@@ -1,0 +1,238 @@
+/* Settings Page Styles */
+
+.settings-header {
+    margin-bottom: 2rem;
+}
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+}
+
+.settings-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--slate-700);
+    margin-bottom: 0.75rem;
+}
+
+.settings-section-title svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.settings-card {
+    background: white;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+}
+
+.settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--slate-100);
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.settings-item:last-child {
+    border-bottom: none;
+}
+
+.settings-item:hover {
+    background: var(--slate-50);
+}
+
+.settings-item-info {
+    flex: 1;
+}
+
+.settings-item-label {
+    font-weight: 600;
+    color: var(--slate-900);
+    margin-bottom: 0.25rem;
+}
+
+.settings-item-description {
+    font-size: 0.875rem;
+    color: var(--slate-500);
+}
+
+.settings-item-arrow {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--slate-400);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 3rem;
+    height: 1.75rem;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--slate-300);
+    border-radius: 9999px;
+    transition: 0.3s;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 1.25rem;
+    width: 1.25rem;
+    left: 0.25rem;
+    bottom: 0.25rem;
+    background: white;
+    border-radius: 50%;
+    transition: 0.3s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked+.toggle-slider {
+    background: linear-gradient(135deg, var(--blue-500), var(--purple-600));
+}
+
+.toggle-switch input:checked+.toggle-slider:before {
+    transform: translateX(1.25rem);
+}
+
+/* Settings Select */
+.settings-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    min-width: 150px;
+    background: white;
+    cursor: pointer;
+}
+
+/* Subscription Info */
+.subscription-info {
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.subscription-badge {
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, var(--blue-500), var(--purple-600));
+    color: white;
+    font-weight: 700;
+    font-size: 0.875rem;
+    border-radius: var(--radius-lg);
+}
+
+.subscription-details p {
+    margin-bottom: 0.25rem;
+    color: var(--slate-600);
+    font-size: 0.875rem;
+}
+
+.subscription-price {
+    font-weight: 700;
+    color: var(--slate-900) !important;
+    font-size: 1.25rem !important;
+}
+
+.settings-card .btn {
+    margin: 1rem;
+    width: calc(100% - 2rem);
+}
+
+/* Profile Edit Icon */
+.profile-edit-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--slate-400);
+}
+
+.profile-edit-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Dark Mode */
+[data-theme="dark"] .settings-section-title {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .settings-card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .settings-item {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .settings-item:hover {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .settings-item-label {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .settings-item-description {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .settings-select {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .toggle-slider {
+    background: var(--slate-600);
+}
+
+[data-theme="dark"] .subscription-info {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .subscription-details p {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .subscription-price {
+    color: var(--text-primary) !important;
+}

@@ -87,7 +87,7 @@
             <div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title">Child Profile 👶</h1>
+                        <h1 class="dashboard-title">Child Profile</h1>
                         <p class="dashboard-subtitle">Manage profiles and view progress</p>
                     </div>
                     <button class="btn btn-outline">
@@ -460,7 +460,7 @@
              <div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title">Motor Skills 🏃‍♂️</h1>
+                        <h1 class="dashboard-title">Motor Skills</h1>
                         <p class="dashboard-subtitle">Gross and fine motor skill assessment</p>
                     </div>
                      <button class="btn btn-gradient">
@@ -605,7 +605,7 @@
                 <h3 class="section-heading">Explore Collections</h3>
                 <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr); gap: 1rem;">
                     <div style="cursor: pointer; text-align: center;">
-                        <div style="background: var(--red-100); aspect-ratio: 1; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 0.5rem;">🏃</div>
+                        <div style="background: var(--red-100); aspect-ratio: 1; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;"><svg style="width:2rem;height:2rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2"/><path d="m15 9-2-2-5 6.5L3 17.5m17-3.5-5.5-4.5-3 3.5 3 3"/></svg></div>
                         <span style="font-weight: 600;">Gross Motor</span>
                     </div>
                     <div style="cursor: pointer; text-align: center;">

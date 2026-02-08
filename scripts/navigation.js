@@ -1,15 +1,28 @@
 // Navigation utility
 function navigateTo(page) {
     const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
-    
+
     const pageMap = {
         'index': 'index.html',
         'login': 'login.html',
         'signup': 'signup.html',
-        'dashboard': 'dashboard.html'
+        'dashboard': 'dashboard.html',
+        'doctor-login': 'doctor-login.html',
+        'doctor-signup': 'doctor-signup.html',
+        'doctor-dashboard': 'doctor-dashboard.html',
+        'settings': 'settings.html',
+        'profile': 'profile.html',
+        'child-profile': 'child-profile.html',
+        'about': 'about.html',
+        'contact': 'contact.html',
+        'privacy': 'privacy.html',
+        'terms': 'terms.html',
+        'help': 'help.html',
+        'features': 'features.html',
+        'pricing': 'pricing.html'
     };
-    
-    const targetPage = pageMap[page] || 'index.html';
+
+    const targetPage = pageMap[page] || page + '.html';
     window.location.href = baseUrl + targetPage;
 }
 

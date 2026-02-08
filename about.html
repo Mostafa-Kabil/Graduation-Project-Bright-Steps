@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us - Bright Steps</title>
+    <meta name="description" content="Learn about Bright Steps child development platform.">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link rel="stylesheet" href="styles/globals.css">
+    <link rel="stylesheet" href="styles/landing.css">
+</head>
+
+<body>
+    <header class="header">
+        <div class="header-container">
+            <div class="header-logo">
+                <a href="index.html">
+                    <img src="assets/logo.png" alt="Bright Steps Logo">
+                </a>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-login')">Doctor Portal</button>
+                <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
+                <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-content">
+        <div class="container">
+            <div class="page-header">
+                <h1 class="page-title">About Bright Steps</h1>
+                <p class="page-subtitle">Empowering parents with AI-powered insights</p>
+            </div>
+
+            <div class="content-section">
+                <h2>Our Mission</h2>
+                <p>Every child deserves the best start in life. We combine AI with pediatric research to give parents
+                    clear insights about their child's growth, speech, and motor skills.</p>
+            </div>
+
+            <div class="content-section">
+                <h2>Our Story</h2>
+                <p>Founded by parents, pediatricians, and AI researchers who saw a gap in detecting developmental delays
+                    early. We created Bright Steps to help parents track development continuously and spot issues early.
+                </p>
+            </div>
+
+            <div class="content-section">
+                <h2>What Sets Us Apart</h2>
+                <ul>
+                    <li>AI-Powered Insights from growth, speech, and motor skills analysis</li>
+                    <li>WHO Standards for growth comparison</li>
+                    <li>Easy traffic-light system (Green, Yellow, Red)</li>
+                    <li>Privacy-first with industry-leading security</li>
+                    <li>Expert-backed recommendations</li>
+                </ul>
+            </div>
+
+            <div class="content-section">
+                <h2>Join Our Team</h2>
+                <p>We're looking for passionate people in AI, pediatrics, design, and engineering.</p>
+                <button class="btn btn-gradient btn-lg" onclick="navigateTo('contact')">View Positions</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-grid">
+                <div class="footer-column">
+                    <div class="footer-logo">
+                        <img src="assets/logo.png" alt="Bright Steps">
+                    </div>
+                    <p class="footer-text">AI-powered child development tracking for ages 0-5. Supporting every
+                        milestone.</p>
+                </div>
+                <div class="footer-column">
+                    <h4 class="footer-heading">Product</h4>
+                    <ul class="footer-links">
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="pricing.html">Pricing</a></li>
+                        <li><a href="signup.html">Get Started</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4 class="footer-heading">Resources</h4>
+                    <ul class="footer-links">
+                        <li><a href="help.html">Help Center</a></li>
+                        <li><a href="help.html">Guidelines</a></li>
+                        <li><a href="privacy.html">Privacy Policy</a></li>
+                        <li><a href="terms.html">Terms of Service</a></li>
+                    </ul>
+                </div>
+                <div class="footer-column">
+                    <h4 class="footer-heading">Company</h4>
+                    <ul class="footer-links">
+                        <li><a href="about.html">About Us</a></li>
+                        <li><a href="contact.html">Contact</a></li>
+                        <li><a href="doctor-login.html">For Clinics</a></li>
+                        <li><a href="about.html">Careers</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                © 2025 Bright Steps. All rights reserved.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Language Toggle -->
+    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+        عربي
+    </button>
+
+    <!-- Floating Theme Toggle -->
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5" />
+            <path
+                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+    </button>
+
+    <script src="scripts/language-toggle.js"></script>
+    <script src="scripts/theme-toggle.js"></script>
+    <script src="scripts/navigation.js"></script>
+</body>
+
+</html>

@@ -5,6 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bright Steps - AI-Powered Child Development Monitoring</title>
+    <meta name="description"
+        content="Monitor your child's growth, speech, and development with AI-powered insights. Get personalized recommendations and early alerts.">
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/landing.css">
 </head>
@@ -14,12 +19,12 @@
     <header class="header">
         <div class="header-container">
             <div class="header-logo">
-                <svg class="logo" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
-                    <text x="10" y="35" font-family="system-ui, -apple-system, sans-serif" font-size="24"
-                        font-weight="700" fill="#2563eb">Bright Steps</text>
-                </svg>
+                <a href="index.html">
+                    <img src="assets/logo.png" alt="Bright Steps Logo">
+                </a>
             </div>
             <div class="header-actions">
+                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-login')">Doctor Portal</button>
                 <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
                 <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
             </div>
@@ -38,7 +43,7 @@
                         </svg>
                         AI-Powered Development Tracking
                     </span>
-                    <h1 class="hero-title">Your child's bright future starts here</h1>
+                    <h1 class="hero-title">Your child's <span>bright future</span> starts here</h1>
                     <p class="hero-description">
                         Monitor your child's growth, speech, and development with AI-powered insights. Get personalized
                         recommendations and early alerts to ensure every step is a bright one.
@@ -357,37 +362,36 @@
         <div class="footer-container">
             <div class="footer-grid">
                 <div class="footer-column">
-                    <svg class="footer-logo" viewBox="0 0 200 50" xmlns="http://www.w3.org/2000/svg">
-                        <text x="10" y="35" font-family="system-ui, -apple-system, sans-serif" font-size="24"
-                            font-weight="700" fill="#ffffff">Bright Steps</text>
-                    </svg>
+                    <div class="footer-logo">
+                        <img src="assets/logo.png" alt="Bright Steps Logo">
+                    </div>
                     <p class="footer-text">AI-powered child development monitoring for ages 0-5</p>
                 </div>
                 <div class="footer-column">
                     <h4 class="footer-heading">Product</h4>
                     <ul class="footer-links">
-                        <li>Features</li>
-                        <li>Pricing</li>
-                        <li>Premium</li>
-                        <li>Mobile App</li>
+                        <li><a href="features.html">Features</a></li>
+                        <li><a href="pricing.html">Pricing</a></li>
+                        <li><a href="signup.html">Get Started</a></li>
+                        <li><a href="dashboard.html">Dashboard</a></li>
                     </ul>
                 </div>
                 <div class="footer-column">
                     <h4 class="footer-heading">Resources</h4>
                     <ul class="footer-links">
-                        <li>Help Center</li>
-                        <li>Guidelines</li>
-                        <li>Privacy Policy</li>
-                        <li>Terms of Service</li>
+                        <li><a href="help.html">Help Center</a></li>
+                        <li><a href="help.html">Guidelines</a></li>
+                        <li><a href="privacy.html">Privacy Policy</a></li>
+                        <li><a href="terms.html">Terms of Service</a></li>
                     </ul>
                 </div>
                 <div class="footer-column">
                     <h4 class="footer-heading">Company</h4>
                     <ul class="footer-links">
-                        <li>About Us</li>
-                        <li>Contact</li>
-                        <li>For Clinics</li>
-                        <li>Careers</li>
+                        <li><a href="about.html">About Us</a></li>
+                        <li><a href="contact.html">Contact</a></li>
+                        <li><a href="contact.html">For Clinics</a></li>
+                        <li><a href="about.html">Careers</a></li>
                     </ul>
                 </div>
             </div>
@@ -397,6 +401,30 @@
         </div>
     </footer>
 
+    <!-- Language Toggle -->
+    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+        عربي
+    </button>
+
+    <!-- Floating Theme Toggle -->
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5" />
+            <path
+                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+    </button>
+
+    <script src="scripts/language-toggle.js"></script>
+    <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
     <script src="scripts/landing.js"></script>
 </body>

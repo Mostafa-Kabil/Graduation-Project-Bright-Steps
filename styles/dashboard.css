@@ -630,6 +630,7 @@
 
 /* Responsive Design */
 @media (max-width: 1200px) {
+
     .development-grid,
     .dashboard-grid {
         grid-template-columns: 1fr;
@@ -689,5 +690,216 @@
 
     .quick-actions-grid {
         grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* Dark Mode Overrides */
+[data-theme="dark"] .dashboard-sidebar {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .sidebar-header,
+[data-theme="dark"] .sidebar-footer {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .user-name,
+[data-theme="dark"] .dashboard-title,
+[data-theme="dark"] .child-name,
+[data-theme="dark"] .development-title,
+[data-theme="dark"] .card-title,
+[data-theme="dark"] .activity-title,
+[data-theme="dark"] .appointment-title,
+[data-theme="dark"] .stat-value,
+[data-theme="dark"] .streak-number,
+[data-theme="dark"] .section-heading {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .user-badge-text,
+[data-theme="dark"] .dashboard-subtitle,
+[data-theme="dark"] .child-details,
+[data-theme="dark"] .development-description,
+[data-theme="dark"] .activity-description,
+[data-theme="dark"] .appointment-date,
+[data-theme="dark"] .appointment-location,
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .streak-label,
+[data-theme="dark"] .activity-duration,
+[data-theme="dark"] .progress-label {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .nav-item {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .nav-item:hover {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .dashboard-main {
+    background: var(--bg-primary);
+}
+
+[data-theme="dark"] .dashboard-card,
+[data-theme="dark"] .stat-box,
+[data-theme="dark"] .quick-action-btn {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .card-header {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .appointment-item {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .progress-bar-container {
+    background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .quick-actions-card {
+    background: var(--bg-secondary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .quick-action-btn {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .quick-action-btn:hover {
+    background: var(--bg-card-hover);
+}
+
+/* Dashboard Responsiveness */
+@media (max-width: 1024px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .dashboard-content {
+        padding: 1.5rem;
+    }
+
+    .doctor-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-layout {
+        flex-direction: column;
+    }
+
+    .dashboard-sidebar {
+        width: 100%;
+        height: auto;
+        max-height: 60vh;
+        border-right: none;
+        border-bottom: 1px solid var(--slate-200);
+    }
+
+    .sidebar-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.75rem;
+    }
+
+    .nav-item {
+        flex: 1;
+        min-width: calc(50% - 0.5rem);
+        padding: 0.5rem 0.75rem;
+        justify-content: center;
+        text-align: center;
+        font-size: 0.75rem;
+    }
+
+    .nav-item span {
+        display: none;
+    }
+
+    .nav-icon {
+        margin: 0;
+    }
+
+    .sidebar-footer {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .sidebar-footer .nav-item {
+        flex: 1;
+        min-width: calc(50% - 0.5rem);
+    }
+
+    .dashboard-main {
+        height: auto;
+        overflow-y: visible;
+    }
+
+    .dashboard-content {
+        padding: 1rem;
+    }
+
+    .dashboard-title {
+        font-size: 1.5rem;
+    }
+
+    .dashboard-header-section {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .doctor-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .stat-card {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar-header {
+        padding: 1rem;
+    }
+
+    .user-avatar {
+        width: 2.5rem;
+        height: 2.5rem;
+        font-size: 0.875rem;
+    }
+
+    .user-name {
+        font-size: 0.8rem;
+    }
+
+    .dashboard-content {
+        padding: 0.75rem;
+    }
+
+    .dashboard-title {
+        font-size: 1.25rem;
+    }
+
+    .doctor-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .section-card {
+        padding: 0.75rem;
+    }
+
+    .patient-row {
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 }
