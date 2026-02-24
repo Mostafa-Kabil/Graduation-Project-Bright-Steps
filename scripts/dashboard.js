@@ -843,15 +843,53 @@
         `;
     }
 
+    // Expose switchView globally for sidebar footer buttons
+    window.switchView = switchView;
+
     // Initialize
     initNav();
     loadView('home');
 })();
 
-// Handle logout
+// Handle logout – Premium modal
 function handleLogout() {
-    if (confirm('Are you sure you want to log out?')) {
-        clearAuth();
-        navigateTo('index');
+    // Remove existing modal if any
+    const existing = document.getElementById('logout-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'logout-modal';
+    modal.innerHTML = `
+        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+        <div class="logout-dialog">
+            <div class="logout-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                </svg>
+            </div>
+            <h3>Are you sure you want to log out?</h3>
+            <p>You will need to sign in again to access your dashboard.</p>
+            <div class="logout-actions">
+                <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    // Trigger entrance animation
+    requestAnimationFrame(() => modal.classList.add('show'));
+}
+
+function closeLogoutModal() {
+    const modal = document.getElementById('logout-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.classList.add('hide');
+        setTimeout(() => modal.remove(), 300);
     }
+}
+
+function confirmLogout() {
+    clearAuth();
+    navigateTo('index');
 }

@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+torch
+torchaudio
+torchvision
+git+https://github.com/openai/whisper.git
+ffmpeg-python
+python-multipart

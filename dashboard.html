@@ -5,11 +5,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Bright Steps</title>
+    <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/dashboard.css">
 </head>
 
 <body>
+    <!-- Mobile Header (visible only on mobile) -->
+    <header class="dashboard-mobile-header">
+        <a href="index.html">
+            <img src="assets/logo.png" alt="Bright Steps" style="height:2rem;width:auto;">
+        </a>
+        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleDashboardSidebar()" aria-label="Open menu">
+            <span></span><span></span><span></span>
+        </button>
+    </header>
+    <div class="dashboard-sidebar-overlay" id="dashboard-sidebar-overlay" onclick="toggleDashboardSidebar()"></div>
+
     <div class="dashboard-layout">
         <!-- Sidebar -->
         <aside class="dashboard-sidebar">
@@ -41,7 +53,16 @@
             </nav>
 
             <div class="sidebar-footer">
-                <button class="nav-item" data-view="settings">
+                <button class="sidebar-language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <path
+                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                    </svg>
+                    <span>عربي</span>
+                </button>
+                <button class="nav-item" data-view="settings" onclick="switchView('settings')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
                         <path d="M12 1v6m0 6v6m-9-9h6m6 0h6" />
@@ -369,20 +390,30 @@
     </button>
 
     <script src="scripts/theme-toggle.js"></script>
-
-    <!-- Language Toggle -->
-    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-        عربي
-    </button>
-
     <script src="scripts/language-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
     <script src="scripts/dashboard.js"></script>
+    <script>
+        // Dashboard sidebar toggle for mobile
+        function toggleDashboardSidebar() {
+            const sidebar = document.querySelector('.dashboard-sidebar');
+            const overlay = document.getElementById('dashboard-sidebar-overlay');
+            const hamburger = document.getElementById('hamburger-btn');
+            if (!sidebar) return;
+            const isOpen = sidebar.classList.contains('sidebar-open');
+            if (isOpen) {
+                sidebar.classList.remove('sidebar-open');
+                overlay.classList.remove('open');
+                hamburger.classList.remove('open');
+                document.body.style.overflow = '';
+            } else {
+                sidebar.classList.add('sidebar-open');
+                overlay.classList.add('open');
+                hamburger.classList.add('open');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    </script>
 </body>
 
 </html>

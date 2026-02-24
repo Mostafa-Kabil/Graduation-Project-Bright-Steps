@@ -19,7 +19,8 @@ function navigateTo(page) {
         'terms': 'terms.html',
         'help': 'help.html',
         'features': 'features.html',
-        'pricing': 'pricing.html'
+        'pricing': 'pricing.html',
+        'demo': 'demo.html'
     };
 
     const targetPage = pageMap[page] || page + '.html';
