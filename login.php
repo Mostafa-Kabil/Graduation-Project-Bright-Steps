@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 include 'connection.php';
 
@@ -25,7 +26,7 @@ if (isset($_POST['login'])) {
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
-                $_SESSION['id']       = $user['id'];
+                $_SESSION['id']       = $user['user_id'];
                 $_SESSION['fname']    = $user['first_name'];
                 $_SESSION['lname']    = $user['last_name'];
                 $_SESSION['email']    = $user['email'];

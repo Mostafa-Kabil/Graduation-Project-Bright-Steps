@@ -58,7 +58,12 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
             (first_name, last_name, email, password, role) 
             VALUES (?, ?, ?, ?, ?)");
         $stmt->execute([$fname, $lname, $email, $hashedPassword, $role]);
-
+        $newUserId = $connect->lastInsertId();
+        $no=0;
+        $stmt = $connect->prepare("INSERT INTO parent 
+            (parent_id, number_of_children) 
+            VALUES (?, ?)");
+        $stmt->execute([$newUserId, $no]);
         
         $_SESSION['fname'] = $fname;
         $_SESSION['lname'] = $lname;        
