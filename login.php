@@ -1,3 +1,51 @@
+<?php
+session_start();
+include 'connection.php';
+
+$errors = [];
+
+if (isset($_POST['login'])) {
+    $email = trim($_POST['email']);
+    $password = trim($_POST['password']);
+
+    if (empty($email)) {
+        $errors[] = "Email is required.";
+    }
+    if (empty($password)) {
+        $errors[] = "Password is required.";
+    }
+
+    if (empty($errors)) {
+        $sql = "SELECT * FROM users WHERE email = :email";
+        $stmt = $connect->prepare($sql);
+        $stmt->bindParam(':email', $email, PDO::PARAM_STR);
+        $stmt->execute();
+
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($user) {
+            if (password_verify($password, $user['password'])) {
+                $_SESSION['id']       = $user['id'];
+                $_SESSION['fname']    = $user['first_name'];
+                $_SESSION['lname']    = $user['last_name'];
+                $_SESSION['email']    = $user['email'];
+                $_SESSION['role']     = $user['role']; 
+
+                if ($user['role'] === 'admin') {
+                    header("Location: index.php");
+                } else {
+                    header("Location: dashboard.php");
+                }
+                exit();
+            } else {
+                $errors[] = "Incorrect email or password.";
+            }
+        } else {
+            $errors[] = "Email not found.";
+        }
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -8,6 +56,17 @@
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/auth.css">
+    <style>
+.input-error {
+    border: 1px solid #e53935 !important;
+}
+
+.error-message {
+    color: #e53935;
+    font-size: 13px;
+    margin-top: 6px;
+}
+    </style>
 </head>
 
 <body>
@@ -28,23 +87,67 @@
                     <h1 class="auth-title">Welcome back!</h1>
                     <p class="auth-subtitle">Continue your child's development journey</p>
                 </div>
+                
+<form novalidate id="login-form" method="POST" class="auth-form">
+    <div class="form-group">
+        <label class="form-label" for="email">Email</label>
 
-                <form id="login-form" class="auth-form">
-                    <div class="form-group">
-                        <label class="form-label" for="email">Email</label>
-                        <input type="email" id="email" class="form-input" placeholder="parent@example.com" required>
-                    </div>
+        <input 
+            type="email" 
+            name="email" 
+            id="email" 
+            class="form-input 
+            <?php 
+                foreach ($errors as $error) {
+                    if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password.") {
+                        echo "input-error";
+                        break;
+                    }
+                }
+            ?>" 
+            placeholder="parent@example.com" 
+            value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
 
-                    <div class="form-group">
-                        <div class="form-label-row">
-                            <label class="form-label" for="password">Password</label>
-                            <a href="#" class="form-link">Forgot?</a>
-                        </div>
-                        <input type="password" id="password" class="form-input" placeholder="••••••••" required>
-                    </div>
+        <?php foreach ($errors as $error): ?>
+            <?php if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password."): ?>
+                <p class="error-message"><?php echo htmlspecialchars($error); ?></p>
+                <?php break; ?>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
 
-                    <button type="submit" class="btn btn-gradient btn-lg btn-full">Log In</button>
-                </form>
+    <div class="form-group">
+        <div class="form-label-row">
+            <label class="form-label" for="password">Password</label>
+            <a href="#" class="form-link">Forgot?</a>
+        </div>
+
+        <input 
+            type="password" 
+            name="password" 
+            id="password" 
+            class="form-input 
+            <?php 
+                foreach ($errors as $error) {
+                    if ($error === "Password is required." || $error === "Incorrect email or password.") {
+                        echo "input-error";
+                        break;
+                    }
+                }
+            ?>" 
+            placeholder="••••••••" 
+            required>
+
+        <?php foreach ($errors as $error): ?>
+            <?php if ($error === "Password is required." || $error === "Incorrect email or password."): ?>
+                <p class="error-message"><?php echo htmlspecialchars($error); ?></p>
+                <?php break; ?>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+
+    <button type="submit" name="login" class="btn btn-gradient btn-lg btn-full">Log In</button>
+</form>
 
                 <div class="auth-footer">
                     <span class="auth-footer-text">Don't have an account? </span>
@@ -106,7 +209,7 @@
     <script src="scripts/language-toggle.js"></script>
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
-    <script src="scripts/auth.js"></script>
+    <!-- <script src="scripts/auth.js"></script> -->
 </body>
 
 </html>

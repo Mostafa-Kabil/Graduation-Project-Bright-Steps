@@ -1,3 +1,75 @@
+<?php
+session_start();
+include "validation.php";
+include "connection.php";
+$fname = $lname = $email  = '';
+$fnameErr =  $lnameErr = $emailErr = $passErr = $confirmpassErr = $termsErr = '';
+$formValid = true;
+
+if ($_SERVER['REQUEST_METHOD'] == "POST") {
+
+    if (empty($_POST["fname"]) || !validate_username($_POST["fname"])) {
+        $fnameErr = "firstname must be more than 2 characters";
+        $formValid = false;
+    } else {
+        $fname = validate_input($_POST["fname"]);
+    }
+    
+    if (empty($_POST["lname"]) || !validate_username($_POST["lname"])) {
+        $lnameErr = "lastname must be more than 2 characters";
+        $formValid = false;
+    } else {
+        $lname = validate_input($_POST["lname"]);
+    }
+
+    if (empty($_POST["email"]) || !validate_email1($_POST["email"])) {
+        $emailErr = "Invalid email format";
+        $formValid = false;
+    } else {
+        $email = validate_input($_POST["email"]);
+        $stmt = $connect->prepare("SELECT email FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        if ($stmt->rowCount() > 0) {
+            $emailErr = "Email already exists";
+            $formValid = false;
+        }
+    }
+
+    if (empty($_POST["password"]) || !validatepassword($_POST["password"])) {
+        $passErr = "Password must be at least 8 characters";
+        $formValid = false;
+    } else {
+        $password = $_POST["password"];
+    }
+
+    if (empty($_POST["confirmpass"]) || !validateconfirmpassword($_POST["password"], $_POST["confirmpass"])) {
+        $confirmpassErr = "Passwords do not match";
+        $formValid = false;
+    }
+    if (!isset($_POST['terms'])) {
+        $termsErr = "You must agree to Terms and Conditions";
+        $formValid = false;
+    }
+
+    if ($formValid) {
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        $role="parent";
+        $stmt = $connect->prepare("INSERT INTO users 
+            (first_name, last_name, email, password, role) 
+            VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$fname, $lname, $email, $hashedPassword, $role]);
+
+        
+        $_SESSION['fname'] = $fname;
+        $_SESSION['lname'] = $lname;        
+        $_SESSION['email'] = $email;
+        $_SESSION['role'] = $role;
+            $_SESSION['signup_success'] = true;
+            header("Location: signup.php");
+        exit();
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -8,6 +80,31 @@
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/auth.css">
+    <style>
+    .error {
+        color: red;
+        font-size: 14px;
+        margin-top: 5px;
+    }
+
+    .input-error {
+        border: 2px solid red !important;
+    }
+
+    .checkbox-error {
+        outline: 2px solid red;
+    }
+
+    .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        text-align: center;
+        font-weight: bold;
+    }
+</style>
 </head>
 
 <body>
@@ -28,34 +125,58 @@
                     <h1 class="auth-title">Start your journey</h1>
                     <p class="auth-subtitle">Create your free account today</p>
                 </div>
+        <?php
+if (isset($_SESSION['signup_success'])):
+    unset($_SESSION['signup_success']);
+?>
+    <div class="success-message">
+        Account created successfully! Redirecting to login...
+    </div>
 
-                <form id="signup-form" class="auth-form">
+    <script>
+        setTimeout(function () {
+            window.location.href = "login.php";
+        }, 3000);
+    </script>
+<?php endif; ?>
+                <form id="signup-form" class="auth-form" novalidate method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]) ?>" enctype="multipart/form-data">
                     <div class="form-group">
-                        <label class="form-label" for="name">Full Name</label>
-                        <input type="text" id="name" class="form-input" placeholder="Sarah Johnson" required>
+                        <label class="form-label" for="name">First Name</label>
+                        <input type="text" name="fname" placeholder="Sarah" class="form-input <?= !empty($fnameErr) ? 'input-error' : '' ?>" value="<?= htmlspecialchars($fname) ?>">
+                        <div class="error"><?= $fnameErr ?></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="name">Last Name</label>
+                        <input type="text" name="lname" placeholder="Johnson" class="form-input <?= !empty($lnameErr) ? 'input-error' : '' ?>" value="<?= htmlspecialchars($lname) ?>">
+                        <div class="error"><?= $lnameErr ?></div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="email">Email</label>
-                        <input type="email" id="email" class="form-input" placeholder="parent@example.com" required>
+                        <input type="email" name="email" placeholder="parent@example.com" class="form-input <?= !empty($emailErr) ? 'input-error' : '' ?>" value="<?= htmlspecialchars($email) ?>">
+                        <div class="error"><?= $emailErr ?></div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="password">Password</label>
-                        <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+                        <input type="password" name="password" placeholder="••••••••" class="form-input <?= !empty($passErr) ? 'input-error' : '' ?>">
+                        <div class="error"><?= $passErr ?></div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="confirm-password">Confirm Password</label>
-                        <input type="password" id="confirm-password" class="form-input" placeholder="••••••••" required>
+                        <input type="password" name="confirmpass" placeholder="••••••••" class="form-input <?= !empty($confirmpassErr) ? 'input-error' : '' ?>">
+                        <div class="error"><?= $confirmpassErr ?></div>
                     </div>
 
                     <div class="form-checkbox-group">
-                        <input type="checkbox" id="terms" required>
+                        <input type="checkbox" id="terms" name="terms" <?= !empty($termsErr) ? 'class="checkbox-error"' : '' ?>>
                         <label for="terms" class="checkbox-label">
                             I agree to the <a href="terms.php" class="auth-link">Terms of Service</a> and <a
                                 href="privacy.php" class="auth-link">Privacy Policy</a>
                         </label>
+                        <div class="error"><?= $termsErr ?></div>
                     </div>
 
                     <button type="submit" class="btn btn-gradient btn-lg btn-full">Create Account</button>
@@ -121,7 +242,7 @@
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/language-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
-    <script src="scripts/auth.js"></script>
+    <!-- <script src="scripts/auth.js"></script> -->
 </body>
 
 </html>
