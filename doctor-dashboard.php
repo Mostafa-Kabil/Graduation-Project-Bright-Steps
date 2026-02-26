@@ -16,7 +16,7 @@
         <!-- Sidebar -->
         <aside class="dashboard-sidebar doctor-sidebar">
             <div class="sidebar-header">
-                <a href="index.html" class="sidebar-logo">
+                <a href="index.php" class="sidebar-logo">
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile">

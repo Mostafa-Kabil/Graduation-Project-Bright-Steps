@@ -13,7 +13,7 @@
 <body>
     <!-- Mobile Header (visible only on mobile) -->
     <header class="dashboard-mobile-header">
-        <a href="index.html">
+        <a href="index.php">
             <img src="assets/logo.png" alt="Bright Steps" style="height:2rem;width:auto;">
         </a>
         <button class="hamburger-btn" id="hamburger-btn" onclick="toggleDashboardSidebar()" aria-label="Open menu">
@@ -26,7 +26,7 @@
         <!-- Sidebar -->
         <aside class="dashboard-sidebar">
             <div class="sidebar-header">
-                <a href="index.html" class="sidebar-logo">
+                <a href="index.php" class="sidebar-logo">
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile">

@@ -22,7 +22,7 @@
         <div class="auth-container">
             <div class="auth-card">
                 <div class="auth-header">
-                    <a href="index.html" class="auth-logo">
+                    <a href="index.php" class="auth-logo">
                         <img src="assets/logo.png" alt="Bright Steps">
                     </a>
                     <span class="doctor-badge-small">Healthcare Provider</span>
@@ -93,7 +93,7 @@
     <script>
         document.getElementById('doctor-login-form').addEventListener('submit', function (e) {
             e.preventDefault();
-            window.location.href = 'doctor-dashboard.html';
+            window.location.href = 'doctor-dashboard.php';
         });
     </script>
 </body>

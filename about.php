@@ -131,27 +131,27 @@
                 <div class="footer-column">
                     <h4 class="footer-heading">Product</h4>
                     <ul class="footer-links">
-                        <li><a href="features.html">Features</a></li>
-                        <li><a href="pricing.html">Pricing</a></li>
-                        <li><a href="signup.html">Get Started</a></li>
+                        <li><a href="features.php">Features</a></li>
+                        <li><a href="pricing.php">Pricing</a></li>
+                        <li><a href="signup.php">Get Started</a></li>
                     </ul>
                 </div>
                 <div class="footer-column">
                     <h4 class="footer-heading">Resources</h4>
                     <ul class="footer-links">
-                        <li><a href="help.html">Help Center</a></li>
-                        <li><a href="help.html">Guidelines</a></li>
-                        <li><a href="privacy.html">Privacy Policy</a></li>
-                        <li><a href="terms.html">Terms of Service</a></li>
+                        <li><a href="help.php">Help Center</a></li>
+                        <li><a href="help.php">Guidelines</a></li>
+                        <li><a href="privacy.php">Privacy Policy</a></li>
+                        <li><a href="terms.php">Terms of Service</a></li>
                     </ul>
                 </div>
                 <div class="footer-column">
                     <h4 class="footer-heading">Company</h4>
                     <ul class="footer-links">
-                        <li><a href="about.html">About Us</a></li>
-                        <li><a href="contact.html">Contact</a></li>
-                        <li><a href="doctor-login.html">For Clinics</a></li>
-                        <li><a href="about.html">Careers</a></li>
+                        <li><a href="about.php">About Us</a></li>
+                        <li><a href="contact.php">Contact</a></li>
+                        <li><a href="doctor-login.php">For Clinics</a></li>
+                        <li><a href="about.php">Careers</a></li>
                     </ul>
                 </div>
             </div>

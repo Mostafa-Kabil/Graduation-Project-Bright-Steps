@@ -3,27 +3,27 @@ function navigateTo(page) {
     const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
 
     const pageMap = {
-        'index': 'index.html',
-        'login': 'login.html',
-        'signup': 'signup.html',
-        'dashboard': 'dashboard.html',
-        'doctor-login': 'doctor-login.html',
-        'doctor-signup': 'doctor-signup.html',
-        'doctor-dashboard': 'doctor-dashboard.html',
-        'settings': 'settings.html',
-        'profile': 'profile.html',
-        'child-profile': 'child-profile.html',
-        'about': 'about.html',
-        'contact': 'contact.html',
-        'privacy': 'privacy.html',
-        'terms': 'terms.html',
-        'help': 'help.html',
-        'features': 'features.html',
-        'pricing': 'pricing.html',
-        'demo': 'demo.html'
+        'index': 'index.php',
+        'login': 'login.php',
+        'signup': 'signup.php',
+        'dashboard': 'dashboard.php',
+        'doctor-login': 'doctor-login.php',
+        'doctor-signup': 'doctor-signup.php',
+        'doctor-dashboard': 'doctor-dashboard.php',
+        'settings': 'settings.php',
+        'profile': 'profile.php',
+        'child-profile': 'child-profile.php',
+        'about': 'about.php',
+        'contact': 'contact.php',
+        'privacy': 'privacy.php',
+        'terms': 'terms.php',
+        'help': 'help.php',
+        'features': 'features.php',
+        'pricing': 'pricing.php',
+        'demo': 'demo.php'
     };
 
-    const targetPage = pageMap[page] || page + '.html';
+    const targetPage = pageMap[page] || page + '.php';
     window.location.href = baseUrl + targetPage;
 }
 

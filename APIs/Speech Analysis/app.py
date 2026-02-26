@@ -92,5 +92,5 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    with open("static/index.html") as f:
+    with open("static/index.php") as f:
         return f.read()

@@ -212,6 +212,6 @@ function getProfileView() {
 // Handle logout
 function handleLogout() {
     if (confirm('Are you sure you want to log out?')) {
-        window.location.href = 'doctor-login.html';
+        window.location.href = 'doctor-login.php';
     }
 }

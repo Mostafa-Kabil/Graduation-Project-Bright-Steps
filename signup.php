@@ -22,7 +22,7 @@
         <div class="auth-container">
             <div class="auth-card">
                 <div class="auth-header">
-                    <a href="index.html" class="auth-logo">
+                    <a href="index.php" class="auth-logo">
                         <img src="assets/logo.png" alt="Bright Steps">
                     </a>
                     <h1 class="auth-title">Start your journey</h1>
@@ -53,8 +53,8 @@
                     <div class="form-checkbox-group">
                         <input type="checkbox" id="terms" required>
                         <label for="terms" class="checkbox-label">
-                            I agree to the <a href="terms.html" class="auth-link">Terms of Service</a> and <a
-                                href="privacy.html" class="auth-link">Privacy Policy</a>
+                            I agree to the <a href="terms.php" class="auth-link">Terms of Service</a> and <a
+                                href="privacy.php" class="auth-link">Privacy Policy</a>
                         </label>
                     </div>
 

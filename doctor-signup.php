@@ -22,7 +22,7 @@
         <div class="auth-container">
             <div class="auth-card">
                 <div class="auth-header">
-                    <a href="index.html" class="auth-logo">
+                    <a href="index.php" class="auth-logo">
                         <img src="assets/logo.png" alt="Bright Steps">
                     </a>
                     <span class="doctor-badge-small">Healthcare Provider</span>
@@ -78,8 +78,8 @@
                     <div class="form-checkbox-group">
                         <input type="checkbox" id="terms" required>
                         <label for="terms" class="checkbox-label">
-                            I agree to the <a href="terms.html" class="auth-link">Terms of Service</a> and
-                            <a href="privacy.html" class="auth-link">Privacy Policy</a>. I confirm my medical
+                            I agree to the <a href="terms.php" class="auth-link">Terms of Service</a> and
+                            <a href="privacy.php" class="auth-link">Privacy Policy</a>. I confirm my medical
                             credentials are valid.
                         </label>
                     </div>
@@ -137,7 +137,7 @@
         document.getElementById('doctor-signup-form').addEventListener('submit', function (e) {
             e.preventDefault();
             alert('Registration submitted for verification. You will receive an email within 24-48 hours.');
-            window.location.href = 'doctor-login.html';
+            window.location.href = 'doctor-login.php';
         });
     </script>
 </body>

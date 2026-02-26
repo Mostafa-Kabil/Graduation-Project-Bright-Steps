@@ -22,7 +22,7 @@
         <div class="auth-container">
             <div class="auth-card">
                 <div class="auth-header">
-                    <a href="index.html" class="auth-logo">
+                    <a href="index.php" class="auth-logo">
                         <img src="assets/logo.png" alt="Bright Steps">
                     </a>
                     <h1 class="auth-title">Welcome back!</h1>
