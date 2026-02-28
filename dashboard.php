@@ -1,7 +1,7 @@
 <?php
-include "connection.php"; 
 session_start();
-if (!isset($_SESSION['id'])) {
+include "connection.php";
+if (!isset($_SESSION['email'])) {
     header("Location: login.php");
     exit();
 }
@@ -50,16 +50,16 @@ if ($parentId) {
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile">
-<?php
-$text1 = $_SESSION['fname'];
-$fletter = $text1[0];
-$text2 = $_SESSION['lname'];
-$lletter = $text2[0];
-?>
-                    <div class="user-avatar"><?php echo htmlspecialchars($fletter . $lletter);?></div>
+                    <?php
+                    $text1 = $_SESSION['fname'];
+                    $fletter = $text1[0];
+                    $text2 = $_SESSION['lname'];
+                    $lletter = $text2[0];
+                    ?>
+                    <div class="user-avatar"><?php echo htmlspecialchars($fletter . $lletter); ?></div>
                     <div class="user-info">
-                        <div class="user-name"><?php echo($_SESSION['fname'])?> <?php echo($_SESSION['lname'])?></div>
-                        <div class="user-badge-text"><?php echo($planname)?> Member</div>
+                        <div class="user-name"><?php echo ($_SESSION['fname']) ?> <?php echo ($_SESSION['lname']) ?></div>
+                        <div class="user-badge-text"><?php echo ($planname) ?> Member</div>
                     </div>
                     <div class="user-badge-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -415,10 +415,10 @@ $lletter = $text2[0];
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/language-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/dashboard.js"></script>
+    <script src="scripts/theme-toggle.js?v=3"></script>
+    <script src="scripts/language-toggle.js?v=3"></script>
+    <script src="scripts/navigation.js?v=3"></script>
+    <script src="scripts/dashboard.js?v=3"></script>
     <script>
         // Dashboard sidebar toggle for mobile
         function toggleDashboardSidebar() {

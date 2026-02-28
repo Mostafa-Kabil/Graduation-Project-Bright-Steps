@@ -6,38 +6,38 @@ include 'connection.php';
 $errors = [];
 
 if (isset($_POST['login'])) {
-    $email = trim($_POST['email']);
+    $email    = trim($_POST['email']);
     $password = trim($_POST['password']);
 
-    if (empty($email)) {
+    // basic validation
+    if ($email === '') {
         $errors[] = "Email is required.";
     }
-    if (empty($password)) {
+    if ($password === '') {
         $errors[] = "Password is required.";
     }
 
-    if (empty($errors)) {
-        $sql = "SELECT * FROM users WHERE email = :email";
+    if (count($errors) === 0) {
+        $sql  = "SELECT * FROM users WHERE email = :email LIMIT 1";
         $stmt = $connect->prepare($sql);
-        $stmt->bindParam(':email', $email, PDO::PARAM_STR);
-        $stmt->execute();
-
+        $stmt->execute(['email' => $email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
-                $_SESSION['id']       = $user['user_id'];
-                $_SESSION['fname']    = $user['first_name'];
-                $_SESSION['lname']    = $user['last_name'];
-                $_SESSION['email']    = $user['email'];
-                $_SESSION['role']     = $user['role']; 
+                if ($user['role'] === 'parent') {
+                    // credentials are correct – set session and redirect
+                    $_SESSION['id']    = $user['user_id'];
+                    $_SESSION['fname'] = $user['first_name'];
+                    $_SESSION['lname'] = $user['last_name'];
+                    $_SESSION['email'] = $user['email'];
+                    $_SESSION['role']  = $user['role'];
 
-                if ($user['role'] === 'admin') {
-                    header("Location: index.php");
-                } else {
                     header("Location: dashboard.php");
+                    exit;
+                } else {
+                    $errors[] = "This portal is for parents only.";
                 }
-                exit();
             } else {
                 $errors[] = "Incorrect email or password.";
             }
@@ -100,7 +100,7 @@ if (isset($_POST['login'])) {
             class="form-input 
             <?php 
                 foreach ($errors as $error) {
-                    if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password.") {
+                    if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password." || $error === "This portal is for parents only.") {
                         echo "input-error";
                         break;
                     }
@@ -110,7 +110,7 @@ if (isset($_POST['login'])) {
             value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
 
         <?php foreach ($errors as $error): ?>
-            <?php if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password."): ?>
+            <?php if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password." || $error === "This portal is for parents only."): ?>
                 <p class="error-message"><?php echo htmlspecialchars($error); ?></p>
                 <?php break; ?>
             <?php endif; ?>
@@ -180,6 +180,15 @@ if (isset($_POST['login'])) {
                         </svg>
                         Facebook
                     </button>
+                </div>
+
+                <div class="auth-divider">
+                    <span>Or</span>
+                </div>
+
+                <div class="doctor-login-link" style="text-align: center; font-size: 14px; margin-top: 15px;">
+                    <span style="color: #64748b;">Are you a healthcare provider? </span>
+                    <a href="#" class="auth-link" onclick="navigateTo('doctor-login'); return false;">Doctor Portal</a>
                 </div>
             </div>
         </div>
