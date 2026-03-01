@@ -71,6 +71,11 @@
 
         const viewFunction = views[viewId] || views['home'];
         contentContainer.innerHTML = viewFunction();
+
+        // Re-apply translations to newly injected content if in Arabic mode
+        if (typeof retranslateCurrentPage === 'function') {
+            retranslateCurrentPage();
+        }
     }
 
     // View templates

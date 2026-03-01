@@ -11,6 +11,12 @@ API_URL = "http://127.0.0.1:8001/translate/batch"
 HTML_DIR = os.path.join(os.path.dirname(__file__), "..", "..")
 BATCH_SIZE = 40
 
+WESTERN_TO_ARABIC_NUMERALS = str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩')
+
+def to_arabic_numerals(text):
+    """Convert Western digits (0-9) to Arabic-Indic digits (٠-٩)."""
+    return text.translate(WESTERN_TO_ARABIC_NUMERALS) if text else text
+
 def extract_texts_from_html(filepath):
     """Extract visible text from an HTML file using regex (no external deps)."""
     with open(filepath, "r", encoding="utf-8") as f:
@@ -31,9 +37,7 @@ def extract_texts_from_html(filepath):
         # Skip empty, very short, or numeric-only lines
         if len(line) < 2:
             continue
-        if re.match(r'^[\d\s\.\,\$\%\-\+\@\#\&\*\(\)\[\]\{\}\/\\:;]+$', line):
-            continue
-        # Skip lines that look like code/paths
+        # Skip lines that look like code/paths (but keep numbers/prices)
         if line.startswith('//') or line.startswith('/*'):
             continue
         # Skip copyright with year only
@@ -76,7 +80,7 @@ def translate_batch(texts_list):
 def main():
     # 1. Collect all texts from all HTML files
     all_texts = set()
-    html_files = [f for f in os.listdir(HTML_DIR) if f.endswith('.html')]
+    html_files = [f for f in os.listdir(HTML_DIR) if f.endswith('.php')]
     
     print(f"Found {len(html_files)} HTML files")
     for fname in sorted(html_files):
@@ -97,7 +101,7 @@ def main():
         translated = translate_batch(batch)
         if translated:
             for orig, trans in zip(batch, translated):
-                translations[orig] = trans
+                translations[orig] = to_arabic_numerals(trans)
         else:
             print(f"  FAILED - skipping batch")
     

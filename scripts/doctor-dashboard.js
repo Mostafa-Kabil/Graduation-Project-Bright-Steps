@@ -56,6 +56,11 @@ function showDoctorView(viewId) {
     const viewFunction = views[viewId];
     if (viewFunction) {
         mainContent.innerHTML = viewFunction();
+
+        // Re-apply translations to newly injected content if in Arabic mode
+        if (typeof retranslateCurrentPage === 'function') {
+            retranslateCurrentPage();
+        }
     }
 }
 

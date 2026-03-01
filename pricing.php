@@ -259,7 +259,7 @@
         </svg>
     </button>
 
-    <script src="scripts/language-toggle.js"></script>
+    <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
     <script src="scripts/mobile-menu.js"></script>

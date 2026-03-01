@@ -416,9 +416,9 @@ if ($parentId) {
     </button>
 
     <script src="scripts/theme-toggle.js?v=3"></script>
-    <script src="scripts/language-toggle.js?v=3"></script>
+    <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/navigation.js?v=3"></script>
-    <script src="scripts/dashboard.js?v=3"></script>
+    <script src="scripts/dashboard.js?v=5"></script>
     <script>
         // Dashboard sidebar toggle for mobile
         function toggleDashboardSidebar() {

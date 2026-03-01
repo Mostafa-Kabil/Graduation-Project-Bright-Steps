@@ -263,10 +263,10 @@
         </svg>
         عربي
     </button>
-    <script src="scripts/language-toggle.js"></script>
+    <script src="scripts/language-toggle.js?v=5"></script>
 
     <script src="scripts/navigation.js"></script>
-    <script src="scripts/doctor-dashboard.js"></script>
+    <script src="scripts/doctor-dashboard.js?v=5"></script>
 </body>
 
 </html>

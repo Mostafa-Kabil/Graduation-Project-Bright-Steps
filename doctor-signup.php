@@ -131,7 +131,7 @@
         </svg>
         عربي
     </button>
-    <script src="scripts/language-toggle.js"></script>
+    <script src="scripts/language-toggle.js?v=5"></script>
 
     <script>
         document.getElementById('doctor-signup-form').addEventListener('submit', function (e) {

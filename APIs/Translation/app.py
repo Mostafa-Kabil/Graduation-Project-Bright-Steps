@@ -4,6 +4,18 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from deep_translator import GoogleTranslator
 from typing import List, Optional
+import re
+
+
+# ── Arabic-Indic Numeral Conversion ───────────────────────────────────
+
+WESTERN_TO_ARABIC_NUMERALS = str.maketrans('0123456789', '٠١٢٣٤٥٦٧٨٩')
+
+def to_arabic_numerals(text: str) -> str:
+    """Convert Western digits (0-9) to Arabic-Indic digits (٠-٩)."""
+    if not text:
+        return text
+    return text.translate(WESTERN_TO_ARABIC_NUMERALS)
 
 app = FastAPI(
     title="Bright Steps Translation API",
@@ -27,12 +39,18 @@ class TranslateRequest(BaseModel):
     text: str
     source: Optional[str] = "en"
     target: Optional[str] = "ar"
+    convert_numbers: Optional[bool] = True
 
 
 class BatchTranslateRequest(BaseModel):
     texts: List[str]
     source: Optional[str] = "en"
     target: Optional[str] = "ar"
+    convert_numbers: Optional[bool] = True
+
+
+class ConvertNumbersRequest(BaseModel):
+    text: str
 
 
 class TranslateResponse(BaseModel):
@@ -71,6 +89,8 @@ def translate_text(request: TranslateRequest):
     try:
         translator = GoogleTranslator(source=request.source, target=request.target)
         translated = translator.translate(request.text)
+        if request.convert_numbers and request.target == "ar":
+            translated = to_arabic_numerals(translated)
         return TranslateResponse(
             original=request.text,
             translated=translated,
@@ -92,6 +112,8 @@ def translate_batch(request: BatchTranslateRequest):
         results = []
         for text in request.texts:
             translated = translator.translate(text) if text.strip() else ""
+            if request.convert_numbers and request.target == "ar":
+                translated = to_arabic_numerals(translated)
             results.append(
                 TranslateResponse(
                     original=text,
@@ -107,6 +129,12 @@ def translate_batch(request: BatchTranslateRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Batch translation failed: {str(e)}")
+
+
+@app.post("/convert-numbers")
+def convert_numbers(request: ConvertNumbersRequest):
+    """Convert Western numerals (0-9) to Arabic-Indic numerals (٠-٩)."""
+    return {"original": request.text, "converted": to_arabic_numerals(request.text)}
 
 
 @app.get("/languages")
