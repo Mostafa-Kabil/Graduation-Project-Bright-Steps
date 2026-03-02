@@ -49,8 +49,7 @@ function showDoctorView(viewId) {
         'appointments': getAppointmentsView,
         'messages': getMessagesView,
         'analytics': getAnalyticsView,
-        'settings': getSettingsView,
-        'profile': getProfileView
+        'settings': getSettingsView
     };
 
     const viewFunction = views[viewId];
@@ -147,67 +146,11 @@ function getAnalyticsView() {
 }
 
 function getSettingsView() {
-    return `
-        <div class="dashboard-content">
-            <div class="dashboard-header-section">
-                <div>
-                    <h1 class="dashboard-title">Settings</h1>
-                    <p class="dashboard-subtitle">Manage your account and preferences</p>
-                </div>
-            </div>
-            <div class="dashboard-card" style="padding: 2rem; margin-bottom: 1rem;">
-                <h3 style="margin-bottom: 1rem;">Account Settings</h3>
-                <div style="display: flex; flex-direction: column; gap: 1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-lg);">
-                        <span>Email Notifications</span>
-                        <label style="position: relative; display: inline-block; width: 50px; height: 26px;">
-                            <input type="checkbox" checked style="opacity: 0; width: 0; height: 0;">
-                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--green-500); border-radius: 26px;"></span>
-                        </label>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-secondary); border-radius: var(--radius-lg);">
-                        <span>SMS Alerts</span>
-                        <label style="position: relative; display: inline-block; width: 50px; height: 26px;">
-                            <input type="checkbox" style="opacity: 0; width: 0; height: 0;">
-                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--slate-300); border-radius: 26px;"></span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-            <div class="dashboard-card" style="padding: 2rem;">
-                <h3 style="margin-bottom: 1rem;">Practice Information</h3>
-                <p style="color: var(--text-secondary);">Update your clinic details and specializations.</p>
-                <button class="btn btn-outline" style="margin-top: 1rem;">Edit Practice Info</button>
-            </div>
-        </div>
-    `;
+    window.location.href = 'dr-settings.php';
+    return '';
 }
 
-function getProfileView() {
-    return `
-        <div class="dashboard-content">
-            <div class="dashboard-header-section">
-                <div>
-                    <h1 class="dashboard-title">My Profile</h1>
-                    <p class="dashboard-subtitle">Manage your professional profile</p>
-                </div>
-            </div>
-            <div class="dashboard-card" style="padding: 2rem;">
-                <div style="display: flex; gap: 2rem; align-items: center; margin-bottom: 2rem;">
-                    <div style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, var(--blue-500), var(--purple-600)); display: flex; align-items: center; justify-content: center; color: white; font-size: 2.5rem; font-weight: 700;">
-                        DA
-                    </div>
-                    <div>
-                        <h2 style="margin-bottom: 0.5rem;">Dr. Ahmed Hassan</h2>
-                        <p style="color: var(--text-secondary);">Pediatric Development Specialist</p>
-                        <p style="color: var(--green-500); font-size: 0.875rem;">✓ Verified Healthcare Provider</p>
-                    </div>
-                </div>
-                <button class="btn btn-gradient">Edit Profile</button>
-            </div>
-        </div>
-    `;
-}
+
 
 // Handle logout
 function handleLogout() {
