@@ -1,3 +1,18 @@
+<?php
+session_start();
+include "connection.php";
+if (!isset($_SESSION['email'])) {
+    header("Location: login.php");
+    exit();
+}
+$parentId = $_SESSION['id'];
+$fname = $_SESSION['fname'];
+$lname = $_SESSION['lname'];
+$initials = strtoupper(substr($fname, 0, 1) . substr($lname, 0, 1));
+$stmt = $connect->prepare("SELECT s.plan_name FROM parent_subscription ps INNER JOIN subscription s ON ps.subscription_id = s.subscription_id WHERE ps.parent_id = :pid LIMIT 1");
+$stmt->execute(['pid' => $parentId]);
+$planname = $stmt->fetchColumn() ?: 'Free';
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -20,10 +35,16 @@
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile" onclick="navigateTo('profile')" style="cursor: pointer;">
-                    <div class="user-avatar">SJ</div>
+                    <div class="user-avatar">
+                        <?php echo htmlspecialchars($initials); ?>
+                    </div>
                     <div class="user-info">
-                        <div class="user-name">Sarah Johnson</div>
-                        <div class="user-badge-text">Premium Member</div>
+                        <div class="user-name">
+                            <?php echo htmlspecialchars($fname . ' ' . $lname); ?>
+                        </div>
+                        <div class="user-badge-text">
+                            <?php echo htmlspecialchars($planname); ?> Member
+                        </div>
                     </div>
                     <div class="profile-edit-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

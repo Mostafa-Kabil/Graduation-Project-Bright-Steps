@@ -80,199 +80,157 @@
 
     // View templates
     function getHomeView() {
-        const template = document.getElementById('home-view-template');
-        return template ? template.innerHTML : '<p>Loading...</p>';
-    }
+        const d = window.dashboardData || {};
+        const p = d.parent || {};
+        const children = d.children || [];
+        const appts = d.appointments || [];
+        const child = children[0] || null;
 
-    function getProfileView() {
-        return `
-            <div class="dashboard-content">
-                <div class="dashboard-header-section">
-                    <div>
-                        <h1 class="dashboard-title">Child Profile</h1>
-                        <p class="dashboard-subtitle">Manage profiles and view progress</p>
-                    </div>
-                    <button class="btn btn-outline">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 5v14M5 12h14"/>
-                        </svg>
-                        Add Child
-                    </button>
+        if (!child) {
+            return `<div class="dashboard-content">
+                <div class="dashboard-header-section"><div>
+                    <h1 class="dashboard-title">Welcome, ${p.fname || 'Parent'}! 👋</h1>
+                    <p class="dashboard-subtitle">Get started by adding your child's profile</p>
+                </div></div>
+                <div class="dashboard-card" style="text-align:center;padding:3rem;">
+                    <svg style="width:4rem;height:4rem;color:var(--slate-300);margin:0 auto 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <h3 style="margin-bottom:.5rem;">No children added yet</h3>
+                    <p style="color:var(--slate-500);margin-bottom:1.5rem;">Add your child to start tracking their development</p>
+                    <a href="child-profile.php" class="btn btn-gradient">Add Child Profile</a>
+                </div></div>`;
+        }
+
+        const g = child.growth || {};
+        const weight = g.weight ? g.weight + ' kg' : '—';
+        const height = g.height ? g.height + ' cm' : '—';
+        const initial = (child.first_name || '?')[0].toUpperCase();
+        const fullName = (child.first_name || '') + ' ' + (child.last_name || '');
+
+        let apptHtml = '';
+        if (appts.length > 0) {
+            appts.forEach(a => {
+                const dt = new Date(a.scheduled_at);
+                const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                apptHtml += `<div class="appointment-item">
+                    <div class="appointment-icon icon-blue-bg">📅</div>
+                    <div class="appointment-info">
+                        <div class="appointment-title">${a.type || 'Appointment'}</div>
+                        <div class="appointment-date">${dateStr}</div>
+                        <div class="appointment-location">Dr. ${a.doc_fname} ${a.doc_lname} - ${a.clinic_name || ''}</div>
+                    </div></div>`;
+            });
+        } else {
+            apptHtml = '<p style="color:var(--slate-500);padding:1rem;">No upcoming appointments</p>';
+        }
+
+        return `<div class="dashboard-content">
+            <div class="dashboard-header-section"><div>
+                <h1 class="dashboard-title">Welcome back, ${p.fname || 'Parent'}! 👋</h1>
+                <p class="dashboard-subtitle">Here's ${child.first_name}'s progress today</p>
+            </div>
+            <div class="streak-cards">
+                <div class="streak-card streak-yellow">
+                    <div class="streak-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
+                    <div class="streak-info"><div class="streak-number">${child.badge_count || 0}</div><div class="streak-label">Badges</div></div>
                 </div>
-
-                <!-- Child Selector Section -->
-                <div class="dashboard-card" style="margin-bottom: 2rem;">
+            </div></div>
+            <div class="child-profile-card">
+                <div class="child-avatar">${initial}</div>
+                <div class="child-info">
+                    <h2 class="child-name">${fullName}</h2>
+                    <div class="child-details">
+                        <span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span>
+                    </div>
+                </div>
+                <div class="child-stats">
+                    <div class="stat-box"><div class="stat-label">Weight</div><div class="stat-value">${weight}</div></div>
+                    <div class="stat-box"><div class="stat-label">Height</div><div class="stat-value">${height}</div></div>
+                </div>
+            </div>
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Recommended Activities</h3></div>
                     <div class="card-content">
-                        <h3 class="card-title" style="margin-bottom: 1rem; font-size: 1rem;">Select Child Profile</h3>
-                        <div style="display: flex; gap: 1.5rem; overflow-x: auto; padding-bottom: 0.5rem;">
-                            <!-- Active Profile -->
-                            <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer;">
-                                <div style="width: 4rem; height: 4rem; background: var(--blue-600); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; border: 3px solid var(--blue-200); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                                    E
-                                </div>
-                                <span style="margin-top: 0.5rem; font-weight: 600; color: var(--blue-600);">Emma</span>
-                                <span style="font-size: 0.75rem; color: var(--slate-500);">15 mo</span>
-                            </div>
-
-                            <!-- Inactive Profile -->
-                            <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.6;">
-                                <div style="width: 4rem; height: 4rem; background: var(--purple-100); color: var(--purple-600); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; border: 3px solid transparent;">
-                                    L
-                                </div>
-                                <span style="margin-top: 0.5rem; font-weight: 600; color: var(--slate-600);">Liam</span>
-                                <span style="font-size: 0.75rem; color: var(--slate-500);">3 yo</span>
-                            </div>
-
-                            <!-- Add New Placeholder -->
-                            <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.6;">
-                                <div style="width: 4rem; height: 4rem; border: 2px dashed var(--slate-300); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--slate-400);">
-                                    <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 5v14M5 12h14"/>
-                                    </svg>
-                                </div>
-                                <span style="margin-top: 0.5rem; font-weight: 500; color: var(--slate-500);">New</span>
-                            </div>
-                        </div>
+                        <div class="activity-item activity-blue"><div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/></svg></div>
+                            <div class="activity-info"><h4 class="activity-title">Reading Time</h4><p class="activity-description">Read a picture book together. Point to objects and say their names clearly.</p><span class="activity-duration">⏱ 15 minutes</span></div></div>
+                        <div class="activity-item activity-purple"><div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+                            <div class="activity-info"><h4 class="activity-title">Stacking Blocks</h4><p class="activity-description">Practice hand-eye coordination by stacking colorful blocks together.</p><span class="activity-duration">⏱ 10 minutes</span></div></div>
                     </div>
                 </div>
-
-                <!-- Main Dashboard Content for Selected Child -->
-                <div class="child-profile-card" style="margin-bottom: 2rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div style="display: flex; gap: 1.5rem; align-items: center;">
-                            <div class="child-avatar" style="width: 5rem; height: 5rem; font-size: 2rem;">E</div>
-                            <div class="child-info">
-                                <h2 class="child-name" style="font-size: 1.75rem;">Emma Johnson</h2>
-                                <div class="child-details">
-                                    <span>15 months old</span>
-                                    <span>•</span>
-                                    <span>Born: Aug 23, 2024</span>
-                                    <span>•</span>
-                                    <span style="color: var(--green-600); font-weight: 600;">On Track</span>
-                                </div>
-                            </div>
-                        </div>
-                        <button class="btn btn-ghost">Edit Details</button>
+                <div class="dashboard-column">
+                    <div class="dashboard-card">
+                        <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Upcoming Appointments</h3></div>
+                        <div class="card-content">${apptHtml}</div>
                     </div>
-                </div>
-
-                <!-- High Level Stats -->
-                <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;">
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                        <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Weight</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">11.1 kg</div>
-                        <div class="badge badge-green" style="margin-top: 0.5rem;">75th %</div>
-                    </div>
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                        <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Height</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">78 cm</div>
-                        <div class="badge badge-green" style="margin-top: 0.5rem;">60th %</div>
-                    </div>
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                        <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Words</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">42</div>
-                        <div class="badge badge-blue" style="margin-top: 0.5rem;">+5 this week</div>
-                    </div>
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                         <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Streak</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--orange-500);">14 Days</div>
-                        <div style="font-size: 0.75rem; color: var(--slate-400); margin-top: 0.5rem;">Keep it up!</div>
-                    </div>
-                </div>
-
-                <div class="dashboard-grid" style="grid-template-columns: 2fr 1fr;">
-                    <!-- Development Status Section (Traffic Light) -->
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <h3 class="section-heading">Development Areas</h3>
-                        
-                        <div class="development-card card-green">
-                            <div class="development-header">
-                                <div class="development-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                                    </svg>
-                                </div>
-                                <div class="development-status status-green">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                        <path d="M20 6L9 17l-5-5"/>
-                                    </svg>
-                                </div>
-                            </div>
-                            <h3 class="development-title">Growth & Physical</h3>
-                            <p class="development-description">Height and weight are developing perfectly on track. Motor skills overlap with expected milestones for 15 months.</p>
-                            <span class="development-badge badge-green">On Track - Green</span>
-                        </div>
-
-                        <div class="development-card card-yellow">
-                            <div class="development-header">
-                                <div class="development-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/>
-                                    </svg>
-                                </div>
-                                <div class="development-status status-yellow">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
-                                    </svg>
-                                </div>
-                            </div>
-                            <h3 class="development-title">Speech & Language</h3>
-                            <p class="development-description">Expression is good, but vocabulary size is slightly below average range. Focus on "Reading Time" activities.</p>
-                            <span class="development-badge badge-yellow">Needs Attention - Yellow</span>
-                        </div>
-                    </div>
-
-                    <!-- Right Column: Activities & Appointments -->
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                         <h3 class="section-heading">Recommended Actions</h3>
-                        
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3 class="card-title">Daily Activities</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="activity-item activity-blue">
-                                    <div class="activity-icon">📚</div>
-                                    <div class="activity-info">
-                                        <h4 class="activity-title">Reading Time</h4>
-                                        <span class="activity-duration">15 min</span>
-                                    </div>
-                                    <button class="btn btn-sm btn-outline">Start</button>
-                                </div>
-                                 <div class="activity-item activity-purple">
-                                    <div class="activity-icon">🎨</div>
-                                    <div class="activity-info">
-                                        <h4 class="activity-title">Block Stacking</h4>
-                                        <span class="activity-duration">10 min</span>
-                                    </div>
-                                    <button class="btn btn-sm btn-outline">Start</button>
-                                </div>
-                            </div>
-                        </div>
-
-                         <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3 class="card-title">Coming Up</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="appointment-item">
-                                    <div class="appointment-icon icon-blue-bg">📅</div>
-                                    <div class="appointment-info">
-                                        <div class="appointment-title">MMR Vaccination</div>
-                                        <div class="appointment-date">Nov 28, 10:00 AM</div>
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="dashboard-card">
+                        <div class="card-header"><h3 class="card-title">Points Wallet</h3></div>
+                        <div class="card-content" style="text-align:center;padding:1.5rem;">
+                            <div style="font-size:2rem;font-weight:800;color:var(--blue-600);">${child.total_points || 0}</div>
+                            <div style="color:var(--slate-500);">Total Points</div>
                         </div>
                     </div>
                 </div>
             </div>
-        `;
+            <div class="quick-actions-card">
+                <h3 class="section-heading">Quick Actions</h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="switchView('growth')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Log Growth</span></button>
+                    <button class="quick-action-btn" onclick="switchView('speech')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/></svg><span>Record Speech</span></button>
+                    <button class="quick-action-btn" onclick="switchView('activities')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span>Add Activity</span></button>
+                    <button class="quick-action-btn" onclick="switchView('clinic')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Book Clinic</span></button>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function getProfileView() {
+        const d = window.dashboardData || {};
+        const children = d.children || [];
+        const child = children[0] || null;
+
+        let selectorHtml = '';
+        children.forEach((c, i) => {
+            const init = (c.first_name || '?')[0].toUpperCase();
+            const ageLabel = c.age_months >= 24 ? Math.floor(c.age_months / 12) + ' yo' : c.age_months + ' mo';
+            const isActive = i === 0;
+            selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;${isActive ? '' : 'opacity:0.6;'}">
+                <div style="width:4rem;height:4rem;background:${isActive ? 'var(--blue-600)' : 'var(--purple-100)'};color:${isActive ? 'white' : 'var(--purple-600)'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;border:3px solid ${isActive ? 'var(--blue-200)' : 'transparent'};">${init}</div>
+                <span style="margin-top:0.5rem;font-weight:600;">${c.first_name}</span>
+                <span style="font-size:0.75rem;color:var(--slate-500);">${ageLabel}</span></div>`;
+        });
+        selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:0.6;" onclick="window.location.href='child-profile.php'">
+            <div style="width:4rem;height:4rem;border:2px dashed var(--slate-300);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--slate-400);"><svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
+            <span style="margin-top:0.5rem;font-weight:500;color:var(--slate-500);">New</span></div>`;
+
+        if (!child) {
+            return `<div class="dashboard-content"><div class="dashboard-header-section"><div><h1 class="dashboard-title">Child Profile</h1><p class="dashboard-subtitle">No children yet</p></div>
+            <a href="child-profile.php" class="btn btn-outline">Add Child</a></div></div>`;
+        }
+
+        const g = child.growth || {};
+        const fullName = (child.first_name || '') + ' ' + (child.last_name || '');
+        const init = (child.first_name || '?')[0].toUpperCase();
+
+        return `<div class="dashboard-content">
+            <div class="dashboard-header-section"><div><h1 class="dashboard-title">Child Profile</h1><p class="dashboard-subtitle">Manage profiles and view progress</p></div>
+            <a href="child-profile.php" class="btn btn-outline"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Child</a></div>
+            <div class="dashboard-card" style="margin-bottom:2rem;"><div class="card-content"><h3 class="card-title" style="margin-bottom:1rem;font-size:1rem;">Select Child Profile</h3>
+                <div style="display:flex;gap:1.5rem;overflow-x:auto;padding-bottom:0.5rem;">${selectorHtml}</div></div></div>
+            <div class="child-profile-card" style="margin-bottom:2rem;"><div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="display:flex;gap:1.5rem;align-items:center;"><div class="child-avatar" style="width:5rem;height:5rem;font-size:2rem;">${init}</div>
+                <div class="child-info"><h2 class="child-name" style="font-size:1.75rem;">${fullName}</h2>
+                <div class="child-details"><span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span></div></div></div>
+                <a href="child-profile.php?child_id=${child.child_id}" class="btn btn-ghost">Edit Details</a></div></div>
+            <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:2rem;">
+                <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Weight</div><div style="font-size:1.5rem;font-weight:700;">${g.weight ? g.weight + ' kg' : '—'}</div></div>
+                <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Height</div><div style="font-size:1.5rem;font-weight:700;">${g.height ? g.height + ' cm' : '—'}</div></div>
+                <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Badges</div><div style="font-size:1.5rem;font-weight:700;">${child.badge_count || 0}</div></div>
+            </div></div>`;
     }
 
     function getGrowthView() {
         return `
-            <div class="dashboard-content">
+        < div class="dashboard-content" >
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Growth Tracking 📏</h1>
@@ -380,13 +338,13 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getSpeechView() {
         return `
-            <div class="dashboard-content">
+        < div class="dashboard-content" >
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Speech Analysis 🗣️</h1>
@@ -453,13 +411,13 @@
                         <button class="btn btn-ghost">View Analysis</button>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getMotorView() {
         return `
-             <div class="dashboard-content">
+        < div class="dashboard-content" >
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Motor Skills</h1>
@@ -559,13 +517,13 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getActivitiesView() {
         return `
-            <div class="dashboard-content">
+        < div class="dashboard-content" >
                  <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
@@ -623,13 +581,13 @@
                         <span style="font-weight: 600;">Social</span>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getClinicView() {
         return `
-            <div class="dashboard-content">
+        < div class="dashboard-content" >
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Book Appointment 🏥</h1>
@@ -705,13 +663,13 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getReportsView() {
         return `
-            <div class="dashboard-content">
+        < div class="dashboard-content" >
                 <div class="dashboard-header-section">
                      <div>
                         <h1 class="dashboard-title">Reports & Insights 📄</h1>
@@ -764,13 +722,21 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getSettingsView() {
+        const d = window.dashboardData || {};
+        const p = d.parent || {};
+        const child = (d.children || [])[0] || null;
+        const parentName = (p.fname || '') + ' ' + (p.lname || '');
+        const parentEmail = p.email || '';
+        const childName = child ? child.first_name : '';
+        const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
+
         return `
-            <div class="dashboard-content">
+        < div class="dashboard-content" >
                 <h1 class="dashboard-title">Settings ⚙️</h1>
                 <p class="dashboard-subtitle" style="margin-bottom: 2rem;">Manage your account and app preferences</p>
                 
@@ -782,13 +748,13 @@
                         <div class="card-content">
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Parent Name</label>
-                                <input type="text" value="Sarah Johnson" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                <input type="text" value="${parentName}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
                             </div>
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Email Address</label>
-                                <input type="email" value="sarah.johnson@example.com" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                <input type="email" value="${parentEmail}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
                             </div>
-                            <button class="btn btn-gradient">Save Changes</button>
+                            <button class="btn btn-gradient" onclick="window.location.href='profile.php'">Edit Profile</button>
                         </div>
                     </div>
 
@@ -800,14 +766,14 @@
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                                 <div>
                                     <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Child Name</label>
-                                    <input type="text" value="Emma" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                    <input type="text" value="${childName}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
                                 </div>
                                 <div>
                                     <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Birth Date</label>
-                                    <input type="date" value="2024-08-23" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                    <input type="date" value="${childBirth}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
                                 </div>
                             </div>
-                            <button class="btn btn-outline">Update Child Profile</button>
+                            <button class="btn btn-outline" onclick="window.location.href='child-profile.php${child ? '?child_id=' + child.child_id : ''}'">Edit Child Profile</button>
                         </div>
                     </div>
 
@@ -841,7 +807,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
@@ -862,20 +828,20 @@ function handleLogout() {
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
     modal.innerHTML = `
-        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
-        <div class="logout-dialog">
-            <div class="logout-icon-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
-                </svg>
+        < div class="logout-overlay" onclick = "closeLogoutModal()" ></div >
+            <div class="logout-dialog">
+                <div class="logout-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                    </svg>
+                </div>
+                <h3>Are you sure you want to log out?</h3>
+                <p>You will need to sign in again to access your dashboard.</p>
+                <div class="logout-actions">
+                    <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                    <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                </div>
             </div>
-            <h3>Are you sure you want to log out?</h3>
-            <p>You will need to sign in again to access your dashboard.</p>
-            <div class="logout-actions">
-                <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
-                <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
-            </div>
-        </div>
     `;
     document.body.appendChild(modal);
     // Trigger entrance animation

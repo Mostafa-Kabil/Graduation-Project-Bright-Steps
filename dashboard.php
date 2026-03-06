@@ -5,17 +5,85 @@ if (!isset($_SESSION['email'])) {
     header("Location: login.php");
     exit();
 }
-// get parent subscription plan
+
 $parentId = $_SESSION['id'] ?? null;
+$planname = 'Free';
+$dashboardData = [
+    'parent' => [
+        'id' => $parentId,
+        'fname' => $_SESSION['fname'],
+        'lname' => $_SESSION['lname'],
+        'email' => $_SESSION['email']
+    ],
+    'subscription' => ['plan_name' => 'Free', 'price' => '0.00', 'plan_period' => ''],
+    'children' => [],
+    'appointments' => []
+];
+
 if ($parentId) {
-    $sql = "SELECT s.plan_name 
+    // Subscription
+    $sql = "SELECT s.plan_name, s.price, s.plan_period
             FROM parent_subscription ps
             INNER JOIN subscription s ON ps.subscription_id = s.subscription_id
-            WHERE ps.parent_id = :parent_id";
-
+            WHERE ps.parent_id = :parent_id LIMIT 1";
     $stmt = $connect->prepare($sql);
     $stmt->execute(['parent_id' => $parentId]);
-    $planname = $stmt->fetchColumn();
+    $plan = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($plan) {
+        $planname = $plan['plan_name'];
+        $dashboardData['subscription'] = $plan;
+    }
+
+    // Children
+    $sql = "SELECT child_id, first_name, last_name, birth_day, birth_month, birth_year, gender, ssn
+            FROM child WHERE parent_id = :parent_id ORDER BY child_id ASC";
+    $stmt = $connect->prepare($sql);
+    $stmt->execute(['parent_id' => $parentId]);
+    $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($children as &$ch) {
+        $bd = mktime(0, 0, 0, $ch['birth_month'], $ch['birth_day'], $ch['birth_year']);
+        $ageM = floor((time() - $bd) / (30.44 * 86400));
+        $ch['age_months'] = (int) $ageM;
+        $ch['age_display'] = $ageM >= 24 ? floor($ageM / 12) . ' years old' : $ageM . ' months old';
+        $ch['birth_date_formatted'] = date('M d, Y', $bd);
+
+        // Latest growth
+        $s2 = $connect->prepare("SELECT height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = :cid ORDER BY recorded_at DESC LIMIT 1");
+        $s2->execute(['cid' => $ch['child_id']]);
+        $ch['growth'] = $s2->fetch(PDO::FETCH_ASSOC) ?: null;
+
+        // All growth history
+        $s3 = $connect->prepare("SELECT height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = :cid ORDER BY recorded_at ASC");
+        $s3->execute(['cid' => $ch['child_id']]);
+        $ch['growth_history'] = $s3->fetchAll(PDO::FETCH_ASSOC);
+
+        // Badge count
+        $s4 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = :cid");
+        $s4->execute(['cid' => $ch['child_id']]);
+        $ch['badge_count'] = (int) $s4->fetchColumn();
+
+        // Points
+        $s5 = $connect->prepare("SELECT total_points FROM points_wallet WHERE child_id = :cid LIMIT 1");
+        $s5->execute(['cid' => $ch['child_id']]);
+        $pts = $s5->fetchColumn();
+        $ch['total_points'] = $pts !== false ? (int) $pts : 0;
+    }
+    unset($ch);
+    $dashboardData['children'] = $children;
+
+    // Appointments
+    $sql = "SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
+                   s.first_name AS doc_fname, s.last_name AS doc_lname, s.specialization,
+                   c.clinic_name, c.location AS clinic_location
+            FROM appointment a
+            INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+            INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+            WHERE a.parent_id = :parent_id AND a.scheduled_at >= NOW()
+            ORDER BY a.scheduled_at ASC LIMIT 10";
+    $stmt = $connect->prepare($sql);
+    $stmt->execute(['parent_id' => $parentId]);
+    $dashboardData['appointments'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -58,7 +126,8 @@ if ($parentId) {
                     ?>
                     <div class="user-avatar"><?php echo htmlspecialchars($fletter . $lletter); ?></div>
                     <div class="user-info">
-                        <div class="user-name"><?php echo ($_SESSION['fname']) ?> <?php echo ($_SESSION['lname']) ?></div>
+                        <div class="user-name"><?php echo ($_SESSION['fname']) ?> <?php echo ($_SESSION['lname']) ?>
+                        </div>
                         <div class="user-badge-text"><?php echo ($planname) ?> Member</div>
                     </div>
                     <div class="user-badge-icon">
@@ -415,10 +484,13 @@ if ($parentId) {
         </svg>
     </button>
 
+    <script>
+        window.dashboardData = <?php echo json_encode($dashboardData, JSON_UNESCAPED_UNICODE); ?>;
+    </script>
     <script src="scripts/theme-toggle.js?v=3"></script>
     <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/navigation.js?v=3"></script>
-    <script src="scripts/dashboard.js?v=5"></script>
+    <script src="scripts/dashboard.js?v=6"></script>
     <script>
         // Dashboard sidebar toggle for mobile
         function toggleDashboardSidebar() {
