@@ -123,7 +123,7 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     <path d="M9 18l6-6-6-6" />
                                 </svg>
                             </div>
-                            <div class="settings-item">
+                            <div class="settings-item" onclick="openChangePasswordModal()" style="cursor:pointer;">
                                 <div class="settings-item-info">
                                     <div class="settings-item-label">Change Password</div>
                                     <div class="settings-item-description">Update your account password</div>
@@ -235,7 +235,8 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     <p class="subscription-price">$9.99/month</p>
                                 </div>
                             </div>
-                            <button class="btn btn-outline btn-full">Manage Subscription</button>
+                            <button class="btn btn-outline btn-full" onclick="window.location.href='payment.php'">Manage
+                                Subscription</button>
                         </div>
                     </div>
                 </div>
@@ -257,6 +258,48 @@ $planname = $stmt->fetchColumn() ?: 'Free';
 
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
+    <script>
+        function openChangePasswordModal() {
+            let existing = document.getElementById('change-pwd-modal');
+            if (existing) existing.remove();
+            const modal = document.createElement('div');
+            modal.id = 'change-pwd-modal';
+            modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
+                    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Change Password</h2>
+                    <p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem;">Enter your current and new password</p>
+                    <input type="password" id="cp-current" placeholder="Current password" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <input type="password" id="cp-new" placeholder="New password (min 8 chars)" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <button onclick="changePassword()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Update Password</button>
+                    <div id="cp-error" style="color:#ef4444;font-size:0.85rem;margin-top:0.5rem;"></div>
+                    <div id="cp-success" style="color:#22c55e;font-size:0.85rem;margin-top:0.5rem;"></div>
+                </div>
+            </div>
+        `;
+            document.body.appendChild(modal);
+        }
+        async function changePassword() {
+            const current = document.getElementById('cp-current').value;
+            const newPwd = document.getElementById('cp-new').value;
+            const err = document.getElementById('cp-error');
+            const suc = document.getElementById('cp-success');
+            err.textContent = ''; suc.textContent = '';
+            if (!current || !newPwd) { err.textContent = 'Both fields are required'; return; }
+            if (newPwd.length < 8) { err.textContent = 'New password must be at least 8 characters'; return; }
+            try {
+                const res = await fetch('api_email_verify.php?action=change-password', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_password: current, new_password: newPwd })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    suc.textContent = data.message;
+                    setTimeout(() => { const m = document.getElementById('change-pwd-modal'); if (m) m.remove(); }, 2000);
+                } else { err.textContent = data.error; }
+            } catch (e) { err.textContent = 'Network error'; }
+        }
+    </script>
 </body>
 
 </html>

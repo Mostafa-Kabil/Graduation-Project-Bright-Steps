@@ -1,3 +1,105 @@
+<?php
+ob_start();
+session_start();
+include 'connection.php';
+include 'validation.php';
+
+$fname = $lname = $email = $specialty = $license = $clinic = '';
+$fnameErr = $lnameErr = $emailErr = $passErr = $specialtyErr = $licenseErr = $clinicErr = $termsErr = '';
+$formValid = true;
+
+if ($_SERVER['REQUEST_METHOD'] == "POST") {
+
+    if (empty($_POST["fname"]) || !validate_username($_POST["fname"])) {
+        $fnameErr = "First name must be more than 2 characters";
+        $formValid = false;
+    } else {
+        $fname = validate_input($_POST["fname"]);
+    }
+
+    if (empty($_POST["lname"]) || !validate_username($_POST["lname"])) {
+        $lnameErr = "Last name must be more than 2 characters";
+        $formValid = false;
+    } else {
+        $lname = validate_input($_POST["lname"]);
+    }
+
+    if (empty($_POST["email"]) || !validate_email1($_POST["email"])) {
+        $emailErr = "Invalid email format";
+        $formValid = false;
+    } else {
+        $email = validate_input($_POST["email"]);
+        $stmt = $connect->prepare("SELECT email FROM users WHERE email = ?");
+        $stmt->execute([$email]);
+        if ($stmt->rowCount() > 0) {
+            $emailErr = "Email already exists";
+            $formValid = false;
+        }
+    }
+
+    if (empty($_POST["specialty"])) {
+        $specialtyErr = "Please select a specialty";
+        $formValid = false;
+    } else {
+        $specialty = validate_input($_POST["specialty"]);
+    }
+
+    if (empty($_POST["license"])) {
+        $licenseErr = "License number is required";
+        $formValid = false;
+    } else {
+        $license = validate_input($_POST["license"]);
+    }
+
+    if (empty($_POST["clinic"])) {
+        $clinicErr = "Clinic name is required";
+        $formValid = false;
+    } else {
+        $clinic = validate_input($_POST["clinic"]);
+    }
+
+    if (empty($_POST["password"]) || !validatepassword($_POST["password"])) {
+        $passErr = "Password must be at least 8 characters";
+        $formValid = false;
+    } else {
+        $password = $_POST["password"];
+    }
+
+    if (!isset($_POST['terms'])) {
+        $termsErr = "You must agree to Terms and Conditions";
+        $formValid = false;
+    }
+
+    if ($formValid) {
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        $role = "doctor";
+
+        // Insert into users table
+        $stmt = $connect->prepare("INSERT INTO users (first_name, last_name, email, password, role) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$fname, $lname, $email, $hashedPassword, $role]);
+        $newUserId = $connect->lastInsertId();
+
+        // Try to find or match clinic by name
+        $clinicId = null;
+        $stmtClinic = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_name = ? LIMIT 1");
+        $stmtClinic->execute([$clinic]);
+        $clinicRow = $stmtClinic->fetch(PDO::FETCH_ASSOC);
+        if ($clinicRow) {
+            $clinicId = $clinicRow['clinic_id'];
+        }
+
+        // Insert into specialist table if clinic exists
+        if ($clinicId) {
+            $stmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, certificate_of_experience) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->execute([$newUserId, $clinicId, $fname, $lname, $specialty, $license]);
+        }
+
+        $_SESSION['signup_success'] = true;
+        header("Location: doctor-signup.php");
+        exit();
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -8,6 +110,31 @@
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/auth.css">
+    <style>
+        .error {
+            color: red;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .input-error {
+            border: 2px solid red !important;
+        }
+
+        .checkbox-error {
+            outline: 2px solid red;
+        }
+
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
@@ -30,58 +157,114 @@
                     <p class="auth-subtitle">Join our network of child development specialists</p>
                 </div>
 
-                <form id="doctor-signup-form" class="auth-form">
+                <?php
+                if (isset($_SESSION['signup_success'])):
+                    unset($_SESSION['signup_success']);
+                    ?>
+                    <div class="success-message">
+                        Registration submitted! Your credentials will be verified within 24-48 hours. Redirecting to
+                        login...
+                    </div>
+                    <script>
+                        setTimeout(function () {
+                            window.location.href = "doctor-login.php";
+                        }, 3000);
+                    </script>
+                <?php endif; ?>
+
+                <form id="doctor-signup-form" class="auth-form" novalidate method="post"
+                    action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]) ?>">
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label" for="first-name">First Name</label>
-                            <input type="text" id="first-name" class="form-input" placeholder="John" required>
+                            <input type="text" name="fname" id="first-name"
+                                class="form-input <?= !empty($fnameErr) ? 'input-error' : '' ?>" placeholder="John"
+                                value="<?= htmlspecialchars($fname) ?>">
+                            <div class="error">
+                                <?= $fnameErr ?>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="last-name">Last Name</label>
-                            <input type="text" id="last-name" class="form-input" placeholder="Smith" required>
+                            <input type="text" name="lname" id="last-name"
+                                class="form-input <?= !empty($lnameErr) ? 'input-error' : '' ?>" placeholder="Smith"
+                                value="<?= htmlspecialchars($lname) ?>">
+                            <div class="error">
+                                <?= $lnameErr ?>
+                            </div>
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="specialty">Specialty</label>
-                        <select id="specialty" class="form-input" required>
+                        <select name="specialty" id="specialty"
+                            class="form-input <?= !empty($specialtyErr) ? 'input-error' : '' ?>">
                             <option value="">Select your specialty</option>
-                            <option value="pediatrician">Pediatrician</option>
-                            <option value="speech-therapist">Speech Therapist</option>
-                            <option value="occupational-therapist">Occupational Therapist</option>
-                            <option value="developmental-pediatrician">Developmental Pediatrician</option>
-                            <option value="child-psychologist">Child Psychologist</option>
-                            <option value="other">Other</option>
+                            <option value="pediatrician" <?= $specialty === 'pediatrician' ? 'selected' : '' ?>
+                                >Pediatrician</option>
+                            <option value="speech-therapist" <?= $specialty === 'speech-therapist' ? 'selected' : '' ?>
+                                >Speech Therapist</option>
+                            <option value="occupational-therapist" <?= $specialty === 'occupational-therapist' ? 'selected' : '' ?>>Occupational Therapist</option>
+                            <option value="developmental-pediatrician" <?= $specialty === 'developmental-pediatrician' ? 'selected' : '' ?>>Developmental Pediatrician</option>
+                            <option value="child-psychologist" <?= $specialty === 'child-psychologist' ? 'selected' : '' ?>
+                                >Child Psychologist</option>
+                            <option value="other" <?= $specialty === 'other' ? 'selected' : '' ?>>Other</option>
                         </select>
+                        <div class="error">
+                            <?= $specialtyErr ?>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="license">License Number</label>
-                        <input type="text" id="license" class="form-input" placeholder="MD-12345" required>
+                        <input type="text" name="license" id="license"
+                            class="form-input <?= !empty($licenseErr) ? 'input-error' : '' ?>" placeholder="MD-12345"
+                            value="<?= htmlspecialchars($license) ?>">
+                        <div class="error">
+                            <?= $licenseErr ?>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="clinic">Clinic/Hospital Name</label>
-                        <input type="text" id="clinic" class="form-input" placeholder="City Pediatrics Clinic" required>
+                        <input type="text" name="clinic" id="clinic"
+                            class="form-input <?= !empty($clinicErr) ? 'input-error' : '' ?>"
+                            placeholder="City Pediatrics Clinic" value="<?= htmlspecialchars($clinic) ?>">
+                        <div class="error">
+                            <?= $clinicErr ?>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="email">Professional Email</label>
-                        <input type="email" id="email" class="form-input" placeholder="doctor@clinic.com" required>
+                        <input type="email" name="email" id="email"
+                            class="form-input <?= !empty($emailErr) ? 'input-error' : '' ?>"
+                            placeholder="doctor@clinic.com" value="<?= htmlspecialchars($email) ?>">
+                        <div class="error">
+                            <?= $emailErr ?>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="password">Password</label>
-                        <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+                        <input type="password" name="password" id="password"
+                            class="form-input <?= !empty($passErr) ? 'input-error' : '' ?>" placeholder="••••••••">
+                        <div id="password-strength" class="password-strength"></div>
+                        <div class="error">
+                            <?= $passErr ?>
+                        </div>
                     </div>
 
                     <div class="form-checkbox-group">
-                        <input type="checkbox" id="terms" required>
+                        <input type="checkbox" id="terms" name="terms" <?= !empty($termsErr) ? 'class="checkbox-error"' : '' ?>>
                         <label for="terms" class="checkbox-label">
                             I agree to the <a href="terms.php" class="auth-link">Terms of Service</a> and
                             <a href="privacy.php" class="auth-link">Privacy Policy</a>. I confirm my medical
                             credentials are valid.
                         </label>
+                        <div class="error">
+                            <?= $termsErr ?>
+                        </div>
                     </div>
 
                     <!-- Verification Notice -->
@@ -107,6 +290,16 @@
         </div>
     </div>
 
+    <!-- Language Toggle -->
+    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+        عربي
+    </button>
+
     <!-- Floating Theme Toggle -->
     <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
         <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -119,27 +312,10 @@
         </svg>
     </button>
 
+    <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
-
-    <!-- Language Toggle -->
-    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-        عربي
-    </button>
-    <script src="scripts/language-toggle.js?v=5"></script>
-
-    <script>
-        document.getElementById('doctor-signup-form').addEventListener('submit', function (e) {
-            e.preventDefault();
-            alert('Registration submitted for verification. You will receive an email within 24-48 hours.');
-            window.location.href = 'doctor-login.php';
-        });
-    </script>
+    <script src="scripts/password-strength.js"></script>
 </body>
 
 </html>

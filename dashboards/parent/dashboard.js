@@ -203,7 +203,7 @@
                 <span style="margin-top:0.5rem;font-weight:600;">${c.first_name}</span>
                 <span style="font-size:0.75rem;color:var(--slate-500);">${ageLabel}</span></div>`;
         });
-        selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:0.6;" onclick="window.location.href='child-profile.php'">
+        selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:0.6;" onclick="window.location.href='../../child-profile.php'">
             <div style="width:4rem;height:4rem;border:2px dashed var(--slate-300);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--slate-400);"><svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
             <span style="margin-top:0.5rem;font-weight:500;color:var(--slate-500);">New</span></div>`;
 
@@ -653,7 +653,7 @@
                         <h1 class="dashboard-title">Reports & Insights 📄</h1>
                         <p class="dashboard-subtitle">Download summaries for your healthcare provider</p>
                     </div>
-                     <button class="btn btn-gradient" onclick="window.open('api_export_pdf.php?type=full-report${childParam}','_blank')">
+                     <button class="btn btn-gradient" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">
                         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                         Generate Full Report
                      </button>
@@ -675,7 +675,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
                             <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download PDF</button>
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download PDF</button>
                             </div>
                         </div>
                     </div>
@@ -692,7 +692,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
                              <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
                             <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download PDF</button>
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download PDF</button>
                             </div>
                         </div>
                     </div>
@@ -710,7 +710,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Basic info, badges & points</p>
                              <span class="badge badge-blue" style="margin-bottom: 1rem;">Profile Data</span>
                             <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download PDF</button>
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download PDF</button>
                             </div>
                         </div>
                     </div>
@@ -747,7 +747,7 @@
                                 <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Email Address</label>
                                 <input type="email" value="${parentEmail}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
                             </div>
-                            <button class="btn btn-gradient" onclick="window.location.href='profile.php'">Edit Profile</button>
+                            <button class="btn btn-gradient" onclick="window.location.href='../../profile.php'">Edit Profile</button>
                         </div>
                     </div>
 
@@ -766,7 +766,7 @@
                                     <input type="date" value="${childBirth}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
                                 </div>
                             </div>
-                            <button class="btn btn-outline" onclick="window.location.href='child-profile.php${child ? '?child_id=' + child.child_id : ''}'">Edit Child Profile</button>
+                            <button class="btn btn-outline" onclick="window.location.href='../../child-profile.php${child ? '?child_id=' + child.child_id : ''}'">Edit Child Profile</button>
                         </div>
                     </div>
 
@@ -835,7 +835,7 @@
     // ── Notification helpers ─────────────────────────────────────
     async function loadNotifCount() {
         try {
-            const res = await fetch('api_notifications.php?action=list&limit=1');
+            const res = await fetch('../../api_notifications.php?action=list&limit=1');
             const data = await res.json();
             const badge = document.getElementById('nav-notif-badge');
             if (badge && data.unread_count > 0) {
@@ -850,7 +850,7 @@
         const container = document.getElementById('notifications-list');
         if (!container) return;
         try {
-            const res = await fetch('api_notifications.php?action=list&limit=30');
+            const res = await fetch('../../api_notifications.php?action=list&limit=30');
             const data = await res.json();
             const notifs = data.notifications || [];
             if (notifs.length === 0) {
@@ -875,7 +875,7 @@
 
     window.markNotifRead = async function (id) {
         try {
-            await fetch('api_notifications.php?action=read', {
+            await fetch('../../api_notifications.php?action=read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ notification_id: id })
             });
@@ -886,7 +886,7 @@
 
     window.markAllRead = async function () {
         try {
-            await fetch('api_notifications.php?action=read', {
+            await fetch('../../api_notifications.php?action=read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
             });
@@ -898,7 +898,7 @@
     // ── WHO Comparison helper ────────────────────────────────────
     async function fetchWHOComparison(childId) {
         try {
-            const res = await fetch('api_who_compare.php?child_id=' + childId);
+            const res = await fetch('../../api_who_compare.php?child_id=' + childId);
             const data = await res.json();
             if (data.measurements) {
                 const m = data.measurements;
@@ -980,7 +980,7 @@
         if (!current || !newPwd) { err.textContent = 'Both fields are required'; return; }
         if (newPwd.length < 8) { err.textContent = 'New password must be at least 8 characters'; return; }
         try {
-            const res = await fetch('api_email_verify.php?action=change-password', {
+            const res = await fetch('../../api_email_verify.php?action=change-password', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ current_password: current, new_password: newPwd })
             });

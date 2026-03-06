@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+stripe
+mysql-connector-python
+pydantic
