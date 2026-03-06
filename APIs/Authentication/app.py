@@ -6,12 +6,17 @@ import mysql.connector
 import bcrypt
 import jwt
 import uuid
+import os
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
 # ── Config ─────────────────────────────────────────────────────────────
-SECRET_KEY = "bright-steps-jwt-secret-change-in-production"
-ALGORITHM = "HS256"
+SECRET_KEY = os.getenv("JWT_SECRET", "bright-steps-jwt-secret-change-in-production")
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 app = FastAPI(
@@ -31,10 +36,10 @@ app.add_middleware(
 # ── DB helper ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="grad",
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "grad"),
         charset="utf8mb4"
     )
 

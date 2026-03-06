@@ -8,6 +8,9 @@ import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
 # ── SMTP Config (Gmail default – set via env vars) ─────────────────────
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -33,10 +36,10 @@ app.add_middleware(
 # ── DB helper ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="grad",
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "grad"),
         charset="utf8mb4"
     )
 

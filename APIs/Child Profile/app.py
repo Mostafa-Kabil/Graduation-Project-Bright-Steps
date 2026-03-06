@@ -4,11 +4,17 @@ from pydantic import BaseModel
 from typing import Optional, List
 import mysql.connector
 import jwt
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+import jwt
 from datetime import datetime
 
 # ── Config ─────────────────────────────────────────────────────────────
-SECRET_KEY = "bright-steps-jwt-secret-change-in-production"
-ALGORITHM = "HS256"
+SECRET_KEY = os.getenv("JWT_SECRET", "bright-steps-jwt-secret-change-in-production")
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
 app = FastAPI(
     title="Bright Steps Child Profile API",
@@ -27,10 +33,10 @@ app.add_middleware(
 # ── DB helper ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="grad",
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "grad"),
         charset="utf8mb4"
     )
 

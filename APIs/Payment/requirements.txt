@@ -3,3 +3,5 @@ uvicorn
 stripe
 mysql-connector-python
 pydantic
+
+python-dotenv

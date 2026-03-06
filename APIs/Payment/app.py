@@ -3,12 +3,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import mysql.connector
+import os
 from datetime import datetime
+from dotenv import load_dotenv
 
-# ── Stripe (test mode – replace with your real keys) ──────────────────
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+
+# ── Stripe (test mode – set keys in .env) ──────────────────
 import stripe
-stripe.api_key = "sk_test_REPLACE_WITH_YOUR_SECRET_KEY"
-STRIPE_PUBLISHABLE_KEY = "pk_test_REPLACE_WITH_YOUR_PUBLISHABLE_KEY"
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "sk_test_REPLACE_WITH_YOUR_SECRET_KEY")
+STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "pk_test_REPLACE_WITH_YOUR_PUBLISHABLE_KEY")
 
 app = FastAPI(
     title="Bright Steps Payment API",
@@ -27,10 +31,10 @@ app.add_middleware(
 # ── DB helper ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="grad",
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "grad"),
         charset="utf8mb4"
     )
 

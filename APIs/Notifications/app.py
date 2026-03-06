@@ -3,7 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import mysql.connector
+import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 
 app = FastAPI(
     title="Bright Steps Notifications API",
@@ -22,10 +26,10 @@ app.add_middleware(
 # ── DB helper ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="grad",
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "grad"),
         charset="utf8mb4"
     )
 

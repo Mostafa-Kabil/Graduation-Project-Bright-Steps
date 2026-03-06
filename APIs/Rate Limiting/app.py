@@ -5,7 +5,12 @@ from typing import Optional, Dict
 from collections import defaultdict
 from datetime import datetime, timedelta
 import mysql.connector
+import os
 import time
+import threading
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 import threading
 
 # ── Config ─────────────────────────────────────────────────────────────
@@ -43,10 +48,10 @@ log_lock = threading.Lock()
 # ── DB helper ──────────────────────────────────────────────────────────
 def get_db():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="grad",
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", ""),
+        database=os.getenv("DB_NAME", "grad"),
         charset="utf8mb4"
     )
 

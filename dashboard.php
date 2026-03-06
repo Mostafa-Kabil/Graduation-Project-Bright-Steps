@@ -96,6 +96,7 @@ if ($parentId) {
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 
 <body>
@@ -436,6 +437,26 @@ if ($parentId) {
                 </div>
             </div>
 
+            <!-- Growth Chart Section -->
+            <div class="dashboard-card growth-chart-card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                        </svg>
+                        Growth Chart
+                    </h3>
+                </div>
+                <div class="card-content">
+                    <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                        <canvas id="growth-chart-canvas"></canvas>
+                    </div>
+                    <p class="chart-empty-msg" id="chart-empty-msg"
+                        style="display:none; text-align:center; color:#94a3b8; padding:2rem;">No growth data recorded
+                        yet. Add measurements to see the chart.</p>
+                </div>
+            </div>
+
             <div class="quick-actions-card">
                 <h3 class="section-heading">Quick Actions</h3>
                 <div class="quick-actions-grid">
@@ -491,6 +512,8 @@ if ($parentId) {
     <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/navigation.js?v=3"></script>
     <script src="scripts/dashboard.js?v=6"></script>
+    <script src="scripts/growth-charts.js?v=1"></script>
+    <script src="scripts/chatbot.js?v=1"></script>
     <script>
         // Dashboard sidebar toggle for mobile
         function toggleDashboardSidebar() {
