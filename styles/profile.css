@@ -1,0 +1,225 @@
+/* Profile Page Styles */
+
+.profile-header {
+    margin-bottom: 2rem;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    background: none;
+    border: none;
+    color: var(--blue-600);
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    transition: color 0.2s ease;
+}
+
+.back-btn:hover {
+    color: var(--blue-700);
+}
+
+.back-btn svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.profile-content {
+    max-width: 800px;
+}
+
+/* Profile Picture Section */
+.profile-picture-section {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-xl);
+    margin-bottom: 2rem;
+}
+
+.profile-picture-large {
+    width: 6rem;
+    height: 6rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue-500), var(--purple-600));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.child-avatar-large {
+    background: linear-gradient(135deg, var(--pink-500), var(--purple-600));
+}
+
+.child-section {
+    flex-wrap: wrap;
+}
+
+.child-header-info {
+    flex: 1;
+}
+
+.child-header-info h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--slate-900);
+    margin-bottom: 0.25rem;
+}
+
+.child-header-info p {
+    color: var(--slate-500);
+    font-size: 0.875rem;
+}
+
+.form-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.form-hint {
+    font-size: 0.75rem;
+    color: var(--slate-500);
+    margin-top: 0.5rem;
+}
+
+/* Profile Form */
+.profile-form {
+    background: white;
+    border: 1px solid var(--slate-200);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+}
+
+.form-section {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.form-section:last-of-type {
+    border-bottom: none;
+}
+
+.form-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--slate-700);
+    margin-bottom: 1rem;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-grid-3 {
+    grid-template-columns: 2fr 1fr 1fr;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--slate-700);
+}
+
+.form-input {
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--slate-200);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--blue-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: var(--slate-50);
+    border-top: 1px solid var(--slate-100);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+
+    .form-grid,
+    .form-grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-picture-section {
+        flex-direction: column;
+        text-align: center;
+    }
+}
+
+/* Dark Mode */
+[data-theme="dark"] .back-btn {
+    color: var(--blue-400);
+}
+
+[data-theme="dark"] .back-btn:hover {
+    color: var(--blue-300);
+}
+
+[data-theme="dark"] .profile-picture-section {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .profile-form {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .form-section {
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .form-section-title,
+[data-theme="dark"] .form-label {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .form-input {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .form-actions {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+[data-theme="dark"] .child-header-info h2 {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .child-header-info p,
+[data-theme="dark"] .form-hint {
+    color: var(--text-secondary);
+}
