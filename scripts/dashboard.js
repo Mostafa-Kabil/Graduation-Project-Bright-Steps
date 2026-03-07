@@ -11,6 +11,7 @@
         { id: 'motor', label: 'Motor Skills', icon: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>' },
         { id: 'activities', label: 'Activities', icon: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>' },
         { id: 'clinic', label: 'Book Clinic', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+        { id: 'notifications', label: 'Notifications', icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' },
         { id: 'reports', label: 'Reports', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>' }
     ];
 
@@ -25,8 +26,11 @@
                     ${item.icon}
                 </svg>
                 <span>${item.label}</span>
+                ${item.id === 'notifications' ? '<span class="notif-badge" id="nav-notif-badge" style="display:none;background:#ef4444;color:white;font-size:0.65rem;font-weight:700;min-width:1.1rem;height:1.1rem;border-radius:50%;display:none;align-items:center;justify-content:center;margin-left:auto;"></span>' : ''}
             </button>
         `).join('');
+        // Load unread notification count
+        loadNotifCount();
 
         // Add click handlers
         navContainer.querySelectorAll('.nav-item').forEach(item => {
@@ -65,6 +69,7 @@
             'motor': getMotorView,
             'activities': getActivitiesView,
             'clinic': getClinicView,
+            'notifications': getNotificationsView,
             'reports': getReportsView,
             'settings': getSettingsView
         };
@@ -80,313 +85,238 @@
 
     // View templates
     function getHomeView() {
-        const template = document.getElementById('home-view-template');
-        return template ? template.innerHTML : '<p>Loading...</p>';
+        const d = window.dashboardData || {};
+        const p = d.parent || {};
+        const children = d.children || [];
+        const appts = d.appointments || [];
+        const child = children[0] || null;
+
+        if (!child) {
+            return `<div class="dashboard-content">
+                <div class="dashboard-header-section"><div>
+                    <h1 class="dashboard-title">Welcome, ${p.fname || 'Parent'}! 👋</h1>
+                    <p class="dashboard-subtitle">Get started by adding your child's profile</p>
+                </div></div>
+                <div class="dashboard-card" style="text-align:center;padding:3rem;">
+                    <svg style="width:4rem;height:4rem;color:var(--slate-300);margin:0 auto 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <h3 style="margin-bottom:.5rem;">No children added yet</h3>
+                    <p style="color:var(--slate-500);margin-bottom:1.5rem;">Add your child to start tracking their development</p>
+                    <a href="child-profile.php" class="btn btn-gradient">Add Child Profile</a>
+                </div></div>`;
+        }
+
+        const g = child.growth || {};
+        const weight = g.weight ? g.weight + ' kg' : '—';
+        const height = g.height ? g.height + ' cm' : '—';
+        const initial = (child.first_name || '?')[0].toUpperCase();
+        const fullName = (child.first_name || '') + ' ' + (child.last_name || '');
+
+        let apptHtml = '';
+        if (appts.length > 0) {
+            appts.forEach(a => {
+                const dt = new Date(a.scheduled_at);
+                const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                apptHtml += `<div class="appointment-item">
+                    <div class="appointment-icon icon-blue-bg">📅</div>
+                    <div class="appointment-info">
+                        <div class="appointment-title">${a.type || 'Appointment'}</div>
+                        <div class="appointment-date">${dateStr}</div>
+                        <div class="appointment-location">Dr. ${a.doc_fname} ${a.doc_lname} - ${a.clinic_name || ''}</div>
+                    </div></div>`;
+            });
+        } else {
+            apptHtml = '<p style="color:var(--slate-500);padding:1rem;">No upcoming appointments</p>';
+        }
+
+        return `<div class="dashboard-content">
+            <div class="dashboard-header-section"><div>
+                <h1 class="dashboard-title">Welcome back, ${p.fname || 'Parent'}! 👋</h1>
+                <p class="dashboard-subtitle">Here's ${child.first_name}'s progress today</p>
+            </div>
+            <div class="streak-cards">
+                <div class="streak-card streak-yellow">
+                    <div class="streak-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
+                    <div class="streak-info"><div class="streak-number">${child.badge_count || 0}</div><div class="streak-label">Badges</div></div>
+                </div>
+            </div></div>
+            <div class="child-profile-card">
+                <div class="child-avatar">${initial}</div>
+                <div class="child-info">
+                    <h2 class="child-name">${fullName}</h2>
+                    <div class="child-details">
+                        <span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span>
+                    </div>
+                </div>
+                <div class="child-stats">
+                    <div class="stat-box"><div class="stat-label">Weight</div><div class="stat-value">${weight}</div></div>
+                    <div class="stat-box"><div class="stat-label">Height</div><div class="stat-value">${height}</div></div>
+                </div>
+            </div>
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Recommended Activities</h3></div>
+                    <div class="card-content">
+                        <div class="activity-item activity-blue"><div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/></svg></div>
+                            <div class="activity-info"><h4 class="activity-title">Reading Time</h4><p class="activity-description">Read a picture book together. Point to objects and say their names clearly.</p><span class="activity-duration">⏱ 15 minutes</span></div></div>
+                        <div class="activity-item activity-purple"><div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
+                            <div class="activity-info"><h4 class="activity-title">Stacking Blocks</h4><p class="activity-description">Practice hand-eye coordination by stacking colorful blocks together.</p><span class="activity-duration">⏱ 10 minutes</span></div></div>
+                    </div>
+                </div>
+                <div class="dashboard-column">
+                    <div class="dashboard-card">
+                        <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Upcoming Appointments</h3></div>
+                        <div class="card-content">${apptHtml}</div>
+                    </div>
+                    <div class="dashboard-card">
+                        <div class="card-header"><h3 class="card-title">Points Wallet</h3></div>
+                        <div class="card-content" style="text-align:center;padding:1.5rem;">
+                            <div style="font-size:2rem;font-weight:800;color:var(--blue-600);">${child.total_points || 0}</div>
+                            <div style="color:var(--slate-500);">Total Points</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="quick-actions-card">
+                <h3 class="section-heading">Quick Actions</h3>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="switchView('growth')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span>Log Growth</span></button>
+                    <button class="quick-action-btn" onclick="switchView('speech')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/></svg><span>Record Speech</span></button>
+                    <button class="quick-action-btn" onclick="switchView('activities')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span>Add Activity</span></button>
+                    <button class="quick-action-btn" onclick="switchView('clinic')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Book Clinic</span></button>
+                </div>
+            </div>
+        </div>`;
     }
 
     function getProfileView() {
-        return `
-            <div class="dashboard-content">
-                <div class="dashboard-header-section">
-                    <div>
-                        <h1 class="dashboard-title">Child Profile</h1>
-                        <p class="dashboard-subtitle">Manage profiles and view progress</p>
-                    </div>
-                    <button class="btn btn-outline">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 5v14M5 12h14"/>
-                        </svg>
-                        Add Child
-                    </button>
-                </div>
+        const d = window.dashboardData || {};
+        const children = d.children || [];
+        const child = children[0] || null;
 
-                <!-- Child Selector Section -->
-                <div class="dashboard-card" style="margin-bottom: 2rem;">
-                    <div class="card-content">
-                        <h3 class="card-title" style="margin-bottom: 1rem; font-size: 1rem;">Select Child Profile</h3>
-                        <div style="display: flex; gap: 1.5rem; overflow-x: auto; padding-bottom: 0.5rem;">
-                            <!-- Active Profile -->
-                            <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer;">
-                                <div style="width: 4rem; height: 4rem; background: var(--blue-600); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; border: 3px solid var(--blue-200); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                                    E
-                                </div>
-                                <span style="margin-top: 0.5rem; font-weight: 600; color: var(--blue-600);">Emma</span>
-                                <span style="font-size: 0.75rem; color: var(--slate-500);">15 mo</span>
-                            </div>
+        let selectorHtml = '';
+        children.forEach((c, i) => {
+            const init = (c.first_name || '?')[0].toUpperCase();
+            const ageLabel = c.age_months >= 24 ? Math.floor(c.age_months / 12) + ' yo' : c.age_months + ' mo';
+            const isActive = i === 0;
+            selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;${isActive ? '' : 'opacity:0.6;'}">
+                <div style="width:4rem;height:4rem;background:${isActive ? 'var(--blue-600)' : 'var(--purple-100)'};color:${isActive ? 'white' : 'var(--purple-600)'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;border:3px solid ${isActive ? 'var(--blue-200)' : 'transparent'};">${init}</div>
+                <span style="margin-top:0.5rem;font-weight:600;">${c.first_name}</span>
+                <span style="font-size:0.75rem;color:var(--slate-500);">${ageLabel}</span></div>`;
+        });
+        selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:0.6;" onclick="window.location.href='child-profile.php'">
+            <div style="width:4rem;height:4rem;border:2px dashed var(--slate-300);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--slate-400);"><svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
+            <span style="margin-top:0.5rem;font-weight:500;color:var(--slate-500);">New</span></div>`;
 
-                            <!-- Inactive Profile -->
-                            <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.6;">
-                                <div style="width: 4rem; height: 4rem; background: var(--purple-100); color: var(--purple-600); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; border: 3px solid transparent;">
-                                    L
-                                </div>
-                                <span style="margin-top: 0.5rem; font-weight: 600; color: var(--slate-600);">Liam</span>
-                                <span style="font-size: 0.75rem; color: var(--slate-500);">3 yo</span>
-                            </div>
+        if (!child) {
+            return `<div class="dashboard-content"><div class="dashboard-header-section"><div><h1 class="dashboard-title">Child Profile</h1><p class="dashboard-subtitle">No children yet</p></div>
+            <a href="child-profile.php" class="btn btn-outline">Add Child</a></div></div>`;
+        }
 
-                            <!-- Add New Placeholder -->
-                            <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: 0.6;">
-                                <div style="width: 4rem; height: 4rem; border: 2px dashed var(--slate-300); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--slate-400);">
-                                    <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 5v14M5 12h14"/>
-                                    </svg>
-                                </div>
-                                <span style="margin-top: 0.5rem; font-weight: 500; color: var(--slate-500);">New</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        const g = child.growth || {};
+        const fullName = (child.first_name || '') + ' ' + (child.last_name || '');
+        const init = (child.first_name || '?')[0].toUpperCase();
 
-                <!-- Main Dashboard Content for Selected Child -->
-                <div class="child-profile-card" style="margin-bottom: 2rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div style="display: flex; gap: 1.5rem; align-items: center;">
-                            <div class="child-avatar" style="width: 5rem; height: 5rem; font-size: 2rem;">E</div>
-                            <div class="child-info">
-                                <h2 class="child-name" style="font-size: 1.75rem;">Emma Johnson</h2>
-                                <div class="child-details">
-                                    <span>15 months old</span>
-                                    <span>•</span>
-                                    <span>Born: Aug 23, 2024</span>
-                                    <span>•</span>
-                                    <span style="color: var(--green-600); font-weight: 600;">On Track</span>
-                                </div>
-                            </div>
-                        </div>
-                        <button class="btn btn-ghost">Edit Details</button>
-                    </div>
-                </div>
-
-                <!-- High Level Stats -->
-                <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 2rem;">
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                        <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Weight</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">11.1 kg</div>
-                        <div class="badge badge-green" style="margin-top: 0.5rem;">75th %</div>
-                    </div>
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                        <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Height</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">78 cm</div>
-                        <div class="badge badge-green" style="margin-top: 0.5rem;">60th %</div>
-                    </div>
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                        <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Words</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--slate-900);">42</div>
-                        <div class="badge badge-blue" style="margin-top: 0.5rem;">+5 this week</div>
-                    </div>
-                    <div class="dashboard-card" style="text-align: center; padding: 1.5rem;">
-                         <div style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 0.5rem;">Streak</div>
-                        <div style="font-size: 1.5rem; font-weight: 700; color: var(--orange-500);">14 Days</div>
-                        <div style="font-size: 0.75rem; color: var(--slate-400); margin-top: 0.5rem;">Keep it up!</div>
-                    </div>
-                </div>
-
-                <div class="dashboard-grid" style="grid-template-columns: 2fr 1fr;">
-                    <!-- Development Status Section (Traffic Light) -->
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <h3 class="section-heading">Development Areas</h3>
-                        
-                        <div class="development-card card-green">
-                            <div class="development-header">
-                                <div class="development-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                                    </svg>
-                                </div>
-                                <div class="development-status status-green">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                        <path d="M20 6L9 17l-5-5"/>
-                                    </svg>
-                                </div>
-                            </div>
-                            <h3 class="development-title">Growth & Physical</h3>
-                            <p class="development-description">Height and weight are developing perfectly on track. Motor skills overlap with expected milestones for 15 months.</p>
-                            <span class="development-badge badge-green">On Track - Green</span>
-                        </div>
-
-                        <div class="development-card card-yellow">
-                            <div class="development-header">
-                                <div class="development-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/>
-                                    </svg>
-                                </div>
-                                <div class="development-status status-yellow">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
-                                    </svg>
-                                </div>
-                            </div>
-                            <h3 class="development-title">Speech & Language</h3>
-                            <p class="development-description">Expression is good, but vocabulary size is slightly below average range. Focus on "Reading Time" activities.</p>
-                            <span class="development-badge badge-yellow">Needs Attention - Yellow</span>
-                        </div>
-                    </div>
-
-                    <!-- Right Column: Activities & Appointments -->
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                         <h3 class="section-heading">Recommended Actions</h3>
-                        
-                        <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3 class="card-title">Daily Activities</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="activity-item activity-blue">
-                                    <div class="activity-icon">📚</div>
-                                    <div class="activity-info">
-                                        <h4 class="activity-title">Reading Time</h4>
-                                        <span class="activity-duration">15 min</span>
-                                    </div>
-                                    <button class="btn btn-sm btn-outline">Start</button>
-                                </div>
-                                 <div class="activity-item activity-purple">
-                                    <div class="activity-icon">🎨</div>
-                                    <div class="activity-info">
-                                        <h4 class="activity-title">Block Stacking</h4>
-                                        <span class="activity-duration">10 min</span>
-                                    </div>
-                                    <button class="btn btn-sm btn-outline">Start</button>
-                                </div>
-                            </div>
-                        </div>
-
-                         <div class="dashboard-card">
-                            <div class="card-header">
-                                <h3 class="card-title">Coming Up</h3>
-                            </div>
-                            <div class="card-content">
-                                <div class="appointment-item">
-                                    <div class="appointment-icon icon-blue-bg">📅</div>
-                                    <div class="appointment-info">
-                                        <div class="appointment-title">MMR Vaccination</div>
-                                        <div class="appointment-date">Nov 28, 10:00 AM</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+        return `<div class="dashboard-content">
+            <div class="dashboard-header-section"><div><h1 class="dashboard-title">Child Profile</h1><p class="dashboard-subtitle">Manage profiles and view progress</p></div>
+            <a href="child-profile.php" class="btn btn-outline"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Child</a></div>
+            <div class="dashboard-card" style="margin-bottom:2rem;"><div class="card-content"><h3 class="card-title" style="margin-bottom:1rem;font-size:1rem;">Select Child Profile</h3>
+                <div style="display:flex;gap:1.5rem;overflow-x:auto;padding-bottom:0.5rem;">${selectorHtml}</div></div></div>
+            <div class="child-profile-card" style="margin-bottom:2rem;"><div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <div style="display:flex;gap:1.5rem;align-items:center;"><div class="child-avatar" style="width:5rem;height:5rem;font-size:2rem;">${init}</div>
+                <div class="child-info"><h2 class="child-name" style="font-size:1.75rem;">${fullName}</h2>
+                <div class="child-details"><span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span></div></div></div>
+                <a href="child-profile.php?child_id=${child.child_id}" class="btn btn-ghost">Edit Details</a></div></div>
+            <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:2rem;">
+                <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Weight</div><div style="font-size:1.5rem;font-weight:700;">${g.weight ? g.weight + ' kg' : '—'}</div></div>
+                <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Height</div><div style="font-size:1.5rem;font-weight:700;">${g.height ? g.height + ' cm' : '—'}</div></div>
+                <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Badges</div><div style="font-size:1.5rem;font-weight:700;">${child.badge_count || 0}</div></div>
+            </div></div>`;
     }
 
     function getGrowthView() {
-        return `
-            <div class="dashboard-content">
-                <div class="dashboard-header-section">
-                    <div>
-                        <h1 class="dashboard-title">Growth Tracking 📏</h1>
-                        <p class="dashboard-subtitle">Monitor Emma's physical development against WHO standards</p>
-                    </div>
-                    <button class="btn btn-gradient">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Log Measurement
-                    </button>
-                </div>
+        const d = window.dashboardData || {};
+        const children = d.children || [];
+        const child = children[0] || null;
 
-                <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
-                     <div class="dashboard-card">
-                        <div class="card-content" style="text-align: center; padding: 1.5rem;">
-                            <p style="color: var(--slate-500); font-size: 0.875rem; margin-bottom: 0.5rem;">Current Weight</p>
-                            <h3 style="font-size: 2rem; font-weight: 800; color: var(--slate-900);">11.1 kg</h3>
-                            <span class="badge badge-green" style="margin-top: 0.5rem;">75th Percentile</span>
-                        </div>
-                    </div>
-                    <div class="dashboard-card">
-                        <div class="card-content" style="text-align: center; padding: 1.5rem;">
-                            <p style="color: var(--slate-500); font-size: 0.875rem; margin-bottom: 0.5rem;">Current Height</p>
-                            <h3 style="font-size: 2rem; font-weight: 800; color: var(--slate-900);">78 cm</h3>
-                            <span class="badge badge-green" style="margin-top: 0.5rem;">60th Percentile</span>
-                        </div>
-                    </div>
-                     <div class="dashboard-card">
-                        <div class="card-content" style="text-align: center; padding: 1.5rem;">
-                            <p style="color: var(--slate-500); font-size: 0.875rem; margin-bottom: 0.5rem;">Head Circumference</p>
-                            <h3 style="font-size: 2rem; font-weight: 800; color: var(--slate-900);">46 cm</h3>
-                            <span class="badge badge-green" style="margin-top: 0.5rem;">50th Percentile</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="dashboard-card" style="margin-bottom: 2rem;">
-                    <div class="card-header" style="justify-content: space-between; display: flex; align-items: center;">
-                        <h3 class="card-title">Weight History</h3>
-                        <div class="tab-group" style="display: flex; gap: 0.5rem;">
-                            <button class="badge badge-blue">Weight</button>
-                            <button class="badge" style="background: transparent; border: 1px solid var(--slate-200);">Height</button>
-                        </div>
-                    </div>
-                    <div class="card-content">
-                        <!-- Simulated Chart Area -->
-                        <div style="height: 300px; width: 100%; position: relative; border-bottom: 2px solid var(--slate-200); border-left: 2px solid var(--slate-200); box-sizing: border-box; margin: 1rem 0;">
-                             <!-- Grid Lines -->
-                             <div style="position: absolute; bottom: 25%; left: 0; right: 0; border-top: 1px dashed var(--slate-200);"></div>
-                             <div style="position: absolute; bottom: 50%; left: 0; right: 0; border-top: 1px dashed var(--slate-200);"></div>
-                             <div style="position: absolute; bottom: 75%; left: 0; right: 0; border-top: 1px dashed var(--slate-200);"></div>
-                             
-                             <!-- Chart Path (Simulated) -->
-                             <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible;">
-                                <path d="M0,250 L50,230 L100,210 L150,180 L200,160 L250,140 L300,120" fill="none" stroke="var(--blue-500)" stroke-width="3" stroke-linecap="round"/>
-                                <circle cx="0" cy="250" r="4" fill="white" stroke="var(--blue-500)" stroke-width="2"/>
-                                <circle cx="100" cy="210" r="4" fill="white" stroke="var(--blue-500)" stroke-width="2"/>
-                                <circle cx="200" cy="160" r="4" fill="white" stroke="var(--blue-500)" stroke-width="2"/>
-                                <circle cx="300" cy="120" r="4" fill="white" stroke="var(--blue-500)" stroke-width="2"/>
-                             </svg>
-                             
-                             <!-- Labels -->
-                             <div style="position: absolute; bottom: -25px; left: 0;">Aug</div>
-                             <div style="position: absolute; bottom: -25px; left: 33%;">Sep</div>
-                             <div style="position: absolute; bottom: -25px; left: 66%;">Oct</div>
-                             <div style="position: absolute; bottom: -25px; right: 0;">Nov</div>
-                        </div>
-                    </div>
-                </div>
+        if (!child) {
+            return `<div class="dashboard-content"><div class="dashboard-header-section"><div>
+                <h1 class="dashboard-title">Growth Tracking 📏</h1>
+                <p class="dashboard-subtitle">Add a child profile first to track growth</p>
+            </div></div>
+            <div class="dashboard-card" style="text-align:center;padding:3rem;">
+                <p style="color:var(--slate-500);margin-bottom:1rem;">No children added yet</p>
+                <a href="child-profile.php" class="btn btn-gradient">Add Child</a>
+            </div></div>`;
+        }
 
-                <div class="dashboard-card">
-                    <div class="card-header">
-                        <h3 class="card-title">Recent Measurements</h3>
-                    </div>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
-                        <thead>
-                            <tr style="border-bottom: 2px solid var(--slate-100);">
-                                <th style="text-align: left; padding: 1rem; color: var(--slate-500);">Date</th>
-                                <th style="text-align: left; padding: 1rem; color: var(--slate-500);">Type</th>
-                                <th style="text-align: left; padding: 1rem; color: var(--slate-500);">Value</th>
-                                <th style="text-align: left; padding: 1rem; color: var(--slate-500);">Percentile</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr style="border-bottom: 1px solid var(--slate-50);">
-                                <td style="padding: 1rem;">Nov 15, 2025</td>
-                                <td style="padding: 1rem;">Weight</td>
-                                <td style="padding: 1rem; font-weight: 600;">11.1 kg</td>
-                                <td style="padding: 1rem;"><span class="badge badge-green">75th</span></td>
-                            </tr>
-                            <tr style="border-bottom: 1px solid var(--slate-50);">
-                                <td style="padding: 1rem;">Nov 15, 2025</td>
-                                <td style="padding: 1rem;">Height</td>
-                                <td style="padding: 1rem; font-weight: 600;">78 cm</td>
-                                <td style="padding: 1rem;"><span class="badge badge-green">60th</span></td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 1rem;">Oct 12, 2025</td>
-                                <td style="padding: 1rem;">Weight</td>
-                                <td style="padding: 1rem; font-weight: 600;">10.8 kg</td>
-                                <td style="padding: 1rem;"><span class="badge badge-green">72nd</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
+        const g = child.growth || {};
+        const gh = child.growth_history || [];
+
+        // Build growth history table rows
+        let historyRows = '';
+        gh.slice().reverse().slice(0, 5).forEach(r => {
+            const dt = new Date(r.recorded_at);
+            const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            if (r.weight) historyRows += `<tr style="border-bottom:1px solid var(--slate-50);"><td style="padding:1rem;">${dateStr}</td><td style="padding:1rem;">Weight</td><td style="padding:1rem;font-weight:600;">${r.weight} kg</td><td style="padding:1rem;"><span class="badge badge-blue" id="who-w-${r.recorded_at}">—</span></td></tr>`;
+            if (r.height) historyRows += `<tr style="border-bottom:1px solid var(--slate-50);"><td style="padding:1rem;">${dateStr}</td><td style="padding:1rem;">Height</td><td style="padding:1rem;font-weight:600;">${r.height} cm</td><td style="padding:1rem;"><span class="badge badge-blue" id="who-h-${r.recorded_at}">—</span></td></tr>`;
+        });
+        if (!historyRows) historyRows = '<tr><td colspan="4" style="padding:1rem;color:var(--slate-500);">No measurements recorded yet</td></tr>';
+
+        // After rendering, fetch WHO comparison
+        setTimeout(() => fetchWHOComparison(child.child_id), 100);
+
+        return `<div class="dashboard-content">
+            <div class="dashboard-header-section"><div>
+                <h1 class="dashboard-title">Growth Tracking 📏</h1>
+                <p class="dashboard-subtitle">Monitor ${child.first_name}'s development against WHO standards</p>
+            </div>
+            <a href="child-profile.php?child_id=${child.child_id}" class="btn btn-gradient">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Log Measurement
+            </a></div>
+
+            <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+                <div class="dashboard-card"><div class="card-content" style="text-align:center;padding:1.5rem;">
+                    <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;">Current Weight</p>
+                    <h3 style="font-size:2rem;font-weight:800;color:var(--slate-900);">${g.weight ? g.weight + ' kg' : '—'}</h3>
+                    <span class="badge" id="who-weight-badge" style="margin-top:0.5rem;">Loading...</span>
+                </div></div>
+                <div class="dashboard-card"><div class="card-content" style="text-align:center;padding:1.5rem;">
+                    <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;">Current Height</p>
+                    <h3 style="font-size:2rem;font-weight:800;color:var(--slate-900);">${g.height ? g.height + ' cm' : '—'}</h3>
+                    <span class="badge" id="who-height-badge" style="margin-top:0.5rem;">Loading...</span>
+                </div></div>
+                <div class="dashboard-card"><div class="card-content" style="text-align:center;padding:1.5rem;">
+                    <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;">Head Circumference</p>
+                    <h3 style="font-size:2rem;font-weight:800;color:var(--slate-900);">${g.head_circumference ? g.head_circumference + ' cm' : '—'}</h3>
+                    <span class="badge" id="who-head-badge" style="margin-top:0.5rem;">Loading...</span>
+                </div></div>
+            </div>
+
+            <div class="dashboard-card" id="who-summary" style="margin-bottom:2rem;display:none;">
+                <div class="card-content" style="padding:1.5rem;">
+                    <h3 class="card-title" style="margin-bottom:1rem;">WHO Growth Assessment</h3>
+                    <div id="who-summary-content"></div>
                 </div>
             </div>
-        `;
+
+            <div class="dashboard-card">
+                <div class="card-header"><h3 class="card-title">Recent Measurements</h3></div>
+                <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
+                    <thead><tr style="border-bottom:2px solid var(--slate-100);">
+                        <th style="text-align:left;padding:1rem;color:var(--slate-500);">Date</th>
+                        <th style="text-align:left;padding:1rem;color:var(--slate-500);">Type</th>
+                        <th style="text-align:left;padding:1rem;color:var(--slate-500);">Value</th>
+                        <th style="text-align:left;padding:1rem;color:var(--slate-500);">Percentile</th>
+                    </tr></thead>
+                    <tbody>${historyRows}</tbody>
+                </table>
+            </div>
+        </div>`;
     }
 
     function getSpeechView() {
-        return `
-            <div class="dashboard-content">
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Speech Analysis 🗣️</h1>
@@ -453,13 +383,12 @@
                         <button class="btn btn-ghost">View Analysis</button>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getMotorView() {
-        return `
-             <div class="dashboard-content">
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Motor Skills</h1>
@@ -559,13 +488,12 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getActivitiesView() {
-        return `
-            <div class="dashboard-content">
+        return `<div class="dashboard-content">
                  <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
@@ -623,13 +551,12 @@
                         <span style="font-weight: 600;">Social</span>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
     }
 
     function getClinicView() {
-        return `
-            <div class="dashboard-content">
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Book Appointment 🏥</h1>
@@ -705,61 +632,81 @@
                         </div>
                     </div>
                 </div>
+            </div >
             </div>
         `;
     }
 
     function getReportsView() {
-        return `
-            <div class="dashboard-content">
+        const d = window.dashboardData || {};
+        const children = d.children || [];
+        const child = children[0] || null;
+        const childParam = child ? '&child_id=' + child.child_id : '';
+
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                      <div>
                         <h1 class="dashboard-title">Reports & Insights 📄</h1>
                         <p class="dashboard-subtitle">Download summaries for your healthcare provider</p>
                     </div>
-                     <button class="btn btn-gradient">Generate New Report</button>
+                     <button class="btn btn-gradient" onclick="window.open('api_export_pdf.php?type=full-report${childParam}','_blank')">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Generate Full Report
+                     </button>
                 </div>
 
                 <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
-                    <!-- Report Card -->
+                    <!-- Full Report Card -->
                     <div class="dashboard-card" style="display: flex; flex-direction: column;">
-                        <div style="height: 120px; background: var(--slate-100); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
-                            <svg style="width: 3rem; height: 3rem; color: var(--slate-400);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <div style="height: 120px; background: linear-gradient(135deg, #6C63FF20, #a78bfa20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <svg style="width: 3rem; height: 3rem; color: #6C63FF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                 <polyline points="14 2 14 8 20 8"></polyline>
                                 <line x1="16" y1="13" x2="8" y2="13"></line>
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
-                                <polyline points="10 9 9 9 8 9"></polyline>
                             </svg>
                         </div>
                         <div class="card-content" style="flex: 1;">
-                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">15-Month Development Summary</h3>
-                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Created Nov 20, 2025</p>
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Full Development Report</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
-                            <div style="margin-top: auto; display: flex; gap: 0.5rem; margin-top: 1rem;">
-                                <button class="btn btn-outline btn-sm" style="flex: 1;">Preview</button>
-                                <button class="btn btn-outline btn-sm">⬇</button>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download PDF</button>
                             </div>
                         </div>
                     </div>
 
-                     <!-- Report Card -->
+                     <!-- Growth Report Card -->
                     <div class="dashboard-card" style="display: flex; flex-direction: column;">
-                         <div style="height: 120px; background: var(--slate-100); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
-                            <svg style="width: 3rem; height: 3rem; color: var(--slate-400);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                                <polyline points="14 2 14 8 20 8"></polyline>
-                                <line x1="12" y1="18" x2="12" y2="12"></line>
-                                <line x1="9" y1="15" x2="15" y2="15"></line>
+                         <div style="height: 120px; background: linear-gradient(135deg, #22c55e20, #86efac20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <svg style="width: 3rem; height: 3rem; color: #22c55e;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                             </svg>
                         </div>
                         <div class="card-content" style="flex: 1;">
-                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Growth Chart Only</h3>
-                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Created Oct 15, 2025</p>
-                             <span class="badge badge-blue" style="margin-bottom: 1rem;">Growth Data</span>
-                            <div style="margin-top: auto; display: flex; gap: 0.5rem; margin-top: 1rem;">
-                                <button class="btn btn-outline btn-sm" style="flex: 1;">Preview</button>
-                                <button class="btn btn-outline btn-sm">⬇</button>
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Growth Report</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
+                             <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download PDF</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Child Profile Card -->
+                    <div class="dashboard-card" style="display: flex; flex-direction: column;">
+                         <div style="height: 120px; background: linear-gradient(135deg, #3b82f620, #93c5fd20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <svg style="width: 3rem; height: 3rem; color: #3b82f6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        <div class="card-content" style="flex: 1;">
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Child Profile</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Basic info, badges & points</p>
+                             <span class="badge badge-blue" style="margin-bottom: 1rem;">Profile Data</span>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download PDF</button>
                             </div>
                         </div>
                     </div>
@@ -769,8 +716,15 @@
     }
 
     function getSettingsView() {
-        return `
-            <div class="dashboard-content">
+        const d = window.dashboardData || {};
+        const p = d.parent || {};
+        const child = (d.children || [])[0] || null;
+        const parentName = (p.fname || '') + ' ' + (p.lname || '');
+        const parentEmail = p.email || '';
+        const childName = child ? child.first_name : '';
+        const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
+
+        return `<div class="dashboard-content">
                 <h1 class="dashboard-title">Settings ⚙️</h1>
                 <p class="dashboard-subtitle" style="margin-bottom: 2rem;">Manage your account and app preferences</p>
                 
@@ -782,13 +736,13 @@
                         <div class="card-content">
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Parent Name</label>
-                                <input type="text" value="Sarah Johnson" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                <input type="text" value="${parentName}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
                             </div>
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Email Address</label>
-                                <input type="email" value="sarah.johnson@example.com" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                <input type="email" value="${parentEmail}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
                             </div>
-                            <button class="btn btn-gradient">Save Changes</button>
+                            <button class="btn btn-gradient" onclick="window.location.href='profile.php'">Edit Profile</button>
                         </div>
                     </div>
 
@@ -800,14 +754,14 @@
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
                                 <div>
                                     <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Child Name</label>
-                                    <input type="text" value="Emma" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                    <input type="text" value="${childName}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
                                 </div>
                                 <div>
                                     <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Birth Date</label>
-                                    <input type="date" value="2024-08-23" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                                    <input type="date" value="${childBirth}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
                                 </div>
                             </div>
-                            <button class="btn btn-outline">Update Child Profile</button>
+                            <button class="btn btn-outline" onclick="window.location.href='child-profile.php${child ? '?child_id=' + child.child_id : ''}'">Edit Child Profile</button>
                         </div>
                     </div>
 
@@ -833,6 +787,16 @@
                         </div>
                     </div>
 
+                    <div class="dashboard-card" style="margin-bottom: 1.5rem;">
+                        <div class="card-header"><h3 class="card-title">Security</h3></div>
+                        <div class="card-content">
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;">
+                                <div><h4 style="font-weight:600;">Change Password</h4><p style="font-size:0.875rem;color:var(--slate-500);">Update your account password</p></div>
+                                <button class="btn btn-outline btn-sm" onclick="openChangePasswordModal()">Change</button>
+                            </div>
+                        </div>
+                    </div>
+
                      <div class="dashboard-card" style="border: 1px solid var(--red-200);">
                         <div class="card-content">
                             <h3 class="card-title" style="color: var(--red-600);">Danger Zone</h3>
@@ -841,12 +805,187 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
         `;
+    }
+
+    // ── Notifications View ──────────────────────────────────────
+    function getNotificationsView() {
+        // Load notifications async after rendering
+        setTimeout(loadNotifications, 100);
+        return `<div class="dashboard-content">
+            <div class="dashboard-header-section"><div>
+                <h1 class="dashboard-title">Notifications 🔔</h1>
+                <p class="dashboard-subtitle">Stay updated on your child's progress</p>
+            </div>
+            <button class="btn btn-outline" onclick="markAllRead()">Mark All Read</button>
+            </div>
+            <div id="notifications-list"><div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">Loading notifications...</div></div>
+        </div>`;
     }
 
     // Expose switchView globally for sidebar footer buttons
     window.switchView = switchView;
+
+    // ── Notification helpers ─────────────────────────────────────
+    async function loadNotifCount() {
+        try {
+            const res = await fetch('api_notifications.php?action=list&limit=1');
+            const data = await res.json();
+            const badge = document.getElementById('nav-notif-badge');
+            if (badge && data.unread_count > 0) {
+                badge.textContent = data.unread_count;
+                badge.style.display = 'flex';
+            }
+        } catch (e) { /* silent */ }
+    }
+    window.loadNotifCount = loadNotifCount;
+
+    async function loadNotifications() {
+        const container = document.getElementById('notifications-list');
+        if (!container) return;
+        try {
+            const res = await fetch('api_notifications.php?action=list&limit=30');
+            const data = await res.json();
+            const notifs = data.notifications || [];
+            if (notifs.length === 0) {
+                container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;"><p style="color:var(--slate-500);">No notifications yet</p></div>';
+                return;
+            }
+            const typeIcons = { appointment_reminder: '📅', payment_success: '💳', growth_alert: '📏', milestone: '🏆', system: '🔔' };
+            container.innerHTML = notifs.map(n => {
+                const dt = new Date(n.created_at);
+                const timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                const icon = typeIcons[n.type] || '🔔';
+                const unreadStyle = n.is_read == 0 ? 'border-left:4px solid var(--blue-500);' : '';
+                return `<div class="dashboard-card" style="padding:1.25rem;margin-bottom:0.75rem;display:flex;gap:1rem;align-items:flex-start;${unreadStyle}cursor:pointer;" onclick="markNotifRead(${n.notification_id})">
+                    <div style="font-size:1.5rem;">${icon}</div>
+                    <div style="flex:1;"><h4 style="font-weight:600;margin-bottom:0.25rem;">${n.title}</h4><p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.25rem;">${n.message}</p><span style="font-size:0.75rem;color:var(--slate-400);">${timeStr}</span></div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--red-500);">Could not load notifications</div>';
+        }
+    }
+
+    window.markNotifRead = async function (id) {
+        try {
+            await fetch('api_notifications.php?action=read', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notification_id: id })
+            });
+            loadNotifications();
+            loadNotifCount();
+        } catch (e) { }
+    };
+
+    window.markAllRead = async function () {
+        try {
+            await fetch('api_notifications.php?action=read', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            loadNotifications();
+            loadNotifCount();
+        } catch (e) { }
+    };
+
+    // ── WHO Comparison helper ────────────────────────────────────
+    async function fetchWHOComparison(childId) {
+        try {
+            const res = await fetch('api_who_compare.php?child_id=' + childId);
+            const data = await res.json();
+            if (data.measurements) {
+                const m = data.measurements;
+                const statusColors = { green: 'badge-green', yellow: 'badge-yellow', red: 'badge-red' };
+                if (m.weight) {
+                    const wb = document.getElementById('who-weight-badge');
+                    if (wb) { wb.textContent = m.weight.percentile + 'th Percentile'; wb.className = 'badge ' + (statusColors[m.weight.status] || 'badge-blue'); }
+                }
+                if (m.height) {
+                    const hb = document.getElementById('who-height-badge');
+                    if (hb) { hb.textContent = m.height.percentile + 'th Percentile'; hb.className = 'badge ' + (statusColors[m.height.status] || 'badge-blue'); }
+                }
+                if (m.head_circumference) {
+                    const hcb = document.getElementById('who-head-badge');
+                    if (hcb) { hcb.textContent = m.head_circumference.percentile + 'th Percentile'; hcb.className = 'badge ' + (statusColors[m.head_circumference.status] || 'badge-blue'); }
+                }
+                // Show WHO summary card
+                const summaryCard = document.getElementById('who-summary');
+                const summaryContent = document.getElementById('who-summary-content');
+                if (summaryCard && summaryContent) {
+                    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">';
+                    for (const [key, val] of Object.entries(m)) {
+                        const label = key === 'head_circumference' ? 'Head Circ.' : key.charAt(0).toUpperCase() + key.slice(1);
+                        const color = val.status === 'green' ? '#22c55e' : val.status === 'yellow' ? '#f59e0b' : '#ef4444';
+                        html += `<div style="padding:1rem;border-radius:12px;border:2px solid ${color}20;background:${color}08;">
+                            <div style="font-weight:600;color:${color};margin-bottom:0.25rem;">${val.label}</div>
+                            <div style="font-size:0.875rem;color:var(--slate-600);">${label}: ${val.value}</div>
+                            <div style="font-size:0.8rem;color:var(--slate-500);">WHO median: ${val.who_median}</div>
+                            <div style="font-size:0.8rem;color:var(--slate-500);">Z-score: ${val.z_score}</div>
+                        </div>`;
+                    }
+                    html += '</div>';
+                    summaryContent.innerHTML = html;
+                    summaryCard.style.display = 'block';
+                }
+            } else {
+                // No growth data
+                ['who-weight-badge', 'who-height-badge', 'who-head-badge'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = 'No data'; el.className = 'badge'; }
+                });
+            }
+        } catch (e) {
+            ['who-weight-badge', 'who-height-badge', 'who-head-badge'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) { el.textContent = 'N/A'; el.className = 'badge'; }
+            });
+        }
+    }
+
+    // ── Change Password Modal ───────────────────────────────────
+    window.openChangePasswordModal = function () {
+        let existing = document.getElementById('change-pwd-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'change-pwd-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
+                    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Change Password</h2>
+                    <p style="color:var(--slate-500);font-size:0.9rem;margin-bottom:1.5rem;">Enter your current and new password</p>
+                    <input type="password" id="cp-current" placeholder="Current password" style="width:100%;padding:0.875rem;border:2px solid var(--slate-200,#e2e8f0);border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <input type="password" id="cp-new" placeholder="New password (min 8 chars)" style="width:100%;padding:0.875rem;border:2px solid var(--slate-200,#e2e8f0);border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <button onclick="changePassword()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Update Password</button>
+                    <div id="cp-error" style="color:#ef4444;font-size:0.85rem;margin-top:0.5rem;"></div>
+                    <div id="cp-success" style="color:#22c55e;font-size:0.85rem;margin-top:0.5rem;"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    };
+
+    window.changePassword = async function () {
+        const current = document.getElementById('cp-current').value;
+        const newPwd = document.getElementById('cp-new').value;
+        const err = document.getElementById('cp-error');
+        const suc = document.getElementById('cp-success');
+        err.textContent = ''; suc.textContent = '';
+        if (!current || !newPwd) { err.textContent = 'Both fields are required'; return; }
+        if (newPwd.length < 8) { err.textContent = 'New password must be at least 8 characters'; return; }
+        try {
+            const res = await fetch('api_email_verify.php?action=change-password', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: current, new_password: newPwd })
+            });
+            const data = await res.json();
+            if (data.success) {
+                suc.textContent = data.message;
+                setTimeout(() => { const m = document.getElementById('change-pwd-modal'); if (m) m.remove(); }, 2000);
+            } else { err.textContent = data.error; }
+        } catch (e) { err.textContent = 'Network error'; }
+    };
 
     // Initialize
     initNav();
@@ -862,20 +1001,20 @@ function handleLogout() {
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
     modal.innerHTML = `
-        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
-        <div class="logout-dialog">
-            <div class="logout-icon-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
-                </svg>
+        < div class="logout-overlay" onclick = "closeLogoutModal()" ></div >
+            <div class="logout-dialog">
+                <div class="logout-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                    </svg>
+                </div>
+                <h3>Are you sure you want to log out?</h3>
+                <p>You will need to sign in again to access your dashboard.</p>
+                <div class="logout-actions">
+                    <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                    <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                </div>
             </div>
-            <h3>Are you sure you want to log out?</h3>
-            <p>You will need to sign in again to access your dashboard.</p>
-            <div class="logout-actions">
-                <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
-                <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
-            </div>
-        </div>
     `;
     document.body.appendChild(modal);
     // Trigger entrance animation

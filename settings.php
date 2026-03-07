@@ -1,3 +1,13 @@
+<?php
+require_once "includes/auth_check.php";
+$parentId = $_SESSION['id'];
+$fname = $_SESSION['fname'];
+$lname = $_SESSION['lname'];
+$initials = strtoupper(substr($fname, 0, 1) . substr($lname, 0, 1));
+$stmt = $connect->prepare("SELECT s.plan_name FROM parent_subscription ps INNER JOIN subscription s ON ps.subscription_id = s.subscription_id WHERE ps.parent_id = :pid LIMIT 1");
+$stmt->execute(['pid' => $parentId]);
+$planname = $stmt->fetchColumn() ?: 'Free';
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -12,56 +22,9 @@
 </head>
 
 <body>
+    <?php include "includes/header.php"; ?>
     <div class="dashboard-layout">
-        <!-- Sidebar -->
-        <aside class="dashboard-sidebar">
-            <div class="sidebar-header">
-                <a href="index.php" class="sidebar-logo">
-                    <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
-                </a>
-                <div class="user-profile" onclick="navigateTo('profile')" style="cursor: pointer;">
-                    <div class="user-avatar">SJ</div>
-                    <div class="user-info">
-                        <div class="user-name">Sarah Johnson</div>
-                        <div class="user-badge-text">Premium Member</div>
-                    </div>
-                    <div class="profile-edit-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 18l6-6-6-6" />
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <nav class="sidebar-nav">
-                <button class="nav-item" onclick="navigateTo('dashboard')">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                    <span>Home</span>
-                </button>
-            </nav>
-
-            <div class="sidebar-footer">
-                <button class="nav-item active">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3" />
-                        <path
-                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </svg>
-                    <span>Settings</span>
-                </button>
-                <button class="nav-item nav-item-logout" onclick="navigateTo('index')">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                        <polyline points="16 17 21 12 16 7" />
-                        <line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                    <span>Log Out</span>
-                </button>
-            </div>
-        </aside>
+        <?php include "includes/sidebar.php"; ?>
 
         <!-- Main Content -->
         <main class="dashboard-main">
@@ -102,7 +65,7 @@
                                     <path d="M9 18l6-6-6-6" />
                                 </svg>
                             </div>
-                            <div class="settings-item">
+                            <div class="settings-item" onclick="openChangePasswordModal()" style="cursor:pointer;">
                                 <div class="settings-item-info">
                                     <div class="settings-item-label">Change Password</div>
                                     <div class="settings-item-description">Update your account password</div>
@@ -214,7 +177,8 @@
                                     <p class="subscription-price">$9.99/month</p>
                                 </div>
                             </div>
-                            <button class="btn btn-outline btn-full">Manage Subscription</button>
+                            <button class="btn btn-outline btn-full" onclick="window.location.href='payment.php'">Manage
+                                Subscription</button>
                         </div>
                     </div>
                 </div>
@@ -236,6 +200,48 @@
 
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
+    <script>
+        function openChangePasswordModal() {
+            let existing = document.getElementById('change-pwd-modal');
+            if (existing) existing.remove();
+            const modal = document.createElement('div');
+            modal.id = 'change-pwd-modal';
+            modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
+                    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Change Password</h2>
+                    <p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem;">Enter your current and new password</p>
+                    <input type="password" id="cp-current" placeholder="Current password" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <input type="password" id="cp-new" placeholder="New password (min 8 chars)" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <button onclick="changePassword()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Update Password</button>
+                    <div id="cp-error" style="color:#ef4444;font-size:0.85rem;margin-top:0.5rem;"></div>
+                    <div id="cp-success" style="color:#22c55e;font-size:0.85rem;margin-top:0.5rem;"></div>
+                </div>
+            </div>
+        `;
+            document.body.appendChild(modal);
+        }
+        async function changePassword() {
+            const current = document.getElementById('cp-current').value;
+            const newPwd = document.getElementById('cp-new').value;
+            const err = document.getElementById('cp-error');
+            const suc = document.getElementById('cp-success');
+            err.textContent = ''; suc.textContent = '';
+            if (!current || !newPwd) { err.textContent = 'Both fields are required'; return; }
+            if (newPwd.length < 8) { err.textContent = 'New password must be at least 8 characters'; return; }
+            try {
+                const res = await fetch('api_email_verify.php?action=change-password', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_password: current, new_password: newPwd })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    suc.textContent = data.message;
+                    setTimeout(() => { const m = document.getElementById('change-pwd-modal'); if (m) m.remove(); }, 2000);
+                } else { err.textContent = data.error; }
+            } catch (e) { err.textContent = 'Network error'; }
+        }
+    </script>
 </body>
 
 </html>
