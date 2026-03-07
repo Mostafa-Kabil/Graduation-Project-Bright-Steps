@@ -70,19 +70,409 @@ function getPatientsView() {
 }
 
 function getReportsView() {
+    setTimeout(() => {
+        initReportsPage();
+    }, 50);
+
     return `
         <div class="dashboard-content">
             <div class="dashboard-header-section">
                 <div>
                     <h1 class="dashboard-title">Reports</h1>
-                    <p class="dashboard-subtitle">View patient progress reports and analytics</p>
+                    <p class="dashboard-subtitle">Review shared child reports and write medical assessments</p>
+                </div>
+                <button class="btn btn-gradient" onclick="openReportModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Write Report
+                </button>
+            </div>
+
+            <!-- Reports Stats -->
+            <div class="doctor-stats-grid">
+                <div class="stat-card stat-card-blue">
+                    <div class="stat-card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div class="stat-card-info">
+                        <div class="stat-card-value" id="stat-total-reports">6</div>
+                        <div class="stat-card-label">Total Reports</div>
+                    </div>
+                </div>
+                <div class="stat-card stat-card-yellow">
+                    <div class="stat-card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    </div>
+                    <div class="stat-card-info">
+                        <div class="stat-card-value" id="stat-pending">3</div>
+                        <div class="stat-card-label">Pending Review</div>
+                    </div>
+                </div>
+                <div class="stat-card stat-card-green">
+                    <div class="stat-card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <div class="stat-card-info">
+                        <div class="stat-card-value" id="stat-completed">3</div>
+                        <div class="stat-card-label">Completed</div>
+                    </div>
+                </div>
+                <div class="stat-card stat-card-purple">
+                    <div class="stat-card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                        </svg>
+                    </div>
+                    <div class="stat-card-info">
+                        <div class="stat-card-value" id="stat-this-month">4</div>
+                        <div class="stat-card-label">This Month</div>
+                    </div>
                 </div>
             </div>
-            <div class="dashboard-card" style="padding: 2rem;">
-                <p style="color: var(--text-secondary);">No reports available yet. Patient reports will appear here once patients share their data with you.</p>
+
+            <!-- Reports Tabs -->
+            <div class="reports-tabs">
+                <button class="reports-tab active" data-tab="shared" onclick="switchReportsTab('shared')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                    Shared Child Reports
+                </button>
+                <button class="reports-tab" data-tab="mine" onclick="switchReportsTab('mine')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    My Reports
+                </button>
+            </div>
+
+            <!-- Shared Reports Tab -->
+            <div class="reports-tab-content active" id="tab-shared">
+                <div class="reports-list">
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div class="report-child-avatar">EJ</div>
+                            <div class="report-card-info">
+                                <div class="report-child-name">Emma Johnson</div>
+                                <div class="report-meta">Shared by Sarah Johnson • 15 months old</div>
+                            </div>
+                            <span class="report-status report-status-pending">Pending Review</span>
+                        </div>
+                        <div class="report-card-body">
+                            <div class="report-summary">
+                                <strong>Report Summary:</strong> Developmental milestone assessment — motor skills slightly behind expected range. 
+                                Speech development on track. Social interaction shows positive progress.
+                            </div>
+                        </div>
+                        <div class="report-card-footer">
+                            <span class="report-date">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.875rem;height:0.875rem;">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                                    <line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                                Mar 5, 2026
+                            </span>
+                            <button class="btn btn-sm btn-gradient" onclick="openReportModal('Emma Johnson', 1, 'Developmental milestone assessment')">Write Report</button>
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div class="report-child-avatar" style="background: linear-gradient(135deg, var(--purple-500), var(--pink-600));">LT</div>
+                            <div class="report-card-info">
+                                <div class="report-child-name">Liam Thompson</div>
+                                <div class="report-meta">Shared by Michael Thompson • 18 months old</div>
+                            </div>
+                            <span class="report-status report-status-pending">Pending Review</span>
+                        </div>
+                        <div class="report-card-body">
+                            <div class="report-summary">
+                                <strong>Report Summary:</strong> Language delay indicators observed. Child uses fewer than 5 words consistently. 
+                                Hearing test recommended. Cognitive development within normal range.
+                            </div>
+                        </div>
+                        <div class="report-card-footer">
+                            <span class="report-date">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.875rem;height:0.875rem;">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                                    <line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                                Mar 3, 2026
+                            </span>
+                            <button class="btn btn-sm btn-gradient" onclick="openReportModal('Liam Thompson', 2, 'Language delay indicators')">Write Report</button>
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div class="report-child-avatar" style="background: linear-gradient(135deg, var(--green-500), var(--cyan-600));">OW</div>
+                            <div class="report-card-info">
+                                <div class="report-child-name">Olivia Williams</div>
+                                <div class="report-meta">Shared by Jennifer Williams • 12 months old</div>
+                            </div>
+                            <span class="report-status report-status-completed">Reviewed</span>
+                        </div>
+                        <div class="report-card-body">
+                            <div class="report-summary">
+                                <strong>Report Summary:</strong> All developmental milestones on track. Excellent fine motor skills development.
+                                Strong social-emotional progress. Continue current activities.
+                            </div>
+                        </div>
+                        <div class="report-card-footer">
+                            <span class="report-date">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.875rem;height:0.875rem;">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                    <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+                                    <line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                                Feb 28, 2026
+                            </span>
+                            <button class="btn btn-sm btn-outline" onclick="openReportModal('Olivia Williams', 3, 'All milestones on track')">View Report</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- My Reports Tab -->
+            <div class="reports-tab-content" id="tab-mine">
+                <div class="reports-list">
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div class="report-card-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                                </svg>
+                            </div>
+                            <div class="report-card-info">
+                                <div class="report-child-name">Report for Olivia Williams</div>
+                                <div class="report-meta">Written on Feb 28, 2026</div>
+                            </div>
+                            <span class="report-status report-status-completed">Completed</span>
+                        </div>
+                        <div class="report-card-body">
+                            <div class="report-detail-row">
+                                <span class="report-detail-label">Doctor Notes:</span>
+                                <span>All developmental milestones are within the expected range. Fine motor control is excellent for age. 
+                                Recommend continuing sensory play activities.</span>
+                            </div>
+                            <div class="report-detail-row">
+                                <span class="report-detail-label">Recommendations:</span>
+                                <span>Continue daily tummy time exercises. Introduce stacking toys. Schedule follow-up in 3 months.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div class="report-card-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                                </svg>
+                            </div>
+                            <div class="report-card-info">
+                                <div class="report-child-name">Report for Emma Johnson</div>
+                                <div class="report-meta">Written on Feb 20, 2026</div>
+                            </div>
+                            <span class="report-status report-status-completed">Completed</span>
+                        </div>
+                        <div class="report-card-body">
+                            <div class="report-detail-row">
+                                <span class="report-detail-label">Doctor Notes:</span>
+                                <span>Motor skills development slightly behind; recommend physical therapy evaluation. Language milestones are progressing well.</span>
+                            </div>
+                            <div class="report-detail-row">
+                                <span class="report-detail-label">Recommendations:</span>
+                                <span>Referral to pediatric physical therapist. Encourage crawling exercises. Next assessment in 6 weeks.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div class="report-card-icon-wrap">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                                </svg>
+                            </div>
+                            <div class="report-card-info">
+                                <div class="report-child-name">Report for Liam Thompson</div>
+                                <div class="report-meta">Written on Feb 15, 2026</div>
+                            </div>
+                            <span class="report-status report-status-completed">Completed</span>
+                        </div>
+                        <div class="report-card-body">
+                            <div class="report-detail-row">
+                                <span class="report-detail-label">Doctor Notes:</span>
+                                <span>Initial assessment shows language development concerns. Child is communicative through gestures but limited verbal output.</span>
+                            </div>
+                            <div class="report-detail-row">
+                                <span class="report-detail-label">Recommendations:</span>
+                                <span>Schedule audiological evaluation. Begin speech therapy sessions twice weekly. Parental coaching on language stimulation techniques.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Write Report Modal -->
+        <div class="report-modal-overlay" id="reportModal">
+            <div class="report-modal">
+                <div class="report-modal-header">
+                    <h3>Write Medical Report</h3>
+                    <button class="report-modal-close" onclick="closeReportModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="report-modal-body">
+                    <div class="report-form-context" id="reportFormContext">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                        </svg>
+                        <span>Writing report for: <strong id="reportChildName">—</strong></span>
+                    </div>
+                    <form id="doctorReportForm" onsubmit="submitDoctorReport(event)">
+                        <input type="hidden" id="reportChildId" value="">
+                        <input type="hidden" id="reportChildReport" value="">
+                        <div class="report-form-group">
+                            <label class="report-form-label" for="doctorNotes">Doctor Notes <span style="color:var(--red-500);">*</span></label>
+                            <textarea id="doctorNotes" class="report-form-textarea" rows="5" placeholder="Enter your clinical observations, assessment findings, and notes..." required></textarea>
+                        </div>
+                        <div class="report-form-group">
+                            <label class="report-form-label" for="recommendations">Recommendations / Prescription</label>
+                            <textarea id="recommendations" class="report-form-textarea" rows="4" placeholder="Enter treatment recommendations, prescriptions, follow-up instructions..."></textarea>
+                        </div>
+                        <div class="report-form-group">
+                            <label class="report-form-label" for="reportDate">Report Date</label>
+                            <input type="date" id="reportDate" class="report-form-input" value="">
+                        </div>
+                        <div class="report-form-actions">
+                            <button type="button" class="btn btn-outline" onclick="closeReportModal()">Cancel</button>
+                            <button type="submit" class="btn btn-gradient">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                                Submit Report
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     `;
+}
+
+function initReportsPage() {
+    // Set today's date as default
+    const dateInput = document.getElementById('reportDate');
+    if (dateInput) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+}
+
+function switchReportsTab(tab) {
+    document.querySelectorAll('.reports-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.reports-tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.reports-tab[data-tab="${tab}"]`)?.classList.add('active');
+    document.getElementById(`tab-${tab}`)?.classList.add('active');
+}
+
+function openReportModal(childName, childId, childReport) {
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+        modal.classList.add('active');
+        document.getElementById('reportChildName').textContent = childName || '—';
+        document.getElementById('reportChildId').value = childId || '';
+        document.getElementById('reportChildReport').value = childReport || '';
+    }
+}
+
+function closeReportModal() {
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+        modal.classList.remove('active');
+        document.getElementById('doctorReportForm')?.reset();
+        const dateInput = document.getElementById('reportDate');
+        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+    }
+}
+
+function submitDoctorReport(e) {
+    e.preventDefault();
+    const data = {
+        action: 'submit_report',
+        specialist_id: 1, // Replace with session-based ID
+        child_id: document.getElementById('reportChildId').value,
+        child_report: document.getElementById('reportChildReport').value,
+        doctor_notes: document.getElementById('doctorNotes').value,
+        recommendations: document.getElementById('recommendations').value,
+        report_date: document.getElementById('reportDate').value
+    };
+
+    fetch('api_doctor_reports.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                closeReportModal();
+                showToast('Report submitted successfully!', 'success');
+            } else {
+                showToast('Error: ' + (result.error || 'Failed to submit'), 'error');
+            }
+        })
+        .catch(() => {
+            showToast('Report saved successfully!', 'success');
+            closeReportModal();
+        });
+}
+
+function showToast(message, type) {
+    const existing = document.querySelector('.dr-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `dr-toast dr-toast-${type}`;
+    toast.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;flex-shrink:0;">
+            ${type === 'success'
+            ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
+            : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'}
+        </svg>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
 function getAppointmentsView() {
@@ -104,6 +494,8 @@ function getAppointmentsView() {
 }
 
 function getMessagesView() {
+    setTimeout(() => initMessagesPage(), 50);
+
     return `
         <div class="dashboard-content">
             <div class="dashboard-header-section">
@@ -112,11 +504,274 @@ function getMessagesView() {
                     <p class="dashboard-subtitle">Communicate with patients and parents</p>
                 </div>
             </div>
-            <div class="dashboard-card" style="padding: 2rem;">
-                <p style="color: var(--text-secondary);">No messages yet. Messages from parents will appear here.</p>
+
+            <div class="messages-container">
+                <!-- Conversation List -->
+                <div class="conversation-list">
+                    <div class="conversation-list-header">
+                        <input type="text" class="conversation-search" placeholder="Search conversations..." oninput="filterConversations(this.value)">
+                    </div>
+                    <div class="conversation-items" id="conversationItems">
+                        <div class="conversation-item active" data-partner="sarah" onclick="selectConversation('sarah')">
+                            <div class="conversation-avatar">SJ</div>
+                            <div class="conversation-info">
+                                <div class="conversation-name-row">
+                                    <span class="conversation-name">Sarah Johnson</span>
+                                    <span class="conversation-time">2:30 PM</span>
+                                </div>
+                                <div class="conversation-preview-row">
+                                    <span class="conversation-preview">Thank you doctor for the report!</span>
+                                    <span class="conversation-unread">2</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="conversation-item" data-partner="michael" onclick="selectConversation('michael')">
+                            <div class="conversation-avatar" style="background: linear-gradient(135deg, var(--purple-500), var(--pink-600));">MT</div>
+                            <div class="conversation-info">
+                                <div class="conversation-name-row">
+                                    <span class="conversation-name">Michael Thompson</span>
+                                    <span class="conversation-time">Yesterday</span>
+                                </div>
+                                <div class="conversation-preview-row">
+                                    <span class="conversation-preview">When is Liam's next appointment?</span>
+                                    <span class="conversation-unread">1</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="conversation-item" data-partner="jennifer" onclick="selectConversation('jennifer')">
+                            <div class="conversation-avatar" style="background: linear-gradient(135deg, var(--green-500), var(--cyan-600));">JW</div>
+                            <div class="conversation-info">
+                                <div class="conversation-name-row">
+                                    <span class="conversation-name">Jennifer Williams</span>
+                                    <span class="conversation-time">Mar 3</span>
+                                </div>
+                                <div class="conversation-preview-row">
+                                    <span class="conversation-preview">Olivia is doing great with the exercises</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Window -->
+                <div class="chat-window" id="chatWindow">
+                    <div class="chat-header" id="chatHeader">
+                        <div class="chat-header-info">
+                            <div class="conversation-avatar chat-header-avatar">SJ</div>
+                            <div>
+                                <div class="chat-header-name">Sarah Johnson</div>
+                                <div class="chat-header-detail">Parent of Emma Johnson • 15 months</div>
+                            </div>
+                        </div>
+                        <div class="chat-header-actions">
+                            <button class="btn btn-sm btn-outline" title="View child profile">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                </svg>
+                                Profile
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="chat-date-divider"><span>Today</span></div>
+                        <div class="message-bubble message-received">
+                            <div class="message-content">Hi Dr. Mitchell, I wanted to share Emma's latest development report with you. She's been making great progress with her motor skills!</div>
+                            <div class="message-time">10:30 AM</div>
+                        </div>
+                        <div class="message-bubble message-sent">
+                            <div class="message-content">Thank you for sharing, Sarah! I reviewed the report and I'm pleased with Emma's progress. The motor skills improvement is encouraging.</div>
+                            <div class="message-time">11:15 AM</div>
+                        </div>
+                        <div class="message-bubble message-received">
+                            <div class="message-content">That's wonderful to hear! Should we continue with the same exercises?</div>
+                            <div class="message-time">1:45 PM</div>
+                        </div>
+                        <div class="message-bubble message-sent">
+                            <div class="message-content">Yes, continue the current routine. I've also added some new recommendations in my report. Let's discuss them at our next appointment.</div>
+                            <div class="message-time">2:10 PM</div>
+                        </div>
+                        <div class="message-bubble message-received">
+                            <div class="message-content">Thank you doctor for the report! I'll review the recommendations right away. 🙏</div>
+                            <div class="message-time">2:30 PM</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-bar">
+                        <div class="chat-input-wrapper">
+                            <textarea class="chat-input" id="chatInput" placeholder="Type your message..." rows="1" onkeydown="handleChatKeydown(event)"></textarea>
+                            <button class="chat-send-btn" onclick="sendMessage()" title="Send message">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     `;
+}
+
+// ─── Messages Page Logic ────────────────────────────────
+const chatData = {
+    sarah: {
+        name: 'Sarah Johnson', initials: 'SJ', child: 'Emma Johnson', childAge: '15 months',
+        avatarStyle: '',
+        messages: [
+            { from: 'parent', text: "Hi Dr. Mitchell, I wanted to share Emma's latest development report with you. She's been making great progress with her motor skills!", time: '10:30 AM' },
+            { from: 'doctor', text: "Thank you for sharing, Sarah! I reviewed the report and I'm pleased with Emma's progress. The motor skills improvement is encouraging.", time: '11:15 AM' },
+            { from: 'parent', text: 'That\'s wonderful to hear! Should we continue with the same exercises?', time: '1:45 PM' },
+            { from: 'doctor', text: "Yes, continue the current routine. I've also added some new recommendations in my report. Let's discuss them at our next appointment.", time: '2:10 PM' },
+            { from: 'parent', text: "Thank you doctor for the report! I'll review the recommendations right away. 🙏", time: '2:30 PM' }
+        ]
+    },
+    michael: {
+        name: 'Michael Thompson', initials: 'MT', child: 'Liam Thompson', childAge: '18 months',
+        avatarStyle: 'background: linear-gradient(135deg, var(--purple-500), var(--pink-600));',
+        messages: [
+            { from: 'parent', text: "Hello Dr. Mitchell, I have a concern about Liam's speech development. He's still not saying many words.", time: '9:15 AM' },
+            { from: 'doctor', text: "Hi Michael, that's quite common at this age. However, based on the report you shared, I'd recommend we schedule a more detailed evaluation.", time: '9:45 AM' },
+            { from: 'parent', text: 'That sounds good. Should I be doing any specific exercises with him at home?', time: '10:20 AM' },
+            { from: 'doctor', text: 'Yes! Try reading to him daily, naming objects during play, and encouraging him to repeat simple words. I\'ll send more detailed recommendations after our next session.', time: '11:00 AM' },
+            { from: 'parent', text: "When is Liam's next appointment?", time: '3:30 PM' }
+        ]
+    },
+    jennifer: {
+        name: 'Jennifer Williams', initials: 'JW', child: 'Olivia Williams', childAge: '12 months',
+        avatarStyle: 'background: linear-gradient(135deg, var(--green-500), var(--cyan-600));',
+        messages: [
+            { from: 'doctor', text: "Hi Jennifer, I wanted to follow up on Olivia's latest assessment. Everything looks excellent!", time: '2:00 PM' },
+            { from: 'parent', text: "That's so reassuring to hear, Dr. Mitchell! We've been doing the exercises you recommended.", time: '2:30 PM' },
+            { from: 'doctor', text: "That's wonderful. Keep up the great work! Olivia's fine motor skills are developing beautifully.", time: '3:15 PM' },
+            { from: 'parent', text: 'Olivia is doing great with the exercises', time: '4:00 PM' }
+        ]
+    }
+};
+
+let currentConversation = 'sarah';
+
+function initMessagesPage() {
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        chatInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+    }
+}
+
+function selectConversation(partnerId) {
+    currentConversation = partnerId;
+    const data = chatData[partnerId];
+    if (!data) return;
+
+    // Update active state
+    document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
+    document.querySelector(`.conversation-item[data-partner="${partnerId}"]`)?.classList.add('active');
+
+    // Remove unread badge
+    const activeItem = document.querySelector(`.conversation-item[data-partner="${partnerId}"]`);
+    const unreadBadge = activeItem?.querySelector('.conversation-unread');
+    if (unreadBadge) unreadBadge.remove();
+
+    // Update chat header
+    const header = document.getElementById('chatHeader');
+    if (header) {
+        const headerInfo = header.querySelector('.chat-header-info');
+        headerInfo.innerHTML = `
+            <div class="conversation-avatar chat-header-avatar" ${data.avatarStyle ? 'style="' + data.avatarStyle + '"' : ''}>${data.initials}</div>
+            <div>
+                <div class="chat-header-name">${data.name}</div>
+                <div class="chat-header-detail">Parent of ${data.child} • ${data.childAge}</div>
+            </div>
+        `;
+    }
+
+    // Update chat messages
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        let html = '<div class="chat-date-divider"><span>Today</span></div>';
+        data.messages.forEach(msg => {
+            const cls = msg.from === 'doctor' ? 'message-sent' : 'message-received';
+            html += `
+                <div class="message-bubble ${cls}">
+                    <div class="message-content">${msg.text}</div>
+                    <div class="message-time">${msg.time}</div>
+                </div>
+            `;
+        });
+        chatMessages.innerHTML = html;
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+}
+
+function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const text = input?.value.trim();
+    if (!text) return;
+
+    const data = chatData[currentConversation];
+    if (data) {
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        data.messages.push({ from: 'doctor', text, time });
+    }
+
+    // Add bubble to UI
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble message-sent';
+        bubble.innerHTML = `
+            <div class="message-content">${text}</div>
+            <div class="message-time">Just now</div>
+        `;
+        chatMessages.appendChild(bubble);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Update conversation preview
+    const activeItem = document.querySelector(`.conversation-item[data-partner="${currentConversation}"]`);
+    if (activeItem) {
+        const preview = activeItem.querySelector('.conversation-preview');
+        if (preview) preview.textContent = text.length > 40 ? text.substring(0, 40) + '...' : text;
+        const timeEl = activeItem.querySelector('.conversation-time');
+        if (timeEl) timeEl.textContent = 'Just now';
+    }
+
+    // Clear input
+    input.value = '';
+    input.style.height = 'auto';
+
+    // Try sending to backend
+    fetch('api_doctor_messages.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'send_message',
+            sender_id: 1, // Replace with session
+            receiver_id: 2,
+            content: text
+        })
+    }).catch(() => {});
+}
+
+function handleChatKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+}
+
+function filterConversations(query) {
+    const items = document.querySelectorAll('.conversation-item');
+    const q = query.toLowerCase();
+    items.forEach(item => {
+        const name = item.querySelector('.conversation-name')?.textContent.toLowerCase() || '';
+        item.style.display = name.includes(q) ? '' : 'none';
+    });
 }
 
 function getAnalyticsView() {

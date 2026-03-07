@@ -1082,6 +1082,52 @@ INSERT IGNORE INTO `milestones` (`category`, `title`, `description`, `min_age_mo
 ('self_care', 'Dresses independently', 'Puts on clothes without help', 36, 60),
 ('self_care', 'Ties shoelaces', 'Can tie own shoes', 48, 72);
 
+-- =====================================================
+-- Doctor Dashboard: Reports & Messages Tables
+-- =====================================================
+
+--
+-- Table structure for table `doctor_report`
+--
+CREATE TABLE IF NOT EXISTS `doctor_report` (
+  `doctor_report_id` int(11) NOT NULL AUTO_INCREMENT,
+  `specialist_id` int(11) NOT NULL,
+  `child_id` int(11) NOT NULL,
+  `child_report` varchar(255) DEFAULT NULL COMMENT 'Reference to child_generated_system_report.report',
+  `doctor_notes` text NOT NULL,
+  `recommendations` text DEFAULT NULL,
+  `report_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`doctor_report_id`),
+  KEY `idx_dr_specialist` (`specialist_id`),
+  KEY `idx_dr_child` (`child_id`),
+  CONSTRAINT `doctor_report_ibfk_1` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
+  CONSTRAINT `doctor_report_ibfk_2` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `message`
+--
+CREATE TABLE IF NOT EXISTS `message` (
+  `message_id` int(11) NOT NULL AUTO_INCREMENT,
+  `sender_id` int(11) NOT NULL,
+  `receiver_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `content` text NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`message_id`),
+  KEY `idx_msg_sender` (`sender_id`),
+  KEY `idx_msg_receiver` (`receiver_id`),
+  KEY `idx_msg_appointment` (`appointment_id`),
+  KEY `idx_msg_child` (`child_id`),
+  CONSTRAINT `message_ibfk_1` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `message_ibfk_2` FOREIGN KEY (`receiver_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `message_ibfk_3` FOREIGN KEY (`appointment_id`) REFERENCES `appointment` (`appointment_id`) ON DELETE SET NULL,
+  CONSTRAINT `message_ibfk_4` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

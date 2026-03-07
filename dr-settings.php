@@ -113,7 +113,7 @@
                     <p class="dashboard-subtitle">Manage your account preferences</p>
                 </div>
 
-                <div class="settings-grid">
+                <div class="settings-grid" style="grid-template-columns: 1fr; max-width: 720px;">
                     <!-- Account Section -->
                     <div class="settings-section">
                         <h2 class="settings-section-title">
@@ -135,7 +135,7 @@
                                     <path d="M9 18l6-6-6-6" />
                                 </svg>
                             </div>
-                            
+
                         </div>
                     </div>
 
@@ -207,40 +207,10 @@
                                     <option value="ar">العربية</option>
                                 </select>
                             </div>
-                            <div class="settings-item">
-                                <div class="settings-item-info">
-                                    <div class="settings-item-label">Data Sharing</div>
-                                    <div class="settings-item-description">Share progress with healthcare providers
-                                    </div>
-                                </div>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" checked>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
                         </div>
                     </div>
 
-                    <!-- Subscription Section -->
-                    <div class="settings-section">
-                        <h2 class="settings-section-title">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path
-                                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                            </svg>
-                            Subscription
-                        </h2>
-                        <div class="settings-card">
-                            <div class="subscription-info">
-                                <div class="subscription-badge">Premium</div>
-                                <div class="subscription-details">
-                                    <p>Your next billing date is <strong>March 15, 2026</strong></p>
-                                    <p class="subscription-price">$9.99/month</p>
-                                </div>
-                            </div>
-                            <button class="btn btn-outline btn-full">Manage Subscription</button>
-                        </div>
-                    </div>
+
                 </div>
             </div>
 
@@ -362,7 +332,8 @@
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-specialty">Specialty <span
                                             class="required">*</span></label>
-                                    <select id="dr-specialty" class="dr-form-select" required>
+                                    <select id="dr-specialty" class="dr-form-select" required
+                                        onchange="handleSpecialtyChange()">
                                         <option value="pediatrician" selected>Pediatrician</option>
                                         <option value="child-psychiatrist">Child Psychiatrist</option>
                                         <option value="developmental-pediatrician">Developmental Pediatrician</option>
@@ -373,6 +344,9 @@
                                         <option value="psychologist">Child Psychologist</option>
                                         <option value="other">Other</option>
                                     </select>
+                                    <input type="text" id="dr-specialty-other" class="dr-form-input"
+                                        placeholder="Enter your specialty" style="display: none; margin-top: 0.5rem;">
+                                    <input type="hidden" id="dr-specialty-final" name="specialty" value="pediatrician">
                                 </div>
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-experience">Years of Experience <span
@@ -407,7 +381,7 @@
                                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                                         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                                     </svg>
-                                   
+
                                 </span>
                             </div>
                             <div class="dr-form-grid">
@@ -422,7 +396,7 @@
                                         value="456 Healthcare Blvd, San Francisco, CA 94102" readonly>
                                 </div>
                             </div>
-                            
+
                         </div>
 
                         <!-- Section 4: Availability Settings -->
@@ -600,7 +574,8 @@
 
             const fullName = document.getElementById('dr-fullname').value.trim();
             const email = document.getElementById('dr-email').value.trim();
-            const specialty = document.getElementById('dr-specialty').value;
+            const specialtySelect = document.getElementById('dr-specialty').value;
+            const specialtyOther = document.getElementById('dr-specialty-other').value.trim();
             const experience = document.getElementById('dr-experience').value;
 
             if (!fullName) {
@@ -619,11 +594,19 @@
                 document.getElementById('dr-email').focus();
                 return;
             }
-            if (!specialty) {
+            if (!specialtySelect) {
                 showToast('Please select your specialty', 'error');
                 document.getElementById('dr-specialty').focus();
                 return;
             }
+            if (specialtySelect === 'other' && !specialtyOther) {
+                showToast('Please enter your specialty', 'error');
+                document.getElementById('dr-specialty-other').focus();
+                return;
+            }
+            // Set the final specialty value for submission
+            var finalSpecialty = (specialtySelect === 'other') ? specialtyOther : specialtySelect;
+            document.getElementById('dr-specialty-final').value = finalSpecialty;
             if (!experience || experience < 0) {
                 showToast('Please enter valid years of experience', 'error');
                 document.getElementById('dr-experience').focus();
@@ -674,6 +657,19 @@
             toast.className = 'dr-toast ' + type;
             setTimeout(function () { toast.classList.add('show'); }, 50);
             setTimeout(function () { toast.classList.remove('show'); }, 3500);
+        }
+
+        // ── Specialty "Other" Toggle ──
+        function handleSpecialtyChange() {
+            var select = document.getElementById('dr-specialty');
+            var otherInput = document.getElementById('dr-specialty-other');
+            if (select.value === 'other') {
+                otherInput.style.display = 'block';
+                otherInput.focus();
+            } else {
+                otherInput.style.display = 'none';
+                otherInput.value = '';
+            }
         }
 
         // ── Logout ──

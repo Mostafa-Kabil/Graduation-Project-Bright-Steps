@@ -1,3 +1,223 @@
+<?php
+// ═══════════════════════════════════════════════════════
+// Doctor Dashboard — Backend API Handler
+// Handles AJAX requests for Reports & Messages
+// ═══════════════════════════════════════════════════════
+if (
+    isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest'
+    || isset($_GET['ajax'])
+) {
+    header('Content-Type: application/json');
+    require_once 'connection.php';
+
+    $method = $_SERVER['REQUEST_METHOD'];
+    $section = $_GET['section'] ?? '';
+
+    // ─── REPORTS SECTION ────────────────────────────────
+    if ($section === 'reports') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_shared_reports') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    SELECT 
+                        csr.child_id, csr.report,
+                        c.first_name AS child_first_name, c.last_name AS child_last_name,
+                        c.gender, c.birth_year, c.birth_month,
+                        p.parent_id,
+                        u.first_name AS parent_first_name, u.last_name AS parent_last_name
+                    FROM child_generated_system_report csr
+                    JOIN child c ON csr.child_id = c.child_id
+                    JOIN parent p ON c.parent_id = p.parent_id
+                    JOIN users u ON p.parent_id = u.user_id
+                    JOIN appointment a ON a.parent_id = p.parent_id AND a.specialist_id = :sid
+                    GROUP BY csr.child_id, csr.report
+                    ORDER BY csr.child_id DESC
+                ");
+                $stmt->execute([':sid' => $specialist_id]);
+                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+
+            } elseif ($action === 'get_doctor_reports') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    SELECT dr.*, c.first_name AS child_first_name, c.last_name AS child_last_name
+                    FROM doctor_report dr
+                    JOIN child c ON dr.child_id = c.child_id
+                    WHERE dr.specialist_id = :sid
+                    ORDER BY dr.created_at DESC
+                ");
+                $stmt->execute([':sid' => $specialist_id]);
+                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+            }
+
+        } elseif ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'submit_report') {
+                $specialist_id = intval($input['specialist_id'] ?? 0);
+                $child_id = intval($input['child_id'] ?? 0);
+                $child_report = trim($input['child_report'] ?? '');
+                $doctor_notes = trim($input['doctor_notes'] ?? '');
+                $recommendations = trim($input['recommendations'] ?? '');
+                $report_date = trim($input['report_date'] ?? date('Y-m-d'));
+
+                if (!$specialist_id || !$child_id || !$doctor_notes) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id, child_id, and doctor_notes are required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    INSERT INTO doctor_report (specialist_id, child_id, child_report, doctor_notes, recommendations, report_date)
+                    VALUES (:sid, :cid, :cr, :notes, :rec, :rdate)
+                ");
+                $stmt->execute([
+                    ':sid' => $specialist_id,
+                    ':cid' => $child_id,
+                    ':cr' => $child_report,
+                    ':notes' => $doctor_notes,
+                    ':rec' => $recommendations,
+                    ':rdate' => $report_date
+                ]);
+                echo json_encode(['success' => true, 'doctor_report_id' => $connect->lastInsertId()]);
+                exit;
+            }
+        }
+    }
+
+    // ─── MESSAGES SECTION ───────────────────────────────
+    if ($section === 'messages') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_conversations') {
+                $user_id = intval($_GET['user_id'] ?? 0);
+                if (!$user_id) {
+                    echo json_encode(['success' => false, 'error' => 'user_id required']);
+                    exit;
+                }
+                // Get latest message per conversation partner
+                $stmt = $connect->prepare("
+                    SELECT 
+                        partner.user_id AS partner_id,
+                        partner.first_name AS partner_first_name,
+                        partner.last_name  AS partner_last_name,
+                        partner.role       AS partner_role,
+                        latest.content     AS last_message,
+                        latest.sent_at     AS last_message_time,
+                        (SELECT COUNT(*) FROM message m2 
+                         WHERE m2.sender_id = partner.user_id 
+                           AND m2.receiver_id = :uid2 
+                           AND m2.is_read = 0) AS unread_count
+                    FROM users partner
+                    JOIN message latest ON (
+                        (latest.sender_id = partner.user_id AND latest.receiver_id = :uid3)
+                        OR (latest.sender_id = :uid4 AND latest.receiver_id = partner.user_id)
+                    )
+                    WHERE partner.user_id != :uid5
+                      AND latest.sent_at = (
+                          SELECT MAX(m3.sent_at) FROM message m3
+                          WHERE (m3.sender_id = :uid6 AND m3.receiver_id = partner.user_id)
+                             OR (m3.sender_id = partner.user_id AND m3.receiver_id = :uid7)
+                      )
+                    GROUP BY partner.user_id
+                    ORDER BY latest.sent_at DESC
+                ");
+                $stmt->execute([
+                    ':uid2' => $user_id,
+                    ':uid3' => $user_id,
+                    ':uid4' => $user_id,
+                    ':uid5' => $user_id,
+                    ':uid6' => $user_id,
+                    ':uid7' => $user_id
+                ]);
+                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+
+            } elseif ($action === 'get_messages') {
+                $user_id = intval($_GET['user_id'] ?? 0);
+                $partner_id = intval($_GET['partner_id'] ?? 0);
+                if (!$user_id || !$partner_id) {
+                    echo json_encode(['success' => false, 'error' => 'user_id and partner_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    SELECT m.*, u.first_name AS sender_first_name, u.last_name AS sender_last_name
+                    FROM message m
+                    JOIN users u ON m.sender_id = u.user_id
+                    WHERE (m.sender_id = :uid AND m.receiver_id = :pid)
+                       OR (m.sender_id = :pid2 AND m.receiver_id = :uid2)
+                    ORDER BY m.sent_at ASC
+                ");
+                $stmt->execute([':uid' => $user_id, ':pid' => $partner_id, ':pid2' => $partner_id, ':uid2' => $user_id]);
+                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+            }
+
+        } elseif ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'send_message') {
+                $sender_id = intval($input['sender_id'] ?? 0);
+                $receiver_id = intval($input['receiver_id'] ?? 0);
+                $content = trim($input['content'] ?? '');
+                $appointment_id = !empty($input['appointment_id']) ? intval($input['appointment_id']) : null;
+                $child_id = !empty($input['child_id']) ? intval($input['child_id']) : null;
+
+                if (!$sender_id || !$receiver_id || !$content) {
+                    echo json_encode(['success' => false, 'error' => 'sender_id, receiver_id, and content are required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    INSERT INTO message (sender_id, receiver_id, appointment_id, child_id, content)
+                    VALUES (:sid, :rid, :aid, :cid, :content)
+                ");
+                $stmt->execute([
+                    ':sid' => $sender_id,
+                    ':rid' => $receiver_id,
+                    ':aid' => $appointment_id,
+                    ':cid' => $child_id,
+                    ':content' => $content
+                ]);
+                echo json_encode(['success' => true, 'message_id' => $connect->lastInsertId()]);
+                exit;
+
+            } elseif ($action === 'mark_read') {
+                $user_id = intval($input['user_id'] ?? 0);
+                $partner_id = intval($input['partner_id'] ?? 0);
+                if (!$user_id || !$partner_id) {
+                    echo json_encode(['success' => false, 'error' => 'user_id and partner_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    UPDATE message SET is_read = 1 
+                    WHERE sender_id = :pid AND receiver_id = :uid AND is_read = 0
+                ");
+                $stmt->execute([':pid' => $partner_id, ':uid' => $user_id]);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+        }
+    }
+
+    // Fallback for unknown ajax requests
+    echo json_encode(['success' => false, 'error' => 'Invalid section or action']);
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
