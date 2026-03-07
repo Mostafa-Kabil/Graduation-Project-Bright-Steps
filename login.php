@@ -3,10 +3,27 @@ ob_start();
 session_start();
 include 'connection.php';
 
+// If already logged in, redirect to appropriate dashboard
+if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
+    if ($_SESSION['role'] === 'admin') {
+        header("Location: admin-dashboard.php");
+        exit;
+    } elseif ($_SESSION['role'] === 'doctor') {
+        header("Location: doctor-dashboard.php");
+        exit;
+    } elseif ($_SESSION['role'] === 'clinic') {
+        header("Location: clinic-dashboard.php");
+        exit;
+    } else {
+        header("Location: dashboard.php");
+        exit;
+    }
+}
+
 $errors = [];
 
 if (isset($_POST['login'])) {
-    $email    = trim($_POST['email']);
+    $email = trim($_POST['email']);
     $password = trim($_POST['password']);
 
     // basic validation
@@ -18,25 +35,36 @@ if (isset($_POST['login'])) {
     }
 
     if (count($errors) === 0) {
-        $sql  = "SELECT * FROM users WHERE email = :email LIMIT 1";
+        $sql = "SELECT * FROM users WHERE email = :email LIMIT 1";
         $stmt = $connect->prepare($sql);
         $stmt->execute(['email' => $email]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
-                if ($user['role'] === 'parent') {
-                    // credentials are correct – set session and redirect
-                    $_SESSION['id']    = $user['user_id'];
-                    $_SESSION['fname'] = $user['first_name'];
-                    $_SESSION['lname'] = $user['last_name'];
-                    $_SESSION['email'] = $user['email'];
-                    $_SESSION['role']  = $user['role'];
+                // credentials are correct – set session
+                $_SESSION['id'] = $user['user_id'];
+                $_SESSION['fname'] = $user['first_name'];
+                $_SESSION['lname'] = $user['last_name'];
+                $_SESSION['email'] = $user['email'];
+                $_SESSION['role'] = $user['role'];
 
+                // route by role
+                if ($user['role'] === 'admin') {
+                    header("Location: admin-dashboard.php");
+                    exit;
+                } elseif ($user['role'] === 'doctor') {
+                    header("Location: doctor-dashboard.php");
+                    exit;
+                } elseif ($user['role'] === 'clinic') {
+                    header("Location: clinic-dashboard.php");
+                    exit;
+                } elseif ($user['role'] === 'parent') {
                     header("Location: dashboard.php");
                     exit;
                 } else {
-                    $errors[] = "This portal is for parents only.";
+                    header("Location: dashboard.php");
+                    exit;
                 }
             } else {
                 $errors[] = "Incorrect email or password.";
@@ -58,15 +86,15 @@ if (isset($_POST['login'])) {
     <link rel="stylesheet" href="styles/globals.css">
     <link rel="stylesheet" href="styles/auth.css">
     <style>
-.input-error {
-    border: 1px solid #e53935 !important;
-}
+        .input-error {
+            border: 1px solid #e53935 !important;
+        }
 
-.error-message {
-    color: #e53935;
-    font-size: 13px;
-    margin-top: 6px;
-}
+        .error-message {
+            color: #e53935;
+            font-size: 13px;
+            margin-top: 6px;
+        }
     </style>
 </head>
 
@@ -88,67 +116,31 @@ if (isset($_POST['login'])) {
                     <h1 class="auth-title">Welcome back!</h1>
                     <p class="auth-subtitle">Continue your child's development journey</p>
                 </div>
-                
-<form novalidate id="login-form" method="POST" class="auth-form">
-    <div class="form-group">
-        <label class="form-label" for="email">Email</label>
 
-        <input 
-            type="email" 
-            name="email" 
-            id="email" 
-            class="form-input 
-            <?php 
-                foreach ($errors as $error) {
-                    if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password." || $error === "This portal is for parents only.") {
-                        echo "input-error";
-                        break;
-                    }
-                }
-            ?>" 
-            placeholder="parent@example.com" 
-            value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
+                <form novalidate id="login-form" method="POST" class="auth-form">
+                    <div class="form-group">
+                        <label class="form-label" for="email">Email</label>
+                        <input type="email" name="email" id="email" class="form-input" placeholder="parent@example.com"
+                            value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
+                    </div>
 
-        <?php foreach ($errors as $error): ?>
-            <?php if ($error === "Email is required." || $error === "Email not found." || $error === "Incorrect email or password." || $error === "This portal is for parents only."): ?>
-                <p class="error-message"><?php echo htmlspecialchars($error); ?></p>
-                <?php break; ?>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </div>
+                    <div class="form-group">
+                        <div class="form-label-row">
+                            <label class="form-label" for="password">Password</label>
+                            <a href="#" class="form-link">Forgot?</a>
+                        </div>
+                        <input type="password" name="password" id="password" class="form-input" placeholder="••••••••"
+                            required>
+                    </div>
 
-    <div class="form-group">
-        <div class="form-label-row">
-            <label class="form-label" for="password">Password</label>
-            <a href="#" class="form-link">Forgot?</a>
-        </div>
+                    <button type="submit" name="login" class="btn btn-gradient btn-lg btn-full">Log In</button>
+                </form>
 
-        <input 
-            type="password" 
-            name="password" 
-            id="password" 
-            class="form-input 
-            <?php 
-                foreach ($errors as $error) {
-                    if ($error === "Password is required." || $error === "Incorrect email or password.") {
-                        echo "input-error";
-                        break;
-                    }
-                }
-            ?>" 
-            placeholder="••••••••" 
-            required>
-
-        <?php foreach ($errors as $error): ?>
-            <?php if ($error === "Password is required." || $error === "Incorrect email or password."): ?>
-                <p class="error-message"><?php echo htmlspecialchars($error); ?></p>
-                <?php break; ?>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </div>
-
-    <button type="submit" name="login" class="btn btn-gradient btn-lg btn-full">Log In</button>
-</form>
+                <?php if (!empty($errors)): ?>
+                    <script>
+                        alert(<?php echo json_encode(implode("\n", $errors)); ?>);
+                    </script>
+                <?php endif; ?>
 
                 <div class="auth-footer">
                     <span class="auth-footer-text">Don't have an account? </span>
