@@ -1,12 +1,5 @@
 <?php
-session_start();
-include "connection.php";
-if (!isset($_SESSION['email'])) {
-    header("Location: login.php");
-    exit();
-}
-
-$parentId = $_SESSION['id'] ?? null;
+require_once "includes/auth_check.php";
 $planname = 'Free';
 $dashboardData = [
     'parent' => [
@@ -40,6 +33,11 @@ if ($parentId) {
     $stmt = $connect->prepare($sql);
     $stmt->execute(['parent_id' => $parentId]);
     $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($children)) {
+        header("Location: add-child.php?setup=1");
+        exit();
+    }
 
     foreach ($children as &$ch) {
         $bd = mktime(0, 0, 0, $ch['birth_month'], $ch['birth_day'], $ch['birth_year']);
@@ -100,79 +98,10 @@ if ($parentId) {
 </head>
 
 <body>
-    <!-- Mobile Header (visible only on mobile) -->
-    <header class="dashboard-mobile-header">
-        <a href="index.php">
-            <img src="assets/logo.png" alt="Bright Steps" style="height:2rem;width:auto;">
-        </a>
-        <button class="hamburger-btn" id="hamburger-btn" onclick="toggleDashboardSidebar()" aria-label="Open menu">
-            <span></span><span></span><span></span>
-        </button>
-    </header>
-    <div class="dashboard-sidebar-overlay" id="dashboard-sidebar-overlay" onclick="toggleDashboardSidebar()"></div>
+    <?php include "includes/header.php"; ?>
 
     <div class="dashboard-layout">
-        <!-- Sidebar -->
-        <aside class="dashboard-sidebar">
-            <div class="sidebar-header">
-                <a href="index.php" class="sidebar-logo">
-                    <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
-                </a>
-                <div class="user-profile">
-                    <?php
-                    $text1 = $_SESSION['fname'];
-                    $fletter = $text1[0];
-                    $text2 = $_SESSION['lname'];
-                    $lletter = $text2[0];
-                    ?>
-                    <div class="user-avatar"><?php echo htmlspecialchars($fletter . $lletter); ?></div>
-                    <div class="user-info">
-                        <div class="user-name"><?php echo ($_SESSION['fname']) ?> <?php echo ($_SESSION['lname']) ?>
-                        </div>
-                        <div class="user-badge-text"><?php echo ($planname) ?> Member</div>
-                    </div>
-                    <div class="user-badge-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                            <path d="M4 22h16" />
-                            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                        </svg>
-                    </div>
-                </div>
-            </div>
-
-            <nav class="sidebar-nav" id="sidebar-nav">
-                <!-- Nav items will be populated by JavaScript -->
-            </nav>
-
-            <div class="sidebar-footer">
-                <button class="sidebar-language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    <span>عربي</span>
-                </button>
-                <button class="nav-item" data-view="settings" onclick="switchView('settings')">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="3" />
-                        <path d="M12 1v6m0 6v6m-9-9h6m6 0h6" />
-                    </svg>
-                    <span>Settings</span>
-                </button>
-                <button class="nav-item nav-item-logout" onclick="handleLogout()">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
-                    </svg>
-                    <span>Log Out</span>
-                </button>
-            </div>
-        </aside>
+        <?php include "includes/sidebar.php"; ?>
 
         <!-- Main Content -->
         <main class="dashboard-main">
@@ -460,7 +389,7 @@ if ($parentId) {
             <div class="quick-actions-card">
                 <h3 class="section-heading">Quick Actions</h3>
                 <div class="quick-actions-grid">
-                    <button class="quick-action-btn">
+                    <button class="quick-action-btn" onclick="showGrowthModal()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
                         </svg>
@@ -493,7 +422,52 @@ if ($parentId) {
                 </div>
             </div>
         </div>
-    </template> <!-- Floating Theme Toggle -->
+    </template>
+
+    <!-- Growth Measurement Modal -->
+    <div class="modal-overlay" id="growth-modal" onclick="if(event.target===this) hideGrowthModal()"
+        style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:center;justify-content:center;">
+        <div class="modal-card"
+            style="background:var(--surface-light);border-radius:20px;padding:2rem;width:90%;max-width:400px;text-align:left;position:relative;">
+            <button type="button" onclick="hideGrowthModal()"
+                style="position:absolute;top:1rem;right:1rem;background:none;border:none;color:var(--text-color);cursor:pointer;opacity:0.6;">✕</button>
+            <h2 style="margin-bottom:0.5rem;font-size:1.5rem;">Add Growth Record</h2>
+            <p style="color:var(--slate-400);font-size:0.9rem;margin-bottom:1.5rem;">Earn <strong
+                    style="color:#f59e0b;">+25 points</strong> for tracking your child's growth!</p>
+
+            <form id="growth-form" onsubmit="submitGrowth(event)">
+                <input type="hidden" id="growth-child-id" name="child_id">
+
+                <div class="form-group" style="margin-bottom:1rem;">
+                    <label class="form-label" style="display:block;margin-bottom:0.5rem;">Weight (kg)</label>
+                    <input type="number" step="0.1" name="weight" class="form-input"
+                        style="width:100%;padding:0.75rem;border-radius:8px;border:1px solid var(--surface-border);background:var(--surface-dark);color:var(--text-color);">
+                </div>
+
+                <div class="form-group" style="margin-bottom:1rem;">
+                    <label class="form-label" style="display:block;margin-bottom:0.5rem;">Height (cm)</label>
+                    <input type="number" step="0.1" name="height" class="form-input"
+                        style="width:100%;padding:0.75rem;border-radius:8px;border:1px solid var(--surface-border);background:var(--surface-dark);color:var(--text-color);">
+                </div>
+
+                <div class="form-group" style="margin-bottom:1.5rem;">
+                    <label class="form-label" style="display:block;margin-bottom:0.5rem;">Head Circumference
+                        (cm)</label>
+                    <input type="number" step="0.1" name="head_circumference" class="form-input"
+                        style="width:100%;padding:0.75rem;border-radius:8px;border:1px solid var(--surface-border);background:var(--surface-dark);color:var(--text-color);">
+                </div>
+
+                <div id="growth-msg" style="margin-bottom:1rem;font-size:0.9rem;font-weight:bold;text-align:center;">
+                </div>
+
+                <button type="submit" id="growth-submit-btn" class="btn btn-gradient btn-full"
+                    style="width:100%;padding:1rem;border-radius:12px;font-weight:bold;cursor:pointer;border:none;">Save
+                    Record & Get Points</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Floating Theme Toggle -->
     <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
         <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="5" />
@@ -532,6 +506,70 @@ if ($parentId) {
                 overlay.classList.add('open');
                 hamburger.classList.add('open');
                 document.body.style.overflow = 'hidden';
+            }
+        }
+
+        // Growth Gamification Modal Logic
+        function showGrowthModal(childId = null) {
+            // Find which child to attach to. Default to first child if not specified in param.
+            if (!childId && window.dashboardData && window.dashboardData.children.length > 0) {
+                childId = window.dashboardData.children[0].child_id;
+            }
+            if (childId) {
+                document.getElementById('growth-child-id').value = childId;
+                document.getElementById('growth-msg').textContent = '';
+                document.getElementById('growth-modal').style.display = 'flex';
+            } else {
+                alert('No child selected.');
+            }
+        }
+
+        function hideGrowthModal() {
+            document.getElementById('growth-modal').style.display = 'none';
+            document.getElementById('growth-form').reset();
+        }
+
+        async function submitGrowth(e) {
+            e.preventDefault();
+            const form = document.getElementById('growth-form');
+            const btn = document.getElementById('growth-submit-btn');
+            const msg = document.getElementById('growth-msg');
+            const data = new FormData(form);
+
+            if (!data.get('weight') && !data.get('height') && !data.get('head_circumference')) {
+                msg.style.color = '#f87171';
+                msg.textContent = 'Please enter at least one measurement.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+            msg.textContent = '';
+
+            try {
+                const res = await fetch('api_add_growth.php', {
+                    method: 'POST',
+                    body: data
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    msg.style.color = '#4ade80';
+                    msg.innerHTML = `🎉 ${result.message}`;
+                    setTimeout(() => {
+                        window.location.reload(); // Reload dashboard to fetch updated points and growth
+                    }, 2000);
+                } else {
+                    msg.style.color = '#f87171';
+                    msg.textContent = result.error || 'Failed to update growth.';
+                    btn.disabled = false;
+                    btn.textContent = 'Save Record & Get Points';
+                }
+            } catch (error) {
+                msg.style.color = '#f87171';
+                msg.textContent = 'Network error occurred.';
+                btn.disabled = false;
+                btn.textContent = 'Save Record & Get Points';
             }
         }
     </script>

@@ -52,9 +52,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($weight !== null || $height !== null || $headCirc !== null) {
                 $stmt = $connect->prepare("INSERT INTO growth_record (child_id, height, weight, head_circumference) VALUES (:cid,:h,:w,:hc)");
                 $stmt->execute(['cid' => $childId, 'h' => $height, 'w' => $weight, 'hc' => $headCirc]);
+
+                // Gamification Points for Growth
+                $pointsToAward = 25;
+                $stmt = $connect->prepare("UPDATE points_wallet SET total_points = total_points + ? WHERE child_id = ?");
+                $stmt->execute([$pointsToAward, $childId]);
+
+                // Log Transaction
+                $stmt = $connect->prepare("SELECT admin_id FROM admin LIMIT 1");
+                $stmt->execute();
+                $adminId = $stmt->fetchColumn();
+
+                if ($adminId) {
+                    $stmt = $connect->prepare("SELECT refrence_id FROM points_refrence WHERE action_name = 'Growth Update' LIMIT 1");
+                    $stmt->execute();
+                    $refId = $stmt->fetchColumn();
+
+                    if (!$refId) {
+                        $stmt = $connect->prepare("INSERT INTO points_refrence (admin_id, action_name, points_value, adjust_sign) VALUES (?, 'Growth Update', ?, '+')");
+                        $stmt->execute([$adminId, $pointsToAward]);
+                        $refId = $connect->lastInsertId();
+                    }
+
+                    $stmt = $connect->prepare("SELECT wallet_id FROM points_wallet WHERE child_id = ?");
+                    $stmt->execute([$childId]);
+                    $walletId = $stmt->fetchColumn();
+
+                    if ($walletId) {
+                        $stmt = $connect->prepare("INSERT INTO points_transaction (refrence_id, wallet_id, points_change, transaction_type) VALUES (?, ?, ?, 'deposit')");
+                        $stmt->execute([$refId, $walletId, $pointsToAward]);
+                    }
+                }
+
+                $successMsg = "Child profile saved! +$pointsToAward Points earned for logging growth.";
+            } else {
+                $successMsg = 'Child profile saved successfully!';
             }
             $connect->commit();
-            $successMsg = 'Child profile saved successfully!';
             $isNew = false;
         } catch (Exception $e) {
             $connect->rollBack();
@@ -239,7 +273,8 @@ if ($childData) {
                                 <div class="form-group">
                                     <label class="form-label" for="gender">Gender</label>
                                     <select id="gender" name="gender" class="form-input">
-                                        <option value="female" <?php echo $gender === 'female' ? 'selected' : ''; ?>>Female
+                                        <option value="female" <?php echo $gender === 'female' ? 'selected' : ''; ?>>
+                                            Female
                                         </option>
                                         <option value="male" <?php echo $gender === 'male' ? 'selected' : ''; ?>>Male
                                         </option>
@@ -251,7 +286,13 @@ if ($childData) {
                         </div>
 
                         <div class="form-section">
-                            <h3 class="form-section-title">Growth Measurements</h3>
+                            <h3 class="form-section-title">
+                                Growth Measurements
+                                <span
+                                    style="font-size:0.8rem;background:rgba(245,158,11,0.1);color:#fbbf24;padding:0.2rem 0.6rem;border-radius:12px;margin-left:0.5rem;vertical-align:middle;">
+                                    Earn +25 Points
+                                </span>
+                            </h3>
                             <div class="form-grid form-grid-3">
                                 <div class="form-group">
                                     <label class="form-label" for="weight">Weight (kg)</label>

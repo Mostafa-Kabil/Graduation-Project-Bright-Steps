@@ -33,7 +33,16 @@ if (isset($_POST['login'])) {
                     $_SESSION['email'] = $user['email'];
                     $_SESSION['role'] = $user['role'];
 
-                    header("Location: dashboard.php");
+                    // Check if parent has any children
+                    $checkChildStmt = $connect->prepare("SELECT number_of_children FROM parent WHERE parent_id = :pid");
+                    $checkChildStmt->execute(['pid' => $user['user_id']]);
+                    $parentData = $checkChildStmt->fetch(PDO::FETCH_ASSOC);
+
+                    if ($parentData && $parentData['number_of_children'] > 0) {
+                        header("Location: dashboard.php");
+                    } else {
+                        header("Location: add-child.php?setup=1");
+                    }
                     exit;
                 } else {
                     $errors[] = "This portal is for parents only.";

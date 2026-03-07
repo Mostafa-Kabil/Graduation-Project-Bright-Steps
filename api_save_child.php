@@ -80,10 +80,16 @@ try {
             'pid' => $parentId
         ]);
     } else {
+        // Failsafe: Ensure parent record exists to prevent FK constraints failure (e.g. for manually created users)
+        $ensureParent = $connect->prepare("INSERT IGNORE INTO parent (parent_id, number_of_children) VALUES (:pid, 0)");
+        $ensureParent->execute(['pid' => $parentId]);
+
         // INSERT new child
         if ($ssn === '') {
-            // Generate a placeholder SSN if not provided
-            $ssn = 'BS-' . strtoupper(bin2hex(random_bytes(5)));
+            $connect->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'SSN is required.']);
+            exit();
         }
 
         $stmt = $connect->prepare("INSERT INTO child (ssn, parent_id, first_name, last_name, birth_day, birth_month, birth_year, gender)

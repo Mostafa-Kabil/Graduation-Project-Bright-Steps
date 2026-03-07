@@ -316,8 +316,7 @@
     }
 
     function getSpeechView() {
-        return `
-        < div class="dashboard-content" >
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Speech Analysis 🗣️</h1>
@@ -389,8 +388,7 @@
     }
 
     function getMotorView() {
-        return `
-        < div class="dashboard-content" >
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Motor Skills</h1>
@@ -495,8 +493,7 @@
     }
 
     function getActivitiesView() {
-        return `
-        < div class="dashboard-content" >
+        return `<div class="dashboard-content">
                  <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
@@ -559,8 +556,7 @@
     }
 
     function getClinicView() {
-        return `
-        < div class="dashboard-content" >
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Book Appointment 🏥</h1>
@@ -637,6 +633,7 @@
                     </div>
                 </div>
             </div >
+            </div>
         `;
     }
 
@@ -646,8 +643,7 @@
         const child = children[0] || null;
         const childParam = child ? '&child_id=' + child.child_id : '';
 
-        return `
-        <div class="dashboard-content">
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                      <div>
                         <h1 class="dashboard-title">Reports & Insights 📄</h1>
@@ -728,8 +724,7 @@
         const childName = child ? child.first_name : '';
         const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
 
-        return `
-        < div class="dashboard-content" >
+        return `<div class="dashboard-content">
                 <h1 class="dashboard-title">Settings ⚙️</h1>
                 <p class="dashboard-subtitle" style="margin-bottom: 2rem;">Manage your account and app preferences</p>
                 
