@@ -213,6 +213,345 @@ if (
         }
     }
 
+    // ─── PATIENTS SECTION ───────────────────────────────
+    if ($section === 'patients') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_patients') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("
+                    SELECT DISTINCT
+                        c.child_id, c.first_name AS child_first_name, c.last_name AS child_last_name,
+                        c.gender, c.birth_year, c.birth_month, c.birth_day,
+                        u.first_name AS parent_first_name, u.last_name AS parent_last_name,
+                        p.parent_id,
+                        (SELECT a2.status FROM appointment a2 
+                         WHERE a2.specialist_id = :sid2 AND a2.parent_id = p.parent_id 
+                         ORDER BY a2.scheduled_at DESC LIMIT 1) AS last_appointment_status,
+                        (SELECT a3.scheduled_at FROM appointment a3 
+                         WHERE a3.specialist_id = :sid3 AND a3.parent_id = p.parent_id 
+                         ORDER BY a3.scheduled_at DESC LIMIT 1) AS last_appointment_date
+                    FROM appointment a
+                    JOIN parent p ON p.parent_id = a.parent_id
+                    JOIN users u ON u.user_id = p.parent_id
+                    JOIN child c ON c.parent_id = p.parent_id
+                    WHERE a.specialist_id = :sid
+                    GROUP BY c.child_id
+                    ORDER BY last_appointment_date DESC
+                ");
+                $stmt->execute([':sid' => $specialist_id, ':sid2' => $specialist_id, ':sid3' => $specialist_id]);
+                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+
+            } elseif ($action === 'get_patient_detail') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                $child_id = intval($_GET['child_id'] ?? 0);
+                if (!$specialist_id || !$child_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id and child_id required']);
+                    exit;
+                }
+
+                // Child info
+                $stmt = $connect->prepare("
+                    SELECT c.child_id, c.first_name, c.last_name, c.gender, c.birth_year, c.birth_month, c.birth_day,
+                           u.first_name AS parent_first_name, u.last_name AS parent_last_name, p.parent_id
+                    FROM child c
+                    JOIN parent p ON p.parent_id = c.parent_id
+                    JOIN users u ON u.user_id = p.parent_id
+                    WHERE c.child_id = :cid
+                ");
+                $stmt->execute([':cid' => $child_id]);
+                $child = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                // Growth records
+                $stmt2 = $connect->prepare("
+                    SELECT record_id, height, weight, head_circumference, recorded_at
+                    FROM growth_record WHERE child_id = :cid ORDER BY recorded_at DESC LIMIT 10
+                ");
+                $stmt2->execute([':cid' => $child_id]);
+                $growth = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+
+                // Milestones
+                $stmt3 = $connect->prepare("
+                    SELECT cm.achieved_at, cm.notes, m.title, m.category, m.description
+                    FROM child_milestones cm
+                    JOIN milestones m ON m.milestone_id = cm.milestone_id
+                    WHERE cm.child_id = :cid ORDER BY cm.achieved_at DESC
+                ");
+                $stmt3->execute([':cid' => $child_id]);
+                $milestones = $stmt3->fetchAll(PDO::FETCH_ASSOC);
+
+                // Doctor reports for this child
+                $stmt4 = $connect->prepare("
+                    SELECT doctor_report_id, doctor_notes, recommendations, report_date, created_at
+                    FROM doctor_report WHERE specialist_id = :sid AND child_id = :cid ORDER BY created_at DESC
+                ");
+                $stmt4->execute([':sid' => $specialist_id, ':cid' => $child_id]);
+                $reports = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+
+                // Appointments
+                $stmt5 = $connect->prepare("
+                    SELECT appointment_id, status, type, scheduled_at, comment
+                    FROM appointment
+                    WHERE specialist_id = :sid AND parent_id = (SELECT parent_id FROM child WHERE child_id = :cid LIMIT 1)
+                    ORDER BY scheduled_at DESC
+                ");
+                $stmt5->execute([':sid' => $specialist_id, ':cid' => $child_id]);
+                $appointments = $stmt5->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'child' => $child,
+                        'growth_records' => $growth,
+                        'milestones' => $milestones,
+                        'doctor_reports' => $reports,
+                        'appointments' => $appointments
+                    ]
+                ]);
+                exit;
+
+            } elseif ($action === 'search_patients') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                $query = trim($_GET['query'] ?? '');
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+                $search = '%' . $query . '%';
+                $stmt = $connect->prepare("
+                    SELECT DISTINCT
+                        c.child_id, c.first_name AS child_first_name, c.last_name AS child_last_name,
+                        c.gender, c.birth_year, c.birth_month, c.birth_day,
+                        u.first_name AS parent_first_name, u.last_name AS parent_last_name,
+                        p.parent_id
+                    FROM appointment a
+                    JOIN parent p ON p.parent_id = a.parent_id
+                    JOIN users u ON u.user_id = p.parent_id
+                    JOIN child c ON c.parent_id = p.parent_id
+                    WHERE a.specialist_id = :sid
+                      AND (CONCAT(c.first_name, ' ', c.last_name) LIKE :q1
+                           OR CONCAT(u.first_name, ' ', u.last_name) LIKE :q2)
+                    GROUP BY c.child_id
+                    ORDER BY c.first_name ASC
+                ");
+                $stmt->execute([':sid' => $specialist_id, ':q1' => $search, ':q2' => $search]);
+                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+            }
+        }
+    }
+
+    // ─── APPOINTMENTS SECTION ──────────────────────────────
+    if ($section === 'appointments') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_appointments') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                $status_filter = trim($_GET['status'] ?? '');
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+
+                $sql = "
+                    SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
+                           u.first_name AS parent_first_name, u.last_name AS parent_last_name,
+                           p.parent_id,
+                           (SELECT GROUP_CONCAT(CONCAT(c2.first_name, ' ', c2.last_name) SEPARATOR ', ')
+                            FROM child c2 WHERE c2.parent_id = p.parent_id) AS children_names
+                    FROM appointment a
+                    JOIN parent p ON p.parent_id = a.parent_id
+                    JOIN users u ON u.user_id = p.parent_id
+                    WHERE a.specialist_id = :sid
+                ";
+                $params = [':sid' => $specialist_id];
+
+                if ($status_filter) {
+                    $sql .= " AND a.status = :status";
+                    $params[':status'] = $status_filter;
+                }
+                $sql .= " ORDER BY a.scheduled_at DESC";
+
+                $stmt = $connect->prepare($sql);
+                $stmt->execute($params);
+                $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Also return summary counts
+                $stmt2 = $connect->prepare("
+                    SELECT 
+                        COUNT(*) AS total,
+                        SUM(CASE WHEN status = 'scheduled' OR status = 'confirmed' THEN 1 ELSE 0 END) AS upcoming,
+                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+                        SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) AS this_week
+                    FROM appointment WHERE specialist_id = :sid
+                ");
+                $stmt2->execute([':sid' => $specialist_id]);
+                $counts = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $appointments, 'counts' => $counts]);
+                exit;
+            }
+
+        } elseif ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'update_appointment') {
+                $appointment_id = intval($input['appointment_id'] ?? 0);
+                $status = trim($input['status'] ?? '');
+                $comment = trim($input['comment'] ?? '');
+
+                if (!$appointment_id) {
+                    echo json_encode(['success' => false, 'error' => 'appointment_id required']);
+                    exit;
+                }
+
+                $fields = [];
+                $params = [':aid' => $appointment_id];
+                if ($status) {
+                    $fields[] = "status = :status";
+                    $params[':status'] = $status;
+                }
+                if ($comment) {
+                    $fields[] = "comment = :comment";
+                    $params[':comment'] = $comment;
+                }
+
+                if (empty($fields)) {
+                    echo json_encode(['success' => false, 'error' => 'Nothing to update']);
+                    exit;
+                }
+
+                $sql = "UPDATE appointment SET " . implode(', ', $fields) . " WHERE appointment_id = :aid";
+                $stmt = $connect->prepare($sql);
+                $stmt->execute($params);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+
+            } elseif ($action === 'cancel_appointment') {
+                $appointment_id = intval($input['appointment_id'] ?? 0);
+                if (!$appointment_id) {
+                    echo json_encode(['success' => false, 'error' => 'appointment_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("UPDATE appointment SET status = 'cancelled' WHERE appointment_id = :aid");
+                $stmt->execute([':aid' => $appointment_id]);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+        }
+    }
+
+    // ─── ANALYTICS SECTION ─────────────────────────────────
+    if ($section === 'analytics') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_analytics') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+
+                // Total unique patients (children via appointments)
+                $stmt = $connect->prepare("
+                    SELECT COUNT(DISTINCT c.child_id) AS total_patients
+                    FROM appointment a
+                    JOIN child c ON c.parent_id = a.parent_id
+                    WHERE a.specialist_id = :sid
+                ");
+                $stmt->execute([':sid' => $specialist_id]);
+                $total_patients = $stmt->fetch(PDO::FETCH_ASSOC)['total_patients'] ?? 0;
+
+                // Appointment stats
+                $stmt2 = $connect->prepare("
+                    SELECT 
+                        COUNT(*) AS total_appointments,
+                        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_appointments,
+                        SUM(CASE WHEN (status = 'scheduled' OR status = 'confirmed') AND scheduled_at >= CURDATE() THEN 1 ELSE 0 END) AS upcoming_appointments,
+                        SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_appointments,
+                        SUM(CASE WHEN scheduled_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS this_week,
+                        SUM(CASE WHEN scheduled_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS this_month
+                    FROM appointment WHERE specialist_id = :sid
+                ");
+                $stmt2->execute([':sid' => $specialist_id]);
+                $appt_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                // Reports written
+                $stmt3 = $connect->prepare("
+                    SELECT COUNT(*) AS total_reports,
+                           SUM(CASE WHEN created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS reports_this_month
+                    FROM doctor_report WHERE specialist_id = :sid
+                ");
+                $stmt3->execute([':sid' => $specialist_id]);
+                $report_stats = $stmt3->fetch(PDO::FETCH_ASSOC);
+
+                // Average rating from feedback
+                $stmt4 = $connect->prepare("
+                    SELECT ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS total_reviews
+                    FROM feedback WHERE specialist_id = :sid
+                ");
+                $stmt4->execute([':sid' => $specialist_id]);
+                $rating_stats = $stmt4->fetch(PDO::FETCH_ASSOC);
+
+                // Messages count
+                $stmt5 = $connect->prepare("
+                    SELECT COUNT(*) AS total_messages,
+                           SUM(CASE WHEN sent_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS messages_this_month
+                    FROM message WHERE sender_id = :sid OR receiver_id = :sid2
+                ");
+                $stmt5->execute([':sid' => $specialist_id, ':sid2' => $specialist_id]);
+                $msg_stats = $stmt5->fetch(PDO::FETCH_ASSOC);
+
+                // Monthly appointment trend (last 6 months)
+                $stmt6 = $connect->prepare("
+                    SELECT DATE_FORMAT(scheduled_at, '%Y-%m') AS month,
+                           COUNT(*) AS count
+                    FROM appointment
+                    WHERE specialist_id = :sid
+                      AND scheduled_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                    GROUP BY DATE_FORMAT(scheduled_at, '%Y-%m')
+                    ORDER BY month ASC
+                ");
+                $stmt6->execute([':sid' => $specialist_id]);
+                $monthly_trend = $stmt6->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'total_patients' => intval($total_patients),
+                        'total_appointments' => intval($appt_stats['total_appointments'] ?? 0),
+                        'completed_appointments' => intval($appt_stats['completed_appointments'] ?? 0),
+                        'upcoming_appointments' => intval($appt_stats['upcoming_appointments'] ?? 0),
+                        'cancelled_appointments' => intval($appt_stats['cancelled_appointments'] ?? 0),
+                        'appointments_this_week' => intval($appt_stats['this_week'] ?? 0),
+                        'appointments_this_month' => intval($appt_stats['this_month'] ?? 0),
+                        'total_reports' => intval($report_stats['total_reports'] ?? 0),
+                        'reports_this_month' => intval($report_stats['reports_this_month'] ?? 0),
+                        'avg_rating' => floatval($rating_stats['avg_rating'] ?? 0),
+                        'total_reviews' => intval($rating_stats['total_reviews'] ?? 0),
+                        'total_messages' => intval($msg_stats['total_messages'] ?? 0),
+                        'messages_this_month' => intval($msg_stats['messages_this_month'] ?? 0),
+                        'monthly_trend' => $monthly_trend
+                    ]
+                ]);
+                exit;
+            }
+        }
+    }
+
     // Fallback for unknown ajax requests
     echo json_encode(['success' => false, 'error' => 'Invalid section or action']);
     exit;
