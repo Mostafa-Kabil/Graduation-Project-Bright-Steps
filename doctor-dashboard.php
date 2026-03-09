@@ -663,17 +663,8 @@ if (
             <div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title">Welcome, Dr. Mitchell</h1>
-                        <p class="dashboard-subtitle">You have 12 patients assigned to your care</p>
-                    </div>
-                    <div class="header-actions-inline">
-                        <button class="btn btn-outline">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19" />
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                            </svg>
-                            Add Patient
-                        </button>
+                        <h1 class="dashboard-title">My Patients</h1>
+                        <p class="dashboard-subtitle" id="patientsSubtitle">View and manage your connected patients</p>
                     </div>
                 </div>
 
@@ -687,7 +678,7 @@ if (
                             </svg>
                         </div>
                         <div class="stat-card-info">
-                            <div class="stat-card-value">12</div>
+                            <div class="stat-card-value" id="stat-active-patients">--</div>
                             <div class="stat-card-label">Active Patients</div>
                         </div>
                     </div>
@@ -699,7 +690,7 @@ if (
                             </svg>
                         </div>
                         <div class="stat-card-info">
-                            <div class="stat-card-value">8</div>
+                            <div class="stat-card-value" id="stat-on-track">--</div>
                             <div class="stat-card-label">On Track</div>
                         </div>
                     </div>
@@ -712,7 +703,7 @@ if (
                             </svg>
                         </div>
                         <div class="stat-card-info">
-                            <div class="stat-card-value">3</div>
+                            <div class="stat-card-value" id="stat-needs-attention">--</div>
                             <div class="stat-card-label">Needs Attention</div>
                         </div>
                     </div>
@@ -726,7 +717,7 @@ if (
                             </svg>
                         </div>
                         <div class="stat-card-info">
-                            <div class="stat-card-value">5</div>
+                            <div class="stat-card-value" id="stat-this-week-patients">--</div>
                             <div class="stat-card-label">This Week</div>
                         </div>
                     </div>
@@ -736,55 +727,11 @@ if (
                 <div class="section-card">
                     <div class="section-card-header">
                         <h2 class="section-heading">Recent Patients</h2>
-                        <input type="text" class="search-input" placeholder="Search patients...">
+                        <input type="text" class="search-input" id="patientSearchInput" placeholder="Search patients..."
+                            oninput="searchPatients(this.value)">
                     </div>
-                    <div class="patients-list">
-                        <div class="patient-row">
-                            <div class="patient-avatar">EJ</div>
-                            <div class="patient-info">
-                                <div class="patient-name">Emma Johnson</div>
-                                <div class="patient-details">15 months • Parent: Sarah Johnson</div>
-                            </div>
-                            <div class="patient-status status-green">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                    <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                                On Track
-                            </div>
-                            <div class="patient-last-update">Updated 2 days ago</div>
-                            <button class="btn btn-sm btn-outline">View Report</button>
-                        </div>
-                        <div class="patient-row">
-                            <div class="patient-avatar">LT</div>
-                            <div class="patient-info">
-                                <div class="patient-name">Liam Thompson</div>
-                                <div class="patient-details">18 months • Parent: Michael Thompson</div>
-                            </div>
-                            <div class="patient-status status-yellow">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <line x1="12" y1="8" x2="12" y2="12" />
-                                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                                </svg>
-                                Needs Review
-                            </div>
-                            <div class="patient-last-update">Updated 5 days ago</div>
-                            <button class="btn btn-sm btn-outline">View Report</button>
-                        </div>
-                        <div class="patient-row">
-                            <div class="patient-avatar">OW</div>
-                            <div class="patient-info">
-                                <div class="patient-name">Olivia Williams</div>
-                                <div class="patient-details">12 months • Parent: Jennifer Williams</div>
-                            </div>
-                            <div class="patient-status status-green">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                                    <polyline points="20 6 9 17 4 12" />
-                                </svg>
-                                On Track
-                            </div>
-                            <div class="patient-last-update">Updated today</div>
-                            <button class="btn btn-sm btn-outline">View Report</button>
+                    <div class="patients-list" id="patientsListContainer">
+                        <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading patients...
                         </div>
                     </div>
                 </div>
@@ -818,7 +765,7 @@ if (
     <script src="scripts/language-toggle.js?v=5"></script>
 
     <script src="scripts/navigation.js"></script>
-    <script src="scripts/doctor-dashboard.js?v=5"></script>
+    <script src="scripts/doctor-dashboard.js?v=6"></script>
 </body>
 
 </html>

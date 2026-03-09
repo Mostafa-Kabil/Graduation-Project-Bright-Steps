@@ -1,7 +1,11 @@
 // Doctor Dashboard JavaScript
+const SPECIALIST_ID = 1; // TODO: Replace with session-based specialist ID
+
 document.addEventListener('DOMContentLoaded', function () {
     // Initialize navigation
     initDoctorNav();
+    // Load initial patients data
+    loadPatientsData();
 });
 
 function initDoctorNav() {
@@ -64,9 +68,253 @@ function showDoctorView(viewId) {
 }
 
 function getPatientsView() {
-    return document.querySelector('.dashboard-content') ?
-        document.querySelector('.dashboard-content').outerHTML :
-        '<div class="dashboard-content"><h1 class="dashboard-title">My Patients</h1><p class="dashboard-subtitle">View and manage your connected patients</p></div>';
+    setTimeout(() => loadPatientsData(), 50);
+    return `
+        <div class="dashboard-content">
+            <div class="dashboard-header-section">
+                <div>
+                    <h1 class="dashboard-title">My Patients</h1>
+                    <p class="dashboard-subtitle" id="patientsSubtitle">View and manage your connected patients</p>
+                </div>
+            </div>
+            <div class="doctor-stats-grid">
+                <div class="stat-card stat-card-blue">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-active-patients">--</div><div class="stat-card-label">Active Patients</div></div>
+                </div>
+                <div class="stat-card stat-card-green">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-on-track">--</div><div class="stat-card-label">On Track</div></div>
+                </div>
+                <div class="stat-card stat-card-yellow">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-needs-attention">--</div><div class="stat-card-label">Needs Attention</div></div>
+                </div>
+                <div class="stat-card stat-card-purple">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-this-week-patients">--</div><div class="stat-card-label">This Week</div></div>
+                </div>
+            </div>
+            <div class="section-card">
+                <div class="section-card-header">
+                    <h2 class="section-heading">Recent Patients</h2>
+                    <input type="text" class="search-input" id="patientSearchInput" placeholder="Search patients..." oninput="searchPatients(this.value)">
+                </div>
+                <div class="patients-list" id="patientsListContainer">
+                    <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading patients...</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function loadPatientsData() {
+    fetch(`doctor-dashboard.php?ajax=1&section=patients&action=get_patients&specialist_id=${SPECIALIST_ID}`)
+        .then(r => r.json())
+        .then(result => {
+            if (result.success && result.data) {
+                renderPatientsList(result.data);
+                updatePatientsStats(result.data);
+            } else {
+                renderPatientsEmpty();
+            }
+        })
+        .catch(() => renderPatientsEmpty());
+}
+
+function renderPatientsList(patients) {
+    const container = document.getElementById('patientsListContainer');
+    if (!container) return;
+
+    if (patients.length === 0) {
+        renderPatientsEmpty();
+        return;
+    }
+
+    let html = '';
+    patients.forEach(p => {
+        const initials = (p.child_first_name?.charAt(0) || '') + (p.child_last_name?.charAt(0) || '');
+        const age = calculateAge(p.birth_year, p.birth_month, p.birth_day);
+        const status = p.last_appointment_status || 'scheduled';
+        const statusClass = status === 'completed' ? 'status-green' : (status === 'cancelled' ? 'status-red' : 'status-yellow');
+        const statusLabel = status === 'completed' ? 'On Track' : (status === 'cancelled' ? 'Cancelled' : 'Needs Review');
+        const statusIcon = status === 'completed'
+            ? '<polyline points="20 6 9 17 4 12"/>'
+            : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+        const lastDate = p.last_appointment_date ? formatRelativeDate(p.last_appointment_date) : 'No appointments';
+
+        html += `
+            <div class="patient-row">
+                <div class="patient-avatar">${initials}</div>
+                <div class="patient-info">
+                    <div class="patient-name">${p.child_first_name} ${p.child_last_name}</div>
+                    <div class="patient-details">${age} • Parent: ${p.parent_first_name} ${p.parent_last_name}</div>
+                </div>
+                <div class="patient-status ${statusClass}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${statusIcon}</svg>
+                    ${statusLabel}
+                </div>
+                <div class="patient-last-update">${lastDate}</div>
+                <button class="btn btn-sm btn-outline" onclick="viewPatientDetail(${p.child_id})">View Details</button>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function renderPatientsEmpty() {
+    const container = document.getElementById('patientsListContainer');
+    if (container) {
+        container.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-secondary);">No patients found. Patients will appear here once they book appointments with you.</div>';
+    }
+}
+
+function updatePatientsStats(patients) {
+    const total = patients.length;
+    const onTrack = patients.filter(p => p.last_appointment_status === 'completed').length;
+    const needsAttention = patients.filter(p => p.last_appointment_status !== 'completed').length;
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thisWeek = patients.filter(p => p.last_appointment_date && new Date(p.last_appointment_date) >= weekAgo).length;
+
+    const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+    el('stat-active-patients', total);
+    el('stat-on-track', onTrack);
+    el('stat-needs-attention', needsAttention);
+    el('stat-this-week-patients', thisWeek);
+
+    const sub = document.getElementById('patientsSubtitle');
+    if (sub) sub.textContent = `You have ${total} patient${total !== 1 ? 's' : ''} assigned to your care`;
+}
+
+function calculateAge(year, month, day) {
+    if (!year || !month) return 'Unknown age';
+    const now = new Date();
+    const birthDate = new Date(year, month - 1, day || 1);
+    let months = (now.getFullYear() - birthDate.getFullYear()) * 12 + (now.getMonth() - birthDate.getMonth());
+    if (months < 0) months = 0;
+    if (months < 24) return `${months} month${months !== 1 ? 's' : ''}`;
+    const years = Math.floor(months / 12);
+    return `${years} year${years !== 1 ? 's' : ''}`;
+}
+
+function formatRelativeDate(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Updated today';
+    if (diffDays === 1) return 'Updated yesterday';
+    if (diffDays < 7) return `Updated ${diffDays} days ago`;
+    if (diffDays < 30) return `Updated ${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+    return `Updated on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+let searchTimeout = null;
+function searchPatients(query) {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        if (!query.trim()) {
+            loadPatientsData();
+            return;
+        }
+        fetch(`doctor-dashboard.php?ajax=1&section=patients&action=search_patients&specialist_id=${SPECIALIST_ID}&query=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(result => {
+                if (result.success && result.data) {
+                    renderPatientsList(result.data);
+                } else {
+                    renderPatientsEmpty();
+                }
+            })
+            .catch(() => renderPatientsEmpty());
+    }, 300);
+}
+
+function viewPatientDetail(childId) {
+    fetch(`doctor-dashboard.php?ajax=1&section=patients&action=get_patient_detail&specialist_id=${SPECIALIST_ID}&child_id=${childId}`)
+        .then(r => r.json())
+        .then(result => {
+            if (result.success && result.data) {
+                showPatientDetailModal(result.data);
+            } else {
+                showToast('Failed to load patient details', 'error');
+            }
+        })
+        .catch(() => showToast('Connection error', 'error'));
+}
+
+function showPatientDetailModal(data) {
+    const c = data.child;
+    if (!c) return;
+    const age = calculateAge(c.birth_year, c.birth_month, c.birth_day);
+    const initials = (c.first_name?.charAt(0) || '') + (c.last_name?.charAt(0) || '');
+
+    let milestonesHtml = '';
+    if (data.milestones && data.milestones.length > 0) {
+        milestonesHtml = data.milestones.slice(0, 5).map(m => `
+            <div style="padding:0.5rem 0; border-bottom:1px solid var(--border-color);">
+                <strong>${m.title}</strong> <span style="color:var(--text-secondary); font-size:0.85rem;">(${m.category})</span>
+                <div style="font-size:0.85rem; color:var(--text-secondary);">${m.achieved_at || 'In progress'}</div>
+            </div>
+        `).join('');
+    } else {
+        milestonesHtml = '<p style="color:var(--text-secondary);">No milestones recorded yet.</p>';
+    }
+
+    let growthHtml = '';
+    if (data.growth_records && data.growth_records.length > 0) {
+        const g = data.growth_records[0];
+        growthHtml = `<p>Height: <strong>${g.height || '--'} cm</strong> | Weight: <strong>${g.weight || '--'} kg</strong> | Head: <strong>${g.head_circumference || '--'} cm</strong></p>
+                      <p style="font-size:0.85rem; color:var(--text-secondary);">Recorded: ${new Date(g.recorded_at).toLocaleDateString()}</p>`;
+    } else {
+        growthHtml = '<p style="color:var(--text-secondary);">No growth records available.</p>';
+    }
+
+    let reportsHtml = '';
+    if (data.doctor_reports && data.doctor_reports.length > 0) {
+        reportsHtml = data.doctor_reports.slice(0, 3).map(r => `
+            <div style="padding:0.75rem 0; border-bottom:1px solid var(--border-color);">
+                <div style="font-weight:600;">${new Date(r.report_date).toLocaleDateString()}</div>
+                <div style="font-size:0.9rem; margin-top:0.25rem;">${r.doctor_notes.substring(0, 120)}${r.doctor_notes.length > 120 ? '...' : ''}</div>
+            </div>
+        `).join('');
+    } else {
+        reportsHtml = '<p style="color:var(--text-secondary);">No reports written for this patient.</p>';
+    }
+
+    // Create modal overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'report-modal-overlay active';
+    overlay.id = 'patientDetailModal';
+    overlay.innerHTML = `
+        <div class="report-modal" style="max-width:700px;">
+            <div class="report-modal-header">
+                <h3 style="display:flex; align-items:center; gap:0.75rem;">
+                    <div class="patient-avatar" style="width:2.5rem; height:2.5rem; font-size:0.9rem;">${initials}</div>
+                    ${c.first_name} ${c.last_name}
+                </h3>
+                <button class="report-modal-close" onclick="document.getElementById('patientDetailModal').remove()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="report-modal-body" style="max-height:70vh; overflow-y:auto;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem;">
+                    <div><strong>Age:</strong> ${age}</div>
+                    <div><strong>Gender:</strong> ${c.gender || 'N/A'}</div>
+                    <div><strong>Parent:</strong> ${c.parent_first_name} ${c.parent_last_name}</div>
+                    <div><strong>Appointments:</strong> ${data.appointments?.length || 0}</div>
+                </div>
+                <h4 style="margin-bottom:0.5rem; color:var(--blue-500);">Latest Growth Record</h4>
+                ${growthHtml}
+                <h4 style="margin:1.5rem 0 0.5rem; color:var(--green-500);">Milestones Achieved</h4>
+                ${milestonesHtml}
+                <h4 style="margin:1.5rem 0 0.5rem; color:var(--purple-500);">Doctor Reports</h4>
+                ${reportsHtml}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
 }
 
 function getReportsView() {
@@ -476,21 +724,165 @@ function showToast(message, type) {
 }
 
 function getAppointmentsView() {
+    setTimeout(() => loadAppointmentsData(), 50);
     return `
         <div class="dashboard-content">
             <div class="dashboard-header-section">
                 <div>
                     <h1 class="dashboard-title">Appointments</h1>
-                    <p class="dashboard-subtitle">Manage your schedule and patient appointments</p>
+                    <p class="dashboard-subtitle" id="appointmentsSubtitle">Manage your schedule and patient appointments</p>
                 </div>
-                <button class="btn btn-gradient">+ New Appointment</button>
             </div>
-            <div class="dashboard-card" style="padding: 2rem;">
-                <h3 style="margin-bottom: 1rem;">Upcoming Appointments</h3>
-                <p style="color: var(--text-secondary);">No upcoming appointments. Your schedule is clear!</p>
+            <div class="doctor-stats-grid">
+                <div class="stat-card stat-card-blue">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-total-appts">--</div><div class="stat-card-label">Total</div></div>
+                </div>
+                <div class="stat-card stat-card-green">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-upcoming-appts">--</div><div class="stat-card-label">Upcoming</div></div>
+                </div>
+                <div class="stat-card stat-card-yellow">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-completed-appts">--</div><div class="stat-card-label">Completed</div></div>
+                </div>
+                <div class="stat-card stat-card-purple">
+                    <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                    <div class="stat-card-info"><div class="stat-card-value" id="stat-week-appts">--</div><div class="stat-card-label">This Week</div></div>
+                </div>
+            </div>
+            <div class="reports-tabs">
+                <button class="reports-tab active" data-tab="all" onclick="filterAppointments('')">All</button>
+                <button class="reports-tab" data-tab="scheduled" onclick="filterAppointments('scheduled')">Upcoming</button>
+                <button class="reports-tab" data-tab="completed" onclick="filterAppointments('completed')">Completed</button>
+                <button class="reports-tab" data-tab="cancelled" onclick="filterAppointments('cancelled')">Cancelled</button>
+            </div>
+            <div class="section-card">
+                <div class="patients-list" id="appointmentsListContainer">
+                    <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading appointments...</div>
+                </div>
             </div>
         </div>
     `;
+}
+
+function loadAppointmentsData(statusFilter) {
+    let url = `doctor-dashboard.php?ajax=1&section=appointments&action=get_appointments&specialist_id=${SPECIALIST_ID}`;
+    if (statusFilter) url += `&status=${statusFilter}`;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                renderAppointmentsList(result.data || []);
+                if (result.counts) updateAppointmentStats(result.counts);
+            } else {
+                renderAppointmentsEmpty();
+            }
+        })
+        .catch(() => renderAppointmentsEmpty());
+}
+
+function renderAppointmentsList(appointments) {
+    const container = document.getElementById('appointmentsListContainer');
+    if (!container) return;
+
+    if (appointments.length === 0) {
+        renderAppointmentsEmpty();
+        return;
+    }
+
+    let html = '';
+    appointments.forEach(a => {
+        const parentName = `${a.parent_first_name} ${a.parent_last_name}`;
+        const date = a.scheduled_at ? new Date(a.scheduled_at) : null;
+        const dateStr = date ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
+        const timeStr = date ? date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+        const status = a.status || 'scheduled';
+        const statusClass = status === 'completed' ? 'status-green' : (status === 'cancelled' ? 'status-red' : 'status-yellow');
+        const typeLabel = a.type === 'online' ? '🖥 Online' : '🏥 On-site';
+        const initials = (a.parent_first_name?.charAt(0) || '') + (a.parent_last_name?.charAt(0) || '');
+
+        html += `
+            <div class="patient-row">
+                <div class="patient-avatar">${initials}</div>
+                <div class="patient-info">
+                    <div class="patient-name">${parentName}</div>
+                    <div class="patient-details">${a.children_names || 'No children listed'} • ${typeLabel}</div>
+                </div>
+                <div class="patient-status ${statusClass}">
+                    ${status.charAt(0).toUpperCase() + status.slice(1)}
+                </div>
+                <div class="patient-last-update">${dateStr}${timeStr ? ' at ' + timeStr : ''}</div>
+                <div style="display:flex; gap:0.5rem;">
+                    ${status !== 'completed' && status !== 'cancelled' ? `
+                        <button class="btn btn-sm btn-gradient" onclick="updateAppointmentStatus(${a.appointment_id}, 'completed')">Complete</button>
+                        <button class="btn btn-sm btn-outline" style="color:var(--red-500); border-color:var(--red-500);" onclick="cancelAppointment(${a.appointment_id})">Cancel</button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+function renderAppointmentsEmpty() {
+    const container = document.getElementById('appointmentsListContainer');
+    if (container) {
+        container.innerHTML = '<div style="text-align:center; padding:2rem; color:var(--text-secondary);">No appointments found.</div>';
+    }
+}
+
+function updateAppointmentStats(counts) {
+    const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val ?? 0; };
+    el('stat-total-appts', counts.total);
+    el('stat-upcoming-appts', counts.upcoming);
+    el('stat-completed-appts', counts.completed);
+    el('stat-week-appts', counts.this_week);
+}
+
+function filterAppointments(status) {
+    document.querySelectorAll('.reports-tabs .reports-tab').forEach(t => t.classList.remove('active'));
+    const tab = status || 'all';
+    document.querySelector(`.reports-tab[data-tab="${tab}"]`)?.classList.add('active');
+    loadAppointmentsData(status);
+}
+
+function updateAppointmentStatus(appointmentId, newStatus) {
+    fetch('doctor-dashboard.php?ajax=1&section=appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'update_appointment', appointment_id: appointmentId, status: newStatus })
+    })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                showToast('Appointment updated!', 'success');
+                loadAppointmentsData();
+            } else {
+                showToast('Failed to update: ' + (result.error || ''), 'error');
+            }
+        })
+        .catch(() => showToast('Connection error', 'error'));
+}
+
+function cancelAppointment(appointmentId) {
+    if (!confirm('Are you sure you want to cancel this appointment?')) return;
+    fetch('doctor-dashboard.php?ajax=1&section=appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel_appointment', appointment_id: appointmentId })
+    })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                showToast('Appointment cancelled', 'success');
+                loadAppointmentsData();
+            } else {
+                showToast('Failed: ' + (result.error || ''), 'error');
+            }
+        })
+        .catch(() => showToast('Connection error', 'error'));
 }
 
 function getMessagesView() {
@@ -655,7 +1047,7 @@ function initMessagesPage() {
 
     const chatInput = document.getElementById('chatInput');
     if (chatInput) {
-        chatInput.addEventListener('input', function() {
+        chatInput.addEventListener('input', function () {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
@@ -755,7 +1147,7 @@ function sendMessage() {
             receiver_id: 2,
             content: text
         })
-    }).catch(() => {});
+    }).catch(() => { });
 }
 
 function handleChatKeydown(e) {
@@ -775,6 +1167,7 @@ function filterConversations(query) {
 }
 
 function getAnalyticsView() {
+    setTimeout(() => loadAnalyticsData(), 50);
     return `
         <div class="dashboard-content">
             <div class="dashboard-header-section">
@@ -785,24 +1178,77 @@ function getAnalyticsView() {
             </div>
             <div class="doctor-stats-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
                 <div class="stat-card" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-xl); border: 1px solid var(--border-color);">
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--blue-500);">12</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--blue-500);" id="analytics-patients">--</div>
                     <div style="color: var(--text-secondary);">Total Patients</div>
                 </div>
                 <div class="stat-card" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-xl); border: 1px solid var(--border-color);">
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--green-500);">45</div>
-                    <div style="color: var(--text-secondary);">Reports Reviewed</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--green-500);" id="analytics-reports">--</div>
+                    <div style="color: var(--text-secondary);">Reports Written</div>
                 </div>
                 <div class="stat-card" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-xl); border: 1px solid var(--border-color);">
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--purple-500);">8</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--purple-500);" id="analytics-week">--</div>
                     <div style="color: var(--text-secondary);">This Week</div>
                 </div>
                 <div class="stat-card" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-xl); border: 1px solid var(--border-color);">
-                    <div style="font-size: 2rem; font-weight: 700; color: var(--orange-500);">95%</div>
-                    <div style="color: var(--text-secondary);">Satisfaction</div>
+                    <div style="font-size: 2rem; font-weight: 700; color: var(--orange-500);" id="analytics-rating">--</div>
+                    <div style="color: var(--text-secondary);">Avg Rating</div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                <div class="section-card" style="padding: 1.5rem;">
+                    <h3 style="margin-bottom: 1rem;">Appointment Overview</h3>
+                    <div id="analytics-appt-overview" style="color: var(--text-secondary);">Loading...</div>
+                </div>
+                <div class="section-card" style="padding: 1.5rem;">
+                    <h3 style="margin-bottom: 1rem;">Activity This Month</h3>
+                    <div id="analytics-monthly" style="color: var(--text-secondary);">Loading...</div>
                 </div>
             </div>
         </div>
     `;
+}
+
+function loadAnalyticsData() {
+    fetch(`doctor-dashboard.php?ajax=1&section=analytics&action=get_analytics&specialist_id=${SPECIALIST_ID}`)
+        .then(r => r.json())
+        .then(result => {
+            if (result.success && result.data) {
+                const d = result.data;
+                const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+                el('analytics-patients', d.total_patients);
+                el('analytics-reports', d.total_reports);
+                el('analytics-week', d.appointments_this_week);
+                el('analytics-rating', d.avg_rating ? d.avg_rating + '/5' : 'N/A');
+
+                // Appointment overview
+                const overview = document.getElementById('analytics-appt-overview');
+                if (overview) {
+                    overview.innerHTML = `
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <div style="display:flex; justify-content:space-between;"><span>Total Appointments</span><strong>${d.total_appointments}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Completed</span><strong style="color:var(--green-500);">${d.completed_appointments}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Upcoming</span><strong style="color:var(--blue-500);">${d.upcoming_appointments}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Cancelled</span><strong style="color:var(--red-500);">${d.cancelled_appointments}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Reviews Received</span><strong>${d.total_reviews}</strong></div>
+                        </div>
+                    `;
+                }
+
+                // Monthly activity
+                const monthly = document.getElementById('analytics-monthly');
+                if (monthly) {
+                    monthly.innerHTML = `
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <div style="display:flex; justify-content:space-between;"><span>Appointments</span><strong>${d.appointments_this_month}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Reports Written</span><strong>${d.reports_this_month}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Messages</span><strong>${d.messages_this_month}</strong></div>
+                            <div style="display:flex; justify-content:space-between;"><span>Total Messages</span><strong>${d.total_messages}</strong></div>
+                        </div>
+                    `;
+                }
+            }
+        })
+        .catch(() => { });
 }
 
 function getSettingsView() {
