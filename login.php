@@ -3,6 +3,23 @@ ob_start();
 session_start();
 include 'connection.php';
 
+// If already logged in, redirect to appropriate dashboard
+if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
+    if ($_SESSION['role'] === 'admin') {
+        header("Location: admin-dashboard.php");
+        exit;
+    } elseif ($_SESSION['role'] === 'doctor') {
+        header("Location: doctor-dashboard.php");
+        exit;
+    } elseif ($_SESSION['role'] === 'clinic') {
+        header("Location: clinic-dashboard.php");
+        exit;
+    } else {
+        header("Location: dashboard.php");
+        exit;
+    }
+}
+
 $errors = [];
 
 if (isset($_POST['login'])) {
@@ -25,27 +42,30 @@ if (isset($_POST['login'])) {
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
-                if ($user['role'] === 'parent') {
-                    // credentials are correct – set session and redirect
-                    $_SESSION['id'] = $user['user_id'];
-                    $_SESSION['fname'] = $user['first_name'];
-                    $_SESSION['lname'] = $user['last_name'];
-                    $_SESSION['email'] = $user['email'];
-                    $_SESSION['role'] = $user['role'];
+                // credentials are correct – set session
+                $_SESSION['id'] = $user['user_id'];
+                $_SESSION['fname'] = $user['first_name'];
+                $_SESSION['lname'] = $user['last_name'];
+                $_SESSION['email'] = $user['email'];
+                $_SESSION['role'] = $user['role'];
 
-                    // Check if parent has any children
-                    $checkChildStmt = $connect->prepare("SELECT number_of_children FROM parent WHERE parent_id = :pid");
-                    $checkChildStmt->execute(['pid' => $user['user_id']]);
-                    $parentData = $checkChildStmt->fetch(PDO::FETCH_ASSOC);
-
-                    if ($parentData && $parentData['number_of_children'] > 0) {
-                        header("Location: dashboard.php");
-                    } else {
-                        header("Location: add-child.php?setup=1");
-                    }
+                // route by role
+                if ($user['role'] === 'admin') {
+                    header("Location: admin-dashboard.php");
+                    exit;
+                } elseif ($user['role'] === 'doctor') {
+                    header("Location: doctor-dashboard.php");
+                    exit;
+                } elseif ($user['role'] === 'clinic') {
+                    header("Location: clinic-dashboard.php");
+                    exit;
+                } elseif ($user['role'] === 'parent') {
+                    // Always redirect parent to dashboard, it handles empty state
+                    header("Location: dashboard.php");
                     exit;
                 } else {
-                    $errors[] = "This portal is for parents only.";
+                    header("Location: dashboard.php");
+                    exit;
                 }
             } else {
                 $errors[] = "Incorrect email or password.";
@@ -76,6 +96,7 @@ if (isset($_POST['login'])) {
             font-size: 13px;
             margin-top: 6px;
         }
+
 
         /* Forgot password modal */
         .forgot-overlay {
