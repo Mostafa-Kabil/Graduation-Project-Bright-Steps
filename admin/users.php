@@ -12,6 +12,22 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Helper: log activity with user info
+function logActivity($connect, $type, $desc, $relatedUserId = null) {
+    $adminId = $_SESSION['id'] ?? null;
+    $userName = '';
+    $userRole = 'admin';
+    if ($adminId) {
+        $s = $connect->prepare("SELECT first_name, last_name FROM users WHERE user_id = :id");
+        $s->execute(['id' => $adminId]);
+        $u = $s->fetch(PDO::FETCH_ASSOC);
+        if ($u) $userName = $u['first_name'] . ' ' . $u['last_name'];
+    }
+    $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+    $stmt = $connect->prepare("INSERT INTO activity_log (activity_type, description, related_user_id, user_name, user_role, ip_address) VALUES (:type, :desc, :uid, :uname, :urole, :ip)");
+    $stmt->execute(['type' => $type, 'desc' => $desc, 'uid' => $relatedUserId, 'uname' => $userName, 'urole' => $userRole, 'ip' => $ip]);
+}
+
 try {
     if ($method === 'GET') {
         $action = $_GET['action'] ?? 'list';
@@ -70,12 +86,7 @@ try {
             $u = $stmt2->fetch(PDO::FETCH_ASSOC);
             $name = $u ? $u['first_name'] . ' ' . $u['last_name'] : 'Unknown';
 
-            $logStmt = $connect->prepare("INSERT INTO activity_log (activity_type, description, related_user_id) VALUES (:type, :desc, :uid)");
-            $logStmt->execute([
-                'type' => 'user_status_change',
-                'desc' => "User {$statusLabel}: {$name}",
-                'uid' => $userId
-            ]);
+            logActivity($connect, 'user_status_change', "User {$statusLabel}: {$name}", $userId);
 
             echo json_encode(['success' => true, 'message' => "User status changed to {$newStatus}"]);
 
@@ -106,7 +117,7 @@ try {
                 $fields[] = "email = :email";
                 $params['email'] = $email;
             }
-            if ($role !== '' && in_array($role, ['parent', 'doctor', 'admin'])) {
+            if ($role !== '' && in_array($role, ['parent', 'specialist', 'admin'])) {
                 $fields[] = "role = :role";
                 $params['role'] = $role;
             }
@@ -119,6 +130,8 @@ try {
             $sql = "UPDATE users SET " . implode(', ', $fields) . " WHERE user_id = :id";
             $stmt = $connect->prepare($sql);
             $stmt->execute($params);
+
+            logActivity($connect, 'user_updated', "User updated: {$firstName} {$lastName}", $userId);
 
             echo json_encode(['success' => true, 'message' => 'User updated successfully']);
 
@@ -165,12 +178,7 @@ try {
                 $stmt->execute(['aid' => $newUserId]);
             }
 
-            // Log activity
-            $logStmt = $connect->prepare("INSERT INTO activity_log (activity_type, description, related_user_id) VALUES ('user_added', :desc, :uid)");
-            $logStmt->execute([
-                'desc' => "New user added: {$firstName} {$lastName} ({$role})",
-                'uid' => $newUserId
-            ]);
+            logActivity($connect, 'user_added', "New user added: {$firstName} {$lastName} ({$role})", $newUserId);
 
             echo json_encode(['success' => true, 'message' => 'User created successfully', 'user_id' => $newUserId]);
 
@@ -187,8 +195,17 @@ try {
                 exit;
             }
 
+            // Get user info for logging before deleting
+            $stmt2 = $connect->prepare("SELECT first_name, last_name, role FROM users WHERE user_id = :id");
+            $stmt2->execute(['id' => $userId]);
+            $u = $stmt2->fetch(PDO::FETCH_ASSOC);
+            $deletedName = $u ? $u['first_name'] . ' ' . $u['last_name'] : 'Unknown';
+            $deletedRole = $u ? $u['role'] : 'unknown';
+
             $stmt = $connect->prepare("DELETE FROM users WHERE user_id = :id");
             $stmt->execute(['id' => $userId]);
+
+            logActivity($connect, 'user_deleted', "User deleted: {$deletedName} ({$deletedRole})", $userId);
 
             echo json_encode(['success' => true, 'message' => 'User deleted']);
 

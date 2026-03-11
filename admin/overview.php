@@ -48,12 +48,16 @@ try {
     $stmt = $connect->query("SELECT COUNT(*) as total FROM parent_subscription");
     $activeSubs = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-    // Subs this month - compare with last month
-    $stmt = $connect->query("SELECT COUNT(*) as c FROM parent_subscription ps JOIN subscription s ON ps.subscription_id = s.subscription_id");
-    $subsTotal = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
-
-    // ── Recent Activity ──────────────────────────────────
-    $stmt = $connect->query("SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 10");
+    // ── Recent Activity (handles both old and new schema) ─
+    // Check which columns exist
+    $alCols = [];
+    $colCheck = $connect->query("SHOW COLUMNS FROM activity_log");
+    while ($col = $colCheck->fetch(PDO::FETCH_ASSOC)) { $alCols[] = $col['Field']; }
+    $selectCols = 'log_id, activity_type, description, related_user_id, created_at';
+    if (in_array('user_name', $alCols)) $selectCols .= ', user_name';
+    if (in_array('user_role', $alCols)) $selectCols .= ', user_role';
+    if (in_array('ip_address', $alCols)) $selectCols .= ', ip_address';
+    $stmt = $connect->query("SELECT $selectCols FROM activity_log ORDER BY created_at DESC LIMIT 15");
     $recentActivity = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // ── User Distribution ────────────────────────────────
