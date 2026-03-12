@@ -200,6 +200,7 @@ $planname = $stmt->fetchColumn() ?: 'Free';
 
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
+    <script src="scripts/dashboard.js?v=7"></script>
     <script>
         function openChangePasswordModal() {
             let existing = document.getElementById('change-pwd-modal');

@@ -43,6 +43,12 @@
 
     // Switch view
     function switchView(viewId) {
+        const contentContainer = document.getElementById('dashboard-content');
+        if (!contentContainer) {
+            window.location.href = '../../dashboard.php?view=' + viewId;
+            return;
+        }
+
         // Update active nav item
         document.querySelectorAll('.nav-item').forEach(item => {
             if (item.dataset.view === viewId) {
@@ -317,7 +323,7 @@
 
     function getSpeechView() {
         return `
-        < div class="dashboard-content" >
+        <div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Speech Analysis 🗣️</h1>
@@ -384,13 +390,13 @@
                         <button class="btn btn-ghost">View Analysis</button>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
     function getMotorView() {
         return `
-        < div class="dashboard-content" >
+        <div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Motor Skills</h1>
@@ -490,13 +496,13 @@
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
     function getActivitiesView() {
         return `
-        < div class="dashboard-content" >
+        <div class="dashboard-content">
                  <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
@@ -554,13 +560,13 @@
                         <span style="font-weight: 600;">Social</span>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
     function getClinicView() {
         return `
-        < div class="dashboard-content" >
+        <div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Book Appointment 🏥</h1>
@@ -636,7 +642,7 @@
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
@@ -729,7 +735,7 @@
         const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
 
         return `
-        < div class="dashboard-content" >
+        <div class="dashboard-content">
                 <h1 class="dashboard-title">Settings ⚙️</h1>
                 <p class="dashboard-subtitle" style="margin-bottom: 2rem;">Manage your account and app preferences</p>
                 
@@ -810,7 +816,7 @@
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
@@ -994,7 +1000,24 @@
 
     // Initialize
     initNav();
-    loadView('home');
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialView = urlParams.get('view') || 'home';
+    
+    if (document.getElementById('dashboard-content')) {
+        switchView(initialView);
+    } else {
+        // We are on a different page
+        const path = window.location.pathname;
+        if (path.includes('settings.php')) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                if (item.dataset.view === 'settings') {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+    }
 })();
 
 // Handle logout – Premium modal
@@ -1006,7 +1029,7 @@ function handleLogout() {
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
     modal.innerHTML = `
-        < div class="logout-overlay" onclick = "closeLogoutModal()" ></div >
+        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
             <div class="logout-dialog">
                 <div class="logout-icon-wrap">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

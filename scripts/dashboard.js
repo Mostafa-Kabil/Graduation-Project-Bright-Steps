@@ -43,6 +43,12 @@
 
     // Switch view
     function switchView(viewId) {
+        const contentContainer = document.getElementById('dashboard-content');
+        if (!contentContainer) {
+            window.location.href = 'dashboard.php?view=' + viewId;
+            return;
+        }
+
         // Update active nav item
         document.querySelectorAll('.nav-item').forEach(item => {
             if (item.dataset.view === viewId) {
@@ -383,7 +389,7 @@
                         <button class="btn btn-ghost">View Analysis</button>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
@@ -488,7 +494,7 @@
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
@@ -551,7 +557,7 @@
                         <span style="font-weight: 600;">Social</span>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
@@ -632,7 +638,7 @@
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
             </div>
         `;
     }
@@ -805,7 +811,7 @@
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
         `;
     }
 
@@ -950,8 +956,7 @@
         if (existing) existing.remove();
         const modal = document.createElement('div');
         modal.id = 'change-pwd-modal';
-        modal.innerHTML = `
-            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
+        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
                 <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
                     <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Change Password</h2>
                     <p style="color:var(--slate-500);font-size:0.9rem;margin-bottom:1.5rem;">Enter your current and new password</p>
@@ -989,7 +994,24 @@
 
     // Initialize
     initNav();
-    loadView('home');
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialView = urlParams.get('view') || 'home';
+    
+    if (document.getElementById('dashboard-content')) {
+        switchView(initialView);
+    } else {
+        // We are on a different page like settings.php
+        const path = window.location.pathname;
+        if (path.includes('settings.php')) {
+            document.querySelectorAll('.nav-item').forEach(item => {
+                if (item.dataset.view === 'settings') {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+    }
 })();
 
 // Handle logout – Premium modal
@@ -1000,8 +1022,7 @@ function handleLogout() {
 
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
-    modal.innerHTML = `
-        < div class="logout-overlay" onclick = "closeLogoutModal()" ></div >
+    modal.innerHTML = `<div class="logout-overlay" onclick="closeLogoutModal()"></div>
             <div class="logout-dialog">
                 <div class="logout-icon-wrap">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
