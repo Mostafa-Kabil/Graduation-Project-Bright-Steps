@@ -184,6 +184,8 @@ CREATE TABLE `clinic` (
   `email` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
   `location` varchar(255) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'pending',
+  `rating` decimal(3,2) DEFAULT 0.00,
   `added_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -396,7 +398,9 @@ CREATE TABLE `subscription` (
   `subscription_id` int(11) NOT NULL,
   `plan_name` varchar(100) DEFAULT NULL,
   `plan_period` varchar(50) DEFAULT NULL,
-  `price` decimal(10,2) DEFAULT NULL
+  `price` decimal(10,2) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'active'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -411,7 +415,9 @@ CREATE TABLE `users` (
   `last_name` varchar(100) DEFAULT NULL,
   `email` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
-  `role` varchar(50) DEFAULT NULL
+  `role` varchar(50) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -1081,6 +1087,387 @@ INSERT IGNORE INTO `milestones` (`category`, `title`, `description`, `min_age_mo
 ('self_care', 'Brushes teeth with help', 'Participates in tooth brushing', 18, 36),
 ('self_care', 'Dresses independently', 'Puts on clothes without help', 36, 60),
 ('self_care', 'Ties shoelaces', 'Can tie own shoes', 48, 72);
+
+-- =====================================================
+-- Doctor Dashboard: Reports & Messages Tables
+-- =====================================================
+
+--
+-- Table structure for table `doctor_report`
+--
+CREATE TABLE IF NOT EXISTS `doctor_report` (
+  `doctor_report_id` int(11) NOT NULL AUTO_INCREMENT,
+  `specialist_id` int(11) NOT NULL,
+  `child_id` int(11) NOT NULL,
+  `child_report` varchar(255) DEFAULT NULL COMMENT 'Reference to child_generated_system_report.report',
+  `doctor_notes` text NOT NULL,
+  `recommendations` text DEFAULT NULL,
+  `report_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`doctor_report_id`),
+  KEY `idx_dr_specialist` (`specialist_id`),
+  KEY `idx_dr_child` (`child_id`),
+  CONSTRAINT `doctor_report_ibfk_1` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
+  CONSTRAINT `doctor_report_ibfk_2` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `message`
+--
+CREATE TABLE IF NOT EXISTS `message` (
+  `message_id` int(11) NOT NULL AUTO_INCREMENT,
+  `sender_id` int(11) NOT NULL,
+  `receiver_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `content` text NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`message_id`),
+  KEY `idx_msg_sender` (`sender_id`),
+  KEY `idx_msg_receiver` (`receiver_id`),
+  KEY `idx_msg_appointment` (`appointment_id`),
+  KEY `idx_msg_child` (`child_id`),
+  CONSTRAINT `message_ibfk_1` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `message_ibfk_2` FOREIGN KEY (`receiver_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `message_ibfk_3` FOREIGN KEY (`appointment_id`) REFERENCES `appointment` (`appointment_id`) ON DELETE SET NULL,
+  CONSTRAINT `message_ibfk_4` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- =====================================================
+-- Admin Dashboard Tables
+-- =====================================================
+
+--
+-- Table structure for table `activity_log`
+--
+CREATE TABLE IF NOT EXISTS `activity_log` (
+  `log_id` int(11) NOT NULL AUTO_INCREMENT,
+  `activity_type` varchar(50) NOT NULL,
+  `description` text NOT NULL,
+  `related_user_id` int(11) DEFAULT NULL,
+  `user_name` varchar(200) DEFAULT NULL,
+  `user_role` varchar(50) DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`log_id`),
+  KEY `related_user_id` (`related_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `platform_settings`
+--
+CREATE TABLE IF NOT EXISTS `platform_settings` (
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` varchar(255) NOT NULL DEFAULT '',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `subscription_feature`
+--
+CREATE TABLE IF NOT EXISTS `subscription_feature` (
+  `feature_id` int(11) NOT NULL AUTO_INCREMENT,
+  `subscription_id` int(11) NOT NULL,
+  `feature_text` varchar(255) NOT NULL,
+  PRIMARY KEY (`feature_id`),
+  KEY `subscription_id` (`subscription_id`),
+  CONSTRAINT `sub_feature_fk` FOREIGN KEY (`subscription_id`) REFERENCES `subscription` (`subscription_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- =====================================================
+-- SEED DATA
+-- =====================================================
+
+-- Default Platform Settings
+INSERT IGNORE INTO `platform_settings` (`setting_key`, `setting_value`) VALUES
+('allow_clinic_registration', '1'),
+('auto_approve_clinics', '0'),
+('enable_free_trial', '1'),
+('weekly_digest', '1'),
+('maintenance_mode', '0');
+
+-- Sample Admin User (password is: password)
+INSERT INTO `users` (`first_name`, `last_name`, `email`, `password`, `role`, `status`) VALUES
+('Super', 'Admin', 'admin@brightsteps.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 'active');
+
+SET @admin_user_id = LAST_INSERT_ID();
+
+INSERT INTO `admin` (`admin_id`, `role_level`) VALUES (@admin_user_id, 1);
+
+-- Sample Parent Users
+INSERT INTO `users` (`first_name`, `last_name`, `email`, `password`, `role`, `status`) VALUES
+('Sarah', 'Johnson', 'sarah.j@email.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'parent', 'active'),
+('Michael', 'Thompson', 'michael.t@email.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'parent', 'active'),
+('Jennifer', 'Williams', 'jennifer.w@email.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'parent', 'inactive'),
+('Ahmed', 'Hassan', 'ahmed.parent@email.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'parent', 'active');
+
+SET @p1 = LAST_INSERT_ID();
+
+INSERT IGNORE INTO `parent` (`parent_id`, `number_of_children`) VALUES
+(@p1, 2), (@p1 + 1, 1), (@p1 + 2, 1), (@p1 + 3, 2);
+
+-- Sample Specialist Users
+INSERT INTO `users` (`first_name`, `last_name`, `email`, `password`, `role`, `status`) VALUES
+('Sarah', 'Mitchell', 'sarah.m@citykids.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'specialist', 'active'),
+('Ahmed', 'Hassan', 'ahmed.h@sunrisepeds.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'specialist', 'active'),
+('Layla', 'Noor', 'layla.n@citykids.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'specialist', 'active');
+
+-- Sample Clinics
+INSERT INTO `clinic` (`admin_id`, `clinic_name`, `email`, `password`, `location`, `status`, `rating`) VALUES
+(@admin_user_id, 'City Kids Care', 'info@citykidscare.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '123 Downtown Blvd', 'verified', 4.80),
+(@admin_user_id, 'Sunrise Pediatrics', 'hello@sunrisepeds.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '456 Oak Avenue', 'verified', 4.60),
+(@admin_user_id, 'Happy Smiles Clinic', 'contact@happysmiles.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '789 Maple Street', 'verified', 4.90),
+(@admin_user_id, 'Little Stars Wellness', 'info@littlestars.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', '321 Elm Drive', 'pending', 4.40);
+
+-- Sample Subscription Plans
+INSERT INTO `subscription` (`plan_name`, `plan_period`, `price`) VALUES
+('Free Trial', 'monthly', 0.00),
+('Standard', 'monthly', 9.99),
+('Premium', 'monthly', 24.99);
+
+SET @sub_free = LAST_INSERT_ID();
+SET @sub_std = @sub_free + 1;
+SET @sub_prem = @sub_free + 2;
+
+INSERT INTO `subscription_feature` (`subscription_id`, `feature_text`) VALUES
+(@sub_free, 'Basic growth tracking'),
+(@sub_free, '1 child profile'),
+(@sub_free, 'Monthly reports'),
+(@sub_std, 'AI-powered insights'),
+(@sub_std, 'Up to 3 child profiles'),
+(@sub_std, 'Weekly reports'),
+(@sub_std, 'Speech analysis'),
+(@sub_prem, 'Everything in Standard'),
+(@sub_prem, 'Unlimited child profiles'),
+(@sub_prem, 'Doctor consultations'),
+(@sub_prem, 'Priority support'),
+(@sub_prem, '1-on-1 specialist access');
+
+-- Sample Points Rules
+INSERT INTO `points_refrence` (`admin_id`, `action_name`, `points_value`, `adjust_sign`) VALUES
+(@admin_user_id, 'Daily Login', 10, '+'),
+(@admin_user_id, 'Growth Measurement', 25, '+'),
+(@admin_user_id, 'Voice Sample Upload', 50, '+'),
+(@admin_user_id, 'Complete Weekly Goal', 100, '+'),
+(@admin_user_id, 'Redeem Badge', 200, '-'),
+(@admin_user_id, 'Missed Check-in', 5, '-');
+
+-- Sample Behavior Categories
+INSERT INTO `behavior_category` (`category_name`, `category_type`, `category_description`) VALUES
+('Motor Development', 'Physical', 'Tracks gross and fine motor skill progression'),
+('Speech and Language', 'Communication', 'Tracks verbal and non-verbal communication skills'),
+('Social Interaction', 'Social-Emotional', 'Tracks social behavior and emotional development'),
+('Cognitive Skills', 'Cognitive', 'Tracks problem-solving and learning abilities'),
+('Self-Care', 'Adaptive', 'Tracks self-care and daily living skills');
+
+-- Sample Activity Logs
+INSERT INTO `activity_log` (`activity_type`, `description`, `related_user_id`, `created_at`) VALUES
+('clinic_registered', 'New Clinic registered: Sunrise Pediatrics', NULL, NOW() - INTERVAL 2 HOUR),
+('user_signup', 'New User signed up: Ahmed Hassan (Parent)', NULL, NOW() - INTERVAL 3 HOUR),
+('subscription_upgrade', 'Subscription Upgrade: Sarah Johnson to Premium', NULL, NOW() - INTERVAL 5 HOUR),
+('payment_received', 'Payment Received: $300.00 from Michael Thompson', NULL, NOW() - INTERVAL 6 HOUR),
+('specialist_added', 'New Specialist added: Dr. Layla Noor at City Kids Care', NULL, NOW() - INTERVAL 8 HOUR),
+('alert', 'Alert: 3 children flagged for developmental review', NULL, NOW() - INTERVAL 1 DAY),
+('user_signup', 'New User signed up: Jennifer Williams (Parent)', NULL, NOW() - INTERVAL 2 DAY),
+('clinic_verified', 'Clinic verified: Happy Smiles Clinic', NULL, NOW() - INTERVAL 3 DAY),
+('payment_received', 'Payment Received: $150.00 from Jennifer Williams', NULL, NOW() - INTERVAL 4 DAY),
+('system_update', 'Platform updated to version 2.1.0', NULL, NOW() - INTERVAL 5 DAY);
+
+-- Sample Badges
+INSERT INTO `badge` (`name`, `description`, `icon`) VALUES
+('First Steps', 'Complete your first growth measurement', 'first_steps'),
+('Voice Hero', 'Upload 5 voice samples', 'voice_hero'),
+('Weekly Champion', 'Complete 4 weekly goals in a row', 'weekly_champion'),
+('Growth Tracker', 'Log 10 growth measurements', 'growth_tracker'),
+('Super Parent', 'Login for 30 consecutive days', 'super_parent');
+
+-- =====================================================
+-- Admin Dashboard Expansion Tables
+-- =====================================================
+
+--
+-- Table: admin_notifications (admin-created bulk/targeted notifications)
+--
+CREATE TABLE IF NOT EXISTS `admin_notifications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `body` text NOT NULL,
+  `type` enum('in_app','email','both') DEFAULT 'in_app',
+  `priority` enum('low','normal','high','urgent') DEFAULT 'normal',
+  `target_type` enum('all','specific','segment') DEFAULT 'all',
+  `target_filter` text DEFAULT NULL COMMENT 'JSON: user IDs or segment criteria',
+  `scheduled_at` datetime DEFAULT NULL,
+  `sent_at` datetime DEFAULT NULL,
+  `status` enum('draft','scheduled','sent','cancelled','failed') DEFAULT 'draft',
+  `recipient_count` int(11) DEFAULT 0,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_admin_notif_status` (`status`),
+  KEY `idx_admin_notif_created_by` (`created_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: admin_notification_recipients (per-user delivery tracking)
+--
+CREATE TABLE IF NOT EXISTS `admin_notification_recipients` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `notification_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `delivered` tinyint(1) DEFAULT 0,
+  `read_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_anr_notif` (`notification_id`),
+  KEY `idx_anr_user` (`user_id`),
+  CONSTRAINT `anr_notif_fk` FOREIGN KEY (`notification_id`) REFERENCES `admin_notifications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `anr_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: flagged_content (content moderation)
+--
+CREATE TABLE IF NOT EXISTS `flagged_content` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `content_type` varchar(50) NOT NULL COMMENT 'feedback, message, report',
+  `content_id` int(11) NOT NULL,
+  `content_text` text DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL COMMENT 'user who posted the content',
+  `reason` varchar(255) DEFAULT NULL,
+  `flagged_by` varchar(50) DEFAULT 'auto' COMMENT 'auto or user_id',
+  `status` enum('pending','approved','removed','warned') DEFAULT 'pending',
+  `reviewed_by` int(11) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_fc_status` (`status`),
+  KEY `idx_fc_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: moderation_log (admin moderation actions)
+--
+CREATE TABLE IF NOT EXISTS `moderation_log` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `admin_id` int(11) NOT NULL,
+  `action` varchar(50) NOT NULL COMMENT 'approve, remove, warn, ban',
+  `target_user_id` int(11) DEFAULT NULL,
+  `content_id` int(11) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ml_admin` (`admin_id`),
+  KEY `idx_ml_target` (`target_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: system_logs (API errors, performance)
+--
+CREATE TABLE IF NOT EXISTS `system_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `level` enum('info','warning','error','critical') DEFAULT 'info',
+  `message` text NOT NULL,
+  `endpoint` varchar(255) DEFAULT NULL,
+  `method` varchar(10) DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `stack_trace` text DEFAULT NULL,
+  `request_payload` text DEFAULT NULL,
+  `response_time_ms` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_sl_level` (`level`),
+  KEY `idx_sl_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: admin_roles (role definitions with permissions)
+--
+CREATE TABLE IF NOT EXISTS `admin_roles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `permissions` text DEFAULT NULL COMMENT 'JSON array of permission strings',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `role_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Seed default admin roles
+INSERT IGNORE INTO `admin_roles` (`name`, `description`, `permissions`) VALUES
+('Super Admin', 'Full access to all features', '["all"]'),
+('Moderator', 'Can moderate content and manage users', '["users","moderation","tickets"]'),
+('Support Agent', 'Can manage support tickets', '["tickets","users_view"]'),
+('Analyst', 'View-only access to analytics', '["overview","reports","revenue","marketing"]');
+
+--
+-- Table: support_tickets
+--
+CREATE TABLE IF NOT EXISTS `support_tickets` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `priority` enum('low','medium','high','critical') DEFAULT 'medium',
+  `status` enum('open','in_progress','waiting','resolved','closed') DEFAULT 'open',
+  `assigned_to` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_st_user` (`user_id`),
+  KEY `idx_st_status` (`status`),
+  KEY `idx_st_assigned` (`assigned_to`),
+  CONSTRAINT `st_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: ticket_messages (conversation thread)
+--
+CREATE TABLE IF NOT EXISTS `ticket_messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ticket_id` int(11) NOT NULL,
+  `sender_id` int(11) NOT NULL,
+  `sender_type` enum('user','admin') DEFAULT 'user',
+  `message` text NOT NULL,
+  `is_internal` tinyint(1) DEFAULT 0 COMMENT 'Internal admin notes',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_tm_ticket` (`ticket_id`),
+  CONSTRAINT `tm_ticket_fk` FOREIGN KEY (`ticket_id`) REFERENCES `support_tickets` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: announcement_banners
+--
+CREATE TABLE IF NOT EXISTS `announcement_banners` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `message` text NOT NULL,
+  `style` enum('info','warning','success','error') DEFAULT 'info',
+  `link` varchar(255) DEFAULT NULL,
+  `target_audience` enum('all','parents','specialists','admins') DEFAULT 'all',
+  `starts_at` datetime DEFAULT NULL,
+  `ends_at` datetime DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ab_active` (`is_active`),
+  KEY `idx_ab_dates` (`starts_at`, `ends_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Seed sample data
+INSERT IGNORE INTO `support_tickets` (`user_id`, `subject`, `priority`, `status`) VALUES
+(2, 'Cannot access growth charts', 'high', 'open'),
+(3, 'Billing question about Premium plan', 'medium', 'in_progress'),
+(4, 'Account recovery request', 'high', 'waiting');
+
+INSERT IGNORE INTO `announcement_banners` (`message`, `style`, `target_audience`, `is_active`) VALUES
+('Welcome to Bright Steps v2.1! Check out the new growth tracking features.', 'info', 'all', 1);
+
+INSERT IGNORE INTO `system_logs` (`level`, `message`, `endpoint`, `method`, `response_time_ms`) VALUES
+('info', 'System started successfully', '/admin/overview.php', 'GET', 45),
+('warning', 'Slow query detected: 2.3s', '/api_who_compare.php', 'GET', 2300),
+('error', 'Failed to send notification email', '/api_email_verify.php', 'POST', 1500);
 
 COMMIT;
 

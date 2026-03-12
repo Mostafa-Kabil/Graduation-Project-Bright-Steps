@@ -7,6 +7,8 @@ function navigateTo(page) {
         'login': 'login.php',
         'signup': 'signup.php',
         'dashboard': 'dashboard.php',
+        'admin-dashboard': 'admin-dashboard.php',
+        'clinic-dashboard': 'clinic-dashboard.php',
         'doctor-login': 'doctor-login.php',
         'doctor-signup': 'doctor-signup.php',
         'doctor-dashboard': 'doctor-dashboard.php',

@@ -34,10 +34,7 @@ if ($parentId) {
     $stmt->execute(['parent_id' => $parentId]);
     $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if (empty($children)) {
-        header("Location: add-child.php?setup=1");
-        exit();
-    }
+
 
     foreach ($children as &$ch) {
         $bd = mktime(0, 0, 0, $ch['birth_month'], $ch['birth_day'], $ch['birth_year']);
