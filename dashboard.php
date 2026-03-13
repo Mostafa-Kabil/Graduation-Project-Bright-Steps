@@ -168,7 +168,7 @@ if ($parentId) {
     <script src="scripts/theme-toggle.js?v=3"></script>
     <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/navigation.js?v=3"></script>
-    <script src="scripts/dashboard.js?v=6"></script>
+    <script src="scripts/dashboard.js?v=8"></script>
     <script src="scripts/growth-charts.js?v=1"></script>
     <script src="scripts/chatbot.js?v=1"></script>
     <script>
