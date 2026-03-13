@@ -316,14 +316,17 @@
     }
 
     function getSpeechView() {
-        return `
-        < div class="dashboard-content" >
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[0] || null;
+        const childId = child ? child.child_id : null;
+        setTimeout(() => loadSpeechHistory(childId), 100);
+        return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Speech Analysis 🗣️</h1>
                         <p class="dashboard-subtitle">Track vocabulary and pronunciation progress</p>
                     </div>
-                    <button class="btn btn-gradient">
+                    <button class="btn btn-gradient" onclick="openSpeechModal(${childId})">
                         <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
                             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
@@ -334,59 +337,149 @@
                     </button>
                 </div>
 
-                <div class="dashboard-grid" style="margin-bottom: 2rem;">
-                     <!-- AI Insight Card -->
-                     <div style="grid-column: span 2; background: linear-gradient(to right, var(--purple-600), var(--blue-600)); border-radius: var(--radius-xl); padding: 2rem; color: white;">
-                        <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem;">AI Insight</h3>
-                        <p style="margin-bottom: 1.5rem; opacity: 0.9;">Emma has added <strong>5 new words</strong> this week! Her articulation of "b" and "m" sounds has improved significantly.</p>
-                        <div style="display: flex; gap: 1rem;">
-                            <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: var(--radius-lg);">
-                                <span style="display: block; font-size: 0.75rem; opacity: 0.8;">Total Words</span>
-                                <span style="font-size: 1.25rem; font-weight: 700;">42</span>
+                <div style="margin-bottom:2rem;">
+                    <div style="background:linear-gradient(to right,#7c3aed,#2563eb);border-radius:var(--radius-xl,16px);padding:2rem;color:#fff;">
+                        <h3 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">AI Insight</h3>
+                        <p id="insight-text" style="margin-bottom:1.5rem;opacity:0.9;">Loading latest analysis...</p>
+                        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                            <div style="background:rgba(255,255,255,0.2);padding:0.5rem 1rem;border-radius:12px;">
+                                <span style="display:block;font-size:0.75rem;opacity:0.8;">Unique Words</span>
+                                <span id="insight-words" style="font-size:1.25rem;font-weight:700;">–</span>
                             </div>
-                            <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: var(--radius-lg);">
-                                <span style="display: block; font-size: 0.75rem; opacity: 0.8;">Clarity Score</span>
-                                <span style="font-size: 1.25rem; font-weight: 700;">85%</span>
+                            <div style="background:rgba(255,255,255,0.2);padding:0.5rem 1rem;border-radius:12px;">
+                                <span style="display:block;font-size:0.75rem;opacity:0.8;">Status</span>
+                                <span id="insight-status" style="font-size:1.1rem;font-weight:700;">–</span>
                             </div>
                         </div>
-                     </div>
+                    </div>
                 </div>
 
                 <h3 class="section-heading">Recent Recordings</h3>
-                <div style="display: flex; flex-direction: column; gap: 1rem;">
-                    <div class="dashboard-card" style="display: flex; align-items: center; padding: 1.5rem; gap: 1.5rem;">
-                        <div style="width: 3rem; height: 3rem; background: var(--purple-100); color: var(--purple-700); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                            ▶️
-                        </div>
-                        <div style="flex: 1;">
-                            <h4 style="font-weight: 700; margin-bottom: 0.25rem;">Morning Chatter</h4>
-                            <p style="color: var(--slate-500); font-size: 0.875rem;">Today, 9:30 AM • 45s</p>
-                        </div>
-                        <div style="text-align: right;">
-                             <span class="badge badge-green" style="margin-bottom: 0.25rem;">Positive</span>
-                             <p style="font-size: 0.75rem; color: var(--slate-500);">Identified: "Mama", "Ball"</p>
-                        </div>
-                        <button class="btn btn-ghost">View Analysis</button>
-                    </div>
-
-                    <div class="dashboard-card" style="display: flex; align-items: center; padding: 1.5rem; gap: 1.5rem;">
-                         <div style="width: 3rem; height: 3rem; background: var(--purple-100); color: var(--purple-700); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                            ▶️
-                        </div>
-                        <div style="flex: 1;">
-                            <h4 style="font-weight: 700; margin-bottom: 0.25rem;">Reading Time</h4>
-                            <p style="color: var(--slate-500); font-size: 0.875rem;">Yesterday, 6:15 PM • 1m 20s</p>
-                        </div>
-                        <div style="text-align: right;">
-                             <span class="badge badge-blue" style="margin-bottom: 0.25rem;">Developing</span>
-                             <p style="font-size: 0.75rem; color: var(--slate-500);">Focus: "Cat", "Dog"</p>
-                        </div>
-                        <button class="btn btn-ghost">View Analysis</button>
-                    </div>
+                <div id="speech-history-list">
+                    <div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">Loading recordings...</div>
                 </div>
-            </div >
-        `;
+            </div>`;
     }
+
+    async function loadSpeechHistory(childId) {
+        const container = document.getElementById('speech-history-list');
+        if (!container || !childId) {
+            if (container) container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">No child profile found.</div>';
+            return;
+        }
+        try {
+            const res = await fetch('../../api_speech_history.php?child_id=' + childId);
+            const data = await res.json();
+            const entries = data.analyses || [];
+
+            if (entries.length > 0) {
+                const latest = entries[0];
+                const insightText = document.getElementById('insight-text');
+                const insightWords = document.getElementById('insight-words');
+                const insightStatus = document.getElementById('insight-status');
+                if (insightText) insightText.textContent = latest.transcript || 'No transcript available.';
+                if (insightWords) insightWords.textContent = latest.vocabulary_score ?? '–';
+                if (insightStatus) insightStatus.textContent = latest.status || '–';
+            } else {
+                const insightText = document.getElementById('insight-text');
+                if (insightText) insightText.textContent = 'No recordings yet. Click "New Recording" to get started!';
+            }
+
+            if (entries.length === 0) {
+                container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">No recordings yet. Upload an audio file to get started!</div>';
+                return;
+            }
+
+            const statusColor = (s) => {
+                if (!s) return '#64748b';
+                if (s.includes('Within') || s.includes('Above')) return '#22c55e';
+                return '#f59e0b';
+            };
+
+            container.innerHTML = entries.map(e => {
+                const dt = new Date(e.sent_at);
+                const timeStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+                const words = e.vocabulary_score ? Math.round(e.vocabulary_score) : '–';
+                const clarify = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
+                const transcript = e.transcript ? (e.transcript.length > 80 ? e.transcript.substring(0, 80) + '…' : e.transcript) : 'No transcript';
+                const sColor = statusColor(e.status);
+                const entryJson = encodeURIComponent(JSON.stringify(e));
+                return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};">
+                    <div style="width:3rem;height:3rem;background:#ede9fe;color:#7c3aed;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">🎙️</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.25rem;flex-wrap:wrap;">
+                            <h4 style="font-weight:700;">${timeStr}</h4>
+                            <span style="background:${sColor}20;color:${sColor};padding:0.2rem 0.6rem;border-radius:999px;font-size:0.75rem;font-weight:600;">${e.status || 'Unknown'}</span>
+                        </div>
+                        <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;font-style:italic;">"${transcript}"</p>
+                        <div style="display:flex;gap:1.5rem;font-size:0.8rem;color:var(--slate-400);">
+                            <span>📖 <strong>${words}</strong> unique words</span>
+                            <span>🔊 Clarity: <strong>${clarify}</strong></span>
+                        </div>
+                    </div>
+                    <button onclick="openSpeechDetailModal(decodeURIComponent('${entryJson}'))" style="flex-shrink:0;padding:0.5rem 1rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
+                        View Analysis
+                    </button>
+                </div>`;
+            }).join('');
+        } catch (err) {
+            container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--red-500);">Could not load speech history.</div>';
+        }
+    }
+
+    window.openSpeechModal = function(childId) {
+        let existing = document.getElementById('speech-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'speech-modal';
+        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">
+            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2.5rem;max-width:440px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
+                <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">🎙️ New Speech Recording</h2>
+                <p style="color:var(--slate-500);font-size:0.9rem;margin-bottom:1.5rem;">Upload an audio or video file of your child speaking</p>
+                <input type="file" id="speech-file-input" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed var(--slate-300,#cbd5e1);border-radius:12px;font-size:0.9rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
+                <button onclick="submitSpeechRecording(${childId})" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;" id="speech-submit-btn">Analyze Speech</button>
+                <div id="speech-progress" style="margin-top:1rem;font-size:0.9rem;"></div>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+    };
+
+    window.submitSpeechRecording = async function(childId) {
+        const fileInput = document.getElementById('speech-file-input');
+        const btn = document.getElementById('speech-submit-btn');
+        const progress = document.getElementById('speech-progress');
+
+        if (!fileInput || !fileInput.files[0]) {
+            if (progress) { progress.style.color = '#ef4444'; progress.textContent = 'Please select an audio file first.'; }
+            return;
+        }
+        const formData = new FormData();
+        formData.append('audio', fileInput.files[0]);
+        formData.append('child_id', childId);
+
+        btn.disabled = true;
+        btn.textContent = 'Analyzing… (this may take a minute)';
+        if (progress) { progress.style.color = '#6366f1'; progress.textContent = '🔬 Transcribing with AI…'; }
+
+        try {
+            const res = await fetch('../../api_speech_analysis.php', { method: 'POST', body: formData });
+            const data = await res.json();
+            const modal = document.getElementById('speech-modal');
+            if (data.success) {
+                if (progress) { progress.style.color = '#22c55e'; progress.textContent = '✅ ' + data.message; }
+                btn.textContent = 'Done!';
+                setTimeout(() => { if (modal) modal.remove(); loadSpeechHistory(childId); switchView('speech'); }, 2000);
+            } else {
+                if (progress) { progress.style.color = '#ef4444'; progress.textContent = '❌ ' + (data.error || 'Analysis failed'); }
+                btn.disabled = false;
+                btn.textContent = 'Analyze Speech';
+            }
+        } catch (e) {
+            if (progress) { progress.style.color = '#ef4444'; progress.textContent = '❌ Network error. Ensure the Python server is running.'; }
+            btn.disabled = false;
+            btn.textContent = 'Analyze Speech';
+        }
+    };
 
     function getMotorView() {
         return `
@@ -659,7 +752,7 @@
                      </button>
                 </div>
 
-                <div class="dashboard-grid" style="grid-template-columns: repeat(3, 1fr); gap: 1.5rem;">
+                <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem;">
                     <!-- Full Report Card -->
                     <div class="dashboard-card" style="display: flex; flex-direction: column;">
                         <div style="height: 120px; background: linear-gradient(135deg, #6C63FF20, #a78bfa20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
@@ -711,6 +804,21 @@
                              <span class="badge badge-blue" style="margin-bottom: 1rem;">Profile Data</span>
                             <div style="margin-top: 1rem;">
                                 <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download PDF</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Speech Report Card -->
+                    <div class="dashboard-card" style="display: flex; flex-direction: column;">
+                         <div style="height: 120px; background: linear-gradient(135deg, #7c3aed20, #e879f920); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <span style="font-size: 3rem;">🗣️</span>
+                        </div>
+                        <div class="card-content" style="flex: 1;">
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Speech Report</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Vocabulary, clarity & full transcripts</p>
+                             <span class="badge" style="background:#f3e8ff;color:#9333ea;margin-bottom: 1rem;">Speech Data</span>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download PDF</button>
                             </div>
                         </div>
                     </div>
@@ -990,6 +1098,78 @@
                 setTimeout(() => { const m = document.getElementById('change-pwd-modal'); if (m) m.remove(); }, 2000);
             } else { err.textContent = data.error; }
         } catch (e) { err.textContent = 'Network error'; }
+    };
+
+    window.openSpeechDetailModal = function(entryJson) {
+        let existing = document.getElementById('speech-detail-modal');
+        if (existing) existing.remove();
+        
+        let entry;
+        try {
+            entry = JSON.parse(entryJson);
+        } catch (e) {
+            console.error("Failed to parse entry details:", e);
+            return;
+        }
+
+        const dt = new Date(entry.sent_at);
+        const timeStr = dt.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + ' at ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+        
+        const vocabScore = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
+        const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
+        
+        let clarityMeaning = 'Developing clear speech patterns.';
+        if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation, aligning perfectly with milestones.';
+        else if (clarityScore >= 75) clarityMeaning = 'Good clarity, typical for this developmental stage.';
+        
+        let vocabMeaning = 'Still building core vocabulary.';
+        if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
+            vocabMeaning = 'Vocabulary size is right on track or advanced for their age!';
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'speech-detail-modal';
+        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.remove()">
+            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2rem;max-width:550px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;text-align:left;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">
+                    <div>
+                        <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.25rem;">Speech Analysis Details</h2>
+                        <p style="color:var(--slate-500);font-size:0.9rem;">Recorded on ${timeStr}</p>
+                    </div>
+                    <button onclick="document.getElementById('speech-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);line-height:1;">&times;</button>
+                </div>
+                
+                <div style="margin-bottom:1.5rem;">
+                    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Listen to Recording</h3>
+                    <audio controls style="width:100%;height:40px;border-radius:8px;" src="../../${entry.audio_url || ''}">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
+                <div style="background:var(--slate-50,#f8fafc);border:1px solid var(--slate-200,#e2e8f0);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+                    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Full Transcript</h3>
+                    <div style="max-height:180px;overflow-y:auto;padding-right:0.5rem;">
+                        <p style="font-style:italic;color:var(--slate-600);line-height:1.6;margin:0;">"${entry.transcript || 'No speech detected.'}"</p>
+                    </div>
+                </div>
+                
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                    <div style="background:#ede9fe;border-radius:12px;padding:1.25rem;">
+                        <span style="display:block;font-size:0.8rem;color:#6b21a8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Vocabulary Score</span>
+                        <div style="font-size:1.75rem;font-weight:800;color:#581c87;margin-bottom:0.5rem;">${vocabScore} <span style="font-size:1rem;font-weight:500;">words</span></div>
+                        <p style="font-size:0.8rem;color:#4c1d95;line-height:1.4;">${vocabMeaning}</p>
+                    </div>
+                    <div style="background:#dcfce7;border-radius:12px;padding:1.25rem;">
+                        <span style="display:block;font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Clarity Score</span>
+                        <div style="font-size:1.75rem;font-weight:800;color:#14532d;margin-bottom:0.5rem;">${clarityScore}%</div>
+                        <p style="font-size:0.8rem;color:#15803d;line-height:1.4;">${clarityMeaning}</p>
+                    </div>
+                </div>
+                
+                <button onclick="document.getElementById('speech-detail-modal').remove()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Close</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
     };
 
     // Initialize

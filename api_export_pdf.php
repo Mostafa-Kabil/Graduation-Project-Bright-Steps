@@ -68,6 +68,16 @@ $stmt = $connect->prepare(
 $stmt->execute([$parentId]);
 $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// Speech Analysis
+$stmt = $connect->prepare("
+    SELECT vs.sent_at, sa.transcript, sa.vocabulary_score, sa.clarify_score, vs.feedback as status
+    FROM voice_sample vs
+    LEFT JOIN speech_analysis sa ON sa.sample_id = vs.sample_id
+    WHERE vs.child_id = ? ORDER BY vs.sent_at DESC LIMIT 10
+");
+$stmt->execute([$childId]);
+$speechRecords = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
 // Badges
 $stmt = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ?");
 $stmt->execute([$childId]);
@@ -85,6 +95,8 @@ if ($type === 'growth-report')
     $reportTitle = 'Growth Report';
 if ($type === 'child-report')
     $reportTitle = 'Child Profile Report';
+if ($type === 'speech-report')
+    $reportTitle = 'Speech Analysis Report';
 
 ob_start();
 ?>
@@ -418,6 +430,49 @@ ob_start();
                 </table>
             <?php else: ?>
                 <p style="color: #94a3b8; padding: 12px;">No appointments on record.</p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($type === 'full-report' || $type === 'speech-report'): ?>
+        <!-- Speech Analysis -->
+        <div class="section">
+            <div class="section-title">🗣️ Speech Analysis History</div>
+            <?php if (count($speechRecords) > 0): ?>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Vocab Score</th>
+                            <th>Clarity</th>
+                            <th>Transcript</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($speechRecords as $s): ?>
+                            <tr>
+                                <td>
+                                    <?= date('M d, Y', strtotime($s['sent_at'])) ?>
+                                </td>
+                                <td><span class="badge <?= (strpos((string)$s['status'], 'Within') !== false || strpos((string)$s['status'], 'Above') !== false) ? 'badge-green' : 'badge-yellow' ?>">
+                                        <?= htmlspecialchars($s['status'] ?: 'Unknown') ?>
+                                    </span></td>
+                                <td>
+                                    <?= htmlspecialchars($s['vocabulary_score'] ? round((float)$s['vocabulary_score']) : '—') ?> words
+                                </td>
+                                <td>
+                                    <?= htmlspecialchars($s['clarify_score'] ? (round((float)$s['clarify_score'] * 100) . '%') : '—') ?>
+                                </td>
+                                <td style="font-style: italic; color: #475569; max-width: 200px;">
+                                    "<?= htmlspecialchars($s['transcript'] ?: '—') ?>"
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php else: ?>
+                <p style="color: #94a3b8; padding: 12px;">No speech recordings on record.</p>
             <?php endif; ?>
         </div>
     <?php endif; ?>
