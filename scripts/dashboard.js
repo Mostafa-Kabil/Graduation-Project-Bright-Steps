@@ -404,7 +404,7 @@
                 const clarify = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
                 const transcript = e.transcript ? (e.transcript.length > 80 ? e.transcript.substring(0, 80) + '…' : e.transcript) : 'No transcript';
                 const sColor = statusColor(e.status);
-                const entryJson = encodeURIComponent(JSON.stringify(e));
+                const entryJson = encodeURIComponent(JSON.stringify(e)).replace(/'/g, "%27");
                 return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};">
                     <div style="width:3rem;height:3rem;background:#ede9fe;color:#7c3aed;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">🎙️</div>
                     <div style="flex:1;min-width:0;">
@@ -1183,7 +1183,7 @@ function handleLogout() {
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
     modal.innerHTML = `
-        < div class="logout-overlay" onclick = "closeLogoutModal()" ></div >
+        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
             <div class="logout-dialog">
                 <div class="logout-icon-wrap">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
