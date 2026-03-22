@@ -6,16 +6,16 @@ include 'connection.php';
 // If already logged in, redirect to appropriate dashboard
 if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
     if ($_SESSION['role'] === 'admin') {
-        header("Location: admin-dashboard.php");
+        header("Location: dashboards/admin/admin-dashboard.php");
         exit;
     } elseif ($_SESSION['role'] === 'doctor') {
-        header("Location: doctor-dashboard.php");
+        header("Location: dashboards/doctor/doctor-dashboard.php");
         exit;
     } elseif ($_SESSION['role'] === 'clinic') {
-        header("Location: clinic-dashboard.php");
+        header("Location: dashboards/clinic/clinic-dashboard.php");
         exit;
     } else {
-        header("Location: dashboard.php");
+        header("Location: dashboards/parent/dashboard.php");
         exit;
     }
 }
@@ -51,20 +51,19 @@ if (isset($_POST['login'])) {
 
                 // route by role
                 if ($user['role'] === 'admin') {
-                    header("Location: admin-dashboard.php");
+                    header("Location: dashboards/admin/admin-dashboard.php");
                     exit;
                 } elseif ($user['role'] === 'doctor') {
-                    header("Location: doctor-dashboard.php");
+                    header("Location: dashboards/doctor/doctor-dashboard.php");
                     exit;
                 } elseif ($user['role'] === 'clinic') {
-                    header("Location: clinic-dashboard.php");
+                    header("Location: dashboards/clinic/clinic-dashboard.php");
                     exit;
                 } elseif ($user['role'] === 'parent') {
-                    // Always redirect parent to dashboard, it handles empty state
-                    header("Location: dashboard.php");
+                    header("Location: dashboards/parent/dashboard.php");
                     exit;
                 } else {
-                    header("Location: dashboard.php");
+                    header("Location: dashboards/parent/dashboard.php");
                     exit;
                 }
             } else {

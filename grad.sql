@@ -1469,6 +1469,97 @@ INSERT IGNORE INTO `system_logs` (`level`, `message`, `endpoint`, `method`, `res
 ('warning', 'Slow query detected: 2.3s', '/api_who_compare.php', 'GET', 2300),
 ('error', 'Failed to send notification email', '/api_email_verify.php', 'POST', 1500);
 
+-- =====================================================
+-- Parent Dashboard Enhancement Tables
+-- =====================================================
+
+--
+-- Table: user_settings (per-user preferences)
+--
+CREATE TABLE IF NOT EXISTS `user_settings` (
+  `user_id` int(11) NOT NULL,
+  `theme` enum('light','dark') DEFAULT 'light',
+  `language` enum('en','ar') DEFAULT 'en',
+  `push_notifications` tinyint(1) DEFAULT 1,
+  `email_notifications` tinyint(1) DEFAULT 1,
+  `appointment_reminders` tinyint(1) DEFAULT 1,
+  `daily_reminders` tinyint(1) DEFAULT 1,
+  `milestone_alerts` tinyint(1) DEFAULT 1,
+  `data_sharing` tinyint(1) DEFAULT 1,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`user_id`),
+  CONSTRAINT `user_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: child_activities (tracks AI-recommended and completed activities)
+--
+CREATE TABLE IF NOT EXISTS `child_activities` (
+  `activity_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `category` enum('article','real_life','website_game','speech','motor','cognitive','social') DEFAULT 'real_life',
+  `duration_minutes` int(11) DEFAULT 15,
+  `difficulty` enum('easy','medium','hard') DEFAULT 'medium',
+  `source` enum('ai','system','specialist') DEFAULT 'ai',
+  `external_url` varchar(500) DEFAULT NULL,
+  `is_completed` tinyint(1) DEFAULT 0,
+  `completed_at` datetime DEFAULT NULL,
+  `points_earned` int(11) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`activity_id`),
+  KEY `idx_ca_child` (`child_id`),
+  KEY `idx_ca_completed` (`is_completed`),
+  KEY `idx_ca_category` (`category`),
+  KEY `idx_ca_created` (`created_at`),
+  CONSTRAINT `child_activities_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Additional streak-based badge seed data
+INSERT IGNORE INTO `badge` (`name`, `description`, `icon`) VALUES
+('Rising Star', 'Maintain a 3-day login streak', 'rising_star'),
+('Consistency King', 'Maintain a 7-day login streak', 'consistency_king'),
+('Weekly Champion', 'Complete 5 activities in one week', 'weekly_champion_streak'),
+('Monthly Master', 'Complete 20 activities in one month', 'monthly_master'),
+('Explorer', 'Try activities from 3 different categories', 'explorer'),
+('Knowledge Seeker', 'Read 5 recommended articles', 'knowledge_seeker');
+
+-- ── Contact Messages ──────────────────────────────
+CREATE TABLE IF NOT EXISTS `contact_messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `subject` varchar(500) NOT NULL,
+  `message` text NOT NULL,
+  `is_read` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Newsletter Subscribers ───────────────────────────
+CREATE TABLE IF NOT EXISTS `newsletter_subscribers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `email` varchar(255) NOT NULL,
+  `subscribed` tinyint(1) DEFAULT 1,
+  `preferences` text DEFAULT NULL,
+  `subscribed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_newsletter_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Newsletter History ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `newsletter_history` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `subject` varchar(500) NOT NULL,
+  `content` text DEFAULT NULL,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_nh_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

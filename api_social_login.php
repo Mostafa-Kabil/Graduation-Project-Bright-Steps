@@ -31,16 +31,16 @@ if ($user) {
         $_SESSION['lname'] = $user['last_name'];
         $_SESSION['email'] = $user['email'];
         $_SESSION['role'] = $user['role'];
-        echo json_encode(['success' => true, 'redirect' => 'dashboard.php', 'message' => 'Welcome back!']);
+        echo json_encode(['success' => true, 'redirect' => 'dashboards/parent/dashboard.php', 'message' => 'Welcome back!']);
     } elseif ($user['role'] === 'doctor') {
         $_SESSION['id'] = $user['user_id'];
         $_SESSION['fname'] = $user['first_name'];
         $_SESSION['lname'] = $user['last_name'];
         $_SESSION['email'] = $user['email'];
         $_SESSION['role'] = $user['role'];
-        echo json_encode(['success' => true, 'redirect' => 'doctor-dashboard.php', 'message' => 'Welcome back, Dr.!']);
+        echo json_encode(['success' => true, 'redirect' => 'dashboards/doctor/doctor-dashboard.php', 'message' => 'Welcome back, Dr.!']);
     } else {
-        echo json_encode(['success' => true, 'redirect' => 'dashboard.php', 'message' => 'Welcome back!']);
+        echo json_encode(['success' => true, 'redirect' => 'dashboards/parent/dashboard.php', 'message' => 'Welcome back!']);
     }
 } else {
     // New user – auto-register as parent
@@ -71,5 +71,5 @@ if ($user) {
     $_SESSION['email'] = $email;
     $_SESSION['role'] = 'parent';
 
-    echo json_encode(['success' => true, 'redirect' => 'dashboard.php', 'message' => 'Account created! Welcome to Bright Steps.', 'new_account' => true]);
+    echo json_encode(['success' => true, 'redirect' => 'dashboards/parent/dashboard.php', 'message' => 'Account created! Welcome to Bright Steps.', 'new_account' => true]);
 }

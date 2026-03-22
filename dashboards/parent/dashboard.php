@@ -17,7 +17,9 @@ $dashboardData = [
     ],
     'subscription' => ['plan_name' => 'Free', 'price' => '0.00', 'plan_period' => ''],
     'children' => [],
-    'appointments' => []
+    'appointments' => [],
+    'streaks' => [],
+    'user_settings' => null
 ];
 
 if ($parentId) {
@@ -84,6 +86,52 @@ if ($parentId) {
     $stmt = $connect->prepare($sql);
     $stmt->execute(['parent_id' => $parentId]);
     $dashboardData['appointments'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Streaks data for first child
+    if (!empty($children)) {
+        $firstChildId = $children[0]['child_id'];
+        try {
+            $streakStmt = $connect->prepare(
+                "SELECT streak_type, current_count, longest_count, last_activity_date FROM streaks WHERE child_id = ?"
+            );
+            $streakStmt->execute([$firstChildId]);
+            $streakRows = $streakStmt->fetchAll(PDO::FETCH_ASSOC);
+            $streakMap = [];
+            foreach ($streakRows as $sr) {
+                $streakMap[$sr['streak_type']] = $sr;
+            }
+            $dashboardData['streaks'] = $streakMap;
+
+            // Badge details
+            $badgeStmt = $connect->prepare(
+                "SELECT b.badge_id, b.name, b.description, b.icon, cb.redeemed_at
+                 FROM child_badge cb
+                 INNER JOIN badge b ON cb.badge_id = b.badge_id
+                 WHERE cb.child_id = ? ORDER BY cb.redeemed_at DESC"
+            );
+            $badgeStmt->execute([$firstChildId]);
+            $dashboardData['badges'] = $badgeStmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $dashboardData['streaks'] = [];
+            $dashboardData['badges'] = [];
+        }
+    }
+
+    // User settings (wrapped in try-catch for when table doesn't exist yet)
+    try {
+        $settingsStmt = $connect->prepare("SELECT * FROM user_settings WHERE user_id = ?");
+        $settingsStmt->execute([$parentId]);
+        $userSettings = $settingsStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$userSettings) {
+            try {
+                $connect->prepare("INSERT IGNORE INTO user_settings (user_id) VALUES (?)")->execute([$parentId]);
+            } catch (Exception $e2) { /* ignore */ }
+            $userSettings = ['theme' => 'light', 'language' => 'en', 'push_notifications' => 1, 'email_notifications' => 1, 'appointment_reminders' => 1, 'daily_reminders' => 1, 'milestone_alerts' => 1, 'data_sharing' => 1];
+        }
+    } catch (Exception $e) {
+        $userSettings = ['theme' => 'light', 'language' => 'en', 'push_notifications' => 1, 'email_notifications' => 1, 'appointment_reminders' => 1, 'daily_reminders' => 1, 'milestone_alerts' => 1, 'data_sharing' => 1];
+    }
+    $dashboardData['user_settings'] = $userSettings;
 }
 ?>
 <!DOCTYPE html>
@@ -148,15 +196,6 @@ if ($parentId) {
             </nav>
 
             <div class="sidebar-footer">
-                <button class="sidebar-language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    <span>عربي</span>
-                </button>
                 <button class="nav-item" data-view="settings" onclick="switchView('settings')">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
@@ -472,17 +511,7 @@ if ($parentId) {
                 </div>
             </div>
         </div>
-    </template> <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <path
-                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    </button>
+    </template>
 
     <script>
         window.dashboardData = <?php echo json_encode($dashboardData, JSON_UNESCAPED_UNICODE); ?>;

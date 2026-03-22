@@ -330,7 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                                     body: JSON.stringify({ email: VERIFY_EMAIL, code: code })
                                 });
                                 const data = await res.json();
-                                if (data.success) { window.location.href = 'dashboard.php'; }
+                                if (data.success) { window.location.href = 'dashboards/parent/dashboard.php'; }
                                 else { document.getElementById('verify-error').textContent = data.error || 'Invalid code'; }
                             } catch (e) { document.getElementById('verify-error').textContent = 'Error verifying'; }
                             document.getElementById('verify-btn').disabled = false;

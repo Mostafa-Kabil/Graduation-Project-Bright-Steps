@@ -38,7 +38,7 @@ if (isset($_POST['login'])) {
                     $_SESSION['specialization'] = $user['specialization'] ?? '';
                     $_SESSION['clinic_id'] = $user['clinic_id'] ?? null;
 
-                    header("Location: doctor-dashboard.php");
+                    header("Location: dashboards/doctor/doctor-dashboard.php");
                     exit;
                 } else {
                     $errors[] = "This portal is for healthcare providers only.";

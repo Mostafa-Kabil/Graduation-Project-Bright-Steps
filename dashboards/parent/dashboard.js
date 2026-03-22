@@ -11,7 +11,6 @@
         { id: 'motor', label: 'Motor Skills', icon: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>' },
         { id: 'activities', label: 'Activities', icon: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>' },
         { id: 'clinic', label: 'Book Clinic', icon: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
-        { id: 'notifications', label: 'Notifications', icon: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' },
         { id: 'reports', label: 'Reports', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>' }
     ];
 
@@ -26,11 +25,17 @@
                     ${item.icon}
                 </svg>
                 <span>${item.label}</span>
-                ${item.id === 'notifications' ? '<span class="notif-badge" id="nav-notif-badge" style="display:none;background:#ef4444;color:white;font-size:0.65rem;font-weight:700;min-width:1.1rem;height:1.1rem;border-radius:50%;display:none;align-items:center;justify-content:center;margin-left:auto;"></span>' : ''}
             </button>
         `).join('');
+
+        // Render Top Bar
+        renderTopBar();
+
         // Load unread notification count
         loadNotifCount();
+
+        // Streak check-in
+        streakCheckIn();
 
         // Add click handlers
         navContainer.querySelectorAll('.nav-item').forEach(item => {
@@ -39,6 +44,157 @@
                 switchView(view);
             });
         });
+    }
+
+    // ── Top Bar ──────────────────────────────────────────────
+    function renderTopBar() {
+        const main = document.querySelector('.dashboard-main');
+        if (!main || document.getElementById('dashboard-topbar')) return;
+
+        const d = window.dashboardData || {};
+        const p = d.parent || {};
+        const streaks = d.streaks || {};
+        const badges = d.badges || [];
+        const dailyStreak = streaks.daily_login ? streaks.daily_login.current_count : 0;
+        const badgeCount = badges.length || ((d.children || [])[0] || {}).badge_count || 0;
+        const totalPoints = ((d.children || [])[0] || {}).total_points || 0;
+        const initials = ((p.fname || 'U')[0] + (p.lname || 'S')[0]).toUpperCase();
+
+        const topbar = document.createElement('div');
+        topbar.id = 'dashboard-topbar';
+        topbar.className = 'dashboard-topbar';
+        topbar.innerHTML = `
+            <div class="topbar-left">
+                <div class="topbar-streak" title="Daily Login Streak">
+                    <div class="topbar-streak-icon">🔥</div>
+                    <div class="topbar-streak-info">
+                        <span class="topbar-streak-count" id="topbar-streak-count">${dailyStreak}</span>
+                        <span class="topbar-streak-label">Day Streak</span>
+                    </div>
+                </div>
+                <div class="topbar-divider"></div>
+                <div class="topbar-badges" title="Badges Earned" onclick="switchView('profile')" style="cursor:pointer">
+                    <div class="topbar-badge-icon">🏆</div>
+                    <div class="topbar-badge-info">
+                        <span class="topbar-badge-count" id="topbar-badge-count">${badgeCount}</span>
+                        <span class="topbar-badge-label">Badges</span>
+                    </div>
+                </div>
+                <div class="topbar-divider"></div>
+                <div class="topbar-points" title="Points Wallet" style="cursor:pointer">
+                    <div class="topbar-points-icon">💎</div>
+                    <div class="topbar-points-info">
+                        <span class="topbar-points-count" id="topbar-points-count">${totalPoints}</span>
+                        <span class="topbar-points-label">Points</span>
+                    </div>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-notification" id="topbar-notification" onclick="toggleNotifDropdown()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span class="topbar-notif-badge" id="topbar-notif-badge" style="display:none">0</span>
+                </div>
+                <div class="topbar-notification-dropdown" id="notif-dropdown" style="display:none">
+                    <div class="notif-dropdown-header">
+                        <h4>Notifications</h4>
+                        <button onclick="markAllRead();loadTopBarNotifs()" class="notif-mark-all">Mark all read</button>
+                    </div>
+                    <div id="notif-dropdown-list" class="notif-dropdown-list">Loading...</div>
+                    <div class="notif-dropdown-footer" onclick="switchView('notifications');toggleNotifDropdown()">
+                        View All Notifications
+                    </div>
+                </div>
+                <div class="topbar-avatar" onclick="switchView('settings')" title="Settings">
+                    ${initials}
+                </div>
+            </div>
+        `;
+        main.insertBefore(topbar, main.firstChild);
+
+        // Close dropdown on outside click
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('notif-dropdown');
+            const trigger = document.getElementById('topbar-notification');
+            if (dropdown && trigger && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+
+    window.toggleNotifDropdown = function() {
+        const dropdown = document.getElementById('notif-dropdown');
+        if (!dropdown) return;
+        if (dropdown.style.display === 'none') {
+            dropdown.style.display = 'block';
+            loadTopBarNotifs();
+        } else {
+            dropdown.style.display = 'none';
+        }
+    };
+
+    async function loadTopBarNotifs() {
+        const list = document.getElementById('notif-dropdown-list');
+        if (!list) return;
+        try {
+            const res = await fetch('../../api_notifications.php?action=list&limit=5');
+            const data = await res.json();
+            const notifs = data.notifications || [];
+            const typeIcons = { appointment_reminder: '📅', payment_success: '💳', growth_alert: '📏', milestone: '🏆', system: '🔔' };
+            if (notifs.length === 0) {
+                list.innerHTML = '<div class="notif-dropdown-empty">No notifications</div>';
+                return;
+            }
+            list.innerHTML = notifs.map(n => {
+                const dt = new Date(n.created_at);
+                const timeStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric'});
+                const icon = typeIcons[n.type] || '🔔';
+                const unread = n.is_read == 0 ? 'notif-unread' : '';
+                return `<div class="notif-dropdown-item ${unread}" onclick="markNotifRead(${n.notification_id});loadTopBarNotifs();loadNotifCount()">
+                    <span class="notif-item-icon">${icon}</span>
+                    <div class="notif-item-content">
+                        <div class="notif-item-title">${n.title}</div>
+                        <div class="notif-item-time">${timeStr}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            list.innerHTML = '<div class="notif-dropdown-empty">Error loading</div>';
+        }
+    }
+
+    async function streakCheckIn() {
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[0] || null;
+        if (!child) return;
+        try {
+            const res = await fetch('../../api_streaks.php?action=check-in', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({child_id: child.child_id})
+            });
+            const data = await res.json();
+            if (data.success) {
+                const el = document.getElementById('topbar-streak-count');
+                if (el) el.textContent = data.current_streak || 0;
+                // Show new badge notifications
+                if (data.new_badges && data.new_badges.length > 0) {
+                    data.new_badges.forEach(b => showBadgeToast(b));
+                    const bc = document.getElementById('topbar-badge-count');
+                    if (bc) bc.textContent = parseInt(bc.textContent || 0) + data.new_badges.length;
+                }
+            }
+        } catch(e) { /* silent */ }
+    }
+
+    function showBadgeToast(badgeName) {
+        const toast = document.createElement('div');
+        toast.className = 'badge-toast';
+        toast.innerHTML = `<span class="badge-toast-icon">🏆</span><div><strong>New Badge!</strong><br>${badgeName}</div>`;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.classList.add('show'), 50);
+        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 400); }, 4000);
     }
 
     // Switch view
@@ -83,9 +239,60 @@
         const viewFunction = views[viewId] || views['home'];
         contentContainer.innerHTML = viewFunction();
 
+        // Post-render hooks
+        if (viewId === 'home' || !viewId) {
+            loadHomeActivities();
+        }
+
         // Re-apply translations to newly injected content if in Arabic mode
         if (typeof retranslateCurrentPage === 'function') {
             retranslateCurrentPage();
+        }
+    }
+
+    // Load home activities from API
+    async function loadHomeActivities() {
+        const container = document.getElementById('home-activities-list');
+        if (!container) return;
+        const d = window.dashboardData || {};
+        const children = d.children || [];
+        const child = children[0] || null;
+        if (!child) return;
+
+        try {
+            const res = await fetch('../../api_activities.php?action=recommend&child_id=' + child.child_id);
+            const data = await res.json();
+
+            if (data.success && data.recommendations) {
+                const recs = data.recommendations;
+                const activities = recs.real_life_activities || [];
+                const colors = ['activity-blue', 'activity-purple', 'activity-green', 'activity-orange'];
+                const icons = [
+                    '<path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/>',
+                    '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+                    '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+                    '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'
+                ];
+
+                if (activities.length === 0) {
+                    container.innerHTML = '<p style="color:var(--slate-500);padding:1rem;text-align:center;">No activities available. Check the Activities tab for more.</p>';
+                    return;
+                }
+
+                container.innerHTML = activities.slice(0, 3).map((act, i) => `
+                    <div class="activity-item ${colors[i % colors.length]}">
+                        <div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icons[i % icons.length]}</svg></div>
+                        <div class="activity-info">
+                            <h4 class="activity-title">${act.title}</h4>
+                            <p class="activity-description">${act.description}</p>
+                            <span class="activity-duration">⏱ ${act.duration || '15 min'}</span>
+                        </div>
+                    </div>`).join('');
+            } else {
+                container.innerHTML = '<p style="color:var(--slate-500);padding:1rem;text-align:center;">Activities will appear here once configured.</p>';
+            }
+        } catch (e) {
+            container.innerHTML = '<p style="color:var(--slate-500);padding:1rem;text-align:center;">Could not load activities.</p>';
         }
     }
 
@@ -107,7 +314,7 @@
                     <svg style="width:4rem;height:4rem;color:var(--slate-300);margin:0 auto 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <h3 style="margin-bottom:.5rem;">No children added yet</h3>
                     <p style="color:var(--slate-500);margin-bottom:1.5rem;">Add your child to start tracking their development</p>
-                    <a href="child-profile.php" class="btn btn-gradient">Add Child Profile</a>
+                    <a href="javascript:void(0)" onclick="openAddChildModal()" class="btn btn-gradient">Add Child Profile</a>
                 </div></div>`;
         }
 
@@ -139,12 +346,7 @@
                 <h1 class="dashboard-title">Welcome back, ${p.fname || 'Parent'}! 👋</h1>
                 <p class="dashboard-subtitle">Here's ${child.first_name}'s progress today</p>
             </div>
-            <div class="streak-cards">
-                <div class="streak-card streak-yellow">
-                    <div class="streak-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
-                    <div class="streak-info"><div class="streak-number">${child.badge_count || 0}</div><div class="streak-label">Badges</div></div>
-                </div>
-            </div></div>
+            </div>
             <div class="child-profile-card">
                 <div class="child-avatar">${initial}</div>
                 <div class="child-info">
@@ -161,11 +363,11 @@
             <div class="dashboard-grid">
                 <div class="dashboard-card">
                     <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Recommended Activities</h3></div>
-                    <div class="card-content">
-                        <div class="activity-item activity-blue"><div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10v1a3.5 3.5 0 0 1-6.39 1.97M2 12C2 6.48 6.48 2 12 2m0 18a10 10 0 0 1-10-10v-1a3.5 3.5 0 0 1 6.39-1.97M22 12c0 5.52-4.48 10-10 10"/></svg></div>
-                            <div class="activity-info"><h4 class="activity-title">Reading Time</h4><p class="activity-description">Read a picture book together. Point to objects and say their names clearly.</p><span class="activity-duration">⏱ 15 minutes</span></div></div>
-                        <div class="activity-item activity-purple"><div class="activity-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></div>
-                            <div class="activity-info"><h4 class="activity-title">Stacking Blocks</h4><p class="activity-description">Practice hand-eye coordination by stacking colorful blocks together.</p><span class="activity-duration">⏱ 10 minutes</span></div></div>
+                    <div class="card-content" id="home-activities-list">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-400);">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.5rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            Loading activities...
+                        </div>
                     </div>
                 </div>
                 <div class="dashboard-column">
@@ -173,11 +375,12 @@
                         <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Upcoming Appointments</h3></div>
                         <div class="card-content">${apptHtml}</div>
                     </div>
-                    <div class="dashboard-card">
-                        <div class="card-header"><h3 class="card-title">Points Wallet</h3></div>
+                    <div class="dashboard-card" style="cursor:pointer" onclick="window.location.href='../../articles.php'">
+                        <div class="card-header"><h3 class="card-title"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Articles & Tips</h3></div>
                         <div class="card-content" style="text-align:center;padding:1.5rem;">
-                            <div style="font-size:2rem;font-weight:800;color:var(--blue-600);">${child.total_points || 0}</div>
-                            <div style="color:var(--slate-500);">Total Points</div>
+                            <div style="font-size:2.5rem;margin-bottom:0.5rem;">📚</div>
+                            <p style="color:var(--slate-500);font-size:0.9rem;">Parenting tips, health guides, nutrition advice & more</p>
+                            <span class="btn btn-outline btn-sm" style="margin-top:0.75rem;display:inline-block;">Browse Articles →</span>
                         </div>
                     </div>
                 </div>
@@ -209,13 +412,13 @@
                 <span style="margin-top:0.5rem;font-weight:600;">${c.first_name}</span>
                 <span style="font-size:0.75rem;color:var(--slate-500);">${ageLabel}</span></div>`;
         });
-        selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:0.6;" onclick="window.location.href='../../child-profile.php'">
+        selectorHtml += `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:0.6;" onclick="openAddChildModal()">
             <div style="width:4rem;height:4rem;border:2px dashed var(--slate-300);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--slate-400);"><svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
             <span style="margin-top:0.5rem;font-weight:500;color:var(--slate-500);">New</span></div>`;
 
         if (!child) {
             return `<div class="dashboard-content"><div class="dashboard-header-section"><div><h1 class="dashboard-title">Child Profile</h1><p class="dashboard-subtitle">No children yet</p></div>
-            <a href="child-profile.php" class="btn btn-outline">Add Child</a></div></div>`;
+            <a href="javascript:void(0)" onclick="openAddChildModal()" class="btn btn-outline">Add Child</a></div></div>`;
         }
 
         const g = child.growth || {};
@@ -224,14 +427,14 @@
 
         return `<div class="dashboard-content">
             <div class="dashboard-header-section"><div><h1 class="dashboard-title">Child Profile</h1><p class="dashboard-subtitle">Manage profiles and view progress</p></div>
-            <a href="child-profile.php" class="btn btn-outline"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Child</a></div>
+            <a href="javascript:void(0)" onclick="openAddChildModal()" class="btn btn-outline"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add Child</a></div>
             <div class="dashboard-card" style="margin-bottom:2rem;"><div class="card-content"><h3 class="card-title" style="margin-bottom:1rem;font-size:1rem;">Select Child Profile</h3>
                 <div style="display:flex;gap:1.5rem;overflow-x:auto;padding-bottom:0.5rem;">${selectorHtml}</div></div></div>
             <div class="child-profile-card" style="margin-bottom:2rem;"><div style="display:flex;justify-content:space-between;align-items:flex-start;">
                 <div style="display:flex;gap:1.5rem;align-items:center;"><div class="child-avatar" style="width:5rem;height:5rem;font-size:2rem;">${init}</div>
                 <div class="child-info"><h2 class="child-name" style="font-size:1.75rem;">${fullName}</h2>
                 <div class="child-details"><span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span></div></div></div>
-                <a href="child-profile.php?child_id=${child.child_id}" class="btn btn-ghost">Edit Details</a></div></div>
+                <a href="javascript:void(0)" onclick="openAddChildModal(window.dashboardData?.children?.[0])" class="btn btn-ghost">Edit Details</a></div></div>
             <div class="dashboard-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:2rem;">
                 <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Weight</div><div style="font-size:1.5rem;font-weight:700;">${g.weight ? g.weight + ' kg' : '—'}</div></div>
                 <div class="dashboard-card" style="text-align:center;padding:1.5rem;"><div style="font-size:0.875rem;color:var(--slate-500);margin-bottom:0.5rem;">Height</div><div style="font-size:1.5rem;font-weight:700;">${g.height ? g.height + ' cm' : '—'}</div></div>
@@ -251,7 +454,7 @@
             </div></div>
             <div class="dashboard-card" style="text-align:center;padding:3rem;">
                 <p style="color:var(--slate-500);margin-bottom:1rem;">No children added yet</p>
-                <a href="child-profile.php" class="btn btn-gradient">Add Child</a>
+                <a href="javascript:void(0)" onclick="openAddChildModal()" class="btn btn-gradient">Add Child</a>
             </div></div>`;
         }
 
@@ -276,7 +479,7 @@
                 <h1 class="dashboard-title">Growth Tracking 📏</h1>
                 <p class="dashboard-subtitle">Monitor ${child.first_name}'s development against WHO standards</p>
             </div>
-            <a href="child-profile.php?child_id=${child.child_id}" class="btn btn-gradient">
+            <a href="javascript:void(0)" onclick="openAddChildModal(window.dashboardData?.children?.[0])" class="btn btn-gradient">
                 <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 Log Measurement
             </a></div>
@@ -594,67 +797,236 @@
     }
 
     function getActivitiesView() {
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[0] || null;
+        const childParam = child ? child.child_id : '';
+
+        // Load AI recommendations after rendering
+        setTimeout(() => loadAIRecommendations(childParam), 200);
+
         return `
         <div class="dashboard-content">
-                 <div class="dashboard-header-section">
+                <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
-                        <p class="dashboard-subtitle">Personalized play for development</p>
+                        <p class="dashboard-subtitle">AI-powered personalized recommendations for ${child ? child.first_name : 'your child'}</p>
+                    </div>
+                    <button class="btn btn-gradient" onclick="loadAIRecommendations('${childParam}')" id="ai-refresh-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" style="margin-right:6px">
+                            <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Get New Recommendations
+                    </button>
+                </div>
+
+                <!-- AI Recommendations Container -->
+                <div id="ai-recommendations">
+                    <div class="ai-loading-state">
+                        <div class="ai-shimmer-container">
+                            <div class="ai-shimmer-card"><div class="shimmer"></div></div>
+                            <div class="ai-shimmer-card"><div class="shimmer"></div></div>
+                            <div class="ai-shimmer-card"><div class="shimmer"></div></div>
+                        </div>
+                        <p style="text-align:center;color:var(--slate-500);margin-top:1.5rem;font-size:1rem;">
+                            <span style="font-size:1.5rem;">🤖</span> AI is analyzing ${child ? child.first_name + "'s" : "your child's"} data and preparing personalized recommendations...
+                        </p>
                     </div>
                 </div>
 
-                <div style="margin-bottom: 2rem;">
-                    <h3 class="section-heading">Today's Schedule</h3>
-                    <div class="dashboard-grid">
-                        <div class="dashboard-card">
-                            <div style="background: var(--orange-100); height: 8px; width: 100%;"></div>
-                            <div class="card-content">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                    <span style="font-weight: 700; color: var(--orange-600);">Morning</span>
-                                    <span style="color: var(--slate-500);">10:00 AM</span>
-                                </div>
-                                <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">Sensory Bin Dig</h4>
-                                <p style="font-size: 0.9rem; color: var(--slate-600); margin-bottom: 1rem;">Fill a bin with rice or pasta and hide small toys for Emma to find. Great for fine motor skills.</p>
-                                <button class="btn btn-outline btn-sm" style="width: 100%;">Mark Complete</button>
-                            </div>
-                        </div>
-
-                         <div class="dashboard-card">
-                            <div style="background: var(--blue-100); height: 8px; width: 100%;"></div>
-                            <div class="card-content">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                                    <span style="font-weight: 700; color: var(--blue-600);">Afternoon</span>
-                                    <span style="color: var(--slate-500);">3:30 PM</span>
-                                </div>
-                                <h4 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem;">Music & Movement</h4>
-                                <p style="font-size: 0.9rem; color: var(--slate-600); margin-bottom: 1rem;">Dance to favorite nursery rhymes. Encourage clapping and stomping.</p>
-                                <button class="btn btn-outline btn-sm" style="width: 100%;">Mark Complete</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <h3 class="section-heading">Explore Collections</h3>
-                <div class="dashboard-grid" style="grid-template-columns: repeat(4, 1fr); gap: 1rem;">
-                    <div style="cursor: pointer; text-align: center;">
-                        <div style="background: var(--red-100); aspect-ratio: 1; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;"><svg style="width:2rem;height:2rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="2"/><path d="m15 9-2-2-5 6.5L3 17.5m17-3.5-5.5-4.5-3 3.5 3 3"/></svg></div>
-                        <span style="font-weight: 600;">Gross Motor</span>
-                    </div>
-                    <div style="cursor: pointer; text-align: center;">
-                        <div style="background: var(--purple-100); aspect-ratio: 1; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 0.5rem;">🗣️</div>
-                        <span style="font-weight: 600;">Speech</span>
-                    </div>
-                    <div style="cursor: pointer; text-align: center;">
-                        <div style="background: var(--green-100); aspect-ratio: 1; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 0.5rem;">🧩</div>
-                        <span style="font-weight: 600;">Thinking</span>
-                    </div>
-                     <div style="cursor: pointer; text-align: center;">
-                        <div style="background: var(--yellow-100); aspect-ratio: 1; border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; font-size: 2rem; margin-bottom: 0.5rem;">🤝</div>
-                        <span style="font-weight: 600;">Social</span>
+                <!-- Activity History -->
+                <div style="margin-top:2rem;">
+                    <h3 class="section-heading">Completed Activities</h3>
+                    <div id="activity-history-list">
+                        <div class="dashboard-card" style="padding:1.5rem;text-align:center;color:var(--slate-500);">Loading history...</div>
                     </div>
                 </div>
             </div>
         `;
+    }
+
+    // ── AI Recommendations Loader ─────────────────────────────
+    window.loadAIRecommendations = async function(childId) {
+        const container = document.getElementById('ai-recommendations');
+        const btn = document.getElementById('ai-refresh-btn');
+        if (!container) return;
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+        container.innerHTML = `
+            <div class="ai-loading-state">
+                <div class="ai-shimmer-container">
+                    <div class="ai-shimmer-card"><div class="shimmer"></div></div>
+                    <div class="ai-shimmer-card"><div class="shimmer"></div></div>
+                    <div class="ai-shimmer-card"><div class="shimmer"></div></div>
+                </div>
+                <p style="text-align:center;color:var(--slate-500);margin-top:1.5rem;">
+                    <span style="font-size:1.5rem;">🤖</span> AI is generating personalized recommendations...
+                </p>
+            </div>`;
+
+        try {
+            const res = await fetch('../../api_activities.php?action=recommend&child_id=' + childId);
+            const data = await res.json();
+
+            if (data.error) {
+                container.innerHTML = `<div class="dashboard-card" style="padding:2rem;text-align:center;">
+                    <p style="color:var(--red-500);margin-bottom:1rem;">⚠️ ${data.error}</p>
+                    <button class="btn btn-outline" onclick="loadAIRecommendations('${childId}')">Try Again</button>
+                </div>`;
+                if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+                return;
+            }
+
+            const rec = data.recommendations;
+            let html = '';
+
+            // Articles Section
+            if (rec.articles && rec.articles.length) {
+                html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;">📚 Recommended Articles</h3>
+                <div class="ai-cards-grid">`;
+                rec.articles.forEach((art, i) => {
+                    const catColors = {parenting:'#6366f1',development:'#8b5cf6',health:'#22c55e',nutrition:'#f59e0b'};
+                    const color = catColors[art.category] || '#6366f1';
+                    html += `<div class="ai-card ai-card-article" style="--accent:${color}">
+                        <div class="ai-card-badge" style="background:${color}15;color:${color}">${art.category || 'article'}</div>
+                        <h4 class="ai-card-title">${art.title}</h4>
+                        <p class="ai-card-desc">${art.summary}</p>
+                        <div class="ai-card-footer">
+                            <span class="ai-card-meta">📖 ${art.read_time || '5 min read'}</span>
+                            <button class="btn btn-outline btn-sm" onclick="completeActivity(${childId}, 'article', ${i})">Mark Read ✓</button>
+                        </div>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            // Real-Life Activities Section
+            if (rec.real_life_activities && rec.real_life_activities.length) {
+                html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;margin-top:2rem;">🎯 Real-Life Activities</h3>
+                <div class="ai-cards-grid">`;
+                rec.real_life_activities.forEach((act, i) => {
+                    const catIcons = {motor:'💪',speech:'🗣️',cognitive:'🧠',social:'🤝'};
+                    const icon = catIcons[act.category] || '🎯';
+                    const diffColors = {easy:'#22c55e',medium:'#f59e0b',hard:'#ef4444'};
+                    const diffColor = diffColors[act.difficulty] || '#f59e0b';
+                    html += `<div class="ai-card ai-card-activity">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                            <span style="font-size:1.75rem;">${icon}</span>
+                            <span class="ai-card-badge" style="background:${diffColor}15;color:${diffColor}">${act.difficulty || 'medium'}</span>
+                        </div>
+                        <h4 class="ai-card-title">${act.title}</h4>
+                        <p class="ai-card-desc">${act.description}</p>
+                        ${act.materials ? `<p style="font-size:0.8rem;color:var(--slate-500);margin-top:0.5rem;">🧰 Materials: ${act.materials}</p>` : ''}
+                        <div class="ai-card-footer">
+                            <span class="ai-card-meta">⏱️ ${act.duration || '15 min'}</span>
+                            <button class="btn btn-gradient btn-sm" onclick="completeActivity(${childId}, 'real_life', ${i})">Complete ✓</button>
+                        </div>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            // Website Games Section
+            if (rec.website_games && rec.website_games.length) {
+                html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;margin-top:2rem;">🎮 Website Games & Interactive Activities</h3>
+                <div class="ai-cards-grid">`;
+                rec.website_games.forEach((game, i) => {
+                    const typeIcons = {interactive:'🕹️',quiz:'❓',creative:'🎨'};
+                    const icon = typeIcons[game.type] || '🎮';
+                    html += `<div class="ai-card ai-card-game">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                            <span style="font-size:1.75rem;">${icon}</span>
+                            <span class="ai-card-badge" style="background:#8b5cf615;color:#8b5cf6">${game.type || 'interactive'}</span>
+                        </div>
+                        <h4 class="ai-card-title">${game.title}</h4>
+                        <p class="ai-card-desc">${game.description}</p>
+                        <div class="ai-card-footer">
+                            <span class="ai-card-meta">🎯 ${game.skill_focus || 'Development'} • ${game.duration || '10 min'}</span>
+                            <button class="btn btn-outline btn-sm" onclick="completeActivity(${childId}, 'website_game', ${i})">Play ▶</button>
+                        </div>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
+
+            // Load activity history
+            loadActivityHistory(childId);
+
+        } catch(e) {
+            container.innerHTML = `<div class="dashboard-card" style="padding:2rem;text-align:center;">
+                <p style="color:var(--red-500);margin-bottom:1rem;">⚠️ Failed to load recommendations</p>
+                <button class="btn btn-outline" onclick="loadAIRecommendations('${childId}')">Try Again</button>
+            </div>`;
+        }
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    };
+
+    window.completeActivity = async function(childId, category, index) {
+        try {
+            // Get the latest activities for this child
+            const res = await fetch('../../api_activities.php?action=history&child_id=' + childId);
+            const data = await res.json();
+            const activities = (data.activities || []).filter(a => !a.is_completed);
+
+            // Find matching activity
+            let activityId = null;
+            let count = 0;
+            for (const act of activities) {
+                if (act.category === category || (category === 'real_life' && ['motor','speech','cognitive','social'].includes(act.category))) {
+                    if (count === index) { activityId = act.activity_id; break; }
+                    count++;
+                }
+            }
+
+            if (!activityId) {
+                // fallback: just complete the first uncompleted
+                if (activities.length > 0) activityId = activities[0].activity_id;
+            }
+
+            if (activityId) {
+                const res2 = await fetch('../../api_activities.php?action=complete', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({activity_id: activityId, child_id: childId})
+                });
+                const result = await res2.json();
+                if (result.success) {
+                    showBadgeToast('Activity completed! +15 points 🎉');
+                    // Also trigger streak check
+                    streakCheckIn();
+                    loadNotifCount();
+                }
+            }
+        } catch(e) { console.error('Complete activity error:', e); }
+    };
+
+    async function loadActivityHistory(childId) {
+        const container = document.getElementById('activity-history-list');
+        if (!container) return;
+        try {
+            const res = await fetch('../../api_activities.php?action=history&child_id=' + childId);
+            const data = await res.json();
+            const completed = (data.activities || []).filter(a => a.is_completed == 1);
+            if (completed.length === 0) {
+                container.innerHTML = '<div class="dashboard-card" style="padding:1.5rem;text-align:center;color:var(--slate-500);">No completed activities yet. Start by completing a recommendation above!</div>';
+                return;
+            }
+            container.innerHTML = completed.slice(0, 10).map(a => {
+                const dt = new Date(a.completed_at);
+                const dateStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric'});
+                const catIcons = {article:'📚',real_life:'🎯',website_game:'🎮',motor:'💪',speech:'🗣️',cognitive:'🧠',social:'🤝'};
+                const icon = catIcons[a.category] || '✅';
+                return `<div class="dashboard-card" style="padding:1rem;margin-bottom:0.5rem;display:flex;align-items:center;gap:1rem;">
+                    <span style="font-size:1.5rem;">${icon}</span>
+                    <div style="flex:1;"><h4 style="font-weight:600;margin-bottom:0.25rem;">${a.title}</h4>
+                    <span style="font-size:0.8rem;color:var(--slate-500);">${dateStr} • +${a.points_earned} pts</span></div>
+                    <span class="badge badge-green">Completed</span>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            container.innerHTML = '<div class="dashboard-card" style="padding:1rem;text-align:center;color:var(--slate-500);">Could not load history</div>';
+        }
     }
 
     function getClinicView() {
@@ -841,92 +1213,243 @@
         const parentEmail = p.email || '';
         const childName = child ? child.first_name : '';
         const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
+        const settings = d.user_settings || {};
+        const isDark = (settings.theme === 'dark') || document.documentElement.getAttribute('data-theme') === 'dark';
+        const lang = settings.language || localStorage.getItem('language') || 'en';
+        const sub = d.subscription || {};
 
         return `
         <div class="dashboard-content">
                 <h1 class="dashboard-title">Settings ⚙️</h1>
                 <p class="dashboard-subtitle" style="margin-bottom: 2rem;">Manage your account and app preferences</p>
                 
-                <div style="max-width: 800px;">
-                    <div class="dashboard-card" style="margin-bottom: 1.5rem;">
-                        <div class="card-header">
-                            <h3 class="card-title">Profile Settings</h3>
-                        </div>
-                        <div class="card-content">
-                            <div class="form-group" style="margin-bottom: 1rem;">
-                                <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Parent Name</label>
-                                <input type="text" value="${parentName}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
+                <div class="settings-layout">
+                    <!-- Account Section -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <span class="settings-section-icon">👤</span>
+                            <div>
+                                <h3 class="settings-section-title">Account</h3>
+                                <p class="settings-section-desc">Manage your personal information</p>
                             </div>
-                            <div class="form-group" style="margin-bottom: 1rem;">
-                                <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Email Address</label>
-                                <input type="email" value="${parentEmail}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);">
-                            </div>
-                            <button class="btn btn-gradient" onclick="window.location.href='../../profile.php'">Edit Profile</button>
                         </div>
-                    </div>
-
-                    <div class="dashboard-card" style="margin-bottom: 1.5rem;">
-                         <div class="card-header">
-                            <h3 class="card-title">Child's Information</h3>
-                        </div>
-                         <div class="card-content">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
-                                <div>
-                                    <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Child Name</label>
-                                    <input type="text" value="${childName}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div class="settings-row-left">
+                                    <div class="settings-avatar">${((p.fname || 'U')[0] + (p.lname || 'S')[0]).toUpperCase()}</div>
+                                    <div>
+                                        <h4 class="settings-row-title">${parentName}</h4>
+                                        <p class="settings-row-sub">${parentEmail}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label style="display: block; font-weight: 500; margin-bottom: 0.5rem;">Birth Date</label>
-                                    <input type="date" value="${childBirth}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--slate-300); border-radius: var(--radius-md);" readonly>
-                                </div>
+                                <button class="btn btn-outline btn-sm" onclick="window.location.href='../../profile.php'">Edit Profile</button>
                             </div>
-                            <button class="btn btn-outline" onclick="window.location.href='../../child-profile.php${child ? '?child_id=' + child.child_id : ''}'">Edit Child Profile</button>
-                        </div>
-                    </div>
-
-                    <div class="dashboard-card" style="margin-bottom: 1.5rem;">
-                        <div class="card-header">
-                            <h3 class="card-title">Notifications</h3>
-                        </div>
-                        <div class="card-content">
-                             <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--slate-100);">
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
                                 <div>
-                                    <h4 style="font-weight: 600;">Daily Reminders</h4>
-                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Receive daily activity suggestions</p>
+                                    <h4 class="settings-row-title">Child Profile</h4>
+                                    <p class="settings-row-sub">${childName || 'No child added'} ${childBirth ? '• Born ' + childBirth : ''}</p>
                                 </div>
-                                <input type="checkbox" checked style="width: 1.25rem; height: 1.25rem;">
+                                <button class="btn btn-outline btn-sm" onclick="openAddChildModal(${child ? 'window.dashboardData?.children?.[0]' : ''})">Edit</button>
                             </div>
-                             <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0;">
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
                                 <div>
-                                    <h4 style="font-weight: 600;">Milestone Alerts</h4>
-                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Get notified when milestones are approaching</p>
+                                    <h4 class="settings-row-title">Change Password</h4>
+                                    <p class="settings-row-sub">Update your account password</p>
                                 </div>
-                                <input type="checkbox" checked style="width: 1.25rem; height: 1.25rem;">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="dashboard-card" style="margin-bottom: 1.5rem;">
-                        <div class="card-header"><h3 class="card-title">Security</h3></div>
-                        <div class="card-content">
-                            <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;">
-                                <div><h4 style="font-weight:600;">Change Password</h4><p style="font-size:0.875rem;color:var(--slate-500);">Update your account password</p></div>
                                 <button class="btn btn-outline btn-sm" onclick="openChangePasswordModal()">Change</button>
                             </div>
                         </div>
                     </div>
 
-                     <div class="dashboard-card" style="border: 1px solid var(--red-200);">
-                        <div class="card-content">
-                            <h3 class="card-title" style="color: var(--red-600);">Danger Zone</h3>
-                            <p style="color: var(--slate-500); margin-bottom: 1rem;">Irreversible actions</p>
-                            <button class="btn btn-outline" style="color: var(--red-600); border-color: var(--red-200);">Delete Account</button>
+                    <!-- Appearance Section -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <span class="settings-section-icon">🎨</span>
+                            <div>
+                                <h3 class="settings-section-title">Appearance</h3>
+                                <p class="settings-section-desc">Customize how the app looks</p>
+                            </div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div>
+                                    <h4 class="settings-row-title">Dark Mode</h4>
+                                    <p class="settings-row-sub">Switch between light and dark themes</p>
+                                </div>
+                                <label class="settings-toggle">
+                                    <input type="checkbox" id="setting-dark-mode" ${isDark ? 'checked' : ''} onchange="handleThemeToggle(this.checked)">
+                                    <span class="toggle-slider">
+                                        <span class="toggle-icon-sun">☀️</span>
+                                        <span class="toggle-icon-moon">🌙</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
+                                <div>
+                                    <h4 class="settings-row-title">Language</h4>
+                                    <p class="settings-row-sub">Choose your preferred language</p>
+                                </div>
+                                <div class="settings-lang-picker">
+                                    <button class="lang-btn ${lang === 'en' ? 'active' : ''}" onclick="handleLangChange('en')" id="lang-en">🇬🇧 English</button>
+                                    <button class="lang-btn ${lang === 'ar' ? 'active' : ''}" onclick="handleLangChange('ar')" id="lang-ar">🇸🇦 عربي</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notifications Section -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <span class="settings-section-icon">🔔</span>
+                            <div>
+                                <h3 class="settings-section-title">Notifications</h3>
+                                <p class="settings-section-desc">Control how you receive updates</p>
+                            </div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Push Notifications</h4><p class="settings-row-sub">Receive in-app notifications</p></div>
+                                <label class="settings-toggle"><input type="checkbox" ${settings.push_notifications != 0 ? 'checked' : ''} onchange="saveSettingToggle('push_notifications', this.checked)"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Email Notifications</h4><p class="settings-row-sub">Get updates sent to your email</p></div>
+                                <label class="settings-toggle"><input type="checkbox" ${settings.email_notifications != 0 ? 'checked' : ''} onchange="saveSettingToggle('email_notifications', this.checked)"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Appointment Reminders</h4><p class="settings-row-sub">Get notified before appointments</p></div>
+                                <label class="settings-toggle"><input type="checkbox" ${settings.appointment_reminders != 0 ? 'checked' : ''} onchange="saveSettingToggle('appointment_reminders', this.checked)"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Daily Activity Reminders</h4><p class="settings-row-sub">Get daily suggestions for activities</p></div>
+                                <label class="settings-toggle"><input type="checkbox" ${settings.daily_reminders != 0 ? 'checked' : ''} onchange="saveSettingToggle('daily_reminders', this.checked)"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Milestone Alerts</h4><p class="settings-row-sub">Get notified when milestones approach</p></div>
+                                <label class="settings-toggle"><input type="checkbox" ${settings.milestone_alerts != 0 ? 'checked' : ''} onchange="saveSettingToggle('milestone_alerts', this.checked)"><span class="toggle-slider"></span></label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Privacy & Data -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <span class="settings-section-icon">🔒</span>
+                            <div><h3 class="settings-section-title">Privacy & Data</h3><p class="settings-section-desc">Manage your data and privacy</p></div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Data Sharing</h4><p class="settings-row-sub">Share anonymized data to improve the platform</p></div>
+                                <label class="settings-toggle"><input type="checkbox" ${settings.data_sharing != 0 ? 'checked' : ''} onchange="saveSettingToggle('data_sharing', this.checked)"><span class="toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-divider"></div>
+                            <div class="settings-row">
+                                <div><h4 class="settings-row-title">Export Your Data</h4><p class="settings-row-sub">Download all your data as a file</p></div>
+                                <button class="btn btn-outline btn-sm" onclick="window.open('../../api_export_pdf.php?type=full-report','_blank')">Export</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subscription -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <span class="settings-section-icon">💎</span>
+                            <div><h3 class="settings-section-title">Subscription</h3><p class="settings-section-desc">Manage your plan</p></div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div>
+                                    <h4 class="settings-row-title">Current Plan: <span style="color:var(--blue-600);font-weight:700;">${sub.plan_name || 'Free'}</span></h4>
+                                    <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? '$' + sub.price + '/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
+                                </div>
+                                <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../subscription.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Danger Zone -->
+                    <div class="settings-section">
+                        <div class="settings-card" style="border: 2px solid var(--red-200);">
+                            <div class="settings-row">
+                                <div>
+                                    <h4 class="settings-row-title" style="color:var(--red-600);">Delete Account</h4>
+                                    <p class="settings-row-sub">Permanently delete your account and all data. This action cannot be undone.</p>
+                                </div>
+                                <button class="btn btn-outline btn-sm" style="color:var(--red-600);border-color:var(--red-200);" onclick="confirmDeleteAccount()">Delete</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
     }
+
+    // ── Settings Handlers ─────────────────────────────────────
+    window.handleThemeToggle = function(isDark) {
+        if (isDark) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            localStorage.setItem('theme', 'light');
+        }
+        saveSettingToggle('theme', isDark ? 'dark' : 'light');
+    };
+
+    window.handleLangChange = function(lang) {
+        document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+        document.getElementById('lang-ar').classList.toggle('active', lang === 'ar');
+        if (lang === 'ar' && document.documentElement.getAttribute('lang') !== 'ar') {
+            toggleLanguage();
+        } else if (lang === 'en' && document.documentElement.getAttribute('lang') === 'ar') {
+            toggleLanguage();
+        }
+        saveSetting('language', lang);
+    };
+
+    window.saveSettingToggle = function(key, value) {
+        const payload = {};
+        payload[key] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+        fetch('../../api_settings.php?action=update', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).catch(e => console.warn('Settings save error:', e));
+    };
+
+    function saveSetting(key, value) {
+        const payload = {};
+        payload[key] = value;
+        fetch('../../api_settings.php?action=update', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        }).catch(e => console.warn('Settings save error:', e));
+    }
+
+    window.confirmDeleteAccount = function() {
+        let existing = document.getElementById('delete-account-modal');
+        if (existing) existing.remove();
+        const modal = document.createElement('div');
+        modal.id = 'delete-account-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
+                    <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+                    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;color:var(--red-600);">Delete Account?</h2>
+                    <p style="color:var(--slate-500);font-size:0.9rem;margin-bottom:1.5rem;">This will permanently delete your account and all associated data. This action cannot be undone.</p>
+                    <div style="display:flex;gap:1rem;">
+                        <button onclick="document.getElementById('delete-account-modal').remove()" style="flex:1;padding:0.875rem;background:var(--slate-100);border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Cancel</button>
+                        <button style="flex:1;padding:0.875rem;background:var(--red-600);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;" onclick="alert('Account deletion requires admin approval. Please contact support.')">Delete</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    };
 
     // ── Notifications View ──────────────────────────────────────
     function getNotificationsView() {
@@ -951,10 +1474,21 @@
         try {
             const res = await fetch('../../api_notifications.php?action=list&limit=1');
             const data = await res.json();
+            // Update sidebar badge
             const badge = document.getElementById('nav-notif-badge');
             if (badge && data.unread_count > 0) {
                 badge.textContent = data.unread_count;
                 badge.style.display = 'flex';
+            }
+            // Update top bar badge
+            const topBadge = document.getElementById('topbar-notif-badge');
+            if (topBadge) {
+                if (data.unread_count > 0) {
+                    topBadge.textContent = data.unread_count > 9 ? '9+' : data.unread_count;
+                    topBadge.style.display = 'flex';
+                } else {
+                    topBadge.style.display = 'none';
+                }
             }
         } catch (e) { /* silent */ }
     }
@@ -1240,5 +1774,194 @@ function closeLogoutModal() {
 
 function confirmLogout() {
     clearAuth();
-    window.location.href = 'logout.php';
+    window.location.href = '../../logout.php';
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Add / Edit Child Modal ─────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+window.openAddChildModal = function(childData) {
+    const isEdit = !!childData;
+    const existing = document.getElementById('add-child-modal');
+    if (existing) existing.remove();
+
+    const birthVal = childData ?
+        `${String(childData.birth_year).padStart(4,'0')}-${String(childData.birth_month).padStart(2,'0')}-${String(childData.birth_day).padStart(2,'0')}` : '';
+
+    const modal = document.createElement('div');
+    modal.id = 'add-child-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s ease;';
+    modal.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);" onclick="closeAddChildModal()"></div>
+        <div id="acm-card" style="position:relative;background:var(--bg-card,#fff);border-radius:24px;padding:0;width:95%;max-width:520px;max-height:90vh;overflow:hidden;box-shadow:0 25px 60px rgba(0,0,0,0.15);transform:scale(0.9) translateY(20px);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.3s ease;">
+            <!-- Header -->
+            <div style="background:linear-gradient(135deg,#6C63FF 0%,#a78bfa 100%);padding:1.75rem 2rem 1.5rem;position:relative;">
+                <button onclick="closeAddChildModal()" style="position:absolute;right:1rem;top:1rem;background:rgba(255,255,255,0.2);border:none;color:#fff;width:2rem;height:2rem;border-radius:50%;cursor:pointer;font-size:1.2rem;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.35)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">&times;</button>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <div style="width:3rem;height:3rem;background:rgba(255,255,255,0.2);border-radius:14px;display:flex;align-items:center;justify-content:center;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div>
+                        <h2 style="color:#fff;margin:0;font-size:1.35rem;font-weight:700;">${isEdit ? 'Edit Child Profile' : 'Add Child Profile'}</h2>
+                        <p style="color:rgba(255,255,255,0.8);margin:0;font-size:0.85rem;">${isEdit ? 'Update your child\'s information' : 'Start tracking your child\'s development'}</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Body -->
+            <div style="padding:1.75rem 2rem;overflow-y:auto;max-height:calc(90vh - 200px);">
+                <div id="acm-status" style="margin-bottom:1rem;display:none;"></div>
+                <form id="acm-form" onsubmit="event.preventDefault();submitChildModal();">
+                    <input type="hidden" id="acm-child-id" value="${childData?.child_id || ''}">
+                    
+                    <!-- Basic Info -->
+                    <div style="margin-bottom:1.5rem;">
+                        <div style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--slate-400,#94a3b8);margin-bottom:0.75rem;">Basic Information</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">First Name *</label>
+                                <input type="text" id="acm-fname" required value="${childData?.first_name || ''}" placeholder="Enter first name" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);transition:border-color 0.2s,box-shadow 0.2s;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#6C63FF';this.style.boxShadow='0 0 0 3px rgba(108,99,255,0.1)'" onblur="this.style.borderColor='';this.style.boxShadow=''">
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">Last Name *</label>
+                                <input type="text" id="acm-lname" required value="${childData?.last_name || ''}" placeholder="Enter last name" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);transition:border-color 0.2s,box-shadow 0.2s;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#6C63FF';this.style.boxShadow='0 0 0 3px rgba(108,99,255,0.1)'" onblur="this.style.borderColor='';this.style.boxShadow=''">
+                            </div>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.75rem;">
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">Date of Birth *</label>
+                                <input type="date" id="acm-dob" required value="${birthVal}" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);transition:border-color 0.2s,box-shadow 0.2s;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#6C63FF';this.style.boxShadow='0 0 0 3px rgba(108,99,255,0.1)'" onblur="this.style.borderColor='';this.style.boxShadow=''">
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">Gender</label>
+                                <select id="acm-gender" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);transition:border-color 0.2s;outline:none;box-sizing:border-box;cursor:pointer;" onfocus="this.style.borderColor='#6C63FF'" onblur="this.style.borderColor=''">
+                                    <option value="male" ${childData?.gender === 'male' ? 'selected' : ''}>Male</option>
+                                    <option value="female" ${childData?.gender === 'female' ? 'selected' : ''}>Female</option>
+                                    <option value="other" ${childData?.gender === 'other' ? 'selected' : ''}>Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Growth Measurements -->
+                    <div style="margin-bottom:1.5rem;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                            <span style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--slate-400,#94a3b8);">Growth Measurements</span>
+                            <span style="font-size:0.7rem;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#fff;padding:0.15rem 0.5rem;border-radius:20px;font-weight:600;">+25 pts</span>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;">
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">Weight (kg)</label>
+                                <input type="number" step="0.1" id="acm-weight" placeholder="0.0" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#6C63FF'" onblur="this.style.borderColor=''">
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">Height (cm)</label>
+                                <input type="number" step="0.1" id="acm-height" placeholder="0.0" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#6C63FF'" onblur="this.style.borderColor=''">
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:0.8rem;font-weight:600;color:var(--text-primary,#1e293b);margin-bottom:0.35rem;">Head (cm)</label>
+                                <input type="number" step="0.1" id="acm-head" placeholder="0.0" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);outline:none;box-sizing:border-box;" onfocus="this.style.borderColor='#6C63FF'" onblur="this.style.borderColor=''">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div style="display:flex;gap:0.75rem;padding-top:0.5rem;">
+                        <button type="button" onclick="closeAddChildModal()" style="flex:1;padding:0.75rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;background:transparent;color:var(--text-primary,#475569);font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='var(--bg-main,#f8fafc)'" onmouseout="this.style.background='transparent'">Cancel</button>
+                        <button type="submit" id="acm-submit" style="flex:2;padding:0.75rem;border:none;border-radius:12px;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 15px rgba(108,99,255,0.3);" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(108,99,255,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 4px 15px rgba(108,99,255,0.3)'">${isEdit ? '✏️ Save Changes' : '✨ Add Child'}</button>
+                    </div>
+                </form>
+            </div>
+        </div>`;
+
+    document.body.appendChild(modal);
+    
+    // Animate in
+    requestAnimationFrame(() => {
+        modal.style.opacity = '1';
+        const card = document.getElementById('acm-card');
+        if (card) {
+            card.style.transform = 'scale(1) translateY(0)';
+        }
+    });
+
+    // Close on Escape
+    modal._escHandler = function(e) { if (e.key === 'Escape') closeAddChildModal(); };
+    document.addEventListener('keydown', modal._escHandler);
+};
+
+window.closeAddChildModal = function() {
+    const modal = document.getElementById('add-child-modal');
+    if (!modal) return;
+    const card = document.getElementById('acm-card');
+    if (card) card.style.transform = 'scale(0.9) translateY(20px)';
+    modal.style.opacity = '0';
+    document.removeEventListener('keydown', modal._escHandler);
+    setTimeout(() => modal.remove(), 300);
+};
+
+window.submitChildModal = async function() {
+    const btn = document.getElementById('acm-submit');
+    const status = document.getElementById('acm-status');
+    const childId = document.getElementById('acm-child-id').value;
+    
+    const payload = {
+        child_id: childId || null,
+        first_name: document.getElementById('acm-fname').value.trim(),
+        last_name: document.getElementById('acm-lname').value.trim(),
+        birth_date: document.getElementById('acm-dob').value,
+        gender: document.getElementById('acm-gender').value,
+        weight: document.getElementById('acm-weight').value || null,
+        height: document.getElementById('acm-height').value || null,
+        head_circumference: document.getElementById('acm-head').value || null
+    };
+
+    if (!payload.first_name || !payload.last_name || !payload.birth_date) {
+        status.style.display = 'block';
+        status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Please fill in all required fields.</div>';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...</span>';
+    status.style.display = 'none';
+
+    try {
+        const action = childId ? 'edit' : 'add';
+        const res = await fetch('../../api_child.php?action=' + action, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            status.style.display = 'block';
+            status.innerHTML = `<div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#16a34a;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                ${data.message}</div>`;
+            
+            // Reload page after short delay to show updated data
+            setTimeout(() => {
+                window.location.reload();
+            }, 1200);
+        } else {
+            status.style.display = 'block';
+            status.innerHTML = `<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">${data.error || 'Something went wrong'}</div>`;
+            btn.disabled = false;
+            btn.textContent = childId ? '✏️ Save Changes' : '✨ Add Child';
+        }
+    } catch (e) {
+        status.style.display = 'block';
+        status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Network error. Please try again.</div>';
+        btn.disabled = false;
+        btn.textContent = childId ? '✏️ Save Changes' : '✨ Add Child';
+    }
+};
+
+// Spinner animation
+if (!document.getElementById('acm-spinner-style')) {
+    const style = document.createElement('style');
+    style.id = 'acm-spinner-style';
+    style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+    document.head.appendChild(style);
 }

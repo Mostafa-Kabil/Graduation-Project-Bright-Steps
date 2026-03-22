@@ -91,8 +91,8 @@
                 <p>Have questions, feedback, or need support? Reach out to us using the form below or contact us
                     directly.</p>
 
-                <form class="contact-form"
-                    onsubmit="event.preventDefault(); alert('Thank you! We will get back to you soon.');">
+                <form class="contact-form" id="contact-form"
+                    onsubmit="event.preventDefault(); submitContact();">
                     <div class="form-group">
                         <label for="name">Your Name</label>
                         <input type="text" id="name" name="name" required placeholder="Enter your full name">
@@ -109,7 +109,8 @@
                         <label for="message">Message</label>
                         <textarea id="message" name="message" required placeholder="Tell us more..."></textarea>
                     </div>
-                    <button type="submit" class="btn btn-gradient btn-lg btn-full">Send Message</button>
+                    <button type="submit" id="contact-btn" class="btn btn-gradient btn-lg btn-full">Send Message</button>
+                    <div id="contact-status" style="margin-top:1rem;text-align:center;font-size:0.9rem;"></div>
                 </form>
             </div>
 
@@ -176,6 +177,45 @@
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/navigation.js"></script>
     <script src="scripts/mobile-menu.js"></script>
+    <script>
+        async function submitContact() {
+            const btn = document.getElementById('contact-btn');
+            const status = document.getElementById('contact-status');
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const subject = document.getElementById('subject').value.trim();
+            const message = document.getElementById('message').value.trim();
+            
+            if (!name || !email || !subject || !message) {
+                status.innerHTML = '<span style="color:#ef4444;">Please fill in all fields.</span>';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+            status.innerHTML = '';
+            
+            try {
+                const res = await fetch('api_contact.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, subject, message })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    status.innerHTML = '<span style="color:#22c55e;">✅ ' + data.message + '</span>';
+                    document.getElementById('contact-form').reset();
+                } else {
+                    status.innerHTML = '<span style="color:#ef4444;">❌ ' + (data.error || 'Something went wrong') + '</span>';
+                }
+            } catch (e) {
+                status.innerHTML = '<span style="color:#ef4444;">❌ Network error. Please try again.</span>';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Send Message';
+        }
+    </script>
 </body>
 
 </html>
