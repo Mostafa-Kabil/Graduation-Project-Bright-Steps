@@ -612,7 +612,7 @@
                 const clarify = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
                 const transcript = e.transcript ? (e.transcript.length > 80 ? e.transcript.substring(0, 80) + '…' : e.transcript) : 'No transcript';
                 const sColor = statusColor(e.status);
-                const entryJson = encodeURIComponent(JSON.stringify(e));
+                const entryJson = encodeURIComponent(JSON.stringify(e)).replace(/'/g, "%27");
                 return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};">
                     <div style="width:3rem;height:3rem;background:#ede9fe;color:#7c3aed;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">🎙️</div>
                     <div style="flex:1;min-width:0;">
@@ -688,6 +688,78 @@
             btn.disabled = false;
             btn.textContent = 'Analyze Speech';
         }
+    };
+
+    window.openSpeechDetailModal = function(entryJson) {
+        let existing = document.getElementById('speech-detail-modal');
+        if (existing) existing.remove();
+        
+        let entry;
+        try {
+            entry = JSON.parse(entryJson);
+        } catch (e) {
+            console.error("Failed to parse entry details:", e);
+            return;
+        }
+
+        const dt = new Date(entry.sent_at);
+        const timeStr = dt.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + ' at ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+        
+        const vocabScore = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
+        const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
+        
+        let clarityMeaning = 'Developing clear speech patterns.';
+        if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation, aligning perfectly with milestones.';
+        else if (clarityScore >= 75) clarityMeaning = 'Good clarity, typical for this developmental stage.';
+        
+        let vocabMeaning = 'Still building core vocabulary.';
+        if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
+            vocabMeaning = 'Vocabulary size is right on track or advanced for their age!';
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'speech-detail-modal';
+        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.remove()">
+            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2rem;max-width:550px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;text-align:left;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">
+                    <div>
+                        <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.25rem;">Speech Analysis Details</h2>
+                        <p style="color:var(--slate-500);font-size:0.9rem;">Recorded on ${timeStr}</p>
+                    </div>
+                    <button onclick="document.getElementById('speech-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);line-height:1;">&times;</button>
+                </div>
+                
+                <div style="margin-bottom:1.5rem;">
+                    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Listen to Recording</h3>
+                    <audio controls style="width:100%;height:40px;border-radius:8px;" src="${entry.audio_url || ''}">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+
+                <div style="background:var(--slate-50,#f8fafc);border:1px solid var(--slate-200,#e2e8f0);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+                    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Full Transcript</h3>
+                    <div style="max-height:180px;overflow-y:auto;padding-right:0.5rem;">
+                        <p style="font-style:italic;color:var(--slate-600);line-height:1.6;margin:0;">"${entry.transcript || 'No speech detected.'}"</p>
+                    </div>
+                </div>
+                
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                    <div style="background:#ede9fe;border-radius:12px;padding:1.25rem;">
+                        <span style="display:block;font-size:0.8rem;color:#6b21a8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Vocabulary Score</span>
+                        <div style="font-size:1.75rem;font-weight:800;color:#581c87;margin-bottom:0.5rem;">${vocabScore} <span style="font-size:1rem;font-weight:500;">words</span></div>
+                        <p style="font-size:0.8rem;color:#4c1d95;line-height:1.4;">${vocabMeaning}</p>
+                    </div>
+                    <div style="background:#dcfce7;border-radius:12px;padding:1.25rem;">
+                        <span style="display:block;font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Clarity Score</span>
+                        <div style="font-size:1.75rem;font-weight:800;color:#14532d;margin-bottom:0.5rem;">${clarityScore}%</div>
+                        <p style="font-size:0.8rem;color:#15803d;line-height:1.4;">${clarityMeaning}</p>
+                    </div>
+                </div>
+                
+                <button onclick="document.getElementById('speech-detail-modal').remove()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Close</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
     };
 
     function getMotorView() {

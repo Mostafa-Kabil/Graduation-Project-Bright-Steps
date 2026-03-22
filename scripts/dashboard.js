@@ -405,12 +405,12 @@
 
             container.innerHTML = entries.map(e => {
                 const dt = new Date(e.sent_at);
-                const timeStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+                const timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                 const words = e.vocabulary_score ? Math.round(e.vocabulary_score) : '–';
                 const clarify = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
                 const transcript = e.transcript ? (e.transcript.length > 80 ? e.transcript.substring(0, 80) + '…' : e.transcript) : 'No transcript';
                 const sColor = statusColor(e.status);
-                const entryJson = encodeURIComponent(JSON.stringify(e));
+                const entryJson = encodeURIComponent(JSON.stringify(e)).replace(/'/g, "%27");
                 return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};">
                     <div style="width:3rem;height:3rem;background:#ede9fe;color:#7c3aed;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">🎙️</div>
                     <div style="flex:1;min-width:0;">
@@ -434,7 +434,7 @@
         }
     }
 
-    window.openSpeechModal = function(childId) {
+    window.openSpeechModal = function (childId) {
         let existing = document.getElementById('speech-modal');
         if (existing) existing.remove();
         const modal = document.createElement('div');
@@ -451,7 +451,7 @@
         document.body.appendChild(modal);
     };
 
-    window.submitSpeechRecording = async function(childId) {
+    window.submitSpeechRecording = async function (childId) {
         const fileInput = document.getElementById('speech-file-input');
         const btn = document.getElementById('speech-submit-btn');
         const progress = document.getElementById('speech-progress');
@@ -488,10 +488,10 @@
         }
     };
 
-    window.openSpeechDetailModal = function(entryJson) {
+    window.openSpeechDetailModal = function (entryJson) {
         let existing = document.getElementById('speech-detail-modal');
         if (existing) existing.remove();
-        
+
         let entry;
         try {
             entry = JSON.parse(entryJson);
@@ -501,15 +501,15 @@
         }
 
         const dt = new Date(entry.sent_at);
-        const timeStr = dt.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + ' at ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-        
+        const timeStr = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
         const vocabScore = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
         const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
-        
+
         let clarityMeaning = 'Developing clear speech patterns.';
         if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation, aligning perfectly with milestones.';
         else if (clarityScore >= 75) clarityMeaning = 'Good clarity, typical for this developmental stage.';
-        
+
         let vocabMeaning = 'Still building core vocabulary.';
         if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
             vocabMeaning = 'Vocabulary size is right on track or advanced for their age!';
@@ -1176,7 +1176,7 @@
     initNav();
     const urlParams = new URLSearchParams(window.location.search);
     const initialView = urlParams.get('view') || 'home';
-    
+
     if (document.getElementById('dashboard-content')) {
         switchView(initialView);
     } else {
@@ -1202,8 +1202,9 @@ function handleLogout() {
 
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
-    modal.innerHTML = `<div class="logout-overlay" onclick="closeLogoutModal()"></div>
-            <div class="logout-dialog">
+    modal.innerHTML = `
+        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+        <div class="logout-dialog">
                 <div class="logout-icon-wrap">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
