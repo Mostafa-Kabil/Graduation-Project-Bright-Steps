@@ -33,7 +33,7 @@
                     </svg>
                     عربي
                 </button>
-                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-login')">Doctor Portal</button>
+                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-dashboard')">Doctor Portal</button>
                 <button class="btn btn-outline-secondary" onclick="navigateTo('clinic-dashboard')">Clinic
                     Portal</button>
                 <button class="btn btn-outline-secondary" onclick="navigateTo('admin-dashboard')">Admin Panel</button>
@@ -65,7 +65,7 @@
                 عربي / English
             </button>
             <div class="mobile-nav-divider"></div>
-            <button class="mobile-nav-item" onclick="navigateTo('doctor-login')">
+            <button class="mobile-nav-item" onclick="navigateTo('doctor-dashboard')">
                 <svg viewBox="0 0 24 24">
                     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                     <circle cx="12" cy="7" r="4" />

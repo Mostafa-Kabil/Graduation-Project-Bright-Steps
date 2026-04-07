@@ -60,6 +60,40 @@ if (
                 $stmt->execute([':sid' => $specialist_id]);
                 echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
                 exit;
+
+            } elseif ($action === 'get_report_stats') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+                // Count doctor reports
+                $stmt = $connect->prepare("
+                    SELECT
+                        COUNT(*) AS total_reports,
+                        SUM(CASE WHEN created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS this_month
+                    FROM doctor_report WHERE specialist_id = :sid
+                ");
+                $stmt->execute([':sid' => $specialist_id]);
+                $dr_stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                // Count shared child reports (pending = no doctor_report reply)
+                $stmt2 = $connect->prepare("
+                    SELECT COUNT(*) AS shared_total FROM child_generated_system_report csr
+                    JOIN child c ON csr.child_id = c.child_id
+                    JOIN parent p ON c.parent_id = p.parent_id
+                    JOIN appointment a ON a.parent_id = p.parent_id AND a.specialist_id = :sid
+                ");
+                $stmt2->execute([':sid' => $specialist_id]);
+                $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => [
+                    'total_reports' => intval($dr_stats['total_reports'] ?? 0),
+                    'this_month' => intval($dr_stats['this_month'] ?? 0),
+                    'shared_total' => intval($shared_stats['shared_total'] ?? 0),
+                    'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
+                ]]);
+                exit;
             }
 
         } elseif ($method === 'POST') {
@@ -565,9 +599,9 @@ if (
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doctor Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/doctor.css">
+    <link rel="stylesheet" href="styles/globals.css?v=20260405">
+    <link rel="stylesheet" href="styles/dashboard.css?v=20260405">
+    <link rel="stylesheet" href="styles/doctor.css?v=20260405">
 </head>
 
 <body>
@@ -765,7 +799,9 @@ if (
     <script src="scripts/language-toggle.js?v=5"></script>
 
     <script src="scripts/navigation.js"></script>
-    <script src="scripts/doctor-dashboard.js?v=6"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="scripts/doctor-dashboard.js?v=20260405b"></script>
+    
 </body>
 
 </html>
