@@ -101,9 +101,28 @@ $whoData = [
             18 => ['median' => 46.2, 'sd' => 1.2],
             24 => ['median' => 47.2, 'sd' => 1.3],
             36 => ['median' => 48.5, 'sd' => 1.3],
-            48 => ['median' => 49.3, 'sd' => 1.3],
             60 => ['median' => 49.6, 'sd' => 1.3]
         ]
+    ],
+    'bmi_for_age' => [
+        'male' => [ 0 => ['median' => 13.4, 'sd' => 1.2], 12 => ['median' => 16.5, 'sd' => 1.3], 24 => ['median' => 16.0, 'sd' => 1.2], 60 => ['median' => 15.3, 'sd' => 1.2] ],
+        'female' => [ 0 => ['median' => 13.3, 'sd' => 1.1], 12 => ['median' => 16.0, 'sd' => 1.3], 24 => ['median' => 15.7, 'sd' => 1.2], 60 => ['median' => 15.3, 'sd' => 1.2] ]
+    ],
+    'arm_for_age' => [
+        'male' => [ 0 => ['median' => 11.0, 'sd' => 1.0], 12 => ['median' => 15.0, 'sd' => 1.0], 24 => ['median' => 16.0, 'sd' => 1.2], 60 => ['median' => 17.0, 'sd' => 1.2] ],
+        'female' => [ 0 => ['median' => 10.5, 'sd' => 1.0], 12 => ['median' => 14.5, 'sd' => 1.0], 24 => ['median' => 15.5, 'sd' => 1.2], 60 => ['median' => 16.5, 'sd' => 1.2] ]
+    ],
+    'subscapular_for_age' => [
+        'male' => [ 0 => ['median' => 5.5, 'sd' => 1.0], 12 => ['median' => 6.5, 'sd' => 1.0], 24 => ['median' => 6.0, 'sd' => 0.8], 60 => ['median' => 5.5, 'sd' => 0.8] ],
+        'female' => [ 0 => ['median' => 5.8, 'sd' => 1.0], 12 => ['median' => 7.0, 'sd' => 1.0], 24 => ['median' => 6.5, 'sd' => 0.8], 60 => ['median' => 6.0, 'sd' => 0.8] ]
+    ],
+    'triceps_for_age' => [
+        'male' => [ 0 => ['median' => 7.5, 'sd' => 1.0], 12 => ['median' => 9.0, 'sd' => 1.0], 24 => ['median' => 9.5, 'sd' => 1.0], 60 => ['median' => 9.0, 'sd' => 1.0] ],
+        'female' => [ 0 => ['median' => 8.0, 'sd' => 1.0], 12 => ['median' => 10.0, 'sd' => 1.2], 24 => ['median' => 10.5, 'sd' => 1.2], 60 => ['median' => 10.0, 'sd' => 1.2] ]
+    ],
+    'weight_for_length' => [
+        'male' => [ 40 => ['median' => 2.5, 'sd' => 0.4], 50 => ['median' => 3.3, 'sd' => 0.5], 70 => ['median' => 8.5, 'sd' => 0.8], 90 => ['median' => 13.0, 'sd' => 1.1], 110 => ['median' => 18.5, 'sd' => 1.5] ],
+        'female' => [ 40 => ['median' => 2.4, 'sd' => 0.4], 50 => ['median' => 3.2, 'sd' => 0.5], 70 => ['median' => 8.0, 'sd' => 0.8], 90 => ['median' => 12.5, 'sd' => 1.0], 110 => ['median' => 18.0, 'sd' => 1.5] ]
     ]
 ];
 
@@ -244,10 +263,101 @@ if ($growth['head_circumference']) {
     ];
 }
 
+// BMI (Calculated automatically if height and weight exist)
+if ($growth['weight'] && $growth['height']) {
+    $heightM = floatval($growth['height']) / 100;
+    if ($heightM > 0) {
+        $bmi = round(floatval($growth['weight']) / ($heightM * $heightM), 2);
+        $bData = $whoData['bmi_for_age'][$gender];
+        $closestAge = getClosestAge($ageMonths, $bData);
+        $ref = $bData[$closestAge];
+        $z = calcZScore($bmi, $ref['median'], $ref['sd']);
+        $pct = zToPercentile($z);
+        $st = getStatus($z);
+        $results['bmi'] = [
+            'value' => $bmi . ' kg/m²',
+            'z_score' => $z,
+            'percentile' => $pct,
+            'status' => $st['status'],
+            'label' => $st['label'],
+            'who_median' => $ref['median'] . ' kg/m²'
+        ];
+        
+        $wlData = $whoData['weight_for_length'][$gender];
+        $closestLen = getClosestAge(floatval($growth['height']), $wlData);
+        $refWL = $wlData[$closestLen];
+        $zw = calcZScore(floatval($growth['weight']), $refWL['median'], $refWL['sd']);
+        $pctw = zToPercentile($zw);
+        $stw = getStatus($zw);
+        $results['weight_for_length'] = [
+            'value' => $growth['weight'] . ' kg',
+            'z_score' => $zw,
+            'percentile' => $pctw,
+            'status' => $stw['status'],
+            'label' => $stw['label'],
+            'who_median' => $refWL['median'] . ' kg'
+        ];
+    }
+}
+
+// Arm Circumference
+if ($growth['arm_circumference']) {
+    $aData = $whoData['arm_for_age'][$gender];
+    $closestAge = getClosestAge($ageMonths, $aData);
+    $ref = $aData[$closestAge];
+    $z = calcZScore(floatval($growth['arm_circumference']), $ref['median'], $ref['sd']);
+    $pct = zToPercentile($z);
+    $st = getStatus($z);
+    $results['arm_circumference'] = [
+        'value' => $growth['arm_circumference'] . ' cm',
+        'z_score' => $z, 'percentile' => $pct, 'status' => $st['status'], 'label' => $st['label'],
+        'who_median' => $ref['median'] . ' cm'
+    ];
+}
+
+// Subscapular Skinfold
+if ($growth['subscapular_skinfold']) {
+    $aData = $whoData['subscapular_for_age'][$gender];
+    $closestAge = getClosestAge($ageMonths, $aData);
+    $ref = $aData[$closestAge];
+    $z = calcZScore(floatval($growth['subscapular_skinfold']), $ref['median'], $ref['sd']);
+    $pct = zToPercentile($z);
+    $st = getStatus($z);
+    $results['subscapular_skinfold'] = [
+        'value' => $growth['subscapular_skinfold'] . ' mm',
+        'z_score' => $z, 'percentile' => $pct, 'status' => $st['status'], 'label' => $st['label'],
+        'who_median' => $ref['median'] . ' mm'
+    ];
+}
+
+// Triceps Skinfold
+if ($growth['triceps_skinfold']) {
+    $aData = $whoData['triceps_for_age'][$gender];
+    $closestAge = getClosestAge($ageMonths, $aData);
+    $ref = $aData[$closestAge];
+    $z = calcZScore(floatval($growth['triceps_skinfold']), $ref['median'], $ref['sd']);
+    $pct = zToPercentile($z);
+    $st = getStatus($z);
+    $results['triceps_skinfold'] = [
+        'value' => $growth['triceps_skinfold'] . ' mm',
+        'z_score' => $z, 'percentile' => $pct, 'status' => $st['status'], 'label' => $st['label'],
+        'who_median' => $ref['median'] . ' mm'
+    ];
+}
+
+
+
+// Fetch historical records
+$stmtHistory = $connect->prepare("SELECT * FROM growth_record WHERE child_id = ? ORDER BY recorded_at ASC");
+$stmtHistory->execute([$childId]);
+$historical = $stmtHistory->fetchAll(PDO::FETCH_ASSOC);
+
 echo json_encode([
     'child' => $child['first_name'] . ' ' . $child['last_name'],
     'age_months' => $ageMonths,
     'gender' => $gender,
     'measurements' => $results,
-    'recorded_at' => $growth['recorded_at']
+    'recorded_at' => $growth['recorded_at'],
+    'historical_records' => $historical,
+    'who_curve_points' => $whoData
 ]);

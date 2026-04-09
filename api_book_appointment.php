@@ -46,6 +46,12 @@ try {
     $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, 'Scheduled', ?, ?, ?)");
     $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
 
+    // 3. Create Notification
+    $title = "Appointment Scheduled";
+    $message = "Your " . ($type === 'onsite' ? 'clinic visit' : 'online session') . " has been successfully scheduled for " . date('M j, Y g:i A', strtotime($scheduledDateTime)) . ".";
+    $stmtN = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+    $stmtN->execute([$parentId, $title, $message]);
+
     $connect->commit();
     echo json_encode(['success' => true]);
 } catch (Exception $e) {

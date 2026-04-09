@@ -26,15 +26,22 @@ switch ($action) {
             exit();
         }
 
-        // Get streaks
+        // Get streaks (parent-level)
         $stmt = $connect->prepare(
-            "SELECT streak_type, current_count, longest_count, last_activity_date FROM streaks WHERE child_id = ?"
+            "SELECT streak_type, current_count, longest_count, last_activity_date FROM streaks WHERE parent_id = ?"
         );
-        $stmt->execute([$childId]);
+        $stmt->execute([$userId]);
         $streaks = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $streakMap = [];
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
         foreach ($streaks as $s) {
+            if ($s['streak_type'] === 'daily_login') {
+                if ($s['last_activity_date'] !== $today && $s['last_activity_date'] !== $yesterday) {
+                    $s['current_count'] = 0;
+                }
+            }
             $streakMap[$s['streak_type']] = $s;
         }
 
@@ -81,12 +88,12 @@ switch ($action) {
         $today = date('Y-m-d');
         $yesterday = date('Y-m-d', strtotime('-1 day'));
 
-        // Get or create daily_login streak
+        // Get or create daily_login streak for PARENT
         $stmt = $connect->prepare(
             "SELECT streak_id, current_count, longest_count, last_activity_date
-             FROM streaks WHERE child_id = ? AND streak_type = 'daily_login'"
+             FROM streaks WHERE parent_id = ? AND streak_type = 'daily_login'"
         );
-        $stmt->execute([$childId]);
+        $stmt->execute([$userId]);
         $streak = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $newCount = 1;
@@ -95,35 +102,29 @@ switch ($action) {
 
         if ($streak) {
             if ($streak['last_activity_date'] === $today) {
-                // Already checked in today
-                echo json_encode([
-                    'success' => true,
-                    'message' => 'Already checked in today',
-                    'current_streak' => (int)$streak['current_count'],
-                    'longest_streak' => (int)$streak['longest_count'],
-                    'new_badges' => []
-                ]);
-                exit();
-            }
-
-            if ($streak['last_activity_date'] === $yesterday) {
-                $newCount = $streak['current_count'] + 1;
+                // Already checked in today, just keep current values for badge checks
+                $newCount = (int)$streak['current_count'];
+                $newLongest = (int)$streak['longest_count'];
             } else {
-                $newCount = 1; // streak broken
-            }
-            $newLongest = max($streak['longest_count'], $newCount);
+                if ($streak['last_activity_date'] === $yesterday) {
+                    $newCount = $streak['current_count'] + 1;
+                } else {
+                    $newCount = 1; // streak broken
+                }
+                $newLongest = max($streak['longest_count'], $newCount);
 
-            $stmt2 = $connect->prepare(
-                "UPDATE streaks SET current_count = ?, longest_count = ?, last_activity_date = ? 
-                 WHERE streak_id = ?"
-            );
-            $stmt2->execute([$newCount, $newLongest, $today, $streak['streak_id']]);
+                $stmt2 = $connect->prepare(
+                    "UPDATE streaks SET current_count = ?, longest_count = ?, last_activity_date = ? 
+                     WHERE streak_id = ?"
+                );
+                $stmt2->execute([$newCount, $newLongest, $today, $streak['streak_id']]);
+            }
         } else {
             $stmt2 = $connect->prepare(
-                "INSERT INTO streaks (child_id, streak_type, current_count, longest_count, last_activity_date)
-                 VALUES (?, 'daily_login', 1, 1, ?)"
+                "INSERT INTO streaks (parent_id, child_id, streak_type, current_count, longest_count, last_activity_date)
+                 VALUES (?, ?, 'daily_login', 1, 1, ?)"
             );
-            $stmt2->execute([$childId, $today]);
+            $stmt2->execute([$userId, $childId, $today]);
         }
 
         // Check badge eligibility based on streak count
@@ -133,90 +134,57 @@ switch ($action) {
             30 => 'Super Parent'
         ];
 
+        // Helper to check and award badge
+        $awardBadge = function($badgeName) use ($connect, $childId, $userId, &$newBadges) {
+            $stmt = $connect->prepare("SELECT badge_id FROM badge WHERE name = ?");
+            $stmt->execute([$badgeName]);
+            $badge = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($badge) {
+                $stmt2 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?");
+                $stmt2->execute([$childId, $badge['badge_id']]);
+                if ($stmt2->fetchColumn() == 0) {
+                    $stmt3 = $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)");
+                    $stmt3->execute([$childId, $badge['badge_id']]);
+                    $newBadges[] = $badgeName;
+                    $stmt4 = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)");
+                    $stmt4->execute([$userId, "🏆 Badge Earned: $badgeName", "Congratulations! You earned the `$badgeName` badge!"]);
+                }
+            }
+        };
+
+        // Streak badges
+        $badgeRules = [
+            3 => 'Rising Star',
+            7 => 'Consistency King',
+            30 => 'Super Parent'
+        ];
         foreach ($badgeRules as $threshold => $badgeName) {
             if ($newCount >= $threshold) {
-                // Check if badge exists and not already awarded
-                $stmt3 = $connect->prepare("SELECT badge_id FROM badge WHERE name = ?");
-                $stmt3->execute([$badgeName]);
-                $badge = $stmt3->fetch(PDO::FETCH_ASSOC);
-
-                if ($badge) {
-                    $stmt4 = $connect->prepare(
-                        "SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?"
-                    );
-                    $stmt4->execute([$childId, $badge['badge_id']]);
-                    if ($stmt4->fetchColumn() == 0) {
-                        $stmt5 = $connect->prepare(
-                            "INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)"
-                        );
-                        $stmt5->execute([$childId, $badge['badge_id']]);
-                        $newBadges[] = $badgeName;
-
-                        // Create notification for badge earned
-                        $stmt6 = $connect->prepare(
-                            "INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)"
-                        );
-                        $stmt6->execute([
-                            $userId,
-                            "🏆 Badge Earned: $badgeName",
-                            "Congratulations! You earned the \"$badgeName\" badge for maintaining a {$newCount}-day streak!"
-                        ]);
-                    }
-                }
+                $awardBadge($badgeName);
             }
         }
 
-        // Check weekly activity badge
-        $stmt7 = $connect->prepare(
-            "SELECT COUNT(*) FROM child_activities 
-             WHERE child_id = ? AND is_completed = 1 
-             AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
-        );
+        // Activity badges
+        $stmt7 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1");
+        $stmt7->execute([$childId]);
+        $totalActivities = (int)$stmt7->fetchColumn();
+
+        $stmt7 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
         $stmt7->execute([$childId]);
         $weeklyCount = (int)$stmt7->fetchColumn();
 
-        if ($weeklyCount >= 5) {
-            $stmt3 = $connect->prepare("SELECT badge_id FROM badge WHERE name = 'Weekly Champion'");
-            $stmt3->execute();
-            $badge = $stmt3->fetch(PDO::FETCH_ASSOC);
-            if ($badge) {
-                $stmt4 = $connect->prepare(
-                    "SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?"
-                );
-                $stmt4->execute([$childId, $badge['badge_id']]);
-                if ($stmt4->fetchColumn() == 0) {
-                    $stmt5 = $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)");
-                    $stmt5->execute([$childId, $badge['badge_id']]);
-                    $newBadges[] = 'Weekly Champion';
-                }
-            }
-        }
-
-        // Check monthly activity badge
-        $stmt8 = $connect->prepare(
-            "SELECT COUNT(*) FROM child_activities 
-             WHERE child_id = ? AND is_completed = 1 
-             AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
-        );
+        $stmt8 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
         $stmt8->execute([$childId]);
         $monthlyCount = (int)$stmt8->fetchColumn();
 
-        if ($monthlyCount >= 20) {
-            $stmt3 = $connect->prepare("SELECT badge_id FROM badge WHERE name = 'Monthly Master'");
-            $stmt3->execute();
-            $badge = $stmt3->fetch(PDO::FETCH_ASSOC);
-            if ($badge) {
-                $stmt4 = $connect->prepare(
-                    "SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?"
-                );
-                $stmt4->execute([$childId, $badge['badge_id']]);
-                if ($stmt4->fetchColumn() == 0) {
-                    $stmt5 = $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)");
-                    $stmt5->execute([$childId, $badge['badge_id']]);
-                    $newBadges[] = 'Monthly Master';
-                }
-            }
-        }
+        if ($totalActivities >= 1) $awardBadge('First Steps');
+        if ($weeklyCount >= 5) $awardBadge('Weekly Champion');
+        if ($monthlyCount >= 20) $awardBadge('Monthly Master');
+
+        // Growth badges
+        $stmtGrowth = $connect->prepare("SELECT COUNT(*) FROM growth_record WHERE child_id = ?");
+        $stmtGrowth->execute([$childId]);
+        if ((int)$stmtGrowth->fetchColumn() >= 5) $awardBadge('Growth Tracker');
 
         echo json_encode([
             'success' => true,

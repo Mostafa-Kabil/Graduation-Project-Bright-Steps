@@ -184,6 +184,97 @@ switch ($action) {
         echo json_encode(['success' => true, 'message' => 'Password updated successfully!']);
         break;
 
+    // ── Send change password verification code ─────────────────────
+    case 'send-change-pw-code':
+        if (!isset($_SESSION['id']) || !isset($_SESSION['email'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Not authenticated']);
+            exit();
+        }
+        $email = $_SESSION['email'];
+        $code = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $_SESSION['verify_code'] = $code;
+        $_SESSION['verify_email'] = $email;
+        $_SESSION['verify_expiry'] = time() + 600;
+
+        $subject = "Bright Steps – Password Change Verification";
+        $content = '
+            <p style="color:#475569;">Enter this code to change your password:</p>
+            <div style="text-align:center;margin:1.5rem 0;">
+                <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#6C63FF;background:#f1f0ff;border-radius:12px;padding:1rem;display:inline-block;">
+                    ' . $code . '
+                </div>
+            </div>
+            <p style="color:#94a3b8;font-size:0.875rem;">This code expires in 10 minutes.</p>';
+        
+        $htmlBody = buildEmailTemplate('Change Password', $content);
+        sendMail($email, $subject, $htmlBody);
+        
+        echo json_encode(['success' => true, 'message' => 'Verification code sent.', 'dev_code' => $code]);
+        break;
+
+    // ── Verify code & Change password (authenticated) ───────────────
+    case 'change-password-verify':
+        if (!isset($_SESSION['id'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Not authenticated']);
+            exit();
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $code = $input['code'] ?? '';
+        $currentPwd = $input['current_password'] ?? '';
+        $newPwd = $input['new_password'] ?? '';
+
+        if (!$code || !$currentPwd || !$newPwd) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Code, current password, and new password are required.']);
+            exit();
+        }
+
+        if (!isset($_SESSION['verify_code']) || $_SESSION['verify_email'] !== $_SESSION['email']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No verification pending.']);
+            exit();
+        }
+
+        if (time() > $_SESSION['verify_expiry']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Code expired. Request a new one.']);
+            exit();
+        }
+
+        if ($_SESSION['verify_code'] !== $code) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid verification code.']);
+            exit();
+        }
+
+        if (strlen($newPwd) < 8) {
+            http_response_code(400);
+            echo json_encode(['error' => 'New password must be at least 8 characters.']);
+            exit();
+        }
+
+        $stmt = $connect->prepare("SELECT password FROM users WHERE user_id = ?");
+        $stmt->execute([$_SESSION['id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!password_verify($currentPwd, $user['password'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Current password is incorrect.']);
+            exit();
+        }
+
+        $hashed = password_hash($newPwd, PASSWORD_DEFAULT);
+        $stmt = $connect->prepare("UPDATE users SET password = ? WHERE user_id = ?");
+        $stmt->execute([$hashed, $_SESSION['id']]);
+
+        unset($_SESSION['verify_code'], $_SESSION['verify_email'], $_SESSION['verify_expiry']);
+
+        echo json_encode(['success' => true, 'message' => 'Password changed successfully!']);
+        break;
+
     // ── Change password (authenticated) ────────────────────────────
     case 'change-password':
         if (!isset($_SESSION['id'])) {
@@ -227,6 +318,6 @@ switch ($action) {
 
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Invalid action. Use: send, verify, forgot, reset, change-password']);
+        echo json_encode(['error' => 'Invalid action. Use: send, verify, forgot, reset, change-password, send-change-pw-code, change-password-verify']);
         break;
 }

@@ -435,6 +435,17 @@ if (
                 $sql = "UPDATE appointment SET " . implode(', ', $fields) . " WHERE appointment_id = :aid";
                 $stmt = $connect->prepare($sql);
                 $stmt->execute($params);
+
+                if (isset($input['status'])) {
+                    $pst = $connect->prepare("SELECT p.user_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                    $pst->execute([$appointment_id]);
+                    $uid = $pst->fetchColumn();
+                    if ($uid) {
+                        $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                        $nst->execute([$uid, 'Appointment Update', "Your appointment status was updated to: " . $input['status']]);
+                    }
+                }
+
                 echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
                 exit;
 
@@ -446,6 +457,15 @@ if (
                 }
                 $stmt = $connect->prepare("UPDATE appointment SET status = 'cancelled' WHERE appointment_id = :aid");
                 $stmt->execute([':aid' => $appointment_id]);
+
+                $pst = $connect->prepare("SELECT p.user_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                $pst->execute([$appointment_id]);
+                $uid = $pst->fetchColumn();
+                if ($uid) {
+                    $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                    $nst->execute([$uid, 'Appointment Cancelled', "Your appointment has been cancelled by the doctor."]);
+                }
+
                 echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
                 exit;
             }

@@ -12,13 +12,25 @@ if (!isset($_SESSION['email'])) {
 $parentId = $_SESSION['id'];
 $data = [];
 
-// --- Parent Info ---
 $data['parent'] = [
     'id'    => $parentId,
     'fname' => $_SESSION['fname'],
     'lname' => $_SESSION['lname'],
     'email' => $_SESSION['email']
 ];
+
+// --- Streaks (Parent Level) ---
+$sqlStreaks = "SELECT streak_type, current_count, longest_count FROM streaks WHERE parent_id = :parent_id";
+$stmtStreaks = $connect->prepare($sqlStreaks);
+$stmtStreaks->execute(['parent_id' => $parentId]);
+$streaksData = $stmtStreaks->fetchAll(PDO::FETCH_ASSOC);
+
+$streakMap = [];
+foreach ($streaksData as $s) {
+    // Basic assignment; api_streaks.php check-in logic handles actual date validation/reset 
+    $streakMap[$s['streak_type']] = $s;
+}
+$data['streaks'] = $streakMap;
 
 // --- Subscription Plan ---
 $sql = "SELECT s.plan_name, s.price, s.plan_period
@@ -75,11 +87,19 @@ foreach ($children as &$child) {
     $stmt3->execute(['child_id' => $child['child_id']]);
     $child['growth_history'] = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 
-    // Badge count
-    $sql4 = "SELECT COUNT(*) FROM child_badge WHERE child_id = :child_id";
+    // Badges array and count
+    $sql4 = "SELECT b.name, b.icon, b.description FROM child_badge cb JOIN badge b ON cb.badge_id = b.badge_id WHERE cb.child_id = :child_id";
     $stmt4 = $connect->prepare($sql4);
     $stmt4->execute(['child_id' => $child['child_id']]);
-    $child['badge_count'] = (int)$stmt4->fetchColumn();
+    $badgesList = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+    $child['badges'] = $badgesList;
+    $child['badge_count'] = count($badgesList);
+
+    // Total Activities completed
+    $sqlAct = "SELECT COUNT(*) FROM child_activities WHERE child_id = :child_id AND is_completed = 1";
+    $stmtAct = $connect->prepare($sqlAct);
+    $stmtAct->execute(['child_id' => $child['child_id']]);
+    $child['activities_completed'] = (int)$stmtAct->fetchColumn();
 
     // Points wallet
     $sql5 = "SELECT total_points FROM points_wallet WHERE child_id = :child_id LIMIT 1";

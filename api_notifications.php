@@ -21,20 +21,25 @@ switch ($action) {
     // ── Get notifications ────────────────────────────────────────
     case 'list':
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
-        $stmt = $connect->prepare(
-            "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
-        );
-        $stmt->execute([$userId, $limit]);
-        $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $connect->prepare(
+                "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?"
+            );
+            $stmt->execute([$userId, $limit]);
+            $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Unread count
-        $stmt2 = $connect->prepare(
-            "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0"
-        );
-        $stmt2->execute([$userId]);
-        $unread = (int) $stmt2->fetchColumn();
+            // Unread count
+            $stmt2 = $connect->prepare(
+                "SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0"
+            );
+            $stmt2->execute([$userId]);
+            $unread = (int) $stmt2->fetchColumn();
 
-        echo json_encode(['notifications' => $notifications, 'unread_count' => $unread]);
+            echo json_encode(['notifications' => $notifications, 'unread_count' => $unread]);
+        } catch (Exception $e) {
+            // Table may not exist yet — return empty
+            echo json_encode(['notifications' => [], 'unread_count' => 0]);
+        }
         break;
 
     // ── Mark as read ─────────────────────────────────────────────

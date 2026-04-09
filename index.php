@@ -1,3 +1,25 @@
+<?php
+session_start();
+// If user is already logged in, redirect to their dashboard
+if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
+    $role = $_SESSION['role'] ?? 'parent';
+    switch ($role) {
+        case 'admin':
+            header("Location: dashboards/admin/dashboard.php");
+            exit();
+        case 'specialist':
+        case 'doctor':
+            header("Location: dashboards/specialist/dashboard.php");
+            exit();
+        case 'clinic':
+            header("Location: dashboards/clinic/dashboard.php");
+            exit();
+        default:
+            header("Location: dashboards/parent/dashboard.php");
+            exit();
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
