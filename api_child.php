@@ -23,7 +23,13 @@ switch ($action) {
     case 'edit':
         $childId = !empty($input['child_id']) ? (int)$input['child_id'] : null;
         $fname = trim($input['first_name'] ?? '');
-        $lname = trim($input['last_name'] ?? '');
+        
+        // Fetch parent last name to use for the child
+        $stmtP = $connect->prepare("SELECT last_name FROM users WHERE user_id = ?");
+        $stmtP->execute([$parentId]);
+        $parentRow = $stmtP->fetch(PDO::FETCH_ASSOC);
+        $lname = $parentRow ? $parentRow['last_name'] : '';
+
         $gender = trim($input['gender'] ?? 'male');
         $birthDate = trim($input['birth_date'] ?? '');
         $weight = !empty($input['weight']) ? (float)$input['weight'] : null;

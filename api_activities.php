@@ -138,12 +138,14 @@ switch ($action) {
         $bd = mktime(0, 0, 0, $child['birth_month'], $child['birth_day'], $child['birth_year']);
         $ageMonths = floor((time() - $bd) / (30.44 * 86400));
 
-        // Get latest growth data
+        // Get latest growth data (2 records to detect direction)
         $stmt2 = $connect->prepare(
-            "SELECT height, weight FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 1"
+            "SELECT height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 2"
         );
         $stmt2->execute([$childId]);
-        $growth = $stmt2->fetch(PDO::FETCH_ASSOC);
+        $growthRecords = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+        $growth = $growthRecords[0] ?? null;
+        $prevGrowth = $growthRecords[1] ?? null;
 
         // Get latest speech data
         $stmt3 = $connect->prepare(
@@ -156,11 +158,25 @@ switch ($action) {
         $stmt3->execute([$childId]);
         $speech = $stmt3->fetch(PDO::FETCH_ASSOC);
 
+        // Get motor milestone completion percentage
+        $stmtMotorTotal = $connect->prepare("SELECT COUNT(*) FROM milestones WHERE category IN ('gross_motor','fine_motor')");
+        $stmtMotorTotal->execute();
+        $motorTotal = (int)$stmtMotorTotal->fetchColumn();
+
+        $stmtMotorDone = $connect->prepare(
+            "SELECT COUNT(*) FROM child_milestones cm 
+             JOIN milestones m ON cm.milestone_id = m.milestone_id 
+             WHERE cm.child_id = ? AND m.category IN ('gross_motor','fine_motor') AND cm.is_achieved = 1"
+        );
+        $stmtMotorDone->execute([$childId]);
+        $motorDone = (int)$stmtMotorDone->fetchColumn();
+        $motorPct = $motorTotal > 0 ? round(($motorDone / $motorTotal) * 100) : 0;
+
         // Get achieved milestones
         $stmt4 = $connect->prepare(
             "SELECT m.category, m.title FROM child_milestones cm
              INNER JOIN milestones m ON cm.milestone_id = m.milestone_id
-             WHERE cm.child_id = ? ORDER BY cm.achieved_at DESC LIMIT 5"
+             WHERE cm.child_id = ? AND cm.is_achieved = 1 ORDER BY cm.achieved_at DESC LIMIT 5"
         );
         $stmt4->execute([$childId]);
         $milestones = $stmt4->fetchAll(PDO::FETCH_ASSOC);
@@ -174,16 +190,43 @@ switch ($action) {
         $stmt5->execute([$childId]);
         $recentActivities = $stmt5->fetchAll(PDO::FETCH_ASSOC);
 
-        // Build context for OpenAI
+        // Build rich context for OpenAI
         $ageDisplay = $ageMonths >= 24 ? floor($ageMonths / 12) . ' years old' : $ageMonths . ' months old';
         $context = "Child: {$child['first_name']}, {$ageDisplay}, Gender: {$child['gender']}.\n";
 
         if ($growth) {
-            $context .= "Growth: Weight {$growth['weight']}kg, Height {$growth['height']}cm.\n";
+            $growthDir = 'stable';
+            if ($prevGrowth) {
+                $wDiff = floatval($growth['weight']) - floatval($prevGrowth['weight']);
+                $hDiff = floatval($growth['height']) - floatval($prevGrowth['height']);
+                if ($wDiff > 0.3 && $hDiff > 0.5) $growthDir = 'growing well';
+                elseif ($wDiff < 0) $growthDir = 'weight declining — needs attention';
+                elseif ($hDiff <= 0) $growthDir = 'height stagnant — monitor closely';
+            }
+            $context .= "Growth: Weight {$growth['weight']}kg, Height {$growth['height']}cm. Trend: {$growthDir}.\n";
+        } else {
+            $context .= "Growth: No measurements recorded yet.\n";
         }
+
         if ($speech) {
-            $context .= "Speech: Vocabulary score {$speech['vocabulary_score']}, Clarity {$speech['clarify_score']}.\n";
+            $vocLevel = $speech['vocabulary_score'] >= 80 ? 'excellent' : ($speech['vocabulary_score'] >= 50 ? 'developing' : 'needs improvement');
+            $claLevel = $speech['clarify_score'] >= 80 ? 'excellent' : ($speech['clarify_score'] >= 50 ? 'developing' : 'needs improvement');
+            $context .= "Speech: Vocabulary {$speech['vocabulary_score']}% ({$vocLevel}), Clarity {$speech['clarify_score']}% ({$claLevel}).\n";
+        } else {
+            $context .= "Speech: No speech analysis data available yet.\n";
         }
+
+        $context .= "Motor Skills: {$motorDone}/{$motorTotal} milestones achieved ({$motorPct}%).\n";
+
+        // Identify weakest area for targeting
+        $weakAreas = [];
+        if ($motorPct < 50) $weakAreas[] = 'motor skills';
+        if ($speech && $speech['vocabulary_score'] < 50) $weakAreas[] = 'vocabulary';
+        if ($speech && $speech['clarify_score'] < 50) $weakAreas[] = 'speech clarity';
+        if (!$growth) $weakAreas[] = 'growth tracking (no data)';
+        $weakStr = !empty($weakAreas) ? "Areas needing focus: " . implode(', ', $weakAreas) . "." : "All areas progressing well.";
+        $context .= $weakStr . "\n";
+
         if (!empty($milestones)) {
             $context .= "Recent milestones achieved: " . implode(', ', array_column($milestones, 'title')) . ".\n";
         }
@@ -192,8 +235,10 @@ switch ($action) {
         }
 
         $apiKey = getEnvValue('OPENAI_API_KEY');
-        if (!$apiKey || strpos($apiKey, 'your-key') !== false) {
-            echo json_encode(['error' => 'OpenAI API key not configured']);
+        if (!$apiKey || strpos($apiKey, 'your-key') !== false || strpos($apiKey, 'sk-') !== 0) {
+            error_log("OpenAI API key invalid or not configured. Key starts with: " . substr($apiKey, 0, 10) . "...");
+            $fallback = getCuratedActivities($ageMonths, $child['first_name']);
+            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (no api key)']);
             exit();
         }
 
@@ -209,9 +254,9 @@ Return EXACTLY this JSON structure (no markdown, no backticks, just raw JSON):
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"}
   ],
   \"real_life_activities\": [
-    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"15 min\", \"category\": \"motor|speech|cognitive|social\", \"difficulty\": \"easy|medium|hard\", \"materials\": \"...\"},
-    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\"},
-    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\"}
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"15 min\", \"category\": \"motor|speech|cognitive|social\", \"difficulty\": \"easy|medium|hard\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"}
   ],
   \"website_games\": [
     {\"title\": \"...\", \"description\": \"...\", \"type\": \"interactive|quiz|creative\", \"skill_focus\": \"...\", \"duration\": \"10 min\"},
@@ -220,7 +265,8 @@ Return EXACTLY this JSON structure (no markdown, no backticks, just raw JSON):
   ]
 }
 
-Make all recommendations age-appropriate, specific, and actionable. Vary the categories to cover different developmental areas.";
+Make all recommendations age-appropriate, specific, and actionable. Vary the categories to cover different developmental areas.
+CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a 'reason_picked' field that explicitly explains why you picked it. This explanation MUST accurately mention the child's exact age (e.g., '$ageDisplay') and directly reference their specific conditions, recent milestones, or speech/growth status if available.";
 
         // OpenAI API call
         $ch = curl_init('https://api.openai.com/v1/chat/completions');
@@ -233,6 +279,7 @@ Make all recommendations age-appropriate, specific, and actionable. Vary the cat
             ],
             CURLOPT_POSTFIELDS => json_encode([
                 'model' => 'gpt-4o-mini',
+                'response_format' => ['type' => 'json_object'],
                 'messages' => [
                     ['role' => 'system', 'content' => 'You are a child development expert. Always respond with valid JSON only, no markdown.'],
                     ['role' => 'user', 'content' => $prompt]
@@ -245,12 +292,17 @@ Make all recommendations age-appropriate, specific, and actionable. Vary the cat
 
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
         curl_close($ch);
 
         if ($httpCode !== 200) {
-            // Fallback to curated activities when API is unavailable
+            // Log error for debugging
+            error_log("OpenAI API error (HTTP $httpCode): " . substr($response, 0, 500));
+            if ($curlError) error_log("Curl error: " . $curlError);
+
+            // Fallback to curated activities when API is unavailable or rate limited
             $fallback = getCuratedActivities($ageMonths, $child['first_name']);
-            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated']);
+            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (api_error)']);
             exit();
         }
 
@@ -268,7 +320,8 @@ Make all recommendations age-appropriate, specific, and actionable. Vary the cat
         }
 
         if (!$recommendations) {
-            echo json_encode(['error' => 'Failed to parse AI response', 'raw' => $content]);
+            $fallback = getCuratedActivities($ageMonths, $child['first_name']);
+            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (unparseable api)']);
             exit();
         }
 
@@ -344,6 +397,15 @@ Make all recommendations age-appropriate, specific, and actionable. Vary the cat
                 "UPDATE points_wallet SET total_points = total_points + 15 WHERE wallet_id = ?"
             );
             $stmtU->execute([$wallet['wallet_id']]);
+
+            $stmtT = $connect->prepare("SELECT total_points FROM points_wallet WHERE wallet_id = ?");
+            $stmtT->execute([$wallet['wallet_id']]);
+            $newPoints = $stmtT->fetchColumn();
+
+            if ($newPoints % 300 >= 225 && ($newPoints - 15) % 300 < 225) {
+                $stmtReward = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                $stmtReward->execute([$userId, 'Close to a Reward!', "You have $newPoints points! You are 75% of the way to redeeming a 300-point Certificate!"]);
+            }
         }
 
         // Create notification
@@ -366,13 +428,19 @@ Make all recommendations age-appropriate, specific, and actionable. Vary the cat
     // ── Get activity history for a child ──────────────────────
     case 'history':
         $childId = $_GET['child_id'] ?? null;
+        $period = $_GET['period'] ?? 'all';
         if (!$childId) {
             echo json_encode(['error' => 'child_id required']);
             exit();
         }
 
+        $periodSql = "";
+        if ($period === 'daily') $periodSql = " AND (completed_at >= CURDATE() OR (is_completed=0 AND created_at >= CURDATE())) ";
+        else if ($period === 'weekly') $periodSql = " AND (completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) OR (is_completed=0 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY))) ";
+        else if ($period === 'monthly') $periodSql = " AND (completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) OR (is_completed=0 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))) ";
+
         $stmt = $connect->prepare(
-            "SELECT * FROM child_activities WHERE child_id = ? ORDER BY created_at DESC LIMIT 50"
+            "SELECT * FROM child_activities WHERE child_id = ? $periodSql ORDER BY created_at DESC LIMIT 50"
         );
         $stmt->execute([$childId]);
         $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -380,8 +448,62 @@ Make all recommendations age-appropriate, specific, and actionable. Vary the cat
         echo json_encode(['success' => true, 'activities' => $activities]);
         break;
 
+    // ── Get activity completion summary ──────────────────────
+    case 'summary':
+        $childId = $_GET['child_id'] ?? null;
+        if (!$childId) {
+            echo json_encode(['error' => 'child_id required']);
+            exit();
+        }
+        $stmtD = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= CURDATE()");
+        $stmtD->execute([$childId]);
+        $daily = $stmtD->fetchColumn();
+
+        $stmtW = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+        $stmtW->execute([$childId]);
+        $weekly = $stmtW->fetchColumn();
+
+        $stmtM = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
+        $stmtM->execute([$childId]);
+        $monthly = $stmtM->fetchColumn();
+
+        echo json_encode(['success' => true, 'daily_completed' => (int)$daily, 'weekly_completed' => (int)$weekly, 'monthly_completed' => (int)$monthly]);
+        break;
+
+    // ── Mark article as read ──────────────────────────────────
+    case 'mark-read':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $title = $input['title'] ?? null;
+        if (!$title) { echo json_encode(['error' => 'title required']); exit(); }
+
+        try {
+            $stmt = $connect->prepare("INSERT INTO article_reads (user_id, article_title) VALUES (?, ?)");
+            $stmt->execute([$userId, $title]);
+        } catch (Exception $e) { /* might already be inserted or table structure issue */ }
+        
+        echo json_encode(['success' => true, 'message' => 'Article marked as read']);
+        break;
+
+    // ── 7-day activity chart data ──────────────────────────────
+    case 'summary_chart':
+        $childId = $_GET['child_id'] ?? null;
+        if (!$childId) { echo json_encode(['error' => 'child_id required']); exit(); }
+
+        $days = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = date('Y-m-d', strtotime("-{$i} days"));
+            $label = date('D', strtotime("-{$i} days")); // Mon, Tue, etc.
+            $stmtC = $connect->prepare(
+                "SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND DATE(completed_at) = ?"
+            );
+            $stmtC->execute([$childId, $date]);
+            $days[] = ['label' => $label, 'date' => $date, 'count' => (int)$stmtC->fetchColumn()];
+        }
+        echo json_encode(['success' => true, 'chart_data' => $days]);
+        break;
+
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Invalid action. Use: recommend, complete, history']);
+        echo json_encode(['error' => 'Invalid action. Use: recommend, complete, history, summary, summary_chart']);
         break;
 }

@@ -99,7 +99,7 @@ CREATE TABLE `behavior_category` (
 
 CREATE TABLE `child` (
   `ssn` varchar(20) NOT NULL,
-  `child_id` int(11) NOT NULL,
+  `child_id` int(11) NOT NULL AUTO_INCREMENT,
   `parent_id` int(11) NOT NULL,
   `first_name` varchar(100) DEFAULT NULL,
   `last_name` varchar(100) DEFAULT NULL,
@@ -107,7 +107,10 @@ CREATE TABLE `child` (
   `birth_month` int(11) DEFAULT NULL,
   `birth_year` int(11) DEFAULT NULL,
   `gender` varchar(10) DEFAULT NULL,
-  `birth_certificate` varchar(255) DEFAULT NULL
+  `birth_certificate` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`child_id`),
+  UNIQUE KEY `ssn` (`ssn`),
+  KEY `parent_id` (`parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -227,6 +230,10 @@ CREATE TABLE `growth_record` (
   `height` decimal(5,2) DEFAULT NULL,
   `weight` decimal(5,2) DEFAULT NULL,
   `head_circumference` decimal(5,2) DEFAULT NULL,
+  `arm_circumference` decimal(5,2) DEFAULT NULL,
+  `subscapular_skinfold` decimal(5,2) DEFAULT NULL,
+  `triceps_skinfold` decimal(5,2) DEFAULT NULL,
+  `motor_milestones_score` int(11) DEFAULT 0,
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -473,12 +480,12 @@ ALTER TABLE `behavior_category`
   ADD PRIMARY KEY (`category_id`);
 
 --
--- Indexes for table `child`
+-- Indexes for table `child` (already defined inline in CREATE TABLE)
 --
-ALTER TABLE `child`
-  ADD PRIMARY KEY (`ssn`,`child_id`),
-  ADD UNIQUE KEY `child_id` (`child_id`),
-  ADD KEY `parent_id` (`parent_id`);
+-- ALTER TABLE `child`
+--   ADD PRIMARY KEY (`child_id`),
+--   ADD UNIQUE KEY `ssn` (`ssn`),
+--   ADD KEY `parent_id` (`parent_id`);
 
 --
 -- Indexes for table `child_badge`
@@ -1560,8 +1567,199 @@ CREATE TABLE IF NOT EXISTS `newsletter_history` (
   KEY `idx_nh_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- ── Onboarding ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `parent_onboarding` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `parent_id` INT NOT NULL,
+  `child_name` VARCHAR(100),
+  `child_dob` DATE,
+  `child_gender` VARCHAR(10),
+  `primary_concerns` TEXT,
+  `preferred_activities` TEXT,
+  `development_goals` TEXT,
+  `completed_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`parent_id`) REFERENCES `users`(`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Article Tracking ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `article_reads` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `article_title` VARCHAR(255) NOT NULL,
+  `read_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Parent Onboarding ──────────────────────────────
+CREATE TABLE IF NOT EXISTS `parent_onboarding` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `parent_id` INT NOT NULL,
+  `child_name` VARCHAR(100) NOT NULL,
+  `child_dob` DATE DEFAULT NULL,
+  `child_gender` VARCHAR(20) DEFAULT NULL,
+  `primary_concerns` JSON DEFAULT NULL,
+  `preferred_activities` JSON DEFAULT NULL,
+  `development_goals` JSON DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`parent_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Article Reads ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS `article_reads` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `article_title` VARCHAR(255) NOT NULL,
+  `read_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Notifications ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `notification_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `type` VARCHAR(50) DEFAULT 'system',
+  `title` VARCHAR(255) NOT NULL,
+  `message` TEXT NOT NULL,
+  `is_read` TINYINT(1) DEFAULT 0,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Motor Milestones ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `motor_milestones` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `child_id` INT NOT NULL,
+  `milestone_name` VARCHAR(150) NOT NULL,
+  `category` VARCHAR(50) DEFAULT 'gross_motor',
+  `is_achieved` TINYINT(1) DEFAULT 0,
+  `achieved_at` TIMESTAMP NULL DEFAULT NULL,
+  `notes` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`child_id`) REFERENCES `child`(`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Consultations ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS `consultations` (
+  `consultation_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `parent_id` INT NOT NULL,
+  `specialist_id` INT NOT NULL,
+  `child_id` INT DEFAULT NULL,
+  `consultation_type` ENUM('video','voice','chat') DEFAULT 'video',
+  `status` ENUM('scheduled','in_progress','completed','cancelled') DEFAULT 'scheduled',
+  `scheduled_at` DATETIME NOT NULL,
+  `duration_minutes` INT DEFAULT 30,
+  `notes` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`parent_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`specialist_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`child_id`) REFERENCES `child`(`child_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Consultation Messages ──────────────────────────
+CREATE TABLE IF NOT EXISTS `consultation_messages` (
+  `message_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `consultation_id` INT NOT NULL,
+  `sender_id` INT NOT NULL,
+  `message` TEXT NOT NULL,
+  `is_read` TINYINT(1) DEFAULT 0,
+  `sent_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`consultation_id`) REFERENCES `consultations`(`consultation_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`sender_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Community Messages ─────────────────────────────
+CREATE TABLE IF NOT EXISTS `community_messages` (
+  `message_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `message` TEXT NOT NULL,
+  `likes` INT DEFAULT 0,
+  `reply_count` INT DEFAULT 0,
+  `parent_message_id` INT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Article Reads ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS `article_reads` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `article_title` VARCHAR(255) NOT NULL,
+  `read_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+> "CREATE TABLE IF NOT EXISTS `motor_milestones` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `child_id` int(11) NOT NULL,
+    `milestone_name` varchar(255) NOT NULL,
+    `category` varchar(100) NOT NULL,
+    `is_achieved` tinyint(1) DEFAULT 0,
+    `achieved_at` datetime DEFAULT NULL,
+    `created_at` timestamp DEFAULT current_timestamp(),
+    PRIMARY KEY (`id`),
+    KEY `child_id` (`child_id`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+  
+> "CREATE TABLE IF NOT EXISTS `child_activities` (
+    `activity_id` int(11) NOT NULL AUTO_INCREMENT,
+    `child_id` int(11) NOT NULL,
+    `title` varchar(255) NOT NULL,
+    `description` text,
+    `category` varchar(100) NOT NULL,
+    `duration_minutes` int(11) DEFAULT 15,
+    `difficulty` varchar(50) DEFAULT 'medium',
+    `source` varchar(50) DEFAULT 'ai',
+    `is_completed` tinyint(1) DEFAULT 0,
+    `completed_at` datetime DEFAULT NULL,
+    `points_earned` int(11) DEFAULT 0,
+    `created_at` timestamp DEFAULT current_timestamp(),
+    PRIMARY KEY (`activity_id`),
+    KEY `child_id` (`child_id`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+  
+> "CREATE TABLE IF NOT EXISTS `child_milestones` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `child_id` int(11) NOT NULL,
+    `milestone_id` int(11) NOT NULL,
+    `achieved_at` datetime NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `child_id` (`child_id`),
+    KEY `milestone_id` (`milestone_id`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+  
+  // Wait, milestones table might also be needed? Let's assume milestones exists or create it too
+> "CREATE TABLE IF NOT EXISTS `milestones` (
+    `milestone_id` int(11) NOT NULL AUTO_INCREMENT,
+    `title` varchar(255) NOT NULL,
+    `category` varchar(100) NOT NULL,
+    PRIMARY KEY (`milestone_id`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+  
+> "CREATE TABLE IF NOT EXISTS `points_wallet` (
+    `wallet_id` int(11) NOT NULL AUTO_INCREMENT,
+    `child_id` int(11) NOT NULL,
+    `total_points` int(11) DEFAULT 0,
+    `updated_at` timestamp DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+    PRIMARY KEY (`wallet_id`),
+    KEY `child_id` (`child_id`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+  ];
+  
+  foreach ($queries as $sql) {
+      try {
+          $connect->exec($sql);
+          echo "Successfully executed query.\n";
+      } catch (PDOException $e) {
+          echo "Error: " . $e->getMessage() . "\n";
+      }
+  }
+  echo "Migration finished.\n";
+  ?>
+
+

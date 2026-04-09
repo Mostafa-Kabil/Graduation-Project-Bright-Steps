@@ -3,6 +3,7 @@ require_once "includes/auth_check.php";
 $parentId = $_SESSION['id'];
 $fname = $_SESSION['fname'];
 $lname = $_SESSION['lname'];
+$email = $_SESSION['email'] ?? '';
 $initials = strtoupper(substr($fname, 0, 1) . substr($lname, 0, 1));
 $stmt = $connect->prepare("SELECT s.plan_name FROM parent_subscription ps INNER JOIN subscription s ON ps.subscription_id = s.subscription_id WHERE ps.parent_id = :pid LIMIT 1");
 $stmt->execute(['pid' => $parentId]);
@@ -62,7 +63,7 @@ if (!$settings) {
                             Account
                         </h2>
                         <div class="settings-card">
-                            <div class="settings-item" onclick="navigateTo('profile')">
+                            <div class="settings-item" onclick="openEditProfileModal()" style="cursor:pointer;">
                                 <div class="settings-item-info">
                                     <div class="settings-item-label">My Profile</div>
                                     <div class="settings-item-description">View and edit your personal information</div>
@@ -219,6 +220,44 @@ if (!$settings) {
     <script src="scripts/navigation.js"></script>
     <script src="scripts/dashboard.js?v=7"></script>
     <script>
+        function openEditProfileModal() {
+            let existing = document.getElementById('edit-profile-modal');
+            if (existing) existing.remove();
+            const modal = document.createElement('div');
+            modal.id = 'edit-profile-modal';
+            modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
+                    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Edit Profile</h2>
+                    <input type="text" id="ep-fname" value="${<?php echo htmlspecialchars(json_encode($fname, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8'); ?>.replace(/(^"|"$)/g, '')}" placeholder="First Name" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <input type="text" id="ep-lname" value="${<?php echo htmlspecialchars(json_encode($lname, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8'); ?>.replace(/(^"|"$)/g, '')}" placeholder="Last Name" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <input type="email" id="ep-email" value="${<?php echo htmlspecialchars(json_encode($email, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8'); ?>.replace(/(^"|"$)/g, '')}" placeholder="Email Address" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                    <button onclick="saveProfile()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Save Changes</button>
+                    <div id="ep-error" style="color:#ef4444;font-size:0.85rem;margin-top:0.5rem;"></div>
+                    <div id="ep-success" style="color:#22c55e;font-size:0.85rem;margin-top:0.5rem;"></div>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+        }
+        
+        async function saveProfile() {
+            const formData = new FormData();
+            formData.append('first_name', document.getElementById('ep-fname').value);
+            formData.append('last_name', document.getElementById('ep-lname').value);
+            formData.append('email', document.getElementById('ep-email').value);
+            
+            try {
+                const res = await fetch('api_save_profile.php', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('ep-success').textContent = data.message;
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    document.getElementById('ep-error').textContent = data.errors ? data.errors.join(', ') : data.error;
+                }
+            } catch(e) { document.getElementById('ep-error').textContent = 'Network error'; }
+        }
+
         function openChangePasswordModal() {
             let existing = document.getElementById('change-pwd-modal');
             if (existing) existing.remove();
@@ -228,29 +267,64 @@ if (!$settings) {
             <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.parentElement.remove()">
                 <div style="background:var(--white,#fff);border-radius:20px;padding:2.5rem;max-width:400px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
                     <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Change Password</h2>
-                    <p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem;">Enter your current and new password</p>
-                    <input type="password" id="cp-current" placeholder="Current password" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
-                    <input type="password" id="cp-new" placeholder="New password (min 8 chars)" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
-                    <button onclick="changePassword()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Update Password</button>
+                    <p style="color:#64748b;font-size:0.9rem;margin-bottom:1.5rem;" id="cp-desc">We will send a verification code to your email.</p>
+                    
+                    <div id="cp-step1">
+                        <button onclick="sendChangePwdCode()" id="btn-send-code" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Send Verification Code</button>
+                    </div>
+
+                    <div id="cp-step2" style="display:none;">
+                        <input type="text" id="cp-code" placeholder="6-digit Verification Code" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;text-align:center;letter-spacing:0.25rem;">
+                        <input type="password" id="cp-current" placeholder="Current password" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                        <input type="password" id="cp-new" placeholder="New password (min 8 chars)" style="width:100%;padding:0.875rem;border:2px solid #e2e8f0;border-radius:12px;font-size:1rem;outline:none;margin-bottom:0.75rem;box-sizing:border-box;">
+                        <button onclick="verifyAndChangePassword()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#6C63FF,#a78bfa);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Update Password</button>
+                    </div>
+
                     <div id="cp-error" style="color:#ef4444;font-size:0.85rem;margin-top:0.5rem;"></div>
                     <div id="cp-success" style="color:#22c55e;font-size:0.85rem;margin-top:0.5rem;"></div>
                 </div>
             </div>
-        `;
+            `;
             document.body.appendChild(modal);
         }
-        async function changePassword() {
+
+        async function sendChangePwdCode() {
+            const btn = document.getElementById('btn-send-code');
+            const err = document.getElementById('cp-error');
+            const suc = document.getElementById('cp-success');
+            err.textContent = ''; suc.textContent = '';
+            btn.disabled = true; btn.textContent = 'Sending...';
+
+            try {
+                const res = await fetch('api_email_verify.php?action=send-change-pw-code', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    suc.textContent = 'Code sent to your email!';
+                    document.getElementById('cp-step1').style.display = 'none';
+                    document.getElementById('cp-step2').style.display = 'block';
+                    document.getElementById('cp-desc').textContent = 'Enter the code and your passwords to update.';
+                } else {
+                    err.textContent = data.error;
+                    btn.disabled = false; btn.textContent = 'Send Verification Code';
+                }
+            } catch(e) { err.textContent = 'Network error'; btn.disabled = false; btn.textContent = 'Send Verification Code'; }
+        }
+
+        async function verifyAndChangePassword() {
+            const code = document.getElementById('cp-code').value;
             const current = document.getElementById('cp-current').value;
             const newPwd = document.getElementById('cp-new').value;
             const err = document.getElementById('cp-error');
             const suc = document.getElementById('cp-success');
             err.textContent = ''; suc.textContent = '';
-            if (!current || !newPwd) { err.textContent = 'Both fields are required'; return; }
+
+            if (!code || !current || !newPwd) { err.textContent = 'All fields are required'; return; }
             if (newPwd.length < 8) { err.textContent = 'New password must be at least 8 characters'; return; }
+
             try {
-                const res = await fetch('api_email_verify.php?action=change-password', {
+                const res = await fetch('api_email_verify.php?action=change-password-verify', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ current_password: current, new_password: newPwd })
+                    body: JSON.stringify({ code: code, current_password: current, new_password: newPwd })
                 });
                 const data = await res.json();
                 if (data.success) {

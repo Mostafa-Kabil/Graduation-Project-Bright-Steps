@@ -53,6 +53,30 @@ if (!move_uploaded_file($_FILES['audio']['tmp_name'], $filePath)) {
     exit();
 }
 
+// Check if Python server is running, and start it if it isn't
+function isPythonServerRunning($port = 8000) {
+    $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
+    if ($fp) {
+        fclose($fp);
+        return true;
+    }
+    return false;
+}
+
+if (!isPythonServerRunning(8000)) {
+    // Start the Python server in the background (Windows)
+    $scriptDir = realpath(__DIR__ . '/APIs/Speech Analysis');
+    if ($scriptDir) {
+        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8000 > NUL 2> NUL', 'r'));
+        // Wait up to 10 seconds for it to start
+        $maxWait = 20;
+        while (!isPythonServerRunning(8000) && $maxWait > 0) {
+            usleep(500000); // 0.5s
+            $maxWait--;
+        }
+    }
+}
+
 // Forward to Python FastAPI at localhost:8000/analyze
 $apiUrl = 'http://127.0.0.1:8000/analyze';
 $curlFile = new CURLFile($filePath, mime_content_type($filePath), basename($filePath));
@@ -72,10 +96,16 @@ curl_close($ch);
 if ($curlError || $httpCode !== 200) {
     // Clean up saved file on failure
     @unlink($filePath);
+
+    // Insert Failure Notification
+    $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+    $nstmt->execute([$parentId, 'Speech Analysis Failed', 'Could not complete the analysis. Please run start-server.bat in APIs/Speech Analysis folder.']);
+
     echo json_encode([
         'success' => false,
-        'error'   => 'Speech analysis service unavailable. Make sure the Python server is running on port 8000.',
-        'details' => $curlError ?: "HTTP $httpCode"
+        'error'   => 'Speech AI is offline. To fix this: Run the file "APIs/Speech Analysis/start-server.bat" to start the speech service.',
+        'details' => $curlError ?: "HTTP $httpCode",
+        'fix'     => 'Navigate to APIs/Speech Analysis folder and double-click start-server.bat'
     ]);
     exit();
 }
@@ -83,6 +113,9 @@ if ($curlError || $httpCode !== 200) {
 $aiResult = json_decode($response, true);
 if (!$aiResult || !isset($aiResult['transcript'])) {
     @unlink($filePath);
+    // Insert Failure Notification
+    $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+    $nstmt->execute([$parentId, 'Speech Analysis Failed', 'Invalid response from speech API.']);
     echo json_encode(['success' => false, 'error' => 'Invalid response from speech API']);
     exit();
 }
@@ -122,10 +155,17 @@ try {
         'cs'  => $clarifyScore,
     ]);
 
+    // Insert Success Notification
+    $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+    $nstmt->execute([$parentId, 'Speech Analysis Complete', 'Your child\'s speech has been transcribed and analyzed. (' . count($aiResult['unique_words'] ?? []) . ' words detected)']);
+
     $connect->commit();
 } catch (Exception $e) {
     $connect->rollBack();
     @unlink($filePath);
+    // Insert Failure Notification
+    $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+    $nstmt->execute([$parentId, 'Speech Analysis Failed', 'Database error occurred.']);
     echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
     exit();
 }

@@ -71,5 +71,5 @@ if ($user) {
     $_SESSION['email'] = $email;
     $_SESSION['role'] = 'parent';
 
-    echo json_encode(['success' => true, 'redirect' => 'dashboards/parent/dashboard.php', 'message' => 'Account created! Welcome to Bright Steps.', 'new_account' => true]);
+    echo json_encode(['success' => true, 'redirect' => 'onboarding.php', 'message' => 'Account created! Let\'s setup your profile.', 'new_account' => true]);
 }
