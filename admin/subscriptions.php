@@ -34,7 +34,7 @@ try {
         if ($action === 'plans') {
             // Get plans with active user counts and features
             $stmt = $connect->query("
-                SELECT s.subscription_id, s.plan_name, s.plan_period, s.price, s.description, s.status,
+                SELECT s.subscription_id, s.plan_name, s.plan_period, s.price, s.description, s.status, s.limits,
                     (SELECT COUNT(*) FROM parent_subscription ps WHERE ps.subscription_id = s.subscription_id) as active_users
                 FROM subscription s
                 ORDER BY s.price ASC
@@ -47,6 +47,7 @@ try {
                 $fStmt->execute(['sid' => $plan['subscription_id']]);
                 $plan['features'] = $fStmt->fetchAll(PDO::FETCH_COLUMN);
                 $plan['mrr'] = round((float) $plan['price'] * (int) $plan['active_users'], 2);
+                $plan['limits'] = $plan['limits'] ? json_decode($plan['limits'], true) : null;
             }
 
             echo json_encode(['success' => true, 'plans' => $plans]);
@@ -129,14 +130,16 @@ try {
             $description = $data['description'] ?? '';
             $status = $data['status'] ?? 'active';
             $features = $data['features'] ?? [];
+            $limits = $data['limits'] ?? null;
 
             if (!$planName) {
                 echo json_encode(['success' => false, 'error' => 'Plan name required']);
                 exit;
             }
 
-            $stmt = $connect->prepare("INSERT INTO subscription (plan_name, plan_period, price, description, status) VALUES (:name, :period, :price, :desc, :status)");
-            $stmt->execute(['name' => $planName, 'period' => $planPeriod, 'price' => $price, 'desc' => $description, 'status' => $status]);
+            $limitsJson = $limits ? json_encode($limits) : null;
+            $stmt = $connect->prepare("INSERT INTO subscription (plan_name, plan_period, price, description, status, limits) VALUES (:name, :period, :price, :desc, :status, :limits)");
+            $stmt->execute(['name' => $planName, 'period' => $planPeriod, 'price' => $price, 'desc' => $description, 'status' => $status, 'limits' => $limitsJson]);
             $newId = $connect->lastInsertId();
 
             // Insert features
@@ -159,6 +162,7 @@ try {
             $description = $data['description'] ?? null;
             $status = $data['status'] ?? null;
             $features = $data['features'] ?? null;
+            $limits = $data['limits'] ?? null;
 
             if (!$subId) {
                 echo json_encode(['success' => false, 'error' => 'Subscription ID required']);
@@ -186,6 +190,11 @@ try {
             if ($status !== null && in_array($status, ['active', 'inactive'])) {
                 $fields[] = "status = :status";
                 $params['status'] = $status;
+            }
+
+            if ($limits !== null) {
+                $fields[] = "limits = :limits";
+                $params['limits'] = json_encode($limits);
             }
 
             if (!empty($fields)) {

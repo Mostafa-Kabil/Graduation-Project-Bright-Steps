@@ -1,6 +1,32 @@
 // Admin Dashboard – View Controller (All 7 Features)
 const ADMIN_API = 'admin/';
-document.addEventListener('DOMContentLoaded', function () { initAdminNav(); showAdminView('overview'); });
+let _adminPermissions = ['all']; // Default: full access
+document.addEventListener('DOMContentLoaded', async function () {
+    // Fetch current admin's permissions
+    try {
+        const r = await apiGet('roles.php?action=get_permissions');
+        if (r.success && r.permissions) _adminPermissions = r.permissions;
+    } catch(e) { console.warn('Could not fetch permissions, defaulting to full access'); }
+    initAdminNav();
+    enforceNavPermissions();
+    showAdminView('overview');
+});
+
+function hasPermission(viewId) {
+    if (_adminPermissions.includes('all')) return true;
+    if (viewId === 'overview' || viewId === 'settings') return true; // Always accessible
+    return _adminPermissions.includes(viewId);
+}
+
+function enforceNavPermissions() {
+    const allNavItems = document.querySelectorAll('.sidebar-nav .nav-item[data-view], .sidebar-footer .nav-item[data-view]');
+    allNavItems.forEach(item => {
+        const view = item.dataset.view;
+        if (view && !hasPermission(view)) {
+            item.style.display = 'none';
+        }
+    });
+}
 
 function initAdminNav() {
     const navItems = document.querySelectorAll('.sidebar-nav .nav-item');
@@ -12,8 +38,20 @@ function initAdminNav() {
 function showAdminView(viewId) {
     const main = document.getElementById('admin-main-content');
     if (!main) return;
+    // Permission check
+    if (!hasPermission(viewId)) {
+        main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;text-align:center;">
+            <div style="width:80px;height:80px;border-radius:50%;background:var(--red-500);display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:40px;height:40px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <h2 style="color:var(--text-primary);margin:0 0 .5rem;">Access Denied</h2>
+            <p style="color:var(--text-secondary);max-width:400px;">You don't have permission to access this section. Contact a Super Admin to request access.</p>
+            <button class="btn btn-outline" onclick="showAdminView('overview')" style="margin-top:1rem;">← Back to Overview</button>
+        </div>`;
+        return;
+    }
     main.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:60vh;"><div class="admin-loading-spinner"></div></div>';
-    const loaders = { 'overview': loadOverviewView, 'users': loadUsersView, 'clinics': loadClinicsView, 'subscriptions': loadSubscriptionsView, 'points': loadPointsView, 'reports': loadReportsView, 'settings': loadSettingsView, 'marketing': loadMarketingView, 'notifications_mgmt': loadNotificationsView, 'moderation': loadModerationView, 'system_health': loadSystemHealthView, 'roles': loadRolesView, 'tickets': loadTicketsView, 'banners': loadBannersView };
+    const loaders = { 'overview': loadOverviewView, 'users': loadUsersView, 'clinics': loadClinicsView, 'subscriptions': loadSubscriptionsView, 'points': loadPointsView, 'reports': loadReportsView, 'settings': loadSettingsView, 'notifications_mgmt': loadNotificationsView, 'moderation': loadModerationView, 'system_health': loadSystemHealthView, 'roles': loadRolesView, 'tickets': loadTicketsView, 'banners': loadBannersView };
     const fn = loaders[viewId]; if (fn) fn(main);
 }
 
@@ -37,10 +75,10 @@ async function apiPost(ep, data) { const r = await fetch(ADMIN_API + ep, { metho
 
 // MODAL SYSTEM
 function closeModal() { document.getElementById('admin-modal-container')?.remove(); }
-function showModal(title, bodyHTML, footerHTML) {
+function showModal(title, bodyHTML, footerHTML, cssClass = '') {
     closeModal();
     const div = document.createElement('div'); div.id = 'admin-modal-container';
-    div.innerHTML = `<div class="admin-modal-overlay" onclick="if(event.target===this)closeModal()"><div class="admin-modal"><div class="admin-modal-header"><h3>${title}</h3><button class="admin-modal-close" onclick="closeModal()">&times;</button></div><div class="admin-modal-body">${bodyHTML}</div><div class="admin-modal-footer">${footerHTML}</div></div></div>`;
+    div.innerHTML = `<div class="admin-modal-overlay" onclick="if(event.target===this)closeModal()"><div class="admin-modal ${cssClass}"><div class="admin-modal-header"><h3>${title}</h3><button class="admin-modal-close" onclick="closeModal()">&times;</button></div><div class="admin-modal-body">${bodyHTML}</div><div class="admin-modal-footer">${footerHTML}</div></div></div>`;
     document.body.appendChild(div);
     const firstInput = div.querySelector('input,select,textarea'); if (firstInput) firstInput.focus();
 }
@@ -221,9 +259,10 @@ async function loadSubscriptionsView(main) {
             <div class="plan-header"><h3 class="plan-name">${p.plan_name}</h3><div class="plan-price">$${Number(p.price).toFixed(2)}<span>/${p.plan_period || 'mo'}</span></div></div>
             ${p.description ? `<p style="color:var(--text-secondary);font-size:.875rem;margin:0 0 1rem;">${p.description}</p>` : ''}
             <div class="plan-stats"><div class="plan-stat"><span class="plan-stat-value">${fmtNum(p.active_users)}</span><span class="plan-stat-label">Active Users</span></div><div class="plan-stat"><span class="plan-stat-value">${p.price > 0 ? '$' + fmtNum(p.mrr) : '—'}</span><span class="plan-stat-label">${p.price > 0 ? 'MRR' : '—'}</span></div></div>
+            ${p.limits ? `<div style="margin:.75rem 0;padding:.75rem;background:var(--bg-secondary);border-radius:10px;"><div style="font-size:.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:.5rem;">Usage Limits</div>${Object.entries(p.limits).map(([k,v]) => `<div style="display:flex;justify-content:space-between;font-size:.8rem;padding:.2rem 0;"><span>${k.replace(/_/g,' ').replace(/max /i,'Max ')}</span><span style="font-weight:600;">${v === -1 ? '∞ Unlimited' : v}</span></div>`).join('')}</div>` : ''}
             <ul class="plan-features">${(p.features || []).map(f => `<li>${f}</li>`).join('')}</ul>
             <div style="display:flex;gap:.5rem;margin-top:auto;">
-                <button class="btn ${i === plans.length - 1 ? 'btn-gradient' : 'btn-outline'}" style="flex:1;" onclick="editPlan(${p.subscription_id},'${p.plan_name.replace(/'/g, "\\'")}',${p.price},'${p.plan_period || 'monthly'}','${(p.description || '').replace(/'/g, "\\'")}','${p.status || 'active'}',${JSON.stringify(p.features || []).replace(/'/g, "\\'")})">Edit</button>
+                <button class="btn ${i === plans.length - 1 ? 'btn-gradient' : 'btn-outline'}" style="flex:1;" onclick='editPlan(${p.subscription_id},${JSON.stringify(p.plan_name)},${p.price},${JSON.stringify(p.plan_period || "monthly")},${JSON.stringify(p.description || "")},${JSON.stringify(p.status || "active")},${JSON.stringify(p.features || [])},${JSON.stringify(p.limits || {})})'>Edit</button>
                 <button class="btn btn-outline" style="color:var(--red-500);padding:.5rem;" onclick="deletePlan(${p.subscription_id},'${p.plan_name.replace(/'/g, "\\'")}')">🗑</button>
             </div>
         </div>`).join('')}</div>
@@ -252,19 +291,29 @@ async function loadSubscriptionsView(main) {
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
 }
 
-function editPlan(subId, name, price, period, description, status, features) {
+function editPlan(subId, name, price, period, description, status, features, limits) {
     const featText = Array.isArray(features) ? features.join('\n') : '';
+    limits = limits || {};
     showModal('Edit Plan', `
         <div class="form-group"><label>Plan Name</label><input type="text" id="ep-name" value="${name}"></div>
         <div class="form-group"><label>Price</label><input type="number" id="ep-price" value="${price}" step="0.01"></div>
         <div class="form-group"><label>Duration</label><select id="ep-period"><option value="monthly" ${period === 'monthly' ? 'selected' : ''}>Monthly</option><option value="yearly" ${period === 'yearly' ? 'selected' : ''}>Yearly</option></select></div>
         <div class="form-group"><label>Description</label><textarea id="ep-desc" rows="2">${description}</textarea></div>
         <div class="form-group"><label>Status</label><select id="ep-status"><option value="active" ${status === 'active' ? 'selected' : ''}>Active</option><option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option></select></div>
-        <div class="form-group"><label>Features (one per line)</label><textarea id="ep-feat" rows="4">${featText}</textarea></div>`,
+        <div class="form-group"><label>Features (one per line)</label><textarea id="ep-feat" rows="4">${featText}</textarea></div>
+        <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-top:.5rem;">
+            <label style="font-weight:600;font-size:.9rem;display:block;margin-bottom:.75rem;">📋 Usage Limits <span style="color:var(--text-secondary);font-weight:400;font-size:.8rem;">(-1 = unlimited)</span></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;">
+                <div class="form-group"><label style="font-size:.8rem;">Max Speech Analyses</label><input type="number" id="ep-lim-speech" value="${limits.max_speech_analyses ?? 3}" min="-1"></div>
+                <div class="form-group"><label style="font-size:.8rem;">Max Children</label><input type="number" id="ep-lim-children" value="${limits.max_children ?? 1}" min="-1"></div>
+                <div class="form-group"><label style="font-size:.8rem;">Max Reports/Month</label><input type="number" id="ep-lim-reports" value="${limits.max_reports ?? 5}" min="-1"></div>
+            </div>
+        </div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="ep-save">Save</button>`);
     document.getElementById('ep-save').onclick = async () => {
         const feats = document.getElementById('ep-feat').value.split('\n').map(f => f.trim()).filter(f => f);
-        try { const res = await apiPost('subscriptions.php', { action: 'update_plan', subscription_id: subId, plan_name: document.getElementById('ep-name').value, price: parseFloat(document.getElementById('ep-price').value), plan_period: document.getElementById('ep-period').value, description: document.getElementById('ep-desc').value, status: document.getElementById('ep-status').value, features: feats }); if (res.success) { showAlert('Plan updated!', 'success'); setTimeout(() => { closeModal(); showAdminView('subscriptions'); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
+        const limitsData = { max_speech_analyses: parseInt(document.getElementById('ep-lim-speech').value), max_children: parseInt(document.getElementById('ep-lim-children').value), max_reports: parseInt(document.getElementById('ep-lim-reports').value) };
+        try { const res = await apiPost('subscriptions.php', { action: 'update_plan', subscription_id: subId, plan_name: document.getElementById('ep-name').value, price: parseFloat(document.getElementById('ep-price').value), plan_period: document.getElementById('ep-period').value, description: document.getElementById('ep-desc').value, status: document.getElementById('ep-status').value, features: feats, limits: limitsData }); if (res.success) { showAlert('Plan updated!', 'success'); setTimeout(() => { closeModal(); showAdminView('subscriptions'); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     };
 }
 
@@ -275,11 +324,20 @@ function showCreatePlanModal() {
         <div class="form-group"><label>Duration</label><select id="cp-period"><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></div>
         <div class="form-group"><label>Description</label><textarea id="cp-desc" rows="2" placeholder="Brief plan description"></textarea></div>
         <div class="form-group"><label>Status</label><select id="cp-status"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
-        <div class="form-group"><label>Features (one per line)</label><textarea id="cp-feat" rows="4" placeholder="Feature 1&#10;Feature 2&#10;Feature 3"></textarea></div>`,
+        <div class="form-group"><label>Features (one per line)</label><textarea id="cp-feat" rows="4" placeholder="Feature 1&#10;Feature 2&#10;Feature 3"></textarea></div>
+        <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;margin-top:.5rem;">
+            <label style="font-weight:600;font-size:.9rem;display:block;margin-bottom:.75rem;">📋 Usage Limits <span style="color:var(--text-secondary);font-weight:400;font-size:.8rem;">(-1 = unlimited)</span></label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;">
+                <div class="form-group"><label style="font-size:.8rem;">Max Speech Analyses</label><input type="number" id="cp-lim-speech" value="3" min="-1"></div>
+                <div class="form-group"><label style="font-size:.8rem;">Max Children</label><input type="number" id="cp-lim-children" value="1" min="-1"></div>
+                <div class="form-group"><label style="font-size:.8rem;">Max Reports/Month</label><input type="number" id="cp-lim-reports" value="5" min="-1"></div>
+            </div>
+        </div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="cp-save">Create Plan</button>`);
     document.getElementById('cp-save').onclick = async () => {
         const features = document.getElementById('cp-feat').value.split('\n').map(f => f.trim()).filter(f => f);
-        const d = { action: 'create_plan', plan_name: document.getElementById('cp-name').value, price: parseFloat(document.getElementById('cp-price').value) || 0, plan_period: document.getElementById('cp-period').value, description: document.getElementById('cp-desc').value, status: document.getElementById('cp-status').value, features };
+        const limits = { max_speech_analyses: parseInt(document.getElementById('cp-lim-speech').value), max_children: parseInt(document.getElementById('cp-lim-children').value), max_reports: parseInt(document.getElementById('cp-lim-reports').value) };
+        const d = { action: 'create_plan', plan_name: document.getElementById('cp-name').value, price: parseFloat(document.getElementById('cp-price').value) || 0, plan_period: document.getElementById('cp-period').value, description: document.getElementById('cp-desc').value, status: document.getElementById('cp-status').value, features, limits };
         if (!d.plan_name) { showAlert('Plan name is required.', 'warning'); return; }
         try { const res = await apiPost('subscriptions.php', d); if (res.success) { showAlert('Plan created!', 'success'); setTimeout(() => { closeModal(); showAdminView('subscriptions'); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     };
@@ -481,41 +539,159 @@ async function exportReportCSV() {
     showAlert('CSV exported successfully!', 'success');
 }
 
-// ═══ SETTINGS (Read-only profile, no credentials editing) ═══
+// ═══ SETTINGS ═══
 async function loadSettingsView(main) {
     try {
         const [pd, cd] = await Promise.all([apiGet('settings.php?action=profile'), apiGet('settings.php?action=config')]);
         const profile = pd.profile, config = cd.config || {};
+        const initials = ((profile?.first_name?.[0] || '') + (profile?.last_name?.[0] || '')).toUpperCase() || 'AD';
+
+        let notifSettings = {};
+        try { const nd = await apiGet('settings.php?action=notifications'); notifSettings = nd.settings || {}; } catch(e) {}
+
+        const togRow = (key, label, onchange) => `
+            <div class="toggle-row"><span>${label}</span>
+                <label class="toggle-switch"><input type="checkbox" ${key} onchange="${onchange}"><span class="toggle-slider"></span></label>
+            </div>`;
+
         main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">System Settings</h1><p class="dashboard-subtitle">Platform configuration and admin information</p></div></div>
+        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Settings</h1><p class="dashboard-subtitle">Manage your admin account and platform configuration</p></div></div>
+
         <div class="settings-grid">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Admin Profile</h2></div><div style="padding:1.5rem;">
-                <div style="display:flex;gap:2rem;align-items:center;margin-bottom:1.5rem;">
-                    <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:36px;height:36px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-                    <div><h3 style="margin-bottom:.25rem;">${profile ? profile.first_name + ' ' + profile.last_name : 'Administrator'}</h3><p style="color:var(--text-secondary);font-size:.875rem;">${profile?.email || ''}</p><p style="color:var(--text-secondary);font-size:.8125rem;">Role Level: ${profile?.role_level || '1'} (Full Access)</p></div>
+            <!-- Admin Profile -->
+            <div class="section-card">
+                <div class="section-card-header"><h2 class="section-heading">Admin Profile</h2></div>
+                <div style="padding:1.5rem;">
+                    <div style="display:flex;align-items:center;gap:1.25rem;margin-bottom:1.5rem;flex-wrap:wrap;">
+                        <div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;color:#fff;flex-shrink:0;">${initials}</div>
+                        <div style="flex:1;min-width:150px;">
+                            <h3 style="margin:0 0 .25rem;">${profile?.first_name || ''} ${profile?.last_name || ''}</h3>
+                            <p style="color:var(--text-secondary);font-size:.875rem;margin:0;">${profile?.email || ''}</p>
+                            <span class="role-badge role-admin" style="margin-top:.5rem;">Administrator</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
+                        <button class="btn btn-outline" onclick="showEditAdminProfile(${JSON.stringify(profile?.first_name||'')},${JSON.stringify(profile?.last_name||'')})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            Edit Profile
+                        </button>
+                        <button class="btn btn-outline" onclick="showAdminChangePassword()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            Change Password
+                        </button>
+                    </div>
+                    <div style="background:var(--bg-secondary);border-radius:10px;padding:.75rem 1rem;display:flex;align-items:center;gap:.75rem;margin-top:1.25rem;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--green-500)" stroke-width="2" style="width:20px;height:20px;flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        <span style="font-size:.8125rem;color:var(--text-secondary);">Email is managed via the authentication system and cannot be changed here.</span>
+                    </div>
                 </div>
-                <div class="security-notice" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:1rem 1.25rem;display:flex;align-items:center;gap:.75rem;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--green-500)" stroke-width="2" style="width:24px;height:24px;flex-shrink:0;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    <div><div style="font-weight:600;font-size:.875rem;">Credentials Secured</div><div style="color:var(--text-secondary);font-size:.8125rem;">Admin email and password are managed securely through the authentication system and cannot be edited from this page.</div></div>
+            </div>
+
+            <!-- Platform Configuration -->
+            <div class="section-card">
+                <div class="section-card-header"><h2 class="section-heading">Platform Configuration</h2></div>
+                <div style="padding:1.5rem;">
+                    ${togRow(config.allow_clinic_registration==='1'?'checked':'', 'Allow new clinic registrations', "updateConfig('allow_clinic_registration',this.checked?'1':'0')")}
+                    ${togRow(config.auto_approve_clinics==='1'?'checked':'', 'Auto-approve verified clinics', "updateConfig('auto_approve_clinics',this.checked?'1':'0')")}
+                    ${togRow(config.enable_free_trial==='1'?'checked':'', 'Enable free trial signups', "updateConfig('enable_free_trial',this.checked?'1':'0')")}
+                    ${togRow(config.weekly_digest==='1'?'checked':'', 'Send weekly platform digest', "updateConfig('weekly_digest',this.checked?'1':'0')")}
+                    <div class="toggle-row" style="border-bottom:none;border-top:2px solid var(--red-400);margin-top:.5rem;padding-top:1rem;">
+                        <span style="color:var(--red-500);font-weight:600;">⚠ Maintenance Mode</span>
+                        <label class="toggle-switch"><input type="checkbox" ${config.maintenance_mode==='1'?'checked':''} onchange="updateConfig('maintenance_mode',this.checked?'1':'0')"><span class="toggle-slider"></span></label>
+                    </div>
                 </div>
-            </div></div>
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Platform Configuration</h2></div><div style="padding:1.5rem;">
-                <div class="toggle-row"><span>Allow new clinic registrations</span><label class="toggle-switch"><input type="checkbox" ${config.allow_clinic_registration === '1' ? 'checked' : ''} onchange="updateConfig('allow_clinic_registration',this.checked?'1':'0')"><span class="toggle-slider"></span></label></div>
-                <div class="toggle-row"><span>Auto-approve verified clinics</span><label class="toggle-switch"><input type="checkbox" ${config.auto_approve_clinics === '1' ? 'checked' : ''} onchange="updateConfig('auto_approve_clinics',this.checked?'1':'0')"><span class="toggle-slider"></span></label></div>
-                <div class="toggle-row"><span>Enable free trial signups</span><label class="toggle-switch"><input type="checkbox" ${config.enable_free_trial === '1' ? 'checked' : ''} onchange="updateConfig('enable_free_trial',this.checked?'1':'0')"><span class="toggle-slider"></span></label></div>
-                <div class="toggle-row"><span>Send weekly platform digest</span><label class="toggle-switch"><input type="checkbox" ${config.weekly_digest === '1' ? 'checked' : ''} onchange="updateConfig('weekly_digest',this.checked?'1':'0')"><span class="toggle-slider"></span></label></div>
-                <div class="toggle-row"><span>Maintenance mode</span><label class="toggle-switch"><input type="checkbox" ${config.maintenance_mode === '1' ? 'checked' : ''} onchange="updateConfig('maintenance_mode',this.checked?'1':'0')"><span class="toggle-slider"></span></label></div>
-            </div></div>
-            <div class="section-card danger-card"><div class="section-card-header"><h2 class="section-heading" style="color:var(--red-600);">Danger Zone</h2></div><div style="padding:1.5rem;">
-                <p style="color:var(--text-secondary);margin-bottom:1rem;">These actions affect the entire platform and cannot be easily undone.</p>
-                <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-                    <button class="btn btn-outline" style="border-color:var(--red-400);color:var(--red-600);" onclick="purgeInactiveUsers()">Purge Inactive Users</button>
-                    <button class="btn btn-outline" style="border-color:var(--red-400);color:var(--red-600);" onclick="resetPointsSystem()">Reset Points System</button>
+            </div>
+
+            <!-- Admin Notifications -->
+            <div class="section-card">
+                <div class="section-card-header"><h2 class="section-heading">Admin Notifications</h2></div>
+                <div style="padding:1.5rem;">
+                    ${togRow(notifSettings.push_notifications!=='0'?'checked':'', 'Push Notifications', "saveAdminNotifSetting('push_notifications',this.checked)")}
+                    ${togRow(notifSettings.email_updates!=='0'?'checked':'', 'Email Updates', "saveAdminNotifSetting('email_updates',this.checked)")}
+                    ${togRow(notifSettings.system_alerts!=='0'?'checked':'', 'System Alerts', "saveAdminNotifSetting('system_alerts',this.checked)")}
+                    ${togRow(notifSettings.weekly_reports!=='0'?'checked':'', 'Weekly Reports', "saveAdminNotifSetting('weekly_reports',this.checked)")}
                 </div>
-            </div></div>
+            </div>
+
+            <!-- Preferences -->
+            <div class="section-card">
+                <div class="section-card-header"><h2 class="section-heading">Preferences</h2></div>
+                <div style="padding:1.5rem;">
+                    <div class="toggle-row">
+                        <span>Language</span>
+                        <select class="settings-select" onchange="updateConfig('language',this.value)">
+                            <option value="en" ${(config.language||'en')==='en'?'selected':''}>English</option>
+                            <option value="ar" ${config.language==='ar'?'selected':''}>العربية</option>
+                        </select>
+                    </div>
+                    ${togRow(config.data_sharing==='1'?'checked':'', 'Allow data sharing for improvements', "updateConfig('data_sharing',this.checked?'1':'0')")}
+                    ${togRow(config.dark_mode_default==='1'?'checked':'', 'Default dark mode for new admins', "updateConfig('dark_mode_default',this.checked?'1':'0')")}
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="section-card danger-card" style="grid-column:1/-1;">
+                <div class="section-card-header"><h2 class="section-heading" style="color:var(--red-600);">⚠ Danger Zone</h2></div>
+                <div style="padding:1.5rem;">
+                    <p style="color:var(--text-secondary);margin-bottom:1.25rem;font-size:.875rem;">These actions affect the entire platform and cannot be easily undone.</p>
+                    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                        <button class="btn btn-outline" style="border-color:var(--red-400);color:var(--red-600);" onclick="purgeInactiveUsers()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Purge Inactive Users
+                        </button>
+                        <button class="btn btn-outline" style="border-color:var(--red-400);color:var(--red-600);" onclick="resetPointsSystem()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            Reset Points System
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div></div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
+}
+
+async function saveAdminNotifSetting(key, checked) {
+    try { await apiPost('settings.php', { action: 'update_notifications', key, value: checked ? '1' : '0' }); } catch(e) { showAlert('Error saving setting', 'error'); }
+}
+
+function showEditAdminProfile(firstName, lastName) {
+    showModal('Edit Profile', `
+        <div class="form-group"><label>First Name</label><input type="text" id="ap-fname" value="${firstName}"></div>
+        <div class="form-group"><label>Last Name</label><input type="text" id="ap-lname" value="${lastName}"></div>
+    `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="ap-save">Save</button>`);
+    document.getElementById('ap-save').onclick = async () => {
+        const f = document.getElementById('ap-fname').value.trim();
+        const l = document.getElementById('ap-lname').value.trim();
+        if (!f || !l) { showAlert('Both fields required', 'warning'); return; }
+        try {
+            const r = await apiPost('settings.php', { action: 'update_profile', first_name: f, last_name: l });
+            if (r.success) { showAlert('Profile updated!', 'success'); setTimeout(() => { closeModal(); showAdminView('settings'); }, 1000); }
+            else showAlert(r.error || 'Failed', 'error');
+        } catch(e) { showAlert('Error: ' + e.message, 'error'); }
+    };
+}
+
+function showAdminChangePassword() {
+    showModal('Change Password', `
+        <div class="form-group"><label>Current Password</label><input type="password" id="cp-cur" placeholder="Enter current password"></div>
+        <div class="form-group"><label>New Password</label><input type="password" id="cp-new" placeholder="At least 8 characters"></div>
+        <div class="form-group"><label>Confirm New Password</label><input type="password" id="cp-conf" placeholder="Repeat new password"></div>
+    `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="cp-save">Update Password</button>`);
+    document.getElementById('cp-save').onclick = async () => {
+        const cur = document.getElementById('cp-cur').value;
+        const nw = document.getElementById('cp-new').value;
+        const conf = document.getElementById('cp-conf').value;
+        if (!cur || !nw || !conf) { showAlert('All fields required', 'warning'); return; }
+        if (nw !== conf) { showAlert('New passwords do not match', 'warning'); return; }
+        if (nw.length < 8) { showAlert('Password must be at least 8 characters', 'warning'); return; }
+        try {
+            const r = await fetch('api_email_verify.php?action=change-password', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ current_password: cur, new_password: nw }) });
+            const data = await r.json();
+            if (data.success) { showAlert('Password updated successfully!', 'success'); closeModal(); }
+            else showAlert(data.error || 'Failed', 'error');
+        } catch(e) { showAlert('Error: ' + e.message, 'error'); }
+    };
 }
 
 async function updateConfig(key, value) { try { await apiPost('settings.php', { action: 'update_config', setting_key: key, setting_value: value }); } catch (e) { showAlert('Error updating setting: ' + e.message, 'error'); } }

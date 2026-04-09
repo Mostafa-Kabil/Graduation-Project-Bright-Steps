@@ -53,6 +53,14 @@ try {
             }
 
             echo json_encode(['success' => true, 'config' => $settings]);
+        } elseif ($action === 'notifications') {
+            $stmt = $connect->prepare("SELECT setting_key, setting_value FROM user_settings WHERE user_id = ?");
+            $stmt->execute([$_SESSION['id']]);
+            $settings = [];
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $settings[$row['setting_key']] = $row['setting_value'];
+            }
+            echo json_encode(['success' => true, 'settings' => $settings]);
         }
 
     } elseif ($method === 'POST') {
@@ -96,6 +104,32 @@ try {
             logActivity($connect, 'points_reset', "All points wallets reset ({$affected} wallets affected)");
 
             echo json_encode(['success' => true, 'message' => "Reset {$affected} wallets to 0 points"]);
+
+        } elseif ($action === 'update_profile') {
+            $firstName = $data['first_name'] ?? '';
+            $lastName = $data['last_name'] ?? '';
+            if (!$firstName || !$lastName) {
+                echo json_encode(['success' => false, 'error' => 'First and last name required']);
+                exit;
+            }
+            $stmt = $connect->prepare("UPDATE users SET first_name = ?, last_name = ? WHERE user_id = ?");
+            $stmt->execute([$firstName, $lastName, $_SESSION['id']]);
+            $_SESSION['fname'] = $firstName;
+            $_SESSION['lname'] = $lastName;
+            logActivity($connect, 'config_updated', "Admin profile updated: {$firstName} {$lastName}");
+            echo json_encode(['success' => true, 'message' => 'Profile updated']);
+
+        } elseif ($action === 'update_notifications') {
+            $key = $data['key'] ?? '';
+            $value = $data['value'] ?? '0';
+            $validKeys = ['push_notifications', 'email_updates', 'system_alerts', 'weekly_reports'];
+            if (!in_array($key, $validKeys)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid setting']);
+                exit;
+            }
+            $stmt = $connect->prepare("INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+            $stmt->execute([$_SESSION['id'], $key, $value, $value]);
+            echo json_encode(['success' => true]);
 
         } else {
             echo json_encode(['success' => false, 'error' => 'Unknown action']);

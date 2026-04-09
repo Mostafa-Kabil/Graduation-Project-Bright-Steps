@@ -51,6 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['success' => true]);
             break;
 
+        case 'delete_role':
+            $id = $input['role_id'] ?? 0;
+            // Don't allow deleting the Super Admin role
+            $stmt = $connect->prepare("SELECT name FROM admin_roles WHERE id = ?");
+            $stmt->execute([$id]);
+            $role = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($role && strtolower($role['name']) === 'super admin') {
+                echo json_encode(['success' => false, 'error' => 'Cannot delete the Super Admin role']);
+                exit;
+            }
+            $connect->prepare("DELETE FROM admin_roles WHERE id=?")->execute([$id]);
+            echo json_encode(['success' => true]);
+            break;
+
         default:
             echo json_encode(['error' => 'Invalid action']);
     }
@@ -63,10 +77,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Get admin users
             $admins = $connect->query("SELECT u.user_id, u.first_name, u.last_name, u.email, u.status, u.created_at, a.role_level FROM users u JOIN admin a ON u.user_id=a.admin_id ORDER BY u.created_at")->fetchAll(PDO::FETCH_ASSOC);
             // Map role names
+            // Map role names
             $roleMap = [];
-            foreach ($roles as $r) { $roleMap[$r['id']] = $r['name']; }
-            foreach ($admins as &$a) { $a['role_name'] = $roleMap[$a['role_level']] ?? 'Unknown'; }
-            echo json_encode(['success' => true, 'roles' => $roles, 'admins' => $admins]);
+            foreach ($roles as $r) { $roleMap[$r['id']] = $r; }
+            foreach ($admins as &$a) {
+                $a['role_name'] = $roleMap[$a['role_level']]['name'] ?? 'Unknown';
+                $a['role_permissions'] = isset($roleMap[$a['role_level']]) ? json_decode($roleMap[$a['role_level']]['permissions'], true) : [];
+            }
+
+            // Get current admin's permissions
+            $myPerms = ['all']; // default
+            $myRoleStmt = $connect->prepare("SELECT role_level FROM admin WHERE admin_id = ?");
+            $myRoleStmt->execute([$adminId]);
+            $myRole = $myRoleStmt->fetch(PDO::FETCH_ASSOC);
+            if ($myRole && isset($roleMap[$myRole['role_level']])) {
+                $myPerms = json_decode($roleMap[$myRole['role_level']]['permissions'], true) ?: ['all'];
+            }
+
+            echo json_encode(['success' => true, 'roles' => $roles, 'admins' => $admins, 'my_permissions' => $myPerms]);
             break;
 
         case 'view':
@@ -82,6 +110,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'audit_log':
             $stmt = $connect->query("SELECT al.*, u.first_name, u.last_name FROM activity_log al LEFT JOIN users u ON al.related_user_id=u.user_id ORDER BY al.created_at DESC LIMIT 50");
             echo json_encode(['success' => true, 'audit' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+            break;
+
+        case 'get_permissions':
+            $stmt = $connect->prepare("SELECT role_level FROM admin WHERE admin_id = ?");
+            $stmt->execute([$adminId]);
+            $myRole = $stmt->fetch(PDO::FETCH_ASSOC);
+            $perms = ['all']; // default for Super Admin
+            if ($myRole) {
+                $roleStmt = $connect->prepare("SELECT permissions FROM admin_roles WHERE id = ?");
+                $roleStmt->execute([$myRole['role_level']]);
+                $roleData = $roleStmt->fetch(PDO::FETCH_ASSOC);
+                if ($roleData) {
+                    $perms = json_decode($roleData['permissions'], true) ?: ['all'];
+                }
+            }
+            echo json_encode(['success' => true, 'permissions' => $perms]);
             break;
 
         default:

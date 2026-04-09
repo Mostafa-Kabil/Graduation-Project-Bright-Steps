@@ -44,7 +44,7 @@ function showComposeNotification() {
         const d = { action:'compose', title:document.getElementById('cn-title').value, body:document.getElementById('cn-body').value, type:document.getElementById('cn-type').value, priority:document.getElementById('cn-priority').value, target_type:document.getElementById('cn-target').value, scheduled_at:document.getElementById('cn-schedule').value||null };
         if (d.target_type==='segment') d.target_filter = {role:document.getElementById('cn-segment-role').value};
         if (!d.title||!d.body) { showAlert('Title and message required','warning'); return; }
-        try { const r = await apiPost('notifications_mgmt.php',d); if(r.success){showAlert(`Notification sent to ${r.recipients} users!`,'success');setTimeout(()=>{closeModal();showAdminView('notifications_mgmt');},1200);}else showAlert(r.error||'Failed','error'); } catch(e){showAlert('Error: '+e.message,'error');}
+        try { const r = await apiPost('notifications_mgmt.php',d); if(r.success){let msg=`Notification sent to ${r.recipients} users!`;if(r.emails_sent>0)msg+=` ${r.emails_sent} email(s) delivered.`;if(r.emails_failed>0)msg+=` ${r.emails_failed} email(s) failed.`;showAlert(msg,'success');setTimeout(()=>{closeModal();showAdminView('notifications_mgmt');},1500);}else showAlert(r.error||'Failed','error'); } catch(e){showAlert('Error: '+e.message,'error');}
     };
 }
 

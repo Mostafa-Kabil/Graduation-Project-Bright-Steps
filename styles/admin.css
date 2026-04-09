@@ -826,6 +826,10 @@ input:checked + .toggle-slider::before {
     animation: modalSlideIn 0.25s ease;
 }
 
+.admin-modal-wide {
+    max-width: 680px;
+}
+
 @keyframes modalSlideIn {
     from {
         transform: translateY(-20px);

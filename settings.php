@@ -7,6 +7,23 @@ $initials = strtoupper(substr($fname, 0, 1) . substr($lname, 0, 1));
 $stmt = $connect->prepare("SELECT s.plan_name FROM parent_subscription ps INNER JOIN subscription s ON ps.subscription_id = s.subscription_id WHERE ps.parent_id = :pid LIMIT 1");
 $stmt->execute(['pid' => $parentId]);
 $planname = $stmt->fetchColumn() ?: 'Free';
+
+$stmt = $connect->prepare("SELECT * FROM user_settings WHERE user_id = ?");
+$stmt->execute([$parentId]);
+$settings = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$settings) {
+    $stmt2 = $connect->prepare("INSERT IGNORE INTO user_settings (user_id) VALUES (?)");
+    $stmt2->execute([$parentId]);
+    $settings = [
+        'theme' => 'light',
+        'language' => 'en',
+        'push_notifications' => 1,
+        'email_notifications' => 1,
+        'appointment_reminders' => 1,
+        'data_sharing' => 1
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -95,7 +112,7 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('push_notifications', this.checked ? 1 : 0)" <?php echo ($settings['push_notifications'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -105,7 +122,7 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     <div class="settings-item-description">Weekly progress reports via email</div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('email_notifications', this.checked ? 1 : 0)" <?php echo ($settings['email_notifications'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -116,7 +133,7 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('appointment_reminders', this.checked ? 1 : 0)" <?php echo ($settings['appointment_reminders'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -139,11 +156,11 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     <div class="settings-item-label">Language</div>
                                     <div class="settings-item-description">Choose your preferred language</div>
                                 </div>
-                                <select class="settings-select">
-                                    <option value="en">English</option>
-                                    <option value="es">Español</option>
-                                    <option value="fr">Français</option>
-                                    <option value="ar">العربية</option>
+                                <select class="settings-select" onchange="updateSetting('language', this.value)">
+                                    <option value="en" <?php echo ($settings['language'] == 'en') ? 'selected' : ''; ?>>English</option>
+                                    <option value="es" <?php echo ($settings['language'] == 'es') ? 'selected' : ''; ?>>Español</option>
+                                    <option value="fr" <?php echo ($settings['language'] == 'fr') ? 'selected' : ''; ?>>Français</option>
+                                    <option value="ar" <?php echo ($settings['language'] == 'ar') ? 'selected' : ''; ?>>العربية</option>
                                 </select>
                             </div>
                             <div class="settings-item">
@@ -153,7 +170,7 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('data_sharing', this.checked ? 1 : 0)" <?php echo ($settings['data_sharing'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -241,6 +258,27 @@ $planname = $stmt->fetchColumn() ?: 'Free';
                     setTimeout(() => { const m = document.getElementById('change-pwd-modal'); if (m) m.remove(); }, 2000);
                 } else { err.textContent = data.error; }
             } catch (e) { err.textContent = 'Network error'; }
+        }
+
+        async function updateSetting(key, value) {
+            try {
+                const res = await fetch('api_settings.php?action=update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [key]: value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    console.log('Setting updated:', key, value);
+                    if (key === 'language') {
+                        window.location.reload();
+                    }
+                } else {
+                    console.error('Failed to update setting', data.error);
+                }
+            } catch (error) {
+                console.error('Network error during updateSetting:', error);
+            }
         }
     </script>
 </body>

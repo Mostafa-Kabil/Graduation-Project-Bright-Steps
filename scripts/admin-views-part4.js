@@ -33,48 +33,58 @@ async function viewTicket(id) {
         const d = await apiGet('tickets.php?action=view&id='+id);
         const t = d.ticket, msgs = d.messages||[], prev = d.previous_tickets||[], admins = d.admins||[];
         showModal(`Ticket #${id} — ${t.subject}`, `
-            <div style="display:flex;gap:1.5rem;">
-                <div style="flex:2;">
-                    <div style="display:flex;gap:.5rem;margin-bottom:1rem;">
-                        <select class="search-input" style="width:auto;" onchange="updateTicketStatus(${id},this.value)">
-                            ${['open','in_progress','waiting','resolved','closed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}
-                        </select>
-                        <select class="search-input" style="width:auto;" onchange="updateTicketPriority(${id},this.value)">
-                            ${['low','medium','high','critical'].map(p=>`<option value="${p}" ${t.priority===p?'selected':''}>${p}</option>`).join('')}
-                        </select>
-                        <select class="search-input" style="width:auto;" onchange="assignTicket(${id},this.value)">
-                            <option value="">Assign to...</option>
-                            ${admins.map(a=>`<option value="${a.user_id}" ${t.assigned_to==a.user_id?'selected':''}>${a.first_name} ${a.last_name}</option>`).join('')}
-                        </select>
+            <div style="display:flex;flex-direction:column;gap:1.5rem;">
+                <div style="background:var(--bg-secondary);padding:1rem;border-radius:12px;display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                    <div>
+                        <span style="font-size:.75rem;color:var(--text-secondary);display:block;margin-bottom:.25rem;">User Info</span>
+                        <strong>${t.first_name} ${t.last_name}</strong><br>
+                        <span style="font-size:.85rem;">${t.email}</span><br>
+                        <span class="role-badge role-${t.role}" style="margin-top:.5rem;display:inline-block;">${t.role}</span>
                     </div>
-                    <div class="ticket-chat" style="max-height:300px;overflow-y:auto;padding:1rem;background:var(--bg-secondary);border-radius:12px;margin-bottom:1rem;">
+                    <div>
+                        <span style="font-size:.75rem;color:var(--text-secondary);display:block;margin-bottom:.25rem;">Ticket Actions</span>
+                        <div style="display:flex;flex-direction:column;gap:.5rem;">
+                            <select class="search-input" style="width:100%;padding:.3rem .5rem;font-size:.8rem;" onchange="updateTicketStatus(${id},this.value)">
+                                ${['open','in_progress','waiting','resolved','closed'].map(s=>`<option value="${s}" ${t.status===s?'selected':''}>${s.replace('_',' ')}</option>`).join('')}
+                            </select>
+                            <select class="search-input" style="width:100%;padding:.3rem .5rem;font-size:.8rem;" onchange="updateTicketPriority(${id},this.value)">
+                                ${['low','medium','high','critical'].map(p=>`<option value="${p}" ${t.priority===p?'selected':''}>${p.toUpperCase()}</option>`).join('')}
+                            </select>
+                            <select class="search-input" style="width:100%;padding:.3rem .5rem;font-size:.8rem;" onchange="assignTicket(${id},this.value)">
+                                <option value="">Assign to...</option>
+                                ${admins.map(a=>`<option value="${a.user_id}" ${t.assigned_to==a.user_id?'selected':''}>${a.first_name} ${a.last_name}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+                        <h4 style="margin:0;">Messages</h4>
+                        ${prev.length > 0 ? `<span style="font-size:.75rem;color:var(--text-secondary);">${prev.length} previous tickets</span>` : ''}
+                    </div>
+                    <div class="ticket-chat" style="max-height:280px;overflow-y:auto;padding-right:.5rem;margin-bottom:1rem;">
                         ${msgs.map(m => `<div class="chat-msg ${m.sender_type}" style="margin-bottom:.75rem;">
                             <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--text-secondary);margin-bottom:.25rem;">
                                 <strong>${m.first_name} ${m.last_name}</strong><span>${timeAgo(m.created_at)}</span>
                             </div>
-                            <div class="chat-bubble" style="background:${m.sender_type==='admin'?'linear-gradient(135deg,#6366f1,#8b5cf6)':'var(--bg-card)'};color:${m.sender_type==='admin'?'white':'var(--text-primary)'};padding:.75rem 1rem;border-radius:12px;">
-                                ${m.message}${m.is_internal?'<br><em style="font-size:.75rem;opacity:.7;">(Internal note)</em>':''}
+                            <div class="chat-bubble" style="background:${m.sender_type==='admin'?'linear-gradient(135deg,#6366f1,#8b5cf6)':'var(--bg-card)'};color:${m.sender_type==='admin'?'white':'var(--text-primary)'};padding:.75rem 1rem;border-radius:12px;border:${m.sender_type==='admin'?'none':'1px solid var(--border)'}">
+                                ${m.message}${m.is_internal?'<br><em style="font-size:.75rem;opacity:.8;display:block;margin-top:.25rem;">(Internal note)</em>':''}
                             </div>
                         </div>`).join('')}
-                        ${msgs.length===0?'<p style="text-align:center;color:var(--text-secondary);">No messages yet</p>':''}
+                        ${msgs.length===0?'<p style="text-align:center;color:var(--text-secondary);padding:1rem;">No conversation history</p>':''}
                     </div>
-                    <div style="display:flex;gap:.5rem;">
-                        <textarea id="tr-msg" rows="2" class="search-input" style="flex:1;" placeholder="Type your reply..."></textarea>
-                        <div style="display:flex;flex-direction:column;gap:.25rem;">
-                            <button class="btn btn-gradient btn-sm" onclick="replyTicket(${id},false)">Reply</button>
-                            <button class="btn btn-outline btn-sm" onclick="replyTicket(${id},true)" style="font-size:.7rem;">Internal</button>
+                    <div style="display:flex;gap:.5rem;align-items:flex-end;">
+                        <div style="flex:1;">
+                            <textarea id="tr-msg" rows="2" class="search-input" style="width:100%;font-size:.875rem;" placeholder="Type your reply..."></textarea>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:.25rem;flex-shrink:0;">
+                            <button class="btn btn-gradient btn-sm" onclick="replyTicket(${id},false)">Send Reply</button>
+                            <button class="btn btn-outline btn-sm" style="font-size:.7rem;" onclick="replyTicket(${id},true)">+ Internal Note</button>
                         </div>
                     </div>
                 </div>
-                <div style="flex:1;border-left:1px solid var(--border,#eee);padding-left:1rem;">
-                    <h4>User Info</h4>
-                    <p style="font-size:.875rem;">${t.first_name} ${t.last_name}<br>${t.email}<br><span class="role-badge role-${t.role}">${t.role}</span><br>Joined: ${fmtDate(t.user_joined)}</p>
-                    <h4 style="margin-top:1rem;">Previous Tickets</h4>
-                    ${prev.map(p=>`<div style="padding:.5rem 0;border-bottom:1px solid var(--border,#eee);font-size:.8rem;"><span class="status-badge ${p.status==='resolved'?'status-active':'status-warning'}" style="font-size:.7rem;">${p.status}</span> ${p.subject}</div>`).join('')}
-                    ${prev.length===0?'<p style="font-size:.8rem;color:var(--text-secondary);">None</p>':''}
-                </div>
             </div>
-        `, `<button class="btn btn-outline" onclick="closeModal()">Close</button>`);
+        `, `<button class="btn btn-outline" onclick="closeModal()">Close Window</button>`, 'admin-modal-wide');
     } catch(e){showAlert('Error loading ticket','error');}
 }
 

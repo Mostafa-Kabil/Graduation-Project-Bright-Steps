@@ -19,6 +19,7 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     <link rel="stylesheet" href="styles/doctor.css">
     <link rel="stylesheet" href="styles/clinic.css">
     <link rel="stylesheet" href="styles/admin.css">
+    <link rel="stylesheet" href="styles/settings.css">
 </head>
 
 <body>
@@ -96,12 +97,7 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                     </svg>
                     <span>Reports</span>
                 </button>
-                <button class="nav-item" data-view="marketing">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                    </svg>
-                    <span>Marketing</span>
-                </button>
+
                 <button class="nav-item" data-view="notifications_mgmt">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>

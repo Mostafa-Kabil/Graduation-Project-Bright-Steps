@@ -2,6 +2,7 @@
 session_start();
 header('Content-Type: application/json');
 include '../connection.php';
+require_once '../includes/mailer.php';
 
 if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     http_response_code(401); echo json_encode(['error' => 'Unauthorized']); exit;
@@ -46,7 +47,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 foreach ($recipients as $uid) { $notifIns->execute([$uid, $title, $body]); }
             }
 
-            echo json_encode(['success' => true, 'notification_id' => $notifId, 'recipients' => $recipientCount]);
+            // If email or both, send actual emails via PHPMailer
+            $emailsSent = 0;
+            $emailsFailed = 0;
+            if ($type === 'email' || $type === 'both') {
+                // Fetch recipient emails
+                if (!empty($recipients)) {
+                    $placeholders = implode(',', array_fill(0, count($recipients), '?'));
+                    $emailStmt = $connect->prepare("SELECT user_id, first_name, last_name, email FROM users WHERE user_id IN ($placeholders)");
+                    $emailStmt->execute($recipients);
+                    $recipientEmails = $emailStmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    // Build email content
+                    $priorityLabel = strtoupper($priority);
+                    $priorityColor = $priority === 'urgent' ? '#ef4444' : ($priority === 'high' ? '#f59e0b' : '#6C63FF');
+                    $emailContent = '
+                        <div style="margin-bottom:1rem;">
+                            <span style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:600;color:#fff;background:' . $priorityColor . ';">' . $priorityLabel . ' PRIORITY</span>
+                        </div>
+                        <p style="color:#475569;font-size:1rem;line-height:1.6;margin:0 0 1rem;">' . nl2br(htmlspecialchars($body)) . '</p>
+                        <div style="margin-top:1.5rem;padding:1rem;background:#f8fafc;border-radius:8px;border-left:4px solid ' . $priorityColor . ';">
+                            <p style="color:#64748b;font-size:.85rem;margin:0;">This notification was sent by the Bright Steps admin team.</p>
+                        </div>';
+                    $htmlBody = buildEmailTemplate($title, $emailContent, 'You received this because you are a Bright Steps user.');
+
+                    $logStmt = $connect->prepare("INSERT INTO email_logs (recipient_email, subject, template_type, status, error_message) VALUES (?, ?, 'admin_notification', ?, ?)");
+
+                    foreach ($recipientEmails as $recip) {
+                        $recipName = trim(($recip['first_name'] ?? '') . ' ' . ($recip['last_name'] ?? ''));
+                        $result = sendMail($recip['email'], 'Bright Steps: ' . $title, $htmlBody, $recipName);
+                        if ($result['success']) {
+                            $emailsSent++;
+                            $logStmt->execute([$recip['email'], $title, 'sent', null]);
+                        } else {
+                            $emailsFailed++;
+                            $logStmt->execute([$recip['email'], $title, 'failed', $result['error'] ?? 'Unknown error']);
+                            // Update recipient delivery status
+                            $connect->prepare("UPDATE admin_notification_recipients SET delivered = 0 WHERE notification_id = ? AND user_id = ?")->execute([$notifId, $recip['user_id']]);
+                        }
+                    }
+                }
+            }
+
+            echo json_encode(['success' => true, 'notification_id' => $notifId, 'recipients' => $recipientCount, 'emails_sent' => $emailsSent, 'emails_failed' => $emailsFailed]);
             break;
 
         case 'cancel':
