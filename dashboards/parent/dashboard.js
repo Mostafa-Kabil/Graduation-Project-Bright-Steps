@@ -364,6 +364,9 @@ var children = (window.dashboardData || {}).children || [];
 
         try {
             const res = await fetch('../../api_activities.php?action=recommend&child_id=' + child.child_id);
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
             const data = await res.json();
 
             if (data.success && data.recommendations) {
@@ -1643,6 +1646,9 @@ var children = (window.dashboardData || {}).children || [];
 
         try {
             const res = await fetch('../../api_activities.php?action=recommend&child_id=' + childId);
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
             const data = await res.json();
 
             if (data.error) {

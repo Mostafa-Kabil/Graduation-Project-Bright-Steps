@@ -611,7 +611,7 @@ if ($parentId) {
             }
         })();
     </script>
-    <script src="../../scripts/chatbot.js?v=3"></script>
+    <script src="../../scripts/chatbot.js"></script>
     <script>
         // Dashboard sidebar toggle for mobile
         function toggleDashboardSidebar() {

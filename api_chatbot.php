@@ -3,15 +3,41 @@
  * Bright Steps – Chatbot API Endpoint
  * Accepts a user message + child_id, fetches child context, calls OpenAI.
  */
-session_start();
-require_once "connection.php";
+
+// Enable CORS for same-origin requests with credentials
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*'));
+header('Access-Control-Allow-Credentials: true');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['id'])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Not authenticated']);
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
     exit();
 }
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once "connection.php";
+
+// Check authentication
+if (!isset($_SESSION['id']) || !isset($_SESSION['email'])) {
+    http_response_code(401);
+    echo json_encode([
+        'error' => 'Not authenticated. Please log in.',
+        'debug' => [
+            'session_id' => session_id(),
+            'has_id' => isset($_SESSION['id']) ? true : false,
+            'has_email' => isset($_SESSION['email']) ? true : false,
+            'session_data' => $_SESSION
+        ]
+    ]);
+    exit();
+}
+
+$userId = $_SESSION['id'];
 
 $userId = $_SESSION['id'];
 $input = json_decode(file_get_contents('php://input'), true);
@@ -38,7 +64,7 @@ function getEnvValueChat($key) {
 }
 
 $apiKey = getEnvValueChat('OPENAI_API_KEY');
-if (!$apiKey || strpos($apiKey, 'your-key') !== false) {
+if (!$apiKey || empty(trim($apiKey))) {
     echo json_encode(['error' => 'OpenAI API key not configured. Please set your API key in the .env file.']);
     exit();
 }
@@ -117,18 +143,53 @@ if ($childId) {
 }
 
 // Call OpenAI
-$systemPrompt = "You are Bright Steps Assistant, a warm, expert child development advisor embedded in the Bright Steps parenting platform. 
-You have access to the following real data about the parent's child:
+$systemPrompt = "You are the Bright Steps Child Development Assistant — a warm, expert, and highly knowledgeable AI embedded in a comprehensive parenting platform. You provide reliable, evidence-based guidance across ALL aspects of child development.
 
+YOU HAVE ACCESS TO THE FOLLOWING REAL DATA ABOUT THE CHILD:
 {$childContext}
 
-Guidelines:
-- Be highly conversational, warm, and human-like. Imagine you are directly speaking with the parent.
-- Always reference the child by name and use their actual recorded age, speech, growth, and motor data in your answers.
-- CRITICAL: Do NOT provide generic bulleted lists of recommendations for 'all age groups' or 'children of this age'. Instead, weave your advice directly into a conversational paragraph tailored exclusively to this specific child's context.
-- If they ask about growth, speech, or motor skills, seamlessly reference their exact scores or percentiles provided in the context above.
-- Keep responses concise (under 250 words), friendly, and deeply customized.
-- Never diagnose or replace professional medical advice — politely recommend consulting a specialist if asked for medical diagnoses.";
+YOUR EXPERTISE COVERS 360° OF CHILD DEVELOPMENT:
+📊 Growth & Physical Development — height, weight, head circumference, WHO percentiles, growth patterns
+🗣️ Speech & Language — vocabulary, clarity, milestones, bilingual development, speech delays
+🏃 Motor Skills — gross motor (walking, running, jumping) and fine motor (grasping, drawing, writing)
+🧠 Cognitive Development — learning, problem-solving, memory, attention, age-appropriate expectations
+😴 Sleep — patterns, routines, regression, age-appropriate sleep needs
+🍼 Nutrition & Feeding — breastfeeding, solids, picky eating, balanced diets, meal planning
+🧼 Hygiene & Self-Care — bathing, teeth brushing, potty training, handwashing
+🛡️ Health & Safety — vaccination schedules, common illnesses, injury prevention, when to call a doctor
+🎭 Social-Emotional — attachment, tantrums, sharing, emotional regulation, play skills
+📚 Learning & Play — age-appropriate activities, educational games, screen time guidelines
+🏥 Medical Appointments — checkup schedules, developmental screenings, specialist referrals
+
+CRITICAL GUIDELINES FOR EVERY RESPONSE:
+1. PERSONALIZE DEEPLY — Reference the child BY NAME, their exact age, and specific data points (e.g., \"Emma's vocabulary score of 85% is excellent for 18 months\"). Never give generic age-group advice.
+2. BE CONVERSATIONAL — Write as if speaking directly to a caring parent. Use warm, encouraging language. Avoid clinical jargon unless explaining it.
+3. PROVIDE ACTIONABLE STEPS — Give 2-3 specific, practical things the parent can do TODAY. Be concrete (e.g., \"Try the 'naming game' during bath time: name each body part as you wash it\").
+4. CITE DEVELOPMENTAL SCIENCE — When relevant, briefly mention why your advice works (e.g., \"Research shows that reading aloud daily builds neural connections for language\").
+5. ACKNOWLEDGE PROGRESS — If data shows improvement (e.g., motor skills at 85%), celebrate it specifically before suggesting next steps.
+6. FLAG CONCERNS APPROPRIATELY — If data suggests a potential delay (e.g., vocabulary below expected range), gently suggest professional evaluation WITHOUT alarming the parent.
+7. NEVER DIAGNOSE — Always clarify you're an AI assistant, not a doctor. Recommend pediatricians, speech therapists, or specialists when concerns exceed your scope.
+8. KEEP IT CONCISE — Aim for 150-300 words. Use short paragraphs. If the topic is complex, offer to elaborate if the parent asks follow-ups.
+9. USE FORMATTING SPARINGLY — Bold key phrases, use bullet points only when listing steps, avoid excessive emojis (max 2 per response).
+10. END WITH ENCOURAGEMENT — Close with an affirming statement about the parent's attentiveness or the child's progress.
+
+RESPONSE STRUCTURE (flexible, not rigid):
+- Open with warmth + child's name + relevant data point
+- Provide 2-3 personalized, actionable recommendations
+- Explain the \"why\" briefly (developmental science)
+- Gently flag any concerns if data warrants it
+- Close with encouragement
+
+TONE: Warm like a trusted pediatric nurse, knowledgeable like a child development professor, encouraging like a supportive friend.
+
+RELIABILITY STANDARDS:
+- Base recommendations on established developmental milestones (CDC, WHO, AAP guidelines)
+- If unsure or lacking data, say so honestly: \"I'd need to know more about [specific aspect] to give personalized advice\"
+- Never invent data or make up statistics
+- When citing milestones, use ranges (e.g., \"most children walk between 9-15 months\") not absolutes
+
+MEDICAL DISCLAIMER (include when health topics arise):
+\"I'm an AI assistant, not a doctor. For medical concerns, please consult your pediatrician.\"\n";
 
 $ch = curl_init('https://api.openai.com/v1/chat/completions');
 curl_setopt_array($ch, [
@@ -145,22 +206,54 @@ curl_setopt_array($ch, [
             ['role' => 'user', 'content' => $message]
         ],
         'temperature' => 0.7,
-        'max_tokens' => 500
+        'max_tokens' => 600,
+        'presence_penalty' => 0.3,
+        'frequency_penalty' => 0.3
     ]),
-    CURLOPT_TIMEOUT => 20
+    CURLOPT_TIMEOUT => 45
 ]);
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
 curl_close($ch);
 
+// Log errors for debugging
 if ($httpCode !== 200) {
-    echo json_encode(['error' => 'AI service temporarily unavailable. Please try again.', 'fallback' => true]);
+    error_log("Chatbot OpenAI error (HTTP $httpCode): " . substr($response, 0, 500));
+    if ($curlError) error_log("Curl error: " . $curlError);
+}
+
+if ($httpCode !== 200 || $curlError) {
+    echo json_encode([
+        'error' => 'AI service temporarily unavailable. Please try again in a moment.',
+        'fallback' => true,
+        'debug' => $curlError ?: "HTTP $httpCode"
+    ]);
     exit();
 }
 
 $result = json_decode($response, true);
-$reply = $result['choices'][0]['message']['content'] ?? 'Sorry, I could not generate a response right now.';
+$reply = $result['choices'][0]['message']['content'] ?? null;
+
+// Check for API errors
+if (isset($result['error'])) {
+    $errorMsg = $result['error']['message'] ?? 'Unknown API error';
+    error_log("OpenAI API error: " . $errorMsg);
+    echo json_encode([
+        'error' => 'AI service encountered an error. Please try again.',
+        'debug' => $errorMsg
+    ]);
+    exit();
+}
+
+if (!$reply) {
+    echo json_encode([
+        'error' => 'Could not generate response. Please try again.',
+        'debug' => 'Empty response from API'
+    ]);
+    exit();
+}
 
 echo json_encode(['success' => true, 'reply' => $reply]);
 ?>

@@ -5,7 +5,15 @@
  * based on child's developmental data.
  */
 session_start();
-include 'connection.php';
+require_once 'connection.php';
+
+// Check if database connection is available
+if (!isset($connect) || !$connect) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Database connection unavailable']);
+    exit();
+}
+
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['id'])) {
@@ -119,15 +127,30 @@ switch ($action) {
             exit();
         }
 
-        // Gather child data
-        $stmt = $connect->prepare(
-            "SELECT c.first_name, c.last_name, c.birth_day, c.birth_month, c.birth_year, c.gender
-             FROM child c WHERE c.child_id = ? AND c.parent_id = (
-                SELECT parent_id FROM parent WHERE parent_id = ?
-             )"
-        );
-        $stmt->execute([$childId, $userId]);
-        $child = $stmt->fetch(PDO::FETCH_ASSOC);
+        // Check database connection first
+        if (!$connect) {
+            // DB connection failed - return curated activities as fallback
+            $fallback = getCuratedActivities(0, 'your child');
+            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (db_error)']);
+            exit();
+        }
+
+        // Gather child data with error handling
+        try {
+            $stmt = $connect->prepare(
+                "SELECT c.first_name, c.last_name, c.birth_day, c.birth_month, c.birth_year, c.gender
+                 FROM child c WHERE c.child_id = ? AND c.parent_id = (
+                    SELECT parent_id FROM parent WHERE parent_id = ?
+                 )"
+            );
+            $stmt->execute([$childId, $userId]);
+            $child = $stmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            error_log("Child data query failed: " . $e->getMessage());
+            $fallback = getCuratedActivities(0, 'your child');
+            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (db_query_error)']);
+            exit();
+        }
 
         if (!$child) {
             echo json_encode(['error' => 'Child not found']);
@@ -139,56 +162,79 @@ switch ($action) {
         $ageMonths = floor((time() - $bd) / (30.44 * 86400));
 
         // Get latest growth data (2 records to detect direction)
-        $stmt2 = $connect->prepare(
-            "SELECT height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 2"
-        );
-        $stmt2->execute([$childId]);
-        $growthRecords = $stmt2->fetchAll(PDO::FETCH_ASSOC);
-        $growth = $growthRecords[0] ?? null;
-        $prevGrowth = $growthRecords[1] ?? null;
+        try {
+            $stmt2 = $connect->prepare(
+                "SELECT height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 2"
+            );
+            $stmt2->execute([$childId]);
+            $growthRecords = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+            $growth = $growthRecords[0] ?? null;
+            $prevGrowth = $growthRecords[1] ?? null;
+        } catch (PDOException $e) {
+            $growth = null;
+            $prevGrowth = null;
+        }
 
         // Get latest speech data
-        $stmt3 = $connect->prepare(
-            "SELECT sa.vocabulary_score, sa.clarify_score, sa.transcript
-             FROM speech_analysis sa
-             INNER JOIN voice_sample vs ON sa.sample_id = vs.sample_id
-             WHERE vs.child_id = ?
-             ORDER BY sa.analyzed_at DESC LIMIT 1"
-        );
-        $stmt3->execute([$childId]);
-        $speech = $stmt3->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt3 = $connect->prepare(
+                "SELECT sa.vocabulary_score, sa.clarify_score, sa.transcript
+                 FROM speech_analysis sa
+                 INNER JOIN voice_sample vs ON sa.sample_id = vs.sample_id
+                 WHERE vs.child_id = ?
+                 ORDER BY sa.analyzed_at DESC LIMIT 1"
+            );
+            $stmt3->execute([$childId]);
+            $speech = $stmt3->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $speech = null;
+        }
 
         // Get motor milestone completion percentage
-        $stmtMotorTotal = $connect->prepare("SELECT COUNT(*) FROM milestones WHERE category IN ('gross_motor','fine_motor')");
-        $stmtMotorTotal->execute();
-        $motorTotal = (int)$stmtMotorTotal->fetchColumn();
+        try {
+            $stmtMotorTotal = $connect->prepare("SELECT COUNT(*) FROM milestones WHERE category IN ('gross_motor','fine_motor')");
+            $stmtMotorTotal->execute();
+            $motorTotal = (int)$stmtMotorTotal->fetchColumn();
 
-        $stmtMotorDone = $connect->prepare(
-            "SELECT COUNT(*) FROM child_milestones cm 
-             JOIN milestones m ON cm.milestone_id = m.milestone_id 
-             WHERE cm.child_id = ? AND m.category IN ('gross_motor','fine_motor') AND cm.is_achieved = 1"
-        );
-        $stmtMotorDone->execute([$childId]);
-        $motorDone = (int)$stmtMotorDone->fetchColumn();
-        $motorPct = $motorTotal > 0 ? round(($motorDone / $motorTotal) * 100) : 0;
+            $stmtMotorDone = $connect->prepare(
+                "SELECT COUNT(*) FROM child_milestones cm
+                 JOIN milestones m ON cm.milestone_id = m.milestone_id
+                 WHERE cm.child_id = ? AND m.category IN ('gross_motor','fine_motor') AND cm.is_achieved = 1"
+            );
+            $stmtMotorDone->execute([$childId]);
+            $motorDone = (int)$stmtMotorDone->fetchColumn();
+            $motorPct = $motorTotal > 0 ? round(($motorDone / $motorTotal) * 100) : 0;
+        } catch (PDOException $e) {
+            $motorTotal = 0;
+            $motorDone = 0;
+            $motorPct = 0;
+        }
 
         // Get achieved milestones
-        $stmt4 = $connect->prepare(
-            "SELECT m.category, m.title FROM child_milestones cm
-             INNER JOIN milestones m ON cm.milestone_id = m.milestone_id
-             WHERE cm.child_id = ? AND cm.is_achieved = 1 ORDER BY cm.achieved_at DESC LIMIT 5"
-        );
-        $stmt4->execute([$childId]);
-        $milestones = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt4 = $connect->prepare(
+                "SELECT m.category, m.title FROM child_milestones cm
+                 INNER JOIN milestones m ON cm.milestone_id = m.milestone_id
+                 WHERE cm.child_id = ? AND cm.is_achieved = 1 ORDER BY cm.achieved_at DESC LIMIT 5"
+            );
+            $stmt4->execute([$childId]);
+            $milestones = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $milestones = [];
+        }
 
         // Get recently completed activities
-        $stmt5 = $connect->prepare(
-            "SELECT title, category FROM child_activities 
-             WHERE child_id = ? AND is_completed = 1 
-             ORDER BY completed_at DESC LIMIT 5"
-        );
-        $stmt5->execute([$childId]);
-        $recentActivities = $stmt5->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            $stmt5 = $connect->prepare(
+                "SELECT title, category FROM child_activities
+                 WHERE child_id = ? AND is_completed = 1
+                 ORDER BY completed_at DESC LIMIT 5"
+            );
+            $stmt5->execute([$childId]);
+            $recentActivities = $stmt5->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $recentActivities = [];
+        }
 
         // Build rich context for OpenAI
         $ageDisplay = $ageMonths >= 24 ? floor($ageMonths / 12) . ' years old' : $ageMonths . ' months old';
@@ -325,40 +371,45 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
             exit();
         }
 
-        // Store recommended activities in DB
-        $insertStmt = $connect->prepare(
-            "INSERT INTO child_activities (child_id, title, description, category, duration_minutes, difficulty, source)
-             VALUES (?, ?, ?, ?, ?, ?, 'ai')"
-        );
+        // Store recommended activities in DB (skip if table doesn't exist)
+        try {
+            $insertStmt = $connect->prepare(
+                "INSERT INTO child_activities (child_id, title, description, category, duration_minutes, difficulty, source)
+                 VALUES (?, ?, ?, ?, ?, ?, 'ai')"
+            );
 
-        if (isset($recommendations['real_life_activities'])) {
-            foreach ($recommendations['real_life_activities'] as $act) {
-                $dur = (int) filter_var($act['duration'] ?? '15', FILTER_SANITIZE_NUMBER_INT);
-                $cat = $act['category'] ?? 'real_life';
-                if (!in_array($cat, ['speech', 'motor', 'cognitive', 'social'])) $cat = 'real_life';
-                $diff = $act['difficulty'] ?? 'medium';
-                if (!in_array($diff, ['easy', 'medium', 'hard'])) $diff = 'medium';
-                try {
-                    $insertStmt->execute([$childId, $act['title'] ?? '', $act['description'] ?? '', $cat, $dur, $diff]);
-                } catch (Exception $e) { /* skip duplicates */ }
+            if (isset($recommendations['real_life_activities'])) {
+                foreach ($recommendations['real_life_activities'] as $act) {
+                    $dur = (int) filter_var($act['duration'] ?? '15', FILTER_SANITIZE_NUMBER_INT);
+                    $cat = $act['category'] ?? 'real_life';
+                    if (!in_array($cat, ['speech', 'motor', 'cognitive', 'social'])) $cat = 'real_life';
+                    $diff = $act['difficulty'] ?? 'medium';
+                    if (!in_array($diff, ['easy', 'medium', 'hard'])) $diff = 'medium';
+                    try {
+                        $insertStmt->execute([$childId, $act['title'] ?? '', $act['description'] ?? '', $cat, $dur, $diff]);
+                    } catch (Exception $e) { /* skip duplicates */ }
+                }
             }
-        }
 
-        if (isset($recommendations['articles'])) {
-            foreach ($recommendations['articles'] as $art) {
-                try {
-                    $insertStmt->execute([$childId, $art['title'] ?? '', $art['summary'] ?? '', 'article', 5, 'easy']);
-                } catch (Exception $e) { /* skip */ }
+            if (isset($recommendations['articles'])) {
+                foreach ($recommendations['articles'] as $art) {
+                    try {
+                        $insertStmt->execute([$childId, $art['title'] ?? '', $art['summary'] ?? '', 'article', 5, 'easy']);
+                    } catch (Exception $e) { /* skip */ }
+                }
             }
-        }
 
-        if (isset($recommendations['website_games'])) {
-            foreach ($recommendations['website_games'] as $game) {
-                $dur = (int) filter_var($game['duration'] ?? '10', FILTER_SANITIZE_NUMBER_INT);
-                try {
-                    $insertStmt->execute([$childId, $game['title'] ?? '', $game['description'] ?? '', 'website_game', $dur, 'medium']);
-                } catch (Exception $e) { /* skip */ }
+            if (isset($recommendations['website_games'])) {
+                foreach ($recommendations['website_games'] as $game) {
+                    $dur = (int) filter_var($game['duration'] ?? '10', FILTER_SANITIZE_NUMBER_INT);
+                    try {
+                        $insertStmt->execute([$childId, $game['title'] ?? '', $game['description'] ?? '', 'website_game', $dur, 'medium']);
+                    } catch (Exception $e) { /* skip */ }
+                }
             }
+        } catch (PDOException $e) {
+            // Table doesn't exist or other DB error - still return the recommendations
+            error_log("Failed to store activities: " . $e->getMessage());
         }
 
         echo json_encode(['success' => true, 'recommendations' => $recommendations]);
@@ -366,6 +417,12 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
 
     // ── Mark an activity as completed ──────────────────────────
     case 'complete':
+        if (!$connect) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Database connection unavailable']);
+            exit();
+        }
+
         $input = json_decode(file_get_contents('php://input'), true);
         $activityId = $input['activity_id'] ?? null;
         $childId = $input['child_id'] ?? null;
@@ -375,58 +432,69 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
             exit();
         }
 
-        // Mark as completed
-        $stmt = $connect->prepare(
-            "UPDATE child_activities SET is_completed = 1, completed_at = NOW(), points_earned = 15
-             WHERE activity_id = ? AND child_id = ? AND is_completed = 0"
-        );
-        $stmt->execute([$activityId, $childId]);
-
-        if ($stmt->rowCount() === 0) {
-            echo json_encode(['error' => 'Activity not found or already completed']);
-            exit();
-        }
-
-        // Award points to wallet
-        $stmtW = $connect->prepare("SELECT wallet_id FROM points_wallet WHERE child_id = ? LIMIT 1");
-        $stmtW->execute([$childId]);
-        $wallet = $stmtW->fetch(PDO::FETCH_ASSOC);
-
-        if ($wallet) {
-            $stmtU = $connect->prepare(
-                "UPDATE points_wallet SET total_points = total_points + 15 WHERE wallet_id = ?"
+        try {
+            // Mark as completed
+            $stmt = $connect->prepare(
+                "UPDATE child_activities SET is_completed = 1, completed_at = NOW(), points_earned = 15
+                 WHERE activity_id = ? AND child_id = ? AND is_completed = 0"
             );
-            $stmtU->execute([$wallet['wallet_id']]);
+            $stmt->execute([$activityId, $childId]);
 
-            $stmtT = $connect->prepare("SELECT total_points FROM points_wallet WHERE wallet_id = ?");
-            $stmtT->execute([$wallet['wallet_id']]);
-            $newPoints = $stmtT->fetchColumn();
-
-            if ($newPoints % 300 >= 225 && ($newPoints - 15) % 300 < 225) {
-                $stmtReward = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
-                $stmtReward->execute([$userId, 'Close to a Reward!', "You have $newPoints points! You are 75% of the way to redeeming a 300-point Certificate!"]);
+            if ($stmt->rowCount() === 0) {
+                echo json_encode(['error' => 'Activity not found or already completed']);
+                exit();
             }
+
+            // Award points to wallet
+            $stmtW = $connect->prepare("SELECT wallet_id FROM points_wallet WHERE child_id = ? LIMIT 1");
+            $stmtW->execute([$childId]);
+            $wallet = $stmtW->fetch(PDO::FETCH_ASSOC);
+
+            if ($wallet) {
+                $stmtU = $connect->prepare(
+                    "UPDATE points_wallet SET total_points = total_points + 15 WHERE wallet_id = ?"
+                );
+                $stmtU->execute([$wallet['wallet_id']]);
+
+                $stmtT = $connect->prepare("SELECT total_points FROM points_wallet WHERE wallet_id = ?");
+                $stmtT->execute([$wallet['wallet_id']]);
+                $newPoints = $stmtT->fetchColumn();
+
+                if ($newPoints % 300 >= 225 && ($newPoints - 15) % 300 < 225) {
+                    $stmtReward = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                    $stmtReward->execute([$userId, 'Close to a Reward!', "You have $newPoints points! You are 75% of the way to redeeming a 300-point Certificate!"]);
+                }
+            }
+
+            // Create notification
+            $stmtN = $connect->prepare(
+                "INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)"
+            );
+            $stmtN->execute([
+                $userId,
+                '✅ Activity Completed!',
+                'You completed an activity and earned 15 points! Keep up the great work!'
+            ]);
+
+            echo json_encode([
+                'success' => true,
+                'message' => 'Activity completed! +15 points',
+                'points_earned' => 15
+            ]);
+        } catch (PDOException $e) {
+            error_log("Complete activity error: " . $e->getMessage());
+            echo json_encode(['error' => 'Failed to complete activity']);
         }
-
-        // Create notification
-        $stmtN = $connect->prepare(
-            "INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)"
-        );
-        $stmtN->execute([
-            $userId,
-            '✅ Activity Completed!',
-            'You completed an activity and earned 15 points! Keep up the great work!'
-        ]);
-
-        echo json_encode([
-            'success' => true,
-            'message' => 'Activity completed! +15 points',
-            'points_earned' => 15
-        ]);
         break;
 
     // ── Get activity history for a child ──────────────────────
     case 'history':
+        if (!$connect) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Database connection unavailable']);
+            exit();
+        }
+
         $childId = $_GET['child_id'] ?? null;
         $period = $_GET['period'] ?? 'all';
         if (!$childId) {
@@ -434,40 +502,57 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
             exit();
         }
 
-        $periodSql = "";
-        if ($period === 'daily') $periodSql = " AND (completed_at >= CURDATE() OR (is_completed=0 AND created_at >= CURDATE())) ";
-        else if ($period === 'weekly') $periodSql = " AND (completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) OR (is_completed=0 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY))) ";
-        else if ($period === 'monthly') $periodSql = " AND (completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) OR (is_completed=0 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))) ";
+        try {
+            $periodSql = "";
+            if ($period === 'daily') $periodSql = " AND (completed_at >= CURDATE() OR (is_completed=0 AND created_at >= CURDATE())) ";
+            else if ($period === 'weekly') $periodSql = " AND (completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) OR (is_completed=0 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY))) ";
+            else if ($period === 'monthly') $periodSql = " AND (completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) OR (is_completed=0 AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY))) ";
 
-        $stmt = $connect->prepare(
-            "SELECT * FROM child_activities WHERE child_id = ? $periodSql ORDER BY created_at DESC LIMIT 50"
-        );
-        $stmt->execute([$childId]);
-        $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt = $connect->prepare(
+                "SELECT * FROM child_activities WHERE child_id = ? $periodSql ORDER BY created_at DESC LIMIT 50"
+            );
+            $stmt->execute([$childId]);
+            $activities = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        echo json_encode(['success' => true, 'activities' => $activities]);
+            echo json_encode(['success' => true, 'activities' => $activities]);
+        } catch (PDOException $e) {
+            error_log("History query error: " . $e->getMessage());
+            echo json_encode(['success' => true, 'activities' => []]);
+        }
         break;
 
     // ── Get activity completion summary ──────────────────────
     case 'summary':
+        if (!$connect) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Database connection unavailable']);
+            exit();
+        }
+
         $childId = $_GET['child_id'] ?? null;
         if (!$childId) {
             echo json_encode(['error' => 'child_id required']);
             exit();
         }
-        $stmtD = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= CURDATE()");
-        $stmtD->execute([$childId]);
-        $daily = $stmtD->fetchColumn();
 
-        $stmtW = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
-        $stmtW->execute([$childId]);
-        $weekly = $stmtW->fetchColumn();
+        try {
+            $stmtD = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= CURDATE()");
+            $stmtD->execute([$childId]);
+            $daily = $stmtD->fetchColumn();
 
-        $stmtM = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
-        $stmtM->execute([$childId]);
-        $monthly = $stmtM->fetchColumn();
+            $stmtW = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+            $stmtW->execute([$childId]);
+            $weekly = $stmtW->fetchColumn();
 
-        echo json_encode(['success' => true, 'daily_completed' => (int)$daily, 'weekly_completed' => (int)$weekly, 'monthly_completed' => (int)$monthly]);
+            $stmtM = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
+            $stmtM->execute([$childId]);
+            $monthly = $stmtM->fetchColumn();
+
+            echo json_encode(['success' => true, 'daily_completed' => (int)$daily, 'weekly_completed' => (int)$weekly, 'monthly_completed' => (int)$monthly]);
+        } catch (PDOException $e) {
+            error_log("Summary query error: " . $e->getMessage());
+            echo json_encode(['success' => true, 'daily_completed' => 0, 'weekly_completed' => 0, 'monthly_completed' => 0]);
+        }
         break;
 
     // ── Mark article as read ──────────────────────────────────
@@ -486,20 +571,31 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
 
     // ── 7-day activity chart data ──────────────────────────────
     case 'summary_chart':
+        if (!$connect) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Database connection unavailable']);
+            exit();
+        }
+
         $childId = $_GET['child_id'] ?? null;
         if (!$childId) { echo json_encode(['error' => 'child_id required']); exit(); }
 
-        $days = [];
-        for ($i = 6; $i >= 0; $i--) {
-            $date = date('Y-m-d', strtotime("-{$i} days"));
-            $label = date('D', strtotime("-{$i} days")); // Mon, Tue, etc.
-            $stmtC = $connect->prepare(
-                "SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND DATE(completed_at) = ?"
-            );
-            $stmtC->execute([$childId, $date]);
-            $days[] = ['label' => $label, 'date' => $date, 'count' => (int)$stmtC->fetchColumn()];
+        try {
+            $days = [];
+            for ($i = 6; $i >= 0; $i--) {
+                $date = date('Y-m-d', strtotime("-{$i} days"));
+                $label = date('D', strtotime("-{$i} days")); // Mon, Tue, etc.
+                $stmtC = $connect->prepare(
+                    "SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND DATE(completed_at) = ?"
+                );
+                $stmtC->execute([$childId, $date]);
+                $days[] = ['label' => $label, 'date' => $date, 'count' => (int)$stmtC->fetchColumn()];
+            }
+            echo json_encode(['success' => true, 'chart_data' => $days]);
+        } catch (PDOException $e) {
+            error_log("Chart data error: " . $e->getMessage());
+            echo json_encode(['success' => true, 'chart_data' => []]);
         }
-        echo json_encode(['success' => true, 'chart_data' => $days]);
         break;
 
     default:

@@ -251,22 +251,49 @@
             const typingId = addTypingIndicator();
             try {
                 const ctx = getChildContext();
+
+                // Debug: log context being sent
+                const ctx = getChildContext();
+                console.log('🤖 Chatbot context:', ctx);
+                console.log('🤖 Sending message:', msg, 'child_id:', ctx.childId);
+
                 const res = await fetch('../../api_chatbot.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
                     body: JSON.stringify({ message: msg, child_id: ctx.childId || null })
                 });
+
+                console.log('🤖 HTTP Response:', res.status, res.statusText);
+
+                if (!res.ok) {
+                    console.error('Chatbot HTTP error:', res.status, res.statusText);
+                    throw new Error('HTTP ' + res.status);
+                }
+
                 const data = await res.json();
+                console.log('🤖 API response:', data);
                 removeTypingIndicator(typingId);
 
                 if (data.success && data.reply) {
                     addMessage(data.reply + '\n<span class="chatbot-ai-badge">✨ AI-powered response</span>', 'bot');
+                } else if (data.error) {
+                    let errorMsg = '⚠️ ' + data.error;
+                    if (data.debug) {
+                        console.error('API Error Details:', data.debug);
+                        if (typeof data.debug === 'object') {
+                            errorMsg += ' (Session: ' + (data.debug.session_data ? 'active' : 'empty') + ')';
+                        }
+                    }
+                    addMessage(errorMsg, 'bot');
                 } else {
                     addMessage(getFallbackResponse(), 'bot');
                 }
             } catch (e) {
+                console.error('🤖 Chatbot API error:', e);
                 removeTypingIndicator(typingId);
-                addMessage(getFallbackResponse(), 'bot');
+                const errorMsg = e.message || 'Unknown error';
+                addMessage('⚠️ Error: ' + errorMsg + '. Check browser console (F12) for details.', 'bot');
             }
         }
     };

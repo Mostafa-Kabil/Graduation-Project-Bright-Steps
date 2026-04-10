@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r ':*)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8000)",
+      "Bash(tasklist)",
+      "Bash(findstr -i python)",
+      "Bash(python:*)",
+      "Bash(where ffmpeg:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(ls -la \"C:/ffmpeg\"*)",
+      "Bash(curl:*)",
+      "Bash(start \"\" python -m uvicorn app:app --host 0.0.0.0 --port 8000)"
+    ]
+  }
+}
