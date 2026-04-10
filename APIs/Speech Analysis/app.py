@@ -1,36 +1,10 @@
 import os
 import sys
-import shutil
 
 # ── Inject FFmpeg bin directory into PATH so Whisper's internal subprocess
 #    calls (whisper/audio.py: load_audio) can locate ffmpeg.exe ──────────────
-
-# Try multiple FFmpeg locations
-_FFMPEG_PATHS = [
-    r"C:\Users\mosta\Downloads\ffmpeg-8.0-full_build\ffmpeg-8.0-full_build\bin",
-    r"C:\Users\Dell\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin",
-    r"C:\Program Files\ffmpeg\bin",
-    r"C:\ffmpeg\bin",
-]
-
-# First check if ffmpeg is in system PATH
-ffmpeg_in_path = shutil.which("ffmpeg")
-if ffmpeg_in_path:
-    _FFMPEG_BIN = os.path.dirname(ffmpeg_in_path)
-else:
-    # Try hardcoded paths
-    _FFMPEG_BIN = None
-    for path in _FFMPEG_PATHS:
-        if os.path.exists(os.path.join(path, "ffmpeg.exe")):
-            _FFMPEG_BIN = path
-            break
-
-if _FFMPEG_BIN:
-    os.environ["PATH"] = _FFMPEG_BIN + os.pathsep + os.environ.get("PATH", "")
-else:
-    print("WARNING: FFmpeg not found. Audio conversion may fail.")
-
-FFMPEG_EXE = os.path.join(_FFMPEG_BIN, "ffmpeg.exe") if _FFMPEG_BIN else "ffmpeg"
+_FFMPEG_BIN = r"C:\Users\Dell\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin"
+os.environ["PATH"] = _FFMPEG_BIN + os.pathsep + os.environ.get("PATH", "")
 
 import whisper
 import torch
@@ -38,6 +12,8 @@ import subprocess
 import uuid
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.responses import JSONResponse
+
+FFMPEG_EXE = os.path.join(_FFMPEG_BIN, "ffmpeg.exe")
 
 app = FastAPI()
 

@@ -1762,4 +1762,3 @@ COMMIT;
   echo "Migration finished.\n";
   ?>
 
-
