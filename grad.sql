@@ -1762,6 +1762,7 @@ COMMIT;
   echo "Migration finished.\n";
   ?>
 
+<<<<<<< HEAD
 
 
 DELIMITER 
@@ -1825,3 +1826,5 @@ CREATE TRIGGER trg_parent_sub_log AFTER INSERT ON parent_subscription FOR EACH R
 END
 DELIMITER ;
 
+=======
+>>>>>>> 39b714dea30f2934727c97f4ec8aff6d17893e00
