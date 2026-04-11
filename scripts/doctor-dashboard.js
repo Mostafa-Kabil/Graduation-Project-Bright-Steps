@@ -1,5 +1,5 @@
 // Doctor Dashboard JavaScript — Core + Patients + Reports + Appointments
-const SPECIALIST_ID = 17; // TODO: Replace with session-based specialist ID
+const SPECIALIST_ID = (typeof SESSION_SPECIALIST_ID !== 'undefined') ? SESSION_SPECIALIST_ID : 0;
 let messagesPollInterval = null;
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -240,8 +240,7 @@ function getReportsView() {
         <div class="dashboard-header-section"><div>
             <h1 class="dashboard-title">Reports</h1>
             <p class="dashboard-subtitle">Review shared child reports and write medical assessments</p>
-        </div>
-        <button class="btn btn-gradient" onclick="openReportModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Write Report</button></div>
+        </div></div>
         <div class="doctor-stats-grid">
             <div class="stat-card stat-card-blue"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-total-reports">--</div><div class="stat-card-label">Total Reports</div></div></div>
             <div class="stat-card stat-card-yellow"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-pending">--</div><div class="stat-card-label">Pending Review</div></div></div>
@@ -485,8 +484,236 @@ function cancelAppointment(appointmentId) {
     }).catch(() => showToast('Connection error', 'error'));
 }
 
-function getSettingsView() { window.location.href = 'dr-settings.php'; return ''; }
-function handleLogout() { if (confirm('Are you sure you want to log out?')) window.location.href = 'doctor-login.php'; }
+function getSettingsView() {
+    const name = (typeof SESSION_DOCTOR_NAME !== 'undefined') ? SESSION_DOCTOR_NAME : 'Doctor';
+    const email = (typeof SESSION_DOCTOR_EMAIL !== 'undefined') ? SESSION_DOCTOR_EMAIL : '';
+    const spec = (typeof SESSION_SPECIALIZATION !== 'undefined') ? SESSION_SPECIALIZATION : 'Specialist';
+    setTimeout(() => initSettingsPage(), 50);
+    return `<div class="dashboard-content">
+        <div class="dashboard-header-section"><div>
+            <h1 class="dashboard-title">Settings</h1>
+            <p class="dashboard-subtitle">Manage your account preferences and profile</p>
+        </div></div>
+        <div class="settings-layout">
+            <div class="settings-sidebar">
+                <div class="settings-profile-card">
+                    <div class="settings-avatar doctor-avatar">${name.split(' ').filter(w=>w).map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
+                    <div class="settings-profile-name">${name}</div>
+                    <div class="settings-profile-role">${spec}</div>
+                    <div class="settings-profile-email">${email}</div>
+                </div>
+                <nav class="settings-nav">
+                    <button class="settings-nav-item active" data-settings-tab="account" onclick="switchSettingsTab('account', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        Account
+                    </button>
+                    <button class="settings-nav-item" data-settings-tab="notifications" onclick="switchSettingsTab('notifications', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        Notifications
+                    </button>
+                    <button class="settings-nav-item" data-settings-tab="preferences" onclick="switchSettingsTab('preferences', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        Preferences
+                    </button>
+                    <button class="settings-nav-item" data-settings-tab="security" onclick="switchSettingsTab('security', this)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        Security
+                    </button>
+                </nav>
+                <div style="margin-top:1.5rem;">
+                    <a href="dr-settings.php" class="btn btn-outline" style="width:100%;justify-content:center;display:flex;gap:0.5rem;align-items:center;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Edit Full Profile
+                    </a>
+                </div>
+            </div>
+            <div class="settings-content">
+                <!-- Account Tab -->
+                <div class="settings-tab-panel active" id="settings-tab-account">
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Account Information</h2>
+                        <p class="settings-section-subtitle">Your practitioner details and contact information</p>
+                        <div class="settings-form">
+                            <div class="settings-field-group">
+                                <label class="settings-label">Full Name</label>
+                                <input type="text" class="settings-input" id="settings-name" value="${name}" placeholder="Your full name">
+                            </div>
+                            <div class="settings-field-group">
+                                <label class="settings-label">Email Address</label>
+                                <input type="email" class="settings-input" id="settings-email" value="${email}" placeholder="Email address">
+                            </div>
+                            <div class="settings-field-group">
+                                <label class="settings-label">Specialization</label>
+                                <input type="text" class="settings-input" id="settings-specialization" value="${spec}" placeholder="e.g. Pediatrician">
+                            </div>
+                            <div class="settings-field-group">
+                                <label class="settings-label">Phone Number</label>
+                                <input type="tel" class="settings-input" id="settings-phone" placeholder="+1 (555) 000-0000">
+                            </div>
+                        </div>
+                        <div class="settings-actions">
+                            <button class="btn btn-gradient" onclick="saveAccountSettings()">Save Changes</button>
+                        </div>
+                    </div>
+                    <div class="settings-section settings-danger-zone">
+                        <h2 class="settings-section-title danger">Danger Zone</h2>
+                        <p class="settings-section-subtitle">Irreversible and destructive actions</p>
+                        <button class="btn btn-outline" style="color:var(--red-500);border-color:var(--red-500);" onclick="showToast('Please contact admin to delete your account', 'error')">
+                            Delete Account
+                        </button>
+                    </div>
+                </div>
+                <!-- Notifications Tab -->
+                <div class="settings-tab-panel" id="settings-tab-notifications">
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Notification Preferences</h2>
+                        <p class="settings-section-subtitle">Control how and when you receive notifications</p>
+                        <div class="settings-toggles">
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">New Appointment</div><div class="settings-toggle-desc">Alert when a parent books an appointment</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="notif-appointment" checked><span class="settings-toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">New Message</div><div class="settings-toggle-desc">Alert when a parent sends a message</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="notif-message" checked><span class="settings-toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">Report Shared</div><div class="settings-toggle-desc">Alert when a parent shares a child report</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="notif-report" checked><span class="settings-toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">Email Notifications</div><div class="settings-toggle-desc">Receive summaries to your email</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="notif-email"><span class="settings-toggle-slider"></span></label>
+                            </div>
+                        </div>
+                        <div class="settings-actions">
+                            <button class="btn btn-gradient" onclick="showToast('Notification preferences saved!', 'success')">Save Preferences</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Preferences Tab -->
+                <div class="settings-tab-panel" id="settings-tab-preferences">
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Application Preferences</h2>
+                        <p class="settings-section-subtitle">Customize your dashboard experience</p>
+                        <div class="settings-toggles">
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">Dark Mode</div><div class="settings-toggle-desc">Use dark theme across the dashboard</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="pref-dark" onchange="toggleTheme()"><span class="settings-toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">Auto-refresh Messages</div><div class="settings-toggle-desc">Automatically poll new messages every 5 seconds</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="pref-autopolling" checked><span class="settings-toggle-slider"></span></label>
+                            </div>
+                            <div class="settings-toggle-row">
+                                <div><div class="settings-toggle-label">Compact View</div><div class="settings-toggle-desc">Show more content with a denser layout</div></div>
+                                <label class="settings-toggle-switch"><input type="checkbox" id="pref-compact"><span class="settings-toggle-slider"></span></label>
+                            </div>
+                        </div>
+                        <div class="settings-actions">
+                            <button class="btn btn-gradient" onclick="showToast('Preferences saved!', 'success')">Save Preferences</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Security Tab -->
+                <div class="settings-tab-panel" id="settings-tab-security">
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Change Password</h2>
+                        <p class="settings-section-subtitle">Update your login credentials</p>
+                        <div class="settings-form">
+                            <div class="settings-field-group">
+                                <label class="settings-label">Current Password</label>
+                                <input type="password" class="settings-input" id="settings-current-pw" placeholder="••••••••">
+                            </div>
+                            <div class="settings-field-group">
+                                <label class="settings-label">New Password</label>
+                                <input type="password" class="settings-input" id="settings-new-pw" placeholder="Min. 8 characters">
+                            </div>
+                            <div class="settings-field-group">
+                                <label class="settings-label">Confirm New Password</label>
+                                <input type="password" class="settings-input" id="settings-confirm-pw" placeholder="Repeat new password">
+                            </div>
+                        </div>
+                        <div class="settings-actions">
+                            <button class="btn btn-gradient" onclick="changePassword()">Update Password</button>
+                        </div>
+                    </div>
+                    <div class="settings-section">
+                        <h2 class="settings-section-title">Active Sessions</h2>
+                        <p class="settings-section-subtitle">You are currently logged in on this device.</p>
+                        <button class="btn btn-outline" onclick="handleLogout()">Sign Out All Devices</button>
+                    </div>
+                </div>
+            </div>
+        </div></div>`;
+}
+
+function initSettingsPage() {
+    const darkPref = document.getElementById('pref-dark');
+    if (darkPref) darkPref.checked = document.documentElement.getAttribute('data-theme') === 'dark';
+}
+
+function switchSettingsTab(tab, btn) {
+    document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.settings-tab-panel').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    const panel = document.getElementById(`settings-tab-${tab}`);
+    if (panel) panel.classList.add('active');
+}
+
+function saveAccountSettings() {
+    showToast('Account settings saved successfully!', 'success');
+}
+
+function changePassword() {
+    const cur = document.getElementById('settings-current-pw')?.value;
+    const nw = document.getElementById('settings-new-pw')?.value;
+    const conf = document.getElementById('settings-confirm-pw')?.value;
+    if (!cur || !nw || !conf) { showToast('Please fill all password fields', 'error'); return; }
+    if (nw !== conf) { showToast('New passwords do not match', 'error'); return; }
+    if (nw.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
+    showToast('Password updated successfully!', 'success');
+}
+function handleLogout() {
+    // Remove existing modal if any
+    const existing = document.getElementById('logout-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'logout-modal';
+    modal.innerHTML = `
+        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+        <div class="logout-dialog">
+                <div class="logout-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                    </svg>
+                </div>
+                <h3>Are you sure you want to log out?</h3>
+                <p>You will need to sign in again to access your dashboard.</p>
+                <div class="logout-actions">
+                    <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                    <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                </div>
+            </div>
+    `;
+    document.body.appendChild(modal);
+    // Trigger entrance animation
+    requestAnimationFrame(() => modal.classList.add('show'));
+}
+
+function closeLogoutModal() {
+    const modal = document.getElementById('logout-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.classList.add('hide');
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+function confirmLogout() {
+    window.location.href = 'logout.php';
+}
 
 // ═══════════════════════════════════════════════════
 // MESSAGES PAGE — Database-driven

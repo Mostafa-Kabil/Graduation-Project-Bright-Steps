@@ -1,14 +1,29 @@
 <?php
+session_start();
+require_once 'connection.php';
+
+// ─── Auth: only authenticated doctors/specialists can access ─────────────
+$isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') || isset($_GET['ajax']);
+if (!$isAjax) {
+    // For HTML page requests: enforce login
+    if (!isset($_SESSION['id']) || ($_SESSION['role'] !== 'doctor' && $_SESSION['role'] !== 'specialist')) {
+        header('Location: doctor-login.php');
+        exit;
+    }
+}
+
+// Session-derived variables for the HTML view
+$sessionSpecialistId = intval($_SESSION['specialist_id'] ?? $_SESSION['id'] ?? 0);
+$sessionDoctorName = 'Dr. ' . htmlspecialchars($_SESSION['fname'] ?? '') . ' ' . htmlspecialchars($_SESSION['lname'] ?? '');
+$sessionDoctorInitials = strtoupper(substr($_SESSION['fname'] ?? 'D', 0, 1) . substr($_SESSION['lname'] ?? 'S', 0, 1));
+$sessionSpecialization = htmlspecialchars($_SESSION['specialization'] ?? 'Specialist');
+
 // ═══════════════════════════════════════════════════════
 // Doctor Dashboard — Backend API Handler
 // Handles AJAX requests for Reports & Messages
 // ═══════════════════════════════════════════════════════
-if (
-    isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest'
-    || isset($_GET['ajax'])
-) {
+if ($isAjax) {
     header('Content-Type: application/json');
-    require_once 'connection.php';
 
     $method = $_SERVER['REQUEST_METHOD'];
     $section = $_GET['section'] ?? '';
@@ -633,10 +648,10 @@ if (
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile">
-                    <div class="user-avatar doctor-avatar">DS</div>
+                    <div class="user-avatar doctor-avatar"><?php echo $sessionDoctorInitials; ?></div>
                     <div class="user-info">
-                        <div class="user-name">Dr. Sarah Mitchell</div>
-                        <div class="user-badge-text">Pediatrician</div>
+                        <div class="user-name"><?php echo $sessionDoctorName; ?></div>
+                        <div class="user-badge-text"><?php echo $sessionSpecialization; ?></div>
                     </div>
                     <div class="verified-badge" title="Verified Provider">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -820,7 +835,14 @@ if (
 
     <script src="scripts/navigation.js?v=8"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js?v=8"></script>
-    <script src="scripts/doctor-dashboard.js?v=8b"></script>
+    <script>
+        // Session-based specialist ID — overrides the hardcoded constant in doctor-dashboard.js
+        const SESSION_SPECIALIST_ID = <?php echo $sessionSpecialistId; ?>;
+        const SESSION_DOCTOR_NAME = <?php echo json_encode($sessionDoctorName); ?>;
+        const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
+        const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
+    </script>
+    <script src="scripts/doctor-dashboard.js?v=9"></script>
     
 </body>
 
