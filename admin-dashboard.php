@@ -14,12 +14,12 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/doctor.css">
-    <link rel="stylesheet" href="styles/clinic.css">
-    <link rel="stylesheet" href="styles/admin.css">
-    <link rel="stylesheet" href="styles/settings.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/clinic.css?v=8">
+    <link rel="stylesheet" href="styles/admin.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
 </head>
 
 <body>
@@ -199,18 +199,18 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
         عربي
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="scripts/admin-dashboard.js"></script>
-    <script src="scripts/admin-views-extended.js"></script>
-    <script src="scripts/admin-views-part2.js"></script>
-    <script src="scripts/admin-views-part3.js"></script>
-    <script src="scripts/admin-views-part4.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js?v=8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js?v=8"></script>
+    <script src="scripts/admin-dashboard.js?v=8"></script>
+    <script src="scripts/admin-views-extended.js?v=8"></script>
+    <script src="scripts/admin-views-part2.js?v=8"></script>
+    <script src="scripts/admin-views-part3.js?v=8"></script>
+    <script src="scripts/admin-views-part4.js?v=8"></script>
 </body>
 
 </html>

@@ -7,9 +7,9 @@
     <title>Watch Demo - Bright Steps</title>
     <meta name="description"
         content="See Bright Steps in action. Watch how our AI-powered platform helps parents track and support their child's development.">
-    <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/landing.css">
+    <link rel="icon" type="image/png" href="assets/logo_white.png">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/landing.css?v=8">
     <style>
         /* Demo Page Styles */
         .demo-hero {
@@ -246,73 +246,7 @@
 </head>
 
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-container">
-            <div class="header-logo">
-                <a href="index.php">
-                    <img src="assets/logo.png" alt="Bright Steps Logo">
-                </a>
-            </div>
-            <div class="header-actions">
-                <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    عربي
-                </button>
-                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-login')">Doctor Portal</button>
-                <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
-                <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
-            </div>
-            <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Open menu">
-                <span></span><span></span><span></span>
-            </button>
-        </div>
-    </header>
-
-    <div class="mobile-menu-overlay" id="mobile-menu-overlay" onclick="toggleMobileMenu()"></div>
-    <nav class="mobile-menu" id="mobile-menu">
-        <div class="mobile-menu-header">
-            <img src="assets/logo.png" alt="Bright Steps">
-            <button class="mobile-menu-close" onclick="toggleMobileMenu()">✕</button>
-        </div>
-        <div class="mobile-menu-body">
-            <button class="mobile-nav-item" onclick="toggleLanguage(); toggleMobileMenu();">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <path
-                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-                عربي / English
-            </button>
-            <div class="mobile-nav-divider"></div>
-            <button class="mobile-nav-item" onclick="navigateTo('doctor-login')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                </svg>
-                Doctor Portal
-            </button>
-            <button class="mobile-nav-item" onclick="navigateTo('login')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4m-5-4l5-5-5-5m5 5H3" />
-                </svg>
-                Log In
-            </button>
-            <button class="mobile-nav-item btn-gradient" onclick="navigateTo('signup')">
-                <svg viewBox="0 0 24 24" stroke="white">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                Get Started Free
-            </button>
-        </div>
-    </nav>
+    <?php include 'includes/public_header.php'; ?>
 
     <!-- Demo Hero -->
     <section class="demo-hero">
@@ -425,10 +359,10 @@
         </svg>
     </button>
 
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/mobile-menu.js"></script>
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="scripts/mobile-menu.js?v=8"></script>
 </body>
 
 </html>

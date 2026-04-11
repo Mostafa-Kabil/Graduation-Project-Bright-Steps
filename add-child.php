@@ -16,8 +16,8 @@ $isSetup = isset($_GET['setup']) ? true : false;
         <?php echo $isSetup ? 'Welcome! Add Your Child' : 'Add Child'; ?> - Bright Steps
     </title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/auth.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/auth.css?v=8">
     <style>
         .auth-card {
             max-width: 600px;
@@ -289,7 +289,7 @@ $isSetup = isset($_GET['setup']) ? true : false;
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
     <script>
         function showSsnModal() {
             document.getElementById('ssn-modal').style.display = 'flex';

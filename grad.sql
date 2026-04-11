@@ -1763,3 +1763,65 @@ COMMIT;
   ?>
 
 
+
+DELIMITER 
+CREATE TRIGGER trg_users_signup_log AFTER INSERT ON users FOR EACH ROW BEGIN
+    INSERT INTO activity_log (activity_type, description, related_user_id, user_name, user_role, created_at)
+    VALUES (
+        'user_signup',
+        CONCAT('New User signed up: ', IFNULL(NEW.first_name, ''), ' ', IFNULL(NEW.last_name, ''), ' (', NEW.role, ')'),
+        NEW.user_id,
+        CONCAT(IFNULL(NEW.first_name, ''), ' ', IFNULL(NEW.last_name, '')),
+        NEW.role,
+        NOW()
+    );
+END
+DELIMITER ;
+
+DELIMITER 
+CREATE TRIGGER trg_clinic_insert_log AFTER INSERT ON clinic FOR EACH ROW BEGIN
+    INSERT INTO activity_log (activity_type, description, created_at)
+    VALUES (
+        'clinic_registered',
+        CONCAT('New Clinic registered: ', IFNULL(NEW.clinic_name, '')),
+        NOW()
+    );
+END
+DELIMITER ;
+
+DELIMITER 
+CREATE TRIGGER trg_clinic_update_log AFTER UPDATE ON clinic FOR EACH ROW BEGIN
+    IF OLD.status != 'verified' AND NEW.status = 'verified' THEN
+        INSERT INTO activity_log (activity_type, description, created_at)
+        VALUES (
+            'clinic_verified',
+            CONCAT('Clinic verified: ', IFNULL(NEW.clinic_name, '')),
+            NOW()
+        );
+    END IF;
+END
+DELIMITER ;
+
+DELIMITER 
+CREATE TRIGGER trg_payment_insert_log AFTER INSERT ON payment FOR EACH ROW BEGIN
+    INSERT INTO activity_log (activity_type, description, created_at)
+    VALUES (
+        'payment_received',
+        CONCAT('Payment Received: $', FORMAT(NEW.amount_post_discount, 2)),
+        NOW()
+    );
+END
+DELIMITER ;
+
+DELIMITER 
+CREATE TRIGGER trg_parent_sub_log AFTER INSERT ON parent_subscription FOR EACH ROW BEGIN
+    INSERT INTO activity_log (activity_type, description, related_user_id, created_at)
+    VALUES (
+        'subscription_upgrade',
+        CONCAT('Subscription Purchased (Plan ID: ', NEW.subscription_id, ')'),
+        NEW.parent_id,
+        NOW()
+    );
+END
+DELIMITER ;
+

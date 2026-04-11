@@ -1,6 +1,7 @@
 <?php
 // Error 500 - Server Error
 http_response_code(500);
+$base_url = str_replace('error-500.php', '', $_SERVER['SCRIPT_NAME']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -9,8 +10,8 @@ http_response_code(500);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>500 - Server Error | Bright Steps</title>
-    <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
+    <link rel="icon" type="image/png" href="<?php echo $base_url; ?>assets/logo.png">
+    <link rel="stylesheet" href="<?php echo $base_url; ?>styles/globals.css?v=8">
     <style>
         .error-page {
             min-height: 100vh;
@@ -166,7 +167,7 @@ http_response_code(500);
     <div class="error-page">
         <div class="error-container">
             <div class="error-logo">
-                <a href="index.php"><img src="assets/logo.png" alt="Bright Steps"></a>
+                <a href="<?php echo $base_url; ?>index.php"><img src="<?php echo $base_url; ?>assets/logo.png" alt="Bright Steps"></a>
             </div>
             <div class="error-illustration">⚠️</div>
             <div class="error-code">500</div>
@@ -176,7 +177,7 @@ http_response_code(500);
                 Our team has been notified and is working on it. Please try again shortly.
             </p>
             <div class="error-actions">
-                <a href="index.php" class="error-btn error-btn-primary">
+                <a href="<?php echo $base_url; ?>index.php" class="error-btn error-btn-primary">
                     🏠 Go Home
                 </a>
                 <a href="javascript:location.reload()" class="error-btn error-btn-secondary">
@@ -185,7 +186,7 @@ http_response_code(500);
             </div>
         </div>
     </div>
-    <script src="scripts/theme-toggle.js?v=3"></script>
+    <script src="<?php echo $base_url; ?>scripts/theme-toggle.js?v=8"></script>
 </body>
 
 </html>

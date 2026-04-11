@@ -137,6 +137,38 @@ switch ($action) {
         break;
 
     // ── Verify reset code & change password ────────────────────────
+    case 'verify_code':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $email = $input['email'] ?? '';
+        $code = $input['code'] ?? '';
+
+        if (!$email || !$code) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Email and code are required.']);
+            exit();
+        }
+
+        if (!isset($_SESSION['reset_code']) || $_SESSION['reset_email'] !== $email) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid reset session. Request a new code.']);
+            exit();
+        }
+
+        if (time() > $_SESSION['reset_expiry']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Code expired.']);
+            exit();
+        }
+
+        if ($_SESSION['reset_code'] !== $code) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid code.']);
+            exit();
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Code verified successfully.']);
+        exit();
+
     case 'reset':
         $input = json_decode(file_get_contents('php://input'), true);
         $email = $input['email'] ?? '';

@@ -4,8 +4,8 @@ session_start();
 include 'connection.php';
 include 'validation.php';
 
-$fname = $lname = $email = $specialty = $license = $clinic = '';
-$fnameErr = $lnameErr = $emailErr = $passErr = $specialtyErr = $licenseErr = $clinicErr = $termsErr = '';
+$fname = $lname = $email = $phone = $specialty = $license = $clinic = '';
+$fnameErr = $lnameErr = $emailErr = $phoneErr = $passErr = $specialtyErr = $licenseErr = $clinicErr = $termsErr = '';
 $formValid = true;
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
@@ -34,6 +34,24 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         if ($stmt->rowCount() > 0) {
             $emailErr = "Email already exists";
             $formValid = false;
+        }
+    }
+
+    if (empty($_POST["phone"])) {
+        $phoneErr = "Phone number is required";
+        $formValid = false;
+    } else {
+        $phone = validate_input($_POST["phone"]);
+        if (!preg_match("/^[0-9\-\+\s]{8,15}$/", $phone)) {
+            $phoneErr = "Invalid phone number format";
+            $formValid = false;
+        } else {
+            $stmt = $connect->prepare("SELECT phone FROM users WHERE phone = ?");
+            $stmt->execute([$phone]);
+            if ($stmt->rowCount() > 0) {
+                $phoneErr = "Phone number already exists";
+                $formValid = false;
+            }
         }
     }
 
@@ -75,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $role = "doctor";
 
         // Insert into users table
-        $stmt = $connect->prepare("INSERT INTO users (first_name, last_name, email, password, role) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$fname, $lname, $email, $hashedPassword, $role]);
+        $stmt = $connect->prepare("INSERT INTO users (first_name, last_name, email, phone, password, role) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$fname, $lname, $email, $phone, $hashedPassword, $role]);
         $newUserId = $connect->lastInsertId();
 
         // Try to find or match clinic by name
@@ -108,8 +126,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doctor Registration - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/auth.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/auth.css?v=12">
     <style>
         .error {
             color: red;
@@ -138,7 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 </head>
 
 <body>
-    <div class="auth-page">
+    <div class="auth-page auth-split-layout">
+        <div class="auth-form-side">
         <button class="back-button" onclick="navigateTo('doctor-login')">
             <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -246,9 +265,27 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label" for="phone">Professional Phone Number</label>
+                        <input type="tel" name="phone" id="phone"
+                            class="form-input <?= !empty($phoneErr) ? 'input-error' : '' ?>"
+                            placeholder="+1234567890" value="<?= htmlspecialchars($phone) ?>">
+                        <div class="error">
+                            <?= $phoneErr ?>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label" for="password">Password</label>
-                        <input type="password" name="password" id="password"
-                            class="form-input <?= !empty($passErr) ? 'input-error' : '' ?>" placeholder="••••••••">
+                        <div class="password-input-wrapper">
+                            <input type="password" name="password" id="password"
+                                class="form-input <?= !empty($passErr) ? 'input-error' : '' ?>" placeholder="••••••••">
+                            <button type="button" class="password-toggle-btn" onclick="togglePassword(this)" aria-label="Toggle password visibility">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            </button>
+                        </div>
                         <div id="password-strength" class="password-strength"></div>
                         <div class="error">
                             <?= $passErr ?>
@@ -282,40 +319,69 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                     <button type="submit" class="btn btn-gradient btn-lg btn-full">Create Provider Account</button>
                 </form>
 
-                <div class="auth-footer">
-                    <span class="auth-footer-text">Already registered? </span>
-                    <a href="#" class="auth-link" onclick="navigateTo('doctor-login'); return false;">Sign In</a>
+                <div class="modern-auth-footer">
+                    <p class="auth-footer-text">
+                        Already registered?  
+                        <a href="#" class="auth-link font-semibold" onclick="navigateTo('doctor-login'); return false;">Sign In</a>
+                    </p>
+                    <div class="footer-divider"></div>
+                    <p class="auth-footer-text" style="color: var(--slate-500, #64748b);">
+                        Looking for parent registration? 
+                        <a href="#" class="auth-link doctor-link" onclick="navigateTo('signup'); return false;">Parent Portal</a>
+                    </p>
                 </div>
             </div>
         </div>
     </div>
+    
+    <!-- Right side image and toggles -->
+    <div class="auth-image-side">
+        <div class="auth-top-nav">
+            <button class="nav-link language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+                عربي
+            </button>
 
-    <!-- Language Toggle -->
-    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-        عربي
-    </button>
+            <button class="nav-link theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+                <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+                <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+            </button>
+        </div>
+        <img src="assets/doctor-signup-illustration.png" class="auth-illustration" alt="Bright Steps Growth and Care">
+    </div>
+</div>
 
-    <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <path
-                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    </button>
+    
 
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/password-strength.js"></script>
+    
+
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="scripts/password-strength.js?v=8"></script>
+    <script>
+        function togglePassword(btn) {
+            const wrapper = btn.closest('.password-input-wrapper');
+            const input = wrapper.querySelector('input');
+            const icon = btn.querySelector('svg');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'; // Eye
+            } else {
+                input.type = 'password';
+                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'; // Eye-off
+            }
+        }
+    </script>
 </body>
 
 </html>

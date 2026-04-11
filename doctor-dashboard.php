@@ -619,9 +619,9 @@ if (
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doctor Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css?v=20260405">
-    <link rel="stylesheet" href="styles/dashboard.css?v=20260405">
-    <link rel="stylesheet" href="styles/doctor.css?v=20260405">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=8">
 </head>
 
 <body>
@@ -805,7 +805,7 @@ if (
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
 
     <!-- Language Toggle -->
     <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
@@ -816,11 +816,11 @@ if (
         </svg>
         عربي
     </button>
-    <script src="scripts/language-toggle.js?v=5"></script>
+    <script src="scripts/language-toggle.js?v=8"></script>
 
-    <script src="scripts/navigation.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="scripts/doctor-dashboard.js?v=20260405b"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js?v=8"></script>
+    <script src="scripts/doctor-dashboard.js?v=8b"></script>
     
 </body>
 

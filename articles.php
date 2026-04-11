@@ -28,7 +28,8 @@ if (isset($_SESSION['id'])) {
     <title>Articles & Tips - Bright Steps</title>
     <meta name="description" content="Expert parenting tips, child health guides, nutrition advice, and development activities from Bright Steps.">
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/landing.css?v=8">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -78,14 +79,18 @@ if (isset($_SESSION['id'])) {
             max-width: 1200px; margin: -1.5rem auto 0; padding: 0 1.5rem; position: relative; z-index: 2;
         }
         .filter-tabs {
-            display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem;
+            display: flex; gap: 0.3rem; overflow-x: auto; padding-bottom: 0;
             background: var(--bg-card, #fff); border-radius: 16px; padding: 0.5rem;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: 1px solid var(--border-color, #e2e8f0);
+            justify-content: center; white-space: nowrap;
+            -ms-overflow-style: none; scrollbar-width: none;
         }
+        .filter-tabs::-webkit-scrollbar { display: none; }
         .filter-tab {
-            padding: 0.6rem 1.2rem; border-radius: 12px; border: none; cursor: pointer;
-            font-size: 0.85rem; font-weight: 600; white-space: nowrap;
+            padding: 0.5rem 0.9rem; border-radius: 12px; border: none; cursor: pointer;
+            font-size: 0.82rem; font-weight: 600; white-space: nowrap;
             background: transparent; color: var(--text-secondary, #64748b); transition: all 0.2s;
+            flex-shrink: 0;
         }
         .filter-tab:hover { background: var(--bg-main, #f8fafc); color: var(--text-primary); }
         .filter-tab.active { background: linear-gradient(135deg, #6C63FF, #a78bfa); color: #fff; box-shadow: 0 2px 8px rgba(108,99,255,0.3); }
@@ -145,21 +150,39 @@ if (isset($_SESSION['id'])) {
         [data-theme="dark"] .filter-tabs { background: #1e293b; border-color: #334155; }
         [data-theme="dark"] .filter-tab { color: #94a3b8; }
         [data-theme="dark"] .filter-tab:hover { background: #334155; }
+        /* Modal Styles */
+        .article-modal {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+            backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem;
+        }
+        .article-modal.active { display: flex; }
+        .article-modal-content {
+            background: var(--bg-card, #fff); width: 100%; max-width: 650px; max-height: 85vh;
+            border-radius: 16px; overflow-y: auto; position: relative; padding: 2.5rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2); animation: modalFadeIn 0.3s ease;
+        }
+        .article-modal-content h2 { margin-bottom: 1rem; color: var(--text-primary); }
+        .article-modal-content p { color: var(--text-secondary); line-height: 1.7; margin-bottom: 1.5rem; }
+        .article-modal-category { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.82rem; font-weight: 600; margin-bottom: 1rem; }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .modal-close {
+            position: absolute; top: 1.25rem; right: 1.5rem; background: none; border: none;
+            font-size: 1.5rem; color: var(--text-secondary); cursor: pointer; transition: color 0.2s;
+        }
+        .modal-close:hover { color: #5046e5; }
+        [data-theme="dark"] .article-modal-content { background: #1e293b; color: #fff; }
     </style>
 </head>
 <body>
+    <?php include 'includes/public_header.php'; ?>
+    
     <!-- Header -->
-    <header class="articles-header">
-        <nav class="header-nav">
-            <a href="index.php" class="logo"><img src="assets/logo.png" alt="Bright Steps"> Bright Steps</a>
-            <?php if (isset($_SESSION['id'])): ?>
-                <a href="dashboards/parent/dashboard.php">← Back to Dashboard</a>
-            <?php else: ?>
-                <a href="login.php">Sign In</a>
-            <?php endif; ?>
-        </nav>
+    <header class="articles-header" style="padding-top: 8rem;">
         <div class="header-content">
-            <h1>Articles & Tips 📚</h1>
+            <h1>Articles & Tips <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -6px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></h1>
             <p>Expert guidance for every stage of your child's journey — from health and nutrition to activities and development.</p>
         </div>
         <div class="search-bar">
@@ -172,14 +195,30 @@ if (isset($_SESSION['id'])) {
     <div class="filter-section">
         <div class="filter-tabs" id="filter-tabs">
             <button class="filter-tab active" data-filter="all" onclick="setFilter('all', this)">All Topics</button>
-            <button class="filter-tab" data-filter="health" onclick="setFilter('health', this)">🏥 Health</button>
-            <button class="filter-tab" data-filter="nutrition" onclick="setFilter('nutrition', this)">🥗 Nutrition</button>
-            <button class="filter-tab" data-filter="development" onclick="setFilter('development', this)">🧒 Development</button>
-            <button class="filter-tab" data-filter="parenting" onclick="setFilter('parenting', this)">👪 Parenting</button>
-            <button class="filter-tab" data-filter="hygiene" onclick="setFilter('hygiene', this)">🧼 Hygiene</button>
-            <button class="filter-tab" data-filter="safety" onclick="setFilter('safety', this)">🛡️ Safety</button>
-            <button class="filter-tab" data-filter="activities" onclick="setFilter('activities', this)">🎨 Activities</button>
-            <button class="filter-tab" data-filter="education" onclick="setFilter('education', this)">📖 Education</button>
+            <button class="filter-tab" data-filter="health" onclick="setFilter('health', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Health
+            </button>
+            <button class="filter-tab" data-filter="nutrition" onclick="setFilter('nutrition', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><path d="M22 12a10 10 0 0 1-10 10 10 10 0 0 1-10-10A10 10 0 0 1 12 2a10 10 0 0 1 10 10z"/><path d="M12 2v20"/><path d="M12 12h10"/></svg> Nutrition
+            </button>
+            <button class="filter-tab" data-filter="development" onclick="setFilter('development', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg> Development
+            </button>
+            <button class="filter-tab" data-filter="parenting" onclick="setFilter('parenting', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Parenting
+            </button>
+            <button class="filter-tab" data-filter="hygiene" onclick="setFilter('hygiene', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><path d="M12 22v-7l-2-2a4 4 0 1 1 5.66-5.66L18 9l-2-2a4 4 0 1 1 5.66-5.66l1.41 1.41"/><path d="M6.34 9.34A4 4 0 0 0 2 15h12c0-2.21-1.79-4-4-4H6.34z"/></svg> Hygiene
+            </button>
+            <button class="filter-tab" data-filter="safety" onclick="setFilter('safety', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Safety
+            </button>
+            <button class="filter-tab" data-filter="activities" onclick="setFilter('activities', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Activities
+            </button>
+            <button class="filter-tab" data-filter="education" onclick="setFilter('education', this)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-3px;"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Education
+            </button>
         </div>
     </div>
 
@@ -188,62 +227,8 @@ if (isset($_SESSION['id'])) {
         <!-- Dynamic content loaded by JS -->
     </main>
 
+    <script src="scripts/articles_data.js"></script>
     <script>
-    const articles = [
-        // Health
-        { title: "Vaccinations: The Complete Schedule", summary: "Everything parents need to know about childhood vaccination schedules, side effects, and why they're important.", category: "health", readTime: "6 min", ageGroup: "all" },
-        { title: "When to Visit the Pediatrician", summary: "Know the warning signs — fever thresholds, breathing difficulties, and other symptoms that need immediate attention.", category: "health", readTime: "4 min", ageGroup: "all" },
-        { title: "Building Strong Immune Systems", summary: "Simple daily habits that help strengthen your child's natural defenses against illness.", category: "health", readTime: "5 min", ageGroup: "all" },
-        { title: "Common Childhood Allergies", summary: "How to identify, manage, and prevent allergic reactions in babies and children.", category: "health", readTime: "5 min", ageGroup: "all" },
-        { title: "Healthy Sleep Habits by Age", summary: "How much sleep does your child need? Create the perfect bedtime routine for restful nights.", category: "health", readTime: "6 min", ageGroup: "all" },
-
-        // Nutrition
-        { title: "Introduction to Solid Foods", summary: "A step-by-step guide to transitioning from milk to solids, including first foods and allergen introduction.", category: "nutrition", readTime: "7 min", ageGroup: "infant" },
-        { title: "Brain-Boosting Foods for Kids", summary: "The best foods for cognitive development — omega-3s, iron-rich meals, and antioxidant-packed snacks.", category: "nutrition", readTime: "5 min", ageGroup: "all" },
-        { title: "Dealing with Picky Eaters", summary: "Proven strategies to expand your child's palate without forcing or bribing.", category: "nutrition", readTime: "4 min", ageGroup: "toddler" },
-        { title: "Healthy Lunchbox Ideas", summary: "Quick, nutritious, and appealing lunch ideas that kids will actually eat at school.", category: "nutrition", readTime: "4 min", ageGroup: "school" },
-        { title: "Meal Planning for Busy Parents", summary: "Time-saving tips for preparing nutritious family meals throughout the week.", category: "nutrition", readTime: "5 min", ageGroup: "all" },
-
-        // Development
-        { title: "Milestones: 0-12 Months", summary: "Track your baby's key development milestones — rolling over, crawling, first words, and more.", category: "development", readTime: "6 min", ageGroup: "infant" },
-        { title: "Toddler Language Development", summary: "How to encourage speech and when to seek professional help for delayed language skills.", category: "development", readTime: "5 min", ageGroup: "toddler" },
-        { title: "Building Fine Motor Skills", summary: "Fun activities that develop hand-eye coordination, grip strength, and dexterity.", category: "development", readTime: "4 min", ageGroup: "all" },
-        { title: "Social Skills Through Play", summary: "How unstructured play, sharing games, and group activities build emotional intelligence.", category: "development", readTime: "5 min", ageGroup: "preschool" },
-        { title: "School Readiness Checklist", summary: "Essential skills your child needs before starting school — cognitive, social, and physical.", category: "development", readTime: "6 min", ageGroup: "preschool" },
-
-        // Parenting
-        { title: "Positive Discipline Techniques", summary: "Effective ways to set boundaries while building trust and strengthening your bond.", category: "parenting", readTime: "6 min", ageGroup: "all" },
-        { title: "Managing Screen Time", summary: "Age-appropriate screen time limits and how to choose quality digital content.", category: "parenting", readTime: "4 min", ageGroup: "all" },
-        { title: "Building Confidence in Children", summary: "Everyday actions that foster self-esteem, resilience, and a growth mindset.", category: "parenting", readTime: "5 min", ageGroup: "all" },
-        { title: "Sibling Rivalry Solutions", summary: "Practical strategies for reducing conflict and fostering strong sibling bonds.", category: "parenting", readTime: "5 min", ageGroup: "all" },
-        { title: "Self-Care for Parents", summary: "You can't pour from an empty cup. Essential wellness tips for exhausted parents.", category: "parenting", readTime: "4 min", ageGroup: "all" },
-
-        // Hygiene
-        { title: "Teaching Handwashing", summary: "Make handwashing fun with songs, games, and visual timers that kids actually enjoy.", category: "hygiene", readTime: "3 min", ageGroup: "toddler" },
-        { title: "First Dental Care Guide", summary: "When to start brushing, choosing the right toothbrush, and making dental hygiene a habit.", category: "hygiene", readTime: "4 min", ageGroup: "all" },
-        { title: "Bath Time Routines", summary: "Safe bathing practices for every age, plus tips for making bath time relaxing and fun.", category: "hygiene", readTime: "3 min", ageGroup: "all" },
-        { title: "Potty Training Made Easy", summary: "Signs of readiness, step-by-step approach, and how to handle setbacks gracefully.", category: "hygiene", readTime: "6 min", ageGroup: "toddler" },
-
-        // Safety
-        { title: "Childproofing Your Home", summary: "Room-by-room guide to making your home safe for curious crawlers and toddlers.", category: "safety", readTime: "5 min", ageGroup: "infant" },
-        { title: "Sun Safety for Kids", summary: "Protecting your child's skin — sunscreen, protective clothing, and shade strategies.", category: "safety", readTime: "3 min", ageGroup: "all" },
-        { title: "Online Safety for Children", summary: "How to protect your child online with parental controls, education, and open conversations.", category: "safety", readTime: "5 min", ageGroup: "school" },
-        { title: "First Aid Basics for Parents", summary: "Essential first aid skills every parent should know — from minor cuts to choking emergencies.", category: "safety", readTime: "6 min", ageGroup: "all" },
-
-        // Activities
-        { title: "Sensory Play Ideas", summary: "Engaging sensory activities for different ages using household items — water, sand, playdough, and more.", category: "activities", readTime: "4 min", ageGroup: "all" },
-        { title: "Indoor Activities for Rainy Days", summary: "20+ creative indoor games and projects that fight boredom and promote learning.", category: "activities", readTime: "5 min", ageGroup: "all" },
-        { title: "Nature Walks & Scavenger Hunts", summary: "Turn outdoor walks into learning adventures with observation games and nature journaling.", category: "activities", readTime: "4 min", ageGroup: "preschool" },
-        { title: "Music & Movement Games", summary: "Fun ways to use music, dance, and rhythm to boost coordination and cognitive skills.", category: "activities", readTime: "3 min", ageGroup: "all" },
-        { title: "STEM Activities for Kids", summary: "Simple science experiments and engineering challenges that spark curiosity and critical thinking.", category: "activities", readTime: "5 min", ageGroup: "school" },
-
-        // Education
-        { title: "Reading Together: Tips by Age", summary: "How to make storytime engaging at every age — from board books to chapter books.", category: "education", readTime: "5 min", ageGroup: "all" },
-        { title: "Learning Through Play", summary: "How play-based learning develops problem-solving, creativity, and social skills.", category: "education", readTime: "4 min", ageGroup: "all" },
-        { title: "Teaching Numbers & Counting", summary: "Fun, everyday ways to introduce math concepts — counting stairs, sorting toys, and more.", category: "education", readTime: "4 min", ageGroup: "preschool" },
-        { title: "Bilingual Kids: Benefits & Tips", summary: "How to raise a bilingual child and why it boosts cognitive development.", category: "education", readTime: "5 min", ageGroup: "all" }
-    ];
-
     let currentFilter = 'all';
     const childAge = '<?php echo $childAge; ?>';
 
@@ -268,20 +253,19 @@ if (isset($_SESSION['id'])) {
         const ageLabels = { infant: '0-12 months', toddler: '1-2 years', preschool: '2-4 years', school: '4+ years', all: 'All ages' };
 
         container.innerHTML = `
-            <h2 class="section-title"><span class="emoji">📖</span> ${currentFilter === 'all' ? 'All Articles' : filteredArticles[0]?.category.charAt(0).toUpperCase() + filteredArticles[0]?.category.slice(1)} (${filteredArticles.length})</h2>
+            <h2 class="section-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px; vertical-align:-3px; color:var(--purple-500);"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg> ${currentFilter === 'all' ? 'All Articles' : filteredArticles[0]?.category.charAt(0).toUpperCase() + filteredArticles[0]?.category.slice(1)} (${filteredArticles.length})</h2>
             <div class="articles-grid">
                 ${filteredArticles.map(a => `
                     <div class="article-card" data-category="${a.category}" onclick="openArticle(this)">
                         <div class="article-card-header">
                             <span class="article-category ${getCategoryClass(a.category)}">${a.category}</span>
-                            <span class="article-read-time">⏱ ${a.readTime}</span>
                         </div>
                         <div class="article-card-body">
                             <h3>${a.title}</h3>
                             <p>${a.summary}</p>
                         </div>
                         <div class="article-card-footer">
-                            <span class="article-age-tag">👶 ${ageLabels[a.ageGroup] || 'All ages'}</span>
+                            <span class="article-age-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px; vertical-align:-2px;"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>${ageLabels[a.ageGroup] || 'All ages'}</span>
                             <span class="article-read-more">Read more →</span>
                         </div>
                     </div>
@@ -313,9 +297,29 @@ if (isset($_SESSION['id'])) {
     }
 
     function openArticle(el) {
-        // Add a subtle bounce animation
+        // Add a subtle bounce animation to the button/card
         el.style.transform = 'scale(0.98)';
         setTimeout(() => el.style.transform = '', 150);
+        
+        const title = el.querySelector('h3').innerText;
+        const articleData = articles.find(a => a.title === title);
+        
+        if (articleData && articleData.content) {
+            document.getElementById('modalArticleBody').innerHTML = articleData.content;
+        } else {
+            document.getElementById('modalArticleBody').innerHTML = `
+                <div style="padding:1rem;background:#fee2e2;color:#991b1b;border-radius:8px; margin-top: 1.5rem;">Article content not found.</div>
+            `;
+        }
+        
+        document.getElementById('articleModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeArticleModal(e) {
+        if(e) e.stopPropagation();
+        document.getElementById('articleModal').classList.remove('active');
+        document.body.style.overflow = '';
     }
 
     // Apply theme
@@ -325,5 +329,31 @@ if (isset($_SESSION['id'])) {
     // Initial render
     filterArticles();
     </script>
+    
+    <!-- Article Modal -->
+    <div class="article-modal" id="articleModal" onclick="if(event.target === this) closeArticleModal()">
+        <div class="article-modal-content" onclick="event.stopPropagation()">
+            <button class="modal-close" onclick="closeArticleModal()">✕</button>
+            <div id="modalArticleBody"></div>
+        </div>
+    </div>
+
+    <!-- Floating Theme Toggle -->
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+    </button>
+
+    <?php include 'includes/public_footer.php'; ?>
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="scripts/mobile-menu.js?v=8"></script>
+    <script src="scripts/mega-menu.js?v=8"></script>
 </body>
 </html>

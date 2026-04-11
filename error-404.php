@@ -1,6 +1,7 @@
 <?php
 // Error 404 - Page Not Found
 http_response_code(404);
+$base_url = str_replace('error-404.php', '', $_SERVER['SCRIPT_NAME']);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -9,8 +10,8 @@ http_response_code(404);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>404 - Page Not Found | Bright Steps</title>
-    <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
+    <link rel="icon" type="image/png" href="<?php echo $base_url; ?>assets/logo.png">
+    <link rel="stylesheet" href="<?php echo $base_url; ?>styles/globals.css?v=8">
     <style>
         .error-page {
             min-height: 100vh;
@@ -146,7 +147,7 @@ http_response_code(404);
     <div class="error-page">
         <div class="error-container">
             <div class="error-logo">
-                <a href="index.php"><img src="assets/logo.png" alt="Bright Steps"></a>
+                <a href="<?php echo $base_url; ?>index.php"><img src="<?php echo $base_url; ?>assets/logo.png" alt="Bright Steps"></a>
             </div>
             <div class="error-illustration">🔍</div>
             <div class="error-code">404</div>
@@ -156,16 +157,16 @@ http_response_code(404);
                 Don't worry — let's get you back on track!
             </p>
             <div class="error-actions">
-                <a href="index.php" class="error-btn error-btn-primary">
+                <a href="<?php echo $base_url; ?>index.php" class="error-btn error-btn-primary">
                     🏠 Go Home
                 </a>
-                <a href="dashboard.php" class="error-btn error-btn-secondary">
+                <a href="<?php echo $base_url; ?>dashboard.php" class="error-btn error-btn-secondary">
                     📊 Dashboard
                 </a>
             </div>
         </div>
     </div>
-    <script src="scripts/theme-toggle.js?v=3"></script>
+    <script src="<?php echo $base_url; ?>scripts/theme-toggle.js?v=8"></script>
 </body>
 
 </html>

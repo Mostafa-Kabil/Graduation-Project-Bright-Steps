@@ -13,11 +13,11 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role'])) {
 
 switch ($_SESSION['role']) {
     case 'admin':
-        header("Location: dashboards/admin/admin-dashboard.php");
+        header("Location: admin-dashboard.php");
         break;
     case 'doctor':
     case 'specialist':
-        header("Location: dashboards/doctor/doctor-dashboard.php");
+        header("Location: doctor-dashboard.php");
         break;
     case 'clinic':
         header("Location: dashboards/clinic/clinic-dashboard.php");
