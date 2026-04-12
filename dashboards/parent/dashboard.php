@@ -195,6 +195,12 @@ if ($parentId) {
         $userSettings = ['theme' => 'light', 'language' => 'en', 'push_notifications' => 1, 'email_notifications' => 1, 'appointment_reminders' => 1, 'daily_reminders' => 1, 'milestone_alerts' => 1, 'data_sharing' => 1];
     }
     $dashboardData['user_settings'] = $userSettings;
+
+    // Banners
+    try {
+        $bStmt = $connect->query("SELECT message, style, link FROM announcement_banners WHERE is_active=1 AND target_audience IN ('parents', 'all') ORDER BY created_at DESC LIMIT 3");
+        $dashboardData['banners'] = $bStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Exception $e) { $dashboardData['banners'] = []; }
 }
 ?>
 <!DOCTYPE html>

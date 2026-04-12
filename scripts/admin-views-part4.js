@@ -1,28 +1,54 @@
-// ═══ SUPPORT TICKETS ═══
+// ═══ SUPPORT TICKETS (Modernized — Tickets + Moderation) ═══
 async function loadTicketsView(main) {
     try {
-        const [td, ad] = await Promise.all([apiGet('tickets.php?action=list'), apiGet('tickets.php?action=analytics')]);
-        const tickets = td.tickets||[], an = ad.analytics||{};
+        const [td, ad, sd, md] = await Promise.all([apiGet('tickets.php?action=list'), apiGet('tickets.php?action=analytics'), apiGet('moderation.php?action=stats'), apiGet('moderation.php?action=list')]);
+        const tickets = td.tickets||[], an = ad.analytics||{}, modStats = sd.stats||{}, modItems = md.items||[];
+        const openPct = an.total > 0 ? Math.round((an.open / an.total) * 100) : 0;
         main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Support Tickets</h1><p class="dashboard-subtitle">Manage user support requests</p></div></div>
-        <div class="admin-stats-grid" style="grid-template-columns:repeat(4,1fr);">
-            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-info"><div class="admin-stat-value">${an.total||0}</div><div class="admin-stat-label">Total Tickets</div></div></div>
-            <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-info"><div class="admin-stat-value">${an.open||0}</div><div class="admin-stat-label">Open</div></div></div>
-            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-info"><div class="admin-stat-value">${an.resolution_rate||0}%</div><div class="admin-stat-label">Resolution Rate</div></div></div>
-            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-info"><div class="admin-stat-value">${an.avg_response_hours||0}h</div><div class="admin-stat-label">Avg Response</div></div></div>
+        <div style="background:linear-gradient(135deg,#6366f1,#4f46e5,#4338ca);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-20px;right:20px;font-size:80px;opacity:.12;">🛡️</div>
+            <div style="position:absolute;bottom:-30px;right:80px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
+            <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">Contact & Support</h1>
+                    <p style="opacity:.85;margin:0;font-size:.95rem;">Tickets, moderation & user support — keep the community safe</p>
+                </div>
+                <div style="display:flex;gap:1.5rem;text-align:center;">
+                    <div><div style="font-size:1.75rem;font-weight:800;">${an.total||0}</div><div style="font-size:.7rem;opacity:.8;">Tickets</div></div>
+                    <div><div style="font-size:1.75rem;font-weight:800;">${modStats.pending||0}</div><div style="font-size:.7rem;opacity:.8;">Pending Review</div></div>
+                </div>
+            </div>
         </div>
-        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">All Tickets</h2></div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem;margin-bottom:1.5rem;">
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${an.total||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">📋 Total Tickets</div></div>
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:${an.open>0?'var(--yellow-500)':'var(--text-primary)'};">${an.open||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">⏳ Open</div></div>
+            <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${an.resolution_rate||0}%</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">✅ Resolution</div></div>
+            <div style="background:linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03));border:1px solid rgba(13,148,136,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${an.avg_response_hours||0}h</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">⚡ Avg Response</div></div>
+            <div style="background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(239,68,68,0.03));border:1px solid rgba(239,68,68,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:${modStats.pending>0?'var(--red-500)':'var(--text-primary)'};">${modStats.pending||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">🚩 Flagged</div></div>
+            <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(236,72,153,0.03));border:1px solid rgba(236,72,153,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${modStats.removed||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">🗑️ Removed</div></div>
+        </div>
+        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Support Tickets</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${tickets.length} tickets</span></div>
             <div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Subject</th><th>User</th><th>Priority</th><th>Status</th><th>Assigned</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
-                ${tickets.map(t => `<tr>
-                    <td><strong>${t.subject}</strong></td>
-                    <td>${t.first_name} ${t.last_name}</td>
+                ${tickets.map(t => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <td><strong>${t.subject}</strong></td><td>${t.first_name} ${t.last_name}</td>
                     <td><span class="status-badge ${t.priority==='critical'?'status-danger':t.priority==='high'?'status-warning':'status-default'}">${t.priority}</span></td>
                     <td><span class="status-badge ${t.status==='open'?'status-warning':t.status==='resolved'||t.status==='closed'?'status-active':'status-default'}">${t.status}</span></td>
-                    <td>${t.assigned_first?t.assigned_first+' '+t.assigned_last:'Unassigned'}</td>
+                    <td>${t.assigned_first?t.assigned_first+' '+t.assigned_last:'<span style="color:var(--text-secondary);font-style:italic;">Unassigned</span>'}</td>
                     <td>${timeAgo(t.updated_at)}</td>
                     <td><button class="btn btn-sm btn-outline" onclick="viewTicket(${t.id})">View</button></td>
                 </tr>`).join('')}
-                ${tickets.length===0?'<tr><td colspan="7" style="text-align:center;padding:2rem;">No tickets</td></tr>':''}
+                ${tickets.length===0?'<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-secondary);">No tickets</td></tr>':''}
+            </tbody></table></div></div>
+        <div class="section-card" style="margin-top:1rem;"><div class="section-card-header"><h2 class="section-heading">🛡️ Content Moderation</h2><span style="font-size:.7rem;background:${modStats.pending>0?'rgba(239,68,68,0.1)':'var(--bg-secondary)'};padding:4px 10px;border-radius:6px;color:${modStats.pending>0?'var(--red-500)':'var(--text-secondary)'};">${modStats.pending||0} pending</span></div>
+            <div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Content</th><th>User</th><th>Reason</th><th>Flagged By</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+                ${modItems.map(i => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${(i.content_text||'').substring(0,50)}...</td>
+                    <td>${i.first_name||''} ${i.last_name||''}</td><td>${i.reason||'—'}</td><td>${i.flagged_by}</td>
+                    <td><span class="status-badge ${i.status==='pending'?'status-warning':i.status==='removed'?'status-danger':'status-active'}">${i.status}</span></td>
+                    <td><div class="action-btns"><button class="btn btn-sm btn-outline" onclick="viewFlaggedContent(${i.id})">View</button>
+                        ${i.status==='pending'?`<button class="btn btn-sm btn-outline" style="color:var(--green-500);" onclick="moderateContent(${i.id},'approved')">✓</button><button class="btn btn-sm btn-outline" style="color:var(--red-500);" onclick="moderateContent(${i.id},'removed')">✗</button>`:''}</div></td>
+                </tr>`).join('')}
+                ${modItems.length===0?'<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:var(--text-secondary);">No flagged content</td></tr>':''}
             </tbody></table></div></div></div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch(e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }

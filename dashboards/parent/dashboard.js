@@ -502,12 +502,29 @@ var children = (window.dashboardData || {}).children || [];
         const appts = d.appointments || [];
         const child = children[window._selectedChildIndex || 0] || children[0] || null;
 
+        let bannerHtml = '';
+        if (d.banners && d.banners.length > 0) {
+            d.banners.forEach(b => {
+                const isUrgent = b.style === 'urgent' || b.style === 'danger';
+                const bg = b.style === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : (isUrgent ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)');
+                const icon = b.style === 'success' ? '✨' : (isUrgent ? '⚠️' : '📢');
+                bannerHtml += `<div style="background:${bg}; color:#fff; padding:1rem 1.5rem; border-radius:12px; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="display:flex; align-items:center; gap:1rem;">
+                        <span style="font-size:1.5rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));">${icon}</span>
+                        <div style="font-weight:600; font-size:0.95rem; line-height:1.4;">${b.message}</div>
+                    </div>
+                    ${b.link ? `<a href="${b.link}" target="_blank" style="color:#fff; background:rgba(255,255,255,0.2); padding:0.5rem 1rem; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.85rem; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">View</a>` : ''}
+                </div>`;
+            });
+        }
+
         if (!child) {
             return `<div class="dashboard-content">
                 <div class="dashboard-header-section"><div>
                     <h1 class="dashboard-title">Welcome, ${p.fname || 'Parent'}! 👋</h1>
                     <p class="dashboard-subtitle">Get started by adding your child's profile</p>
                 </div></div>
+                ${bannerHtml}
                 <div class="dashboard-card" style="text-align:center;padding:3rem;">
                     <svg style="width:4rem;height:4rem;color:var(--slate-300);margin:0 auto 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <h3 style="margin-bottom:.5rem;">No children added yet</h3>
@@ -545,6 +562,7 @@ var children = (window.dashboardData || {}).children || [];
                 <p class="dashboard-subtitle">Here's ${child.first_name}'s progress today</p>
             </div>
             </div>
+            ${bannerHtml}
             <div class="child-profile-card">
                 <div class="child-avatar">${initial}</div>
                 <div class="child-info">
@@ -2756,6 +2774,22 @@ var children = (window.dashboardData || {}).children || [];
     window.switchView = switchView;
 
     // ── Notification helpers ─────────────────────────────────────
+    window.markNotifRead = async function(id) {
+        try {
+            await fetch('../../api_notifications.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'read', notification_id: id }) });
+            loadNotifications();
+            if (typeof loadNotifCount === 'function') loadNotifCount();
+        } catch(e){}
+    };
+    
+    window.markAllRead = async function() {
+        try {
+            await fetch('../../api_notifications.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'read' }) });
+            loadNotifications();
+            if (typeof loadNotifCount === 'function') loadNotifCount();
+        } catch(e){}
+    };
+
     async function loadNotifCount() {
         try {
             const res = await fetch('../../api_notifications.php?action=list&limit=1');
