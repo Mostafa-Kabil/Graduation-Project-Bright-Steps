@@ -1,3 +1,485 @@
+<?php
+// ═══════════════════════════════════════════════════════
+// Clinic Dashboard — Backend API Handler
+// Handles AJAX requests for Clinic management sections
+// ═══════════════════════════════════════════════════════
+if (
+    (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest')
+    || isset($_GET['ajax'])
+) {
+    header('Content-Type: application/json');
+    require_once 'connection.php';
+
+    $method = $_SERVER['REQUEST_METHOD'];
+    $section = $_GET['section'] ?? '';
+    $clinic_id = intval($_GET['clinic_id'] ?? 1); // Default to clinic 1
+
+    // ─── SPECIALISTS SECTION ─────────────────────────────
+    if ($section === 'specialists') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_specialists') {
+                $stmt = $connect->prepare("
+                    SELECT
+                        s.specialist_id, s.specialization, s.experience_years,
+                        u.first_name, u.last_name, u.email, u.status,
+                        ROUND(AVG(f.rating), 1) AS avg_rating,
+                        COUNT(DISTINCT f.feedback_id) AS review_count,
+                        COUNT(DISTINCT a.appointment_id) AS total_appointments,
+                        SUM(CASE WHEN a.status IN ('scheduled','confirmed') AND a.scheduled_at >= NOW() THEN 1 ELSE 0 END) AS upcoming_appointments
+                    FROM specialist s
+                    INNER JOIN users u ON s.specialist_id = u.user_id
+                    LEFT JOIN feedback f ON f.specialist_id = s.specialist_id
+                    LEFT JOIN appointment a ON a.specialist_id = s.specialist_id
+                    WHERE s.clinic_id = :clinic_id
+                    GROUP BY s.specialist_id
+                    ORDER BY u.first_name ASC
+                ");
+                $stmt->execute([':clinic_id' => $clinic_id]);
+                $specialists = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Overall stats for this clinic
+                $stmt2 = $connect->prepare("
+                    SELECT
+                        COUNT(DISTINCT s.specialist_id) AS total_specialists,
+                        COUNT(DISTINCT a.appointment_id) AS total_appointments,
+                        ROUND(AVG(f.rating), 1) AS avg_rating
+                    FROM specialist s
+                    LEFT JOIN appointment a ON a.specialist_id = s.specialist_id
+                    LEFT JOIN feedback f ON f.specialist_id = s.specialist_id
+                    WHERE s.clinic_id = :clinic_id
+                ");
+                $stmt2->execute([':clinic_id' => $clinic_id]);
+                $stats = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $specialists, 'stats' => $stats]);
+                exit;
+            }
+        }
+
+        if ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'add_specialist') {
+                $first_name  = trim($input['first_name'] ?? '');
+                $last_name   = trim($input['last_name'] ?? '');
+                $email       = trim($input['email'] ?? '');
+                $password    = trim($input['password'] ?? '');
+                $spec        = trim($input['specialization'] ?? '');
+                $exp_years   = intval($input['experience_years'] ?? 0);
+
+                if (!$first_name || !$last_name || !$email || !$password || !$spec) {
+                    echo json_encode(['success' => false, 'error' => 'All required fields must be filled']);
+                    exit;
+                }
+
+                // Check email uniqueness
+                $check = $connect->prepare("SELECT user_id FROM users WHERE email = :email");
+                $check->execute([':email' => $email]);
+                if ($check->fetch()) {
+                    echo json_encode(['success' => false, 'error' => 'Email already registered']);
+                    exit;
+                }
+
+                try {
+                    $connect->beginTransaction();
+                    $hashed = password_hash($password, PASSWORD_DEFAULT);
+                    $stmt = $connect->prepare("
+                        INSERT INTO users (first_name, last_name, email, password, role, status)
+                        VALUES (:fn, :ln, :email, :pw, 'specialist', 'active')
+                    ");
+                    $stmt->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':pw' => $hashed]);
+                    $user_id = $connect->lastInsertId();
+
+                    $stmt2 = $connect->prepare("
+                        INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years)
+                        VALUES (:sid, :cid, :fn, :ln, :spec, :exp)
+                    ");
+                    $stmt2->execute([
+                        ':sid'  => $user_id,
+                        ':cid'  => $clinic_id,
+                        ':fn'   => $first_name,
+                        ':ln'   => $last_name,
+                        ':spec' => $spec,
+                        ':exp'  => $exp_years
+                    ]);
+                    $connect->commit();
+                    echo json_encode(['success' => true, 'specialist_id' => $user_id]);
+                } catch (Exception $e) {
+                    $connect->rollBack();
+                    echo json_encode(['success' => false, 'error' => 'Failed to add specialist']);
+                }
+                exit;
+            }
+
+            if ($action === 'update_specialist_status') {
+                $specialist_id = intval($input['specialist_id'] ?? 0);
+                $status        = trim($input['status'] ?? '');
+                if (!$specialist_id || !in_array($status, ['active', 'inactive'])) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id and valid status required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("UPDATE users SET status = :status WHERE user_id = :uid");
+                $stmt->execute([':status' => $status, ':uid' => $specialist_id]);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+        }
+    }
+
+    // ─── APPOINTMENTS SECTION ────────────────────────────
+    if ($section === 'appointments') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_appointments') {
+                $status_filter = trim($_GET['status'] ?? '');
+
+                $sql = "
+                    SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.comment, a.report,
+                           u_parent.first_name AS parent_first_name, u_parent.last_name AS parent_last_name,
+                           a.parent_id,
+                           u_doc.first_name AS doctor_first_name, u_doc.last_name AS doctor_last_name,
+                           s.specialization,
+                           ch.first_name AS child_first_name, ch.last_name AS child_last_name
+                    FROM appointment a
+                    INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                    INNER JOIN users u_parent ON u_parent.user_id = a.parent_id
+                    INNER JOIN users u_doc ON u_doc.user_id = a.specialist_id
+                    LEFT JOIN child ch ON ch.parent_id = a.parent_id
+                    WHERE s.clinic_id = :clinic_id
+                ";
+                $params = [':clinic_id' => $clinic_id];
+
+                if ($status_filter) {
+                    $sql .= " AND a.status = :status";
+                    $params[':status'] = $status_filter;
+                }
+                $sql .= " GROUP BY a.appointment_id ORDER BY a.scheduled_at DESC LIMIT 100";
+
+                $stmt = $connect->prepare($sql);
+                $stmt->execute($params);
+                $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Summary counts
+                $stmt2 = $connect->prepare("
+                    SELECT
+                        COUNT(*) AS total,
+                        SUM(CASE WHEN a.status IN ('scheduled','confirmed') AND a.scheduled_at >= NOW() THEN 1 ELSE 0 END) AS upcoming,
+                        SUM(CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+                        SUM(CASE WHEN a.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+                        SUM(CASE WHEN DATE(a.scheduled_at) = CURDATE() THEN 1 ELSE 0 END) AS today
+                    FROM appointment a
+                    INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                    WHERE s.clinic_id = :clinic_id
+                ");
+                $stmt2->execute([':clinic_id' => $clinic_id]);
+                $counts = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $appointments, 'counts' => $counts]);
+                exit;
+            }
+
+            if ($action === 'update_appointment') {
+                $appointment_id = intval($_GET['appointment_id'] ?? 0);
+                $status         = trim($_GET['status'] ?? '');
+                if (!$appointment_id || !$status) {
+                    echo json_encode(['success' => false, 'error' => 'appointment_id and status required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("UPDATE appointment SET status = :status WHERE appointment_id = :aid");
+                $stmt->execute([':status' => $status, ':aid' => $appointment_id]);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+        }
+
+        if ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'update_appointment') {
+                $appointment_id = intval($input['appointment_id'] ?? 0);
+                $status         = trim($input['status'] ?? '');
+                if (!$appointment_id) {
+                    echo json_encode(['success' => false, 'error' => 'appointment_id required']);
+                    exit;
+                }
+                $fields = [];
+                $params = [':aid' => $appointment_id];
+                if ($status) { $fields[] = "status = :status"; $params[':status'] = $status; }
+                if (empty($fields)) {
+                    echo json_encode(['success' => false, 'error' => 'No fields to update']);
+                    exit;
+                }
+                $stmt = $connect->prepare("UPDATE appointment SET " . implode(', ', $fields) . " WHERE appointment_id = :aid");
+                $stmt->execute($params);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+        }
+    }
+
+    // ─── PATIENTS SECTION ────────────────────────────────
+    if ($section === 'patients') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+            $query  = trim($_GET['query'] ?? '');
+
+            if ($action === 'get_patients') {
+                $search = '%' . $query . '%';
+
+                $sql = "
+                    SELECT
+                        c.child_id,
+                        c.first_name AS child_first_name,
+                        c.last_name  AS child_last_name,
+                        c.gender, c.birth_year, c.birth_month, c.birth_day,
+                        u_p.first_name AS parent_first_name,
+                        u_p.last_name  AS parent_last_name,
+                        p.parent_id,
+                        MAX(a.scheduled_at) AS last_appointment_date,
+                        SUBSTRING_INDEX(GROUP_CONCAT(a.status ORDER BY a.scheduled_at DESC), ',', 1) AS last_status,
+                        SUBSTRING_INDEX(GROUP_CONCAT(u_d.first_name ORDER BY a.scheduled_at DESC), ',', 1) AS assigned_doctor_first,
+                        SUBSTRING_INDEX(GROUP_CONCAT(u_d.last_name  ORDER BY a.scheduled_at DESC), ',', 1) AS assigned_doctor_last
+                    FROM appointment a
+                    INNER JOIN specialist s  ON a.specialist_id = s.specialist_id
+                    INNER JOIN users u_d     ON u_d.user_id = s.specialist_id
+                    INNER JOIN parent p      ON a.parent_id = p.parent_id
+                    INNER JOIN users u_p     ON u_p.user_id = p.parent_id
+                    INNER JOIN child c       ON c.parent_id = p.parent_id
+                    WHERE s.clinic_id = :clinic_id
+                ";
+                $params = [':clinic_id' => $clinic_id];
+
+                if ($query) {
+                    $sql .= " AND (CONCAT(c.first_name,' ',c.last_name) LIKE :q OR CONCAT(u_p.first_name,' ',u_p.last_name) LIKE :q2)";
+                    $params[':q']  = $search;
+                    $params[':q2'] = $search;
+                }
+
+                $sql .= " GROUP BY c.child_id ORDER BY last_appointment_date DESC LIMIT 100";
+
+                $stmt = $connect->prepare($sql);
+                $stmt->execute($params);
+                $patients = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $patients, 'count' => count($patients)]);
+                exit;
+            }
+        }
+    }
+
+    // ─── REVENUE SECTION ─────────────────────────────────
+    if ($section === 'revenue') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_revenue') {
+                // Revenue from subscriptions paid by parents who have appointments at this clinic
+                $stmt = $connect->prepare("
+                    SELECT
+                        sub.plan_name,
+                        sub.price,
+                        COUNT(DISTINCT ps.parent_id) AS subscriber_count,
+                        SUM(sub.price) AS plan_revenue
+                    FROM parent_subscription ps
+                    INNER JOIN subscription sub ON ps.subscription_id = sub.subscription_id
+                    WHERE ps.parent_id IN (
+                        SELECT DISTINCT a.parent_id FROM appointment a
+                        INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                        WHERE s.clinic_id = :clinic_id
+                    )
+                    GROUP BY sub.subscription_id
+                    ORDER BY sub.price DESC
+                ");
+                $stmt->execute([':clinic_id' => $clinic_id]);
+                $breakdown = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Recent payments
+                $stmt2 = $connect->prepare("
+                    SELECT
+                        u.first_name, u.last_name,
+                        sub.plan_name, pay.method,
+                        pay.amount_post_discount, pay.status, pay.paid_at
+                    FROM payment pay
+                    INNER JOIN subscription sub ON pay.subscription_id = sub.subscription_id
+                    INNER JOIN parent_subscription ps ON ps.subscription_id = sub.subscription_id
+                    INNER JOIN users u ON u.user_id = ps.parent_id
+                    WHERE ps.parent_id IN (
+                        SELECT DISTINCT a.parent_id FROM appointment a
+                        INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                        WHERE s.clinic_id = :clinic_id
+                    )
+                    ORDER BY pay.paid_at DESC
+                    LIMIT 10
+                ");
+                $stmt2->execute([':clinic_id' => $clinic_id]);
+                $recent_payments = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+
+                // Total aggregates
+                $stmt3 = $connect->prepare("
+                    SELECT
+                        COALESCE(SUM(sub.price), 0) AS total_monthly_revenue,
+                        COUNT(DISTINCT ps.parent_id) AS total_subscribers,
+                        SUM(CASE WHEN sub.price = 0 THEN 1 ELSE 0 END) AS free_users,
+                        SUM(CASE WHEN pay.status = 'pending' THEN 1 ELSE 0 END) AS pending_payments
+                    FROM parent_subscription ps
+                    INNER JOIN subscription sub ON ps.subscription_id = sub.subscription_id
+                    LEFT JOIN payment pay ON pay.subscription_id = sub.subscription_id
+                    WHERE ps.parent_id IN (
+                        SELECT DISTINCT a.parent_id FROM appointment a
+                        INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                        WHERE s.clinic_id = :clinic_id
+                    )
+                ");
+                $stmt3->execute([':clinic_id' => $clinic_id]);
+                $totals = $stmt3->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success'        => true,
+                    'breakdown'      => $breakdown,
+                    'recent_payments'=> $recent_payments,
+                    'totals'         => $totals
+                ]);
+                exit;
+            }
+        }
+    }
+
+    // ─── REVIEWS SECTION ─────────────────────────────────
+    if ($section === 'reviews') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_reviews') {
+                $stmt = $connect->prepare("
+                    SELECT
+                        f.feedback_id, f.content, f.rating, f.submitted_at,
+                        u_p.first_name AS parent_first_name, u_p.last_name AS parent_last_name,
+                        u_d.first_name AS doctor_first_name, u_d.last_name AS doctor_last_name,
+                        s.specialization
+                    FROM feedback f
+                    INNER JOIN specialist s ON f.specialist_id = s.specialist_id
+                    INNER JOIN users u_d ON u_d.user_id = s.specialist_id
+                    LEFT JOIN users u_p ON u_p.user_id = f.parent_id
+                    WHERE s.clinic_id = :clinic_id
+                    ORDER BY f.submitted_at DESC
+                    LIMIT 50
+                ");
+                $stmt->execute([':clinic_id' => $clinic_id]);
+                $reviews = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Aggregate stats
+                $stmt2 = $connect->prepare("
+                    SELECT
+                        ROUND(AVG(f.rating), 1) AS avg_rating,
+                        COUNT(*) AS total_reviews,
+                        SUM(CASE WHEN f.rating >= 4 THEN 1 ELSE 0 END) AS positive_count
+                    FROM feedback f
+                    INNER JOIN specialist s ON f.specialist_id = s.specialist_id
+                    WHERE s.clinic_id = :clinic_id
+                ");
+                $stmt2->execute([':clinic_id' => $clinic_id]);
+                $stats = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $reviews, 'stats' => $stats]);
+                exit;
+            }
+        }
+    }
+
+    // ─── SETTINGS SECTION ────────────────────────────────
+    if ($section === 'settings') {
+
+        if ($method === 'GET') {
+            $stmt = $connect->prepare("
+                SELECT c.*, GROUP_CONCAT(cp.phone SEPARATOR ',') AS phones
+                FROM clinic c
+                LEFT JOIN clinic_phone cp ON cp.clinic_id = c.clinic_id
+                WHERE c.clinic_id = :clinic_id
+                GROUP BY c.clinic_id
+            ");
+            $stmt->execute([':clinic_id' => $clinic_id]);
+            $clinic = $stmt->fetch(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'data' => $clinic]);
+            exit;
+        }
+
+        if ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'update_clinic') {
+                $fields = [];
+                $params = [':cid' => $clinic_id];
+                foreach (['clinic_name', 'email', 'location'] as $f) {
+                    if (isset($input[$f])) {
+                        $fields[] = "$f = :$f";
+                        $params[":$f"] = strip_tags(trim($input[$f]));
+                    }
+                }
+                if (empty($fields)) {
+                    echo json_encode(['success' => false, 'error' => 'No fields to update']);
+                    exit;
+                }
+                $stmt = $connect->prepare("UPDATE clinic SET " . implode(', ', $fields) . " WHERE clinic_id = :cid");
+                $stmt->execute($params);
+                echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+
+            // ── Change Password ─────────────────────────────
+            if ($action === 'change_password') {
+                $current = trim($input['current_password'] ?? '');
+                $new     = trim($input['new_password'] ?? '');
+
+                if (!$current || !$new) {
+                    echo json_encode(['success' => false, 'error' => 'Both passwords are required']);
+                    exit;
+                }
+                if (strlen($new) < 8) {
+                    echo json_encode(['success' => false, 'error' => 'New password must be at least 8 characters']);
+                    exit;
+                }
+
+                // Get clinic admin user ID
+                $stmt = $connect->prepare("
+                    SELECT u.user_id, u.password FROM users u
+                    INNER JOIN admin a ON u.user_id = a.admin_id
+                    INNER JOIN clinic c ON c.admin_id = a.admin_id
+                    WHERE c.clinic_id = :cid LIMIT 1
+                ");
+                $stmt->execute([':cid' => $clinic_id]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if (!$user || !password_verify($current, $user['password'])) {
+                    echo json_encode(['success' => false, 'error' => 'Current password is incorrect']);
+                    exit;
+                }
+
+                $hashed = password_hash($new, PASSWORD_DEFAULT);
+                $connect->prepare("UPDATE users SET password = :pw WHERE user_id = :uid")
+                        ->execute([':pw' => $hashed, ':uid' => $user['user_id']]);
+
+                echo json_encode(['success' => true, 'message' => 'Password changed successfully']);
+                exit;
+            }
+        }
+    }
+
+    // Fallback
+    echo json_encode(['success' => false, 'error' => 'Invalid section or action']);
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
