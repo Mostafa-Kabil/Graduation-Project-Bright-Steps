@@ -187,6 +187,12 @@ CREATE TABLE `clinic` (
   `email` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
   `location` varchar(255) DEFAULT NULL,
+  `bio` text DEFAULT NULL,
+  `cover_image` varchar(255) DEFAULT NULL,
+  `profile_image` varchar(255) DEFAULT NULL,
+  `opening_hours` varchar(255) DEFAULT NULL,
+  `specialties` text DEFAULT NULL,
+  `website` varchar(255) DEFAULT NULL,
   `status` varchar(20) DEFAULT 'pending',
   `rating` decimal(3,2) DEFAULT 0.00,
   `added_at` timestamp NOT NULL DEFAULT current_timestamp()
@@ -859,14 +865,16 @@ ALTER TABLE `voice_sample`
 CREATE TABLE IF NOT EXISTS `notifications` (
   `notification_id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
-  `type` enum('appointment_reminder','payment_success','growth_alert','milestone','system') DEFAULT 'system',
+  `type` enum('appointment_reminder','appointment_confirmed','appointment_cancelled','prescription_added','medical_record','payment_success','growth_alert','milestone','system','general') DEFAULT 'system',
   `title` varchar(255) NOT NULL,
   `message` text NOT NULL,
+  `reference_id` int(11) DEFAULT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`notification_id`),
   KEY `user_id` (`user_id`),
   KEY `is_read` (`is_read`),
+  KEY `idx_notif_read` (`user_id`, `is_read`),
   CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -1291,6 +1299,7 @@ INSERT INTO `badge` (`name`, `description`, `icon`) VALUES
 ('Super Parent', 'Login for 30 consecutive days', 'super_parent');
 
 -- =====================================================
+<<<<<<< HEAD
 -- Admin Dashboard Expansion Tables
 -- =====================================================
 
@@ -1686,6 +1695,83 @@ CREATE TABLE IF NOT EXISTS `article_reads` (
   `article_title` VARCHAR(255) NOT NULL,
   `read_at` TIMESTAMP DEFAULT current_timestamp(),
   FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+=======
+-- Clinic Module Tables
+-- =====================================================
+
+--
+-- Add child_id to appointment table for clinic module
+--
+ALTER TABLE `appointment`
+  ADD COLUMN `child_id` int(11) DEFAULT NULL AFTER `parent_id`,
+  ADD KEY `fk_appointment_child` (`child_id`),
+  ADD CONSTRAINT `fk_appointment_child` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE SET NULL;
+
+--
+-- Table structure for table `medical_records`
+--
+CREATE TABLE IF NOT EXISTS `medical_records` (
+  `record_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `doctor_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `diagnosis` text DEFAULT NULL,
+  `symptoms` text DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `follow_up_date` date DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`record_id`),
+  KEY `fk_mr_child` (`child_id`),
+  KEY `fk_mr_doctor` (`doctor_id`),
+  KEY `fk_mr_appointment` (`appointment_id`),
+  CONSTRAINT `fk_mr_child` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_mr_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_mr_appointment` FOREIGN KEY (`appointment_id`) REFERENCES `appointment` (`appointment_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `prescriptions`
+--
+CREATE TABLE IF NOT EXISTS `prescriptions` (
+  `prescription_id` int(11) NOT NULL AUTO_INCREMENT,
+  `record_id` int(11) NOT NULL,
+  `child_id` int(11) NOT NULL,
+  `doctor_id` int(11) NOT NULL,
+  `medication_name` varchar(255) NOT NULL,
+  `dosage` varchar(100) DEFAULT NULL,
+  `frequency` varchar(100) DEFAULT NULL,
+  `duration` varchar(100) DEFAULT NULL,
+  `instructions` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`prescription_id`),
+  KEY `fk_pres_record` (`record_id`),
+  KEY `fk_pres_child` (`child_id`),
+  KEY `fk_pres_doctor` (`doctor_id`),
+  CONSTRAINT `fk_pres_record` FOREIGN KEY (`record_id`) REFERENCES `medical_records` (`record_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pres_child` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_pres_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table structure for table `appointment_slots`
+--
+CREATE TABLE IF NOT EXISTS `appointment_slots` (
+  `slot_id` int(11) NOT NULL AUTO_INCREMENT,
+  `doctor_id` int(11) NOT NULL,
+  `clinic_id` int(11) NOT NULL,
+  `day_of_week` tinyint(1) NOT NULL COMMENT '0=Sunday, 6=Saturday',
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `slot_duration` int(11) DEFAULT 30 COMMENT 'Duration in minutes',
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`slot_id`),
+  KEY `fk_slot_doctor` (`doctor_id`),
+  KEY `fk_slot_clinic` (`clinic_id`),
+  CONSTRAINT `fk_slot_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_slot_clinic` FOREIGN KEY (`clinic_id`) REFERENCES `clinic` (`clinic_id`) ON DELETE CASCADE
+>>>>>>> d45c7513f23a5924c3ee01d693a6712e6eff99c6
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 COMMIT;

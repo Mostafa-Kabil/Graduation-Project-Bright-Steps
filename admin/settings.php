@@ -54,13 +54,20 @@ try {
 
             echo json_encode(['success' => true, 'config' => $settings]);
         } elseif ($action === 'notifications') {
-            $stmt = $connect->prepare("SELECT setting_key, setting_value FROM user_settings WHERE user_id = ?");
+            $stmt = $connect->prepare("SELECT push_notifications, email_notifications, system_alerts, weekly_reports FROM user_settings WHERE user_id = ?");
             $stmt->execute([$_SESSION['id']]);
-            $settings = [];
-            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                $settings[$row['setting_key']] = $row['setting_value'];
+            $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$settings) {
+                $settings = ['push_notifications' => 1, 'email_notifications' => 1, 'system_alerts' => 1, 'weekly_reports' => 1];
             }
-            echo json_encode(['success' => true, 'settings' => $settings]);
+            // Map email_notifications back to email_updates for JS expectations
+            $mappedSettings = [
+                'push_notifications' => $settings['push_notifications'],
+                'email_updates' => $settings['email_notifications'],
+                'system_alerts' => $settings['system_alerts'],
+                'weekly_reports' => $settings['weekly_reports']
+            ];
+            echo json_encode(['success' => true, 'settings' => $mappedSettings]);
         }
 
     } elseif ($method === 'POST') {
@@ -122,13 +129,20 @@ try {
         } elseif ($action === 'update_notifications') {
             $key = $data['key'] ?? '';
             $value = $data['value'] ?? '0';
-            $validKeys = ['push_notifications', 'email_updates', 'system_alerts', 'weekly_reports'];
-            if (!in_array($key, $validKeys)) {
+            
+            $dbKey = $key;
+            if ($key === 'email_updates') $dbKey = 'email_notifications';
+
+            $validKeys = ['push_notifications', 'email_notifications', 'system_alerts', 'weekly_reports'];
+            if (!in_array($dbKey, $validKeys)) {
                 echo json_encode(['success' => false, 'error' => 'Invalid setting']);
                 exit;
             }
-            $stmt = $connect->prepare("INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
-            $stmt->execute([$_SESSION['id'], $key, $value, $value]);
+
+            $valInt = $value ? 1 : 0;
+            $stmt = $connect->prepare("INSERT INTO user_settings (user_id, `$dbKey`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `$dbKey` = ?");
+            $stmt->execute([$_SESSION['id'], $valInt, $valInt]);
+
             echo json_encode(['success' => true]);
 
         } else {

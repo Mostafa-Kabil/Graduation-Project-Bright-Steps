@@ -406,26 +406,35 @@
             container.innerHTML = entries.map(e => {
                 const dt = new Date(e.sent_at);
                 const timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                const words = e.vocabulary_score ? Math.round(e.vocabulary_score) : '–';
-                const clarify = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
+                const words    = e.vocabulary_score ? Math.round(e.vocabulary_score) : '–';
+                const clarify  = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
                 const transcript = e.transcript ? (e.transcript.length > 80 ? e.transcript.substring(0, 80) + '…' : e.transcript) : 'No transcript';
-                const sColor = statusColor(e.status);
+                const sColor   = statusColor(e.status);
+                const isCompare = e.mode === 'read_compare';
+                const modeEmoji = isCompare ? '📖' : '🎤';
+                const modeLabel = isCompare ? 'Read & Compare' : 'Free Talk';
+                const modeBg    = isCompare ? '#dcfce7' : '#ede9fe';
+                const modeClr   = isCompare ? '#166534' : '#5b21b6';
+                const matchHtml = isCompare && e.match_score !== null
+                    ? `<span>🎯 Match: <strong>${Math.round(e.match_score)}%</strong></span>` : '';
                 const entryJson = encodeURIComponent(JSON.stringify(e)).replace(/'/g, "%27");
                 return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};">
-                    <div style="width:3rem;height:3rem;background:#ede9fe;color:#7c3aed;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">🎙️</div>
+                    <div style="width:3rem;height:3rem;background:${modeBg};color:${modeClr};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">${modeEmoji}</div>
                     <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.25rem;flex-wrap:wrap;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;flex-wrap:wrap;">
                             <h4 style="font-weight:700;">${timeStr}</h4>
-                            <span style="background:${sColor}20;color:${sColor};padding:0.2rem 0.6rem;border-radius:999px;font-size:0.75rem;font-weight:600;">${e.status || 'Unknown'}</span>
+                            <span style="background:${modeBg};color:${modeClr};padding:0.15rem 0.55rem;border-radius:999px;font-size:0.7rem;font-weight:700;">${modeLabel}</span>
+                            <span style="background:${sColor}20;color:${sColor};padding:0.15rem 0.55rem;border-radius:999px;font-size:0.7rem;font-weight:600;">${e.status || 'Unknown'}</span>
                         </div>
-                        <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;font-style:italic;">"${transcript}"</p>
-                        <div style="display:flex;gap:1.5rem;font-size:0.8rem;color:var(--slate-400);">
-                            <span>📖 <strong>${words}</strong> unique words</span>
+                        <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;font-style:italic;">&quot;${transcript}&quot;</p>
+                        <div style="display:flex;gap:1.25rem;font-size:0.8rem;color:var(--slate-400);flex-wrap:wrap;">
+                            <span>📖 <strong>${words}</strong> words</span>
                             <span>🔊 Clarity: <strong>${clarify}</strong></span>
+                            ${matchHtml}
                         </div>
                     </div>
                     <button onclick="openSpeechDetailModal(decodeURIComponent('${entryJson}'))" style="flex-shrink:0;padding:0.5rem 1rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
-                        View Analysis
+                        View
                     </button>
                 </div>`;
             }).join('');
@@ -434,57 +443,142 @@
         }
     }
 
+    // ── Age-based recommended words ──────────────────────────────────────────
+    function getAgeWords(ageMonths) {
+        if (ageMonths < 18)  return { label: '12–17 months', words: ['mama','dada','ball','cup','no','bye','up','hi','dog','cat'] };
+        if (ageMonths < 24)  return { label: '18–23 months', words: ['water','shoe','bird','book','car','baby','hot','go','sit','more'] };
+        if (ageMonths < 36)  return { label: '24–35 months', words: ['apple','tree','run','jump','play','happy','blue','red','big','eat'] };
+        if (ageMonths < 48)  return { label: '36–47 months', words: ['orange','school','friend','animal','family','outside','music','color','dance','grow'] };
+        if (ageMonths < 60)  return { label: '48–59 months', words: ['elephant','butterfly','teacher','together','beautiful','favorite','remember','always','village','garden'] };
+        return { label: '60–72 months', words: ['strawberry','hospital','experiment','neighborhood','imagination','celebrate','accomplish','wonderful','adventure','discovery'] };
+    }
+
     window.openSpeechModal = function (childId) {
+        const d = window.dashboardData || {};
+        const children = d.children || [];
+        const child = children.find(c => c.child_id == childId) || children[0] || {};
+        const ageMonths = child.age_months || 24;
+        const childName = child.first_name || 'Child';
+        const ageWordData = getAgeWords(ageMonths);
+
         let existing = document.getElementById('speech-modal');
         if (existing) existing.remove();
         const modal = document.createElement('div');
         modal.id = 'speech-modal';
-        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">
-            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2.5rem;max-width:440px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
-                <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">🎙️ New Speech Recording</h2>
-                <p style="color:var(--slate-500);font-size:0.9rem;margin-bottom:1.5rem;">Upload an audio or video file of your child speaking</p>
-                <input type="file" id="speech-file-input" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed var(--slate-300,#cbd5e1);border-radius:12px;font-size:0.9rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
-                <button onclick="submitSpeechRecording(${childId})" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;" id="speech-submit-btn">Analyze Speech</button>
-                <div id="speech-progress" style="margin-top:1rem;font-size:0.9rem;"></div>
+
+        const wordPills = ageWordData.words.map(w =>
+            `<span style="display:inline-block;background:#ede9fe;color:#5b21b6;padding:0.35rem 0.85rem;border-radius:999px;font-size:0.875rem;font-weight:600;margin:0.25rem;">${w}</span>`
+        ).join('');
+
+        modal.innerHTML = `
+        <div id="speech-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='speech-modal-overlay')document.getElementById('speech-modal').remove()">
+            <div style="background:#fff;border-radius:22px;padding:2rem;max-width:480px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,0.3);">
+
+                <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:0.25rem;text-align:center;">🎙️ New Speech Recording</h2>
+                <p style="text-align:center;color:#64748b;font-size:0.875rem;margin-bottom:1.5rem;">Choose how you want to record ${childName}'s speech</p>
+
+                <!-- Mode Cards -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                    <div id="mode-card-free" onclick="selectSpeechMode('free_talk')" style="cursor:pointer;border:2.5px solid #7c3aed;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:14px;padding:1.2rem;text-align:center;transition:transform .15s;">
+                        <div style="font-size:2rem;margin-bottom:0.4rem;">🎤</div>
+                        <div style="font-weight:700;font-size:0.95rem;color:#4c1d95;">Free Talk</div>
+                        <div style="font-size:0.75rem;color:#6d28d9;margin-top:0.25rem;">Child speaks freely</div>
+                    </div>
+                    <div id="mode-card-compare" onclick="selectSpeechMode('read_compare')" style="cursor:pointer;border:2.5px solid #e2e8f0;background:#f8fafc;border-radius:14px;padding:1.2rem;text-align:center;transition:transform .15s;">
+                        <div style="font-size:2rem;margin-bottom:0.4rem;">📖</div>
+                        <div style="font-weight:700;font-size:0.95rem;color:#334155;">Read & Compare</div>
+                        <div style="font-size:0.75rem;color:#64748b;margin-top:0.25rem;">Read age-matched words</div>
+                    </div>
+                </div>
+
+                <!-- Free Talk panel (shown by default) -->
+                <div id="panel-free_talk">
+                    <p style="color:#64748b;font-size:0.875rem;margin-bottom:0.75rem;text-align:center;">Upload an audio or video recording of your child speaking naturally.</p>
+                    <input type="file" id="speech-file-input" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed #cbd5e1;border-radius:12px;font-size:0.875rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
+                    <button onclick="submitSpeechRecording(${childId},'free_talk','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">🔬 Analyze Speech</button>
+                </div>
+
+                <!-- Read & Compare panel (hidden by default) -->
+                <div id="panel-read_compare" style="display:none;">
+                    <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+                        <div style="font-size:0.8rem;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5rem;">📋 Age-matched words (${ageWordData.label})</div>
+                        <div style="margin-bottom:0.5rem;">${wordPills}</div>
+                        <p style="font-size:0.8rem;color:#15803d;margin:0;">Ask your child to say each word. Then upload the recording below.</p>
+                    </div>
+                    <input type="file" id="speech-file-input" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed #cbd5e1;border-radius:12px;font-size:0.875rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
+                    <button onclick="submitSpeechRecording(${childId},'read_compare','${ageWordData.words.join(' ')}')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#16a34a,#059669);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">🔬 Compare & Analyze</button>
+                </div>
+
+                <div id="speech-progress" style="margin-top:0.75rem;font-size:0.875rem;text-align:center;"></div>
             </div>
         </div>`;
         document.body.appendChild(modal);
     };
 
-    window.submitSpeechRecording = async function (childId) {
+    window.selectSpeechMode = function(mode) {
+        const freeCard    = document.getElementById('mode-card-free');
+        const compareCard = document.getElementById('mode-card-compare');
+        const freePanel   = document.getElementById('panel-free_talk');
+        const cmpPanel    = document.getElementById('panel-read_compare');
+        if (!freeCard) return;
+
+        if (mode === 'free_talk') {
+            freeCard.style.border    = '2.5px solid #7c3aed';
+            freeCard.style.background = 'linear-gradient(135deg,#ede9fe,#ddd6fe)';
+            compareCard.style.border  = '2.5px solid #e2e8f0';
+            compareCard.style.background = '#f8fafc';
+            freePanel.style.display   = 'block';
+            cmpPanel.style.display    = 'none';
+        } else {
+            compareCard.style.border   = '2.5px solid #16a34a';
+            compareCard.style.background = 'linear-gradient(135deg,#dcfce7,#bbf7d0)';
+            freeCard.style.border        = '2.5px solid #e2e8f0';
+            freeCard.style.background    = '#f8fafc';
+            freePanel.style.display  = 'none';
+            cmpPanel.style.display   = 'block';
+        }
+    };
+
+    window.submitSpeechRecording = async function (childId, mode, targetText) {
         const fileInput = document.getElementById('speech-file-input');
-        const btn = document.getElementById('speech-submit-btn');
-        const progress = document.getElementById('speech-progress');
+        const btn       = document.getElementById('speech-submit-btn');
+        const progress  = document.getElementById('speech-progress');
 
         if (!fileInput || !fileInput.files[0]) {
             if (progress) { progress.style.color = '#ef4444'; progress.textContent = 'Please select an audio file first.'; }
             return;
         }
         const formData = new FormData();
-        formData.append('audio', fileInput.files[0]);
-        formData.append('child_id', childId);
+        formData.append('audio',       fileInput.files[0]);
+        formData.append('child_id',    childId);
+        formData.append('mode',        mode || 'free_talk');
+        formData.append('target_text', targetText || '');
 
-        btn.disabled = true;
+        btn.disabled    = true;
         btn.textContent = 'Analyzing… (this may take a minute)';
         if (progress) { progress.style.color = '#6366f1'; progress.textContent = '🔬 Transcribing with AI…'; }
 
         try {
-            const res = await fetch('api_speech_analysis.php', { method: 'POST', body: formData });
+            const res  = await fetch('api_speech_analysis.php', { method: 'POST', body: formData });
             const data = await res.json();
             const modal = document.getElementById('speech-modal');
             if (data.success) {
-                if (progress) { progress.style.color = '#22c55e'; progress.textContent = '✅ ' + data.message; }
+                let msg = '✅ ' + data.message;
+                if (data.match_score !== null && data.match_score !== undefined) {
+                    msg += ` Match: ${data.match_score}%`;
+                }
+                if (progress) { progress.style.color = '#22c55e'; progress.textContent = msg; }
                 btn.textContent = 'Done!';
-                setTimeout(() => { if (modal) modal.remove(); loadSpeechHistory(childId); switchView('speech'); }, 2000);
+                setTimeout(() => { if (modal) modal.remove(); loadSpeechHistory(childId); switchView('speech'); }, 2500);
             } else {
                 if (progress) { progress.style.color = '#ef4444'; progress.textContent = '❌ ' + (data.error || 'Analysis failed'); }
-                btn.disabled = false;
-                btn.textContent = 'Analyze Speech';
+                btn.disabled    = false;
+                btn.textContent = mode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
             }
         } catch (e) {
-            if (progress) { progress.style.color = '#ef4444'; progress.textContent = '❌ Network error. Ensure the Python server is running.'; }
+            if (progress) { progress.style.color = '#ef4444'; progress.textContent = '❌ Network error: ' + e.message; }
             btn.disabled = false;
-            btn.textContent = 'Analyze Speech';
+            btn.textContent = mode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
         }
     };
 
@@ -493,67 +587,96 @@
         if (existing) existing.remove();
 
         let entry;
-        try {
-            entry = JSON.parse(entryJson);
-        } catch (e) {
-            console.error("Failed to parse entry details:", e);
-            return;
-        }
+        try { entry = JSON.parse(entryJson); }
+        catch (e) { console.error('Failed to parse entry details:', e); return; }
 
-        const dt = new Date(entry.sent_at);
-        const timeStr = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const dt       = new Date(entry.sent_at);
+        const timeStr  = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                       + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const isCompare   = entry.mode === 'read_compare';
+        const modeLabel   = isCompare ? '📖 Read & Compare' : '🎤 Free Talk';
+        const modeBadgeBg = isCompare ? '#dcfce7' : '#ede9fe';
+        const modeBadgeClr= isCompare ? '#166534' : '#5b21b6';
 
-        const vocabScore = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
+        const vocabScore   = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
         const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
+        const matchScore   = entry.match_score !== null && entry.match_score !== undefined
+                             ? Math.round(entry.match_score) : null;
 
         let clarityMeaning = 'Developing clear speech patterns.';
-        if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation, aligning perfectly with milestones.';
-        else if (clarityScore >= 75) clarityMeaning = 'Good clarity, typical for this developmental stage.';
+        if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation!';
+        else if (clarityScore >= 75) clarityMeaning = 'Good clarity for this stage.';
 
         let vocabMeaning = 'Still building core vocabulary.';
         if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
-            vocabMeaning = 'Vocabulary size is right on track or advanced for their age!';
+            vocabMeaning = 'Vocabulary is on track or advanced for their age!';
+        }
+
+        // Word comparison grid (only for read_compare)
+        let wordGridHtml = '';
+        if (isCompare && entry.target_text) {
+            const targetWords = entry.target_text.toLowerCase().split(/\s+/).filter(Boolean);
+            const transcriptWords = new Set((entry.transcript || '').toLowerCase()
+                .split(/\s+/).map(w => w.replace(/[.,!?]/g, '')).filter(Boolean));
+            const pillsHtml = targetWords.map(w => {
+                const hit = transcriptWords.has(w);
+                return `<span style="display:inline-block;padding:0.35rem 0.85rem;border-radius:999px;font-size:0.875rem;font-weight:600;margin:0.2rem;background:${hit ? '#dcfce7' : '#fee2e2'};color:${hit ? '#166534' : '#991b1b'};">
+                    ${hit ? '✓' : '✗'} ${w}</span>`;
+            }).join('');
+            const matchPct = matchScore !== null ? matchScore : 0;
+            const barClr = matchPct >= 70 ? '#16a34a' : matchPct >= 40 ? '#d97706' : '#dc2626';
+            wordGridHtml = `
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                        <h3 style="font-size:1rem;font-weight:700;color:#1e293b;">🎯 Word Match Results</h3>
+                        <span style="font-size:1.4rem;font-weight:800;color:${barClr};">${matchPct}%</span>
+                    </div>
+                    <div style="background:#e2e8f0;border-radius:999px;height:8px;margin-bottom:0.75rem;overflow:hidden;">
+                        <div style="height:100%;width:${matchPct}%;background:${barClr};border-radius:999px;"></div>
+                    </div>
+                    <div>${pillsHtml}</div>
+                    <p style="font-size:0.75rem;color:#64748b;margin-top:0.5rem;">✓ said correctly &nbsp;∗ not detected</p>
+                </div>`;
         }
 
         const modal = document.createElement('div');
         modal.id = 'speech-detail-modal';
-        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.remove()">
-            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2rem;max-width:550px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;text-align:left;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">
+        modal.innerHTML = `
+        <div id="detail-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='detail-overlay')document.getElementById('speech-detail-modal').remove()">
+            <div style="background:#fff;border-radius:20px;padding:2rem;max-width:550px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;">
                     <div>
-                        <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.25rem;">Speech Analysis Details</h2>
-                        <p style="color:var(--slate-500);font-size:0.9rem;">Recorded on ${timeStr}</p>
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;">
+                            <h2 style="font-size:1.4rem;font-weight:800;">Speech Details</h2>
+                            <span style="background:${modeBadgeBg};color:${modeBadgeClr};padding:0.2rem 0.65rem;border-radius:999px;font-size:0.75rem;font-weight:700;">${modeLabel}</span>
+                        </div>
+                        <p style="color:#64748b;font-size:0.875rem;">Recorded on ${timeStr}</p>
                     </div>
-                    <button onclick="document.getElementById('speech-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);line-height:1;">&times;</button>
+                    <button onclick="document.getElementById('speech-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#94a3b8;line-height:1;">&times;</button>
                 </div>
-                
-                <div style="margin-bottom:1.5rem;">
-                    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Listen to Recording</h3>
-                    <audio controls style="width:100%;height:40px;border-radius:8px;" src="${entry.audio_url || ''}">
-                        Your browser does not support the audio element.
-                    </audio>
+                <div style="margin-bottom:1.25rem;">
+                    <h3 style="font-size:0.875rem;font-weight:700;color:#475569;margin-bottom:0.4rem;">🔊 Listen to Recording</h3>
+                    <audio controls style="width:100%;border-radius:8px;" src="${entry.audio_url || ''}">Your browser does not support audio.</audio>
                 </div>
-
-                <div style="background:var(--slate-50,#f8fafc);border:1px solid var(--slate-200,#e2e8f0);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
-                    <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Full Transcript</h3>
-                    <div style="max-height:180px;overflow-y:auto;padding-right:0.5rem;">
-                        <p style="font-style:italic;color:var(--slate-600);line-height:1.6;margin:0;">"${entry.transcript || 'No speech detected.'}"</p>
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.1rem;margin-bottom:1.25rem;">
+                    <h3 style="font-size:0.875rem;font-weight:700;color:#475569;margin-bottom:0.4rem;">📝 Full Transcript</h3>
+                    <p style="font-style:italic;color:#475569;line-height:1.6;margin:0;">&quot;${entry.transcript || 'No speech detected.'}&quot;</p>
+                </div>
+                ${wordGridHtml}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem;">
+                    <div style="background:#ede9fe;border-radius:12px;padding:1.1rem;">
+                        <span style="display:block;font-size:0.75rem;color:#6b21a8;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Vocabulary</span>
+                        <div style="font-size:1.6rem;font-weight:800;color:#581c87;">${vocabScore} <span style="font-size:0.9rem;font-weight:500;">words</span></div>
+                        <p style="font-size:0.75rem;color:#4c1d95;margin-top:0.25rem;line-height:1.4;">${vocabMeaning}</p>
                     </div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-                    <div style="background:#ede9fe;border-radius:12px;padding:1.25rem;">
-                        <span style="display:block;font-size:0.8rem;color:#6b21a8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Vocabulary Score</span>
-                        <div style="font-size:1.75rem;font-weight:800;color:#581c87;margin-bottom:0.5rem;">${vocabScore} <span style="font-size:1rem;font-weight:500;">words</span></div>
-                        <p style="font-size:0.8rem;color:#4c1d95;line-height:1.4;">${vocabMeaning}</p>
-                    </div>
-                    <div style="background:#dcfce7;border-radius:12px;padding:1.25rem;">
-                        <span style="display:block;font-size:0.8rem;color:#166534;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Clarity Score</span>
-                        <div style="font-size:1.75rem;font-weight:800;color:#14532d;margin-bottom:0.5rem;">${clarityScore}%</div>
-                        <p style="font-size:0.8rem;color:#15803d;line-height:1.4;">${clarityMeaning}</p>
+                    <div style="background:#dcfce7;border-radius:12px;padding:1.1rem;">
+                        <span style="display:block;font-size:0.75rem;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Clarity</span>
+                        <div style="font-size:1.6rem;font-weight:800;color:#14532d;">${clarityScore}%</div>
+                        <p style="font-size:0.75rem;color:#15803d;margin-top:0.25rem;line-height:1.4;">${clarityMeaning}</p>
                     </div>
                 </div>
-                
-                <button onclick="document.getElementById('speech-detail-modal').remove()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Close</button>
+                <button onclick="document.getElementById('speech-detail-modal').remove()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">Close</button>
+            </div>
         </div>`;
         document.body.appendChild(modal);
     };

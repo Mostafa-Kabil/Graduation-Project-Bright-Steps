@@ -1,6 +1,6 @@
 // Dashboard JavaScript
-(function() {
-var children = (window.dashboardData || {}).children || [];
+(function () {
+    var children = (window.dashboardData || {}).children || [];
 
     // Navigation items configuration
     const navItems = [
@@ -117,7 +117,7 @@ var children = (window.dashboardData || {}).children || [];
         main.insertBefore(topbar, main.firstChild);
 
         // Close dropdown on outside click
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             const dropdown = document.getElementById('notif-dropdown');
             const trigger = document.getElementById('topbar-notification');
             if (dropdown && trigger && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
@@ -126,7 +126,7 @@ var children = (window.dashboardData || {}).children || [];
         });
     }
 
-    window.toggleNotifDropdown = function() {
+    window.toggleNotifDropdown = function () {
         const dropdown = document.getElementById('notif-dropdown');
         if (!dropdown) return;
         if (dropdown.style.display === 'none') {
@@ -151,7 +151,7 @@ var children = (window.dashboardData || {}).children || [];
             }
             list.innerHTML = notifs.map(n => {
                 const dt = new Date(n.created_at);
-                const timeStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric'});
+                const timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 const icon = typeIcons[n.type] || '🔔';
                 const unread = n.is_read == 0 ? 'notif-unread' : '';
                 return `<div class="notif-dropdown-item ${unread}" onclick="markNotifRead(${n.notification_id});loadTopBarNotifs();loadNotifCount()">
@@ -162,7 +162,7 @@ var children = (window.dashboardData || {}).children || [];
                     </div>
                 </div>`;
             }).join('');
-        } catch(e) {
+        } catch (e) {
             list.innerHTML = '<div class="notif-dropdown-empty">Error loading</div>';
         }
     }
@@ -173,8 +173,8 @@ var children = (window.dashboardData || {}).children || [];
         if (!child) return;
         try {
             const res = await fetch('../../api_streaks.php?action=check-in', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({child_id: child.child_id})
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ child_id: child.child_id })
             });
             const data = await res.json();
             if (data.success) {
@@ -187,7 +187,7 @@ var children = (window.dashboardData || {}).children || [];
                     if (bc) bc.textContent = parseInt(bc.textContent || 0) + data.new_badges.length;
                 }
             }
-        } catch(e) { /* silent */ }
+        } catch (e) { /* silent */ }
     }
 
     function showBadgeToast(badgeName) {
@@ -204,7 +204,7 @@ var children = (window.dashboardData || {}).children || [];
         toast.className = 'badge-toast';
         let bg = type === 'success' ? '#22c55e' : (type === 'error' ? '#ef4444' : '#64748b');
         toast.style.cssText = `position:fixed;bottom:2rem;left:50%;transform:translateX(-50%) translateY(100px);background:${bg};color:#fff;padding:1rem 1.5rem;border-radius:12px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:10000;display:flex;align-items:center;gap:0.75rem;font-weight:600;opacity:0;transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);`;
-        
+
         let icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : 'ℹ️');
         toast.innerHTML = `<span style="font-size:1.25rem;">${icon}</span><div style="font-size:0.95rem;">${msg}</div>`;
         document.body.appendChild(toast);
@@ -212,7 +212,7 @@ var children = (window.dashboardData || {}).children || [];
         setTimeout(() => { toast.style.transform = 'translateX(-50%) translateY(20px)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 5000);
     }
 
-    window.openBadgesPopup = function() {
+    window.openBadgesPopup = function () {
         let existing = document.getElementById('badges-modal');
         if (existing) existing.remove();
 
@@ -244,11 +244,11 @@ var children = (window.dashboardData || {}).children || [];
             const opacity = isEarned ? '1' : '0.4';
             const filter = isEarned ? 'none' : 'grayscale(100%)';
             const bgClass = isEarned ? '' : 'unearned-badge';
-            
+
             const earnedObj = earnedBadges.find(eb => eb.name === b.name);
             const earnedDate = earnedObj && earnedObj.redeemed_at ? new Date(earnedObj.redeemed_at).toLocaleDateString() : '';
-            const statusHtml = isEarned 
-                ? `<div style="font-size:0.7rem;color:#15803d;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> EARNED ${earnedDate}</div>` 
+            const statusHtml = isEarned
+                ? `<div style="font-size:0.7rem;color:#15803d;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> EARNED ${earnedDate}</div>`
                 : `<div style="font-size:0.7rem;color:var(--slate-400);font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> LOCKED</div>`;
 
             return `
@@ -332,7 +332,7 @@ var children = (window.dashboardData || {}).children || [];
             'clinic': getClinicView,
             'notifications': getNotificationsView,
             'reports': getReportsView,
-            'messages': function() { return (window.getMessagesView || function(){ return '<div class="dashboard-content"><p>Messages view loading...</p></div>'; })(); },
+            'messages': function () { return (window.getMessagesView || function () { return '<div class="dashboard-content"><p>Messages view loading...</p></div>'; })(); },
             'settings': getSettingsView
         };
 
@@ -373,11 +373,11 @@ var children = (window.dashboardData || {}).children || [];
                 const recs = data.recommendations;
                 const activities = recs.real_life_activities || [];
                 const catBadges = {
-                    motor: {label:'Motor 💪', bg:'#dcfce7', color:'#166534'},
-                    speech: {label:'Speech 🗣️', bg:'#dbeafe', color:'#1e40af'},
-                    cognitive: {label:'Cognitive 🧠', bg:'#fef3c7', color:'#92400e'},
-                    social: {label:'Social 🤝', bg:'#fce7f3', color:'#9d174d'},
-                    real_life: {label:'Activity ⭐', bg:'#f1f5f9', color:'#475569'}
+                    motor: { label: 'Motor 💪', bg: '#dcfce7', color: '#166534' },
+                    speech: { label: 'Speech 🗣️', bg: '#dbeafe', color: '#1e40af' },
+                    cognitive: { label: 'Cognitive 🧠', bg: '#fef3c7', color: '#92400e' },
+                    social: { label: 'Social 🤝', bg: '#fce7f3', color: '#9d174d' },
+                    real_life: { label: 'Activity ⭐', bg: '#f1f5f9', color: '#475569' }
                 };
 
                 if (activities.length === 0) {
@@ -472,7 +472,7 @@ var children = (window.dashboardData || {}).children || [];
                     });
                 }
             }
-        } catch(e) {}
+        } catch (e) { }
 
         // ── Weekly Article Countdown Timer ────────────────────
         function updateArticleCountdown() {
@@ -502,12 +502,29 @@ var children = (window.dashboardData || {}).children || [];
         const appts = d.appointments || [];
         const child = children[window._selectedChildIndex || 0] || children[0] || null;
 
+        let bannerHtml = '';
+        if (d.banners && d.banners.length > 0) {
+            d.banners.forEach(b => {
+                const isUrgent = b.style === 'urgent' || b.style === 'danger';
+                const bg = b.style === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : (isUrgent ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)');
+                const icon = b.style === 'success' ? '✨' : (isUrgent ? '⚠️' : '📢');
+                bannerHtml += `<div style="background:${bg}; color:#fff; padding:1rem 1.5rem; border-radius:12px; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                    <div style="display:flex; align-items:center; gap:1rem;">
+                        <span style="font-size:1.5rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.2));">${icon}</span>
+                        <div style="font-weight:600; font-size:0.95rem; line-height:1.4;">${b.message}</div>
+                    </div>
+                    ${b.link ? `<a href="${b.link}" target="_blank" style="color:#fff; background:rgba(255,255,255,0.2); padding:0.5rem 1rem; border-radius:8px; text-decoration:none; font-weight:600; font-size:0.85rem; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">View</a>` : ''}
+                </div>`;
+            });
+        }
+
         if (!child) {
             return `<div class="dashboard-content">
                 <div class="dashboard-header-section"><div>
                     <h1 class="dashboard-title">Welcome, ${p.fname || 'Parent'}! 👋</h1>
                     <p class="dashboard-subtitle">Get started by adding your child's profile</p>
                 </div></div>
+                ${bannerHtml}
                 <div class="dashboard-card" style="text-align:center;padding:3rem;">
                     <svg style="width:4rem;height:4rem;color:var(--slate-300);margin:0 auto 1rem;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <h3 style="margin-bottom:.5rem;">No children added yet</h3>
@@ -545,10 +562,11 @@ var children = (window.dashboardData || {}).children || [];
                 <p class="dashboard-subtitle">Here's ${child.first_name}'s progress today</p>
             </div>
             </div>
+            ${bannerHtml}
             <div class="child-profile-card">
                 <div class="child-avatar">${initial}</div>
                 <div class="child-info">
-                    <h2 class="child-name">${fullName}</h2>
+                    <h2 class="child-name">${child.first_name + ' ' + p.fname}</h2>
                     <div class="child-details">
                         <span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span>
                     </div>
@@ -640,8 +658,8 @@ var children = (window.dashboardData || {}).children || [];
             const ci = (c.first_name || '?')[0].toUpperCase();
             const al = c.age_months >= 24 ? Math.floor(c.age_months / 12) + ' yo' : c.age_months + ' mo';
             const act = i === idx;
-            selectorHtml += `<div onclick="window._selectedChildIndex=${i};switchView('profile')" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all 0.3s;${act?'':'opacity:0.5;filter:grayscale(50%);'}">
-                <div style="width:4.5rem;height:4.5rem;background:${act?'linear-gradient(135deg,#6366f1,#8b5cf6)':'#e2e8f0'};color:${act?'white':'#64748b'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;border:3px solid ${act?'#c7d2fe':'transparent'};box-shadow:${act?'0 4px 15px rgba(99,102,241,0.3)':'none'};">${ci}</div>
+            selectorHtml += `<div onclick="window._selectedChildIndex=${i};switchView('profile')" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all 0.3s;${act ? '' : 'opacity:0.5;filter:grayscale(50%);'}">
+                <div style="width:4.5rem;height:4.5rem;background:${act ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#e2e8f0'};color:${act ? 'white' : '#64748b'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;border:3px solid ${act ? '#c7d2fe' : 'transparent'};box-shadow:${act ? '0 4px 15px rgba(99,102,241,0.3)' : 'none'};">${ci}</div>
                 <span style="margin-top:0.5rem;font-weight:600;font-size:0.9rem;">${c.first_name}</span>
                 <span style="font-size:0.7rem;color:#94a3b8;">${al}</span></div>`;
         });
@@ -760,7 +778,7 @@ var children = (window.dashboardData || {}).children || [];
                     <div style="padding:1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
                         <div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
                             <div style="width:28px;height:28px;background:linear-gradient(135deg,#60a5fa,#3b82f6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">📊</div>
-                            <div><span style="font-size:0.75rem;color:#64748b;display:block;">Latest Growth</span><span style="font-size:0.85rem;color:#1e293b;font-weight:600;">${g.weight?g.weight+' kg, '+g.height+' cm':'No recent data'}</span></div></div>
+                            <div><span style="font-size:0.75rem;color:#64748b;display:block;">Latest Growth</span><span style="font-size:0.85rem;color:#1e293b;font-weight:600;">${g.weight ? g.weight + ' kg, ' + g.height + ' cm' : 'No recent data'}</span></div></div>
                         <div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
                             <div style="width:28px;height:28px;background:linear-gradient(135deg,#f472b6,#ec4899);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">🗣️</div>
                             <div><span style="font-size:0.75rem;color:#64748b;display:block;">Speech Analysis</span><span style="font-size:0.85rem;color:#1e293b;font-weight:600;">Check Speech Hub</span></div></div>
@@ -773,7 +791,7 @@ var children = (window.dashboardData || {}).children || [];
                 <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h3 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">🚀 Quick Access</h3></div>
                 <div style="padding:1.5rem;display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;">
                     <div onclick="switchView('growth')" style="cursor:pointer;text-align:center;padding:1.25rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-                        <div style="font-size:1.5rem;margin-bottom:0.5rem;">📊</div><div style="font-weight:600;font-size:0.85rem;color:#166534;">Growth</div><div style="font-size:0.7rem;color:#16a34a;margin-top:0.25rem;">${g.weight?g.weight+'kg · '+g.height+'cm':'No data yet'}</div></div>
+                        <div style="font-size:1.5rem;margin-bottom:0.5rem;">📊</div><div style="font-weight:600;font-size:0.85rem;color:#166534;">Growth</div><div style="font-size:0.7rem;color:#16a34a;margin-top:0.25rem;">${g.weight ? g.weight + 'kg · ' + g.height + 'cm' : 'No data yet'}</div></div>
                     <div onclick="switchView('speech')" style="cursor:pointer;text-align:center;padding:1.25rem;background:#faf5ff;border:1px solid #e9d5ff;border-radius:14px;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
                         <div style="font-size:1.5rem;margin-bottom:0.5rem;">🗣️</div><div style="font-weight:600;font-size:0.85rem;color:#6b21a8;">Speech</div><div style="font-size:0.7rem;color:#9333ea;margin-top:0.25rem;">Track vocabulary</div></div>
                     <div onclick="switchView('motor')" style="cursor:pointer;text-align:center;padding:1.25rem;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
@@ -1015,7 +1033,7 @@ var children = (window.dashboardData || {}).children || [];
             return;
         }
         try {
-            const res = await fetch('../../api_speech_history.php?child_id=' + childId);
+            const res = await fetch('../../api_speech_history.php?child_id=' + childId + '&t=' + Date.now());
             const data = await res.json();
             const entries = data.analyses || [];
 
@@ -1043,29 +1061,53 @@ var children = (window.dashboardData || {}).children || [];
                 return '#f59e0b';
             };
 
+            const modeBadge = (mode, matchScore) => {
+                if (mode === 'read_compare') {
+                    const scoreColor = matchScore >= 80 ? '#22c55e' : matchScore >= 50 ? '#f59e0b' : '#ef4444';
+                    return `<span style="background:#16a34a20;color:#16a34a;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.7rem;font-weight:600;display:flex;align-items:center;gap:0.25rem;">📖 Read & Compare${matchScore != null ? `<span style="background:${scoreColor}20;color:${scoreColor};padding:0.1rem 0.4rem;border-radius:999px;margin-left:0.25rem;">${Math.round(matchScore)}%</span>` : ''}</span>`;
+                }
+                return '<span style="background:#7c3aed20;color:#7c3aed;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.7rem;font-weight:600;">🎤 Free Talk</span>';
+            };
+
             container.innerHTML = entries.map(e => {
                 const dt = new Date(e.sent_at);
-                const timeStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+                const timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' · ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                 const words = e.vocabulary_score ? Math.round(e.vocabulary_score) : '–';
                 const clarify = e.clarify_score ? Math.round(e.clarify_score * 100) + '%' : '–';
-                const transcript = e.transcript ? (e.transcript.length > 80 ? e.transcript.substring(0, 80) + '…' : e.transcript) : 'No transcript';
+                const overall = e.overall_development_score ? Math.round(e.overall_development_score) : null;
+                const matchScore = e.match_score;
+                const transcript = e.transcript ? (e.transcript.length > 100 ? e.transcript.substring(0, 100) + '…' : e.transcript) : 'No transcript';
                 const sColor = statusColor(e.status);
                 const entryJson = encodeURIComponent(JSON.stringify(e)).replace(/'/g, "%27");
-                return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};">
-                    <div style="width:3rem;height:3rem;background:#ede9fe;color:#7c3aed;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">🎙️</div>
+
+                // Mode-specific metrics display
+                const isCompare = e.mode === 'read_compare';
+                const matchScoreVal = matchScore !== null && matchScore !== undefined ? Math.round(matchScore) : null;
+                const modeMetrics = isCompare && matchScoreVal != null
+                    ? `<span>🎯 Match: <strong style="color:${matchScoreVal >= 80 ? '#22c55e' : matchScoreVal >= 50 ? '#f59e0b' : '#ef4444'}">${matchScoreVal}%</strong></span>
+                       ${e.word_hits ? `<span>✓ <strong>${e.word_hits.length}</strong> words hit</span>` : ''}`
+                    : `<span>📊 Avg sent: <strong>${e.avg_sentence_length || '–'}</strong></span>`;
+
+                return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
+                    <div style="width:3.5rem;height:3.5rem;background:${e.mode === 'read_compare' ? 'linear-gradient(135deg,#dcfce7,#86efac)' : 'linear-gradient(135deg,#ede9fe,#c4b5fd)'};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;box-shadow:0 4px 8px rgba(0,0,0,0.1);">
+                        ${e.mode === 'read_compare' ? '📖' : '🎤'}
+                    </div>
                     <div style="flex:1;min-width:0;">
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.25rem;flex-wrap:wrap;">
-                            <h4 style="font-weight:700;">${timeStr}</h4>
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;flex-wrap:wrap;">
+                            ${modeBadge(e.mode, matchScore)}
                             <span style="background:${sColor}20;color:${sColor};padding:0.2rem 0.6rem;border-radius:999px;font-size:0.75rem;font-weight:600;">${e.status || 'Unknown'}</span>
+                            ${overall !== null ? `<span style="background:#7c3aed20;color:#7c3aed;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.75rem;font-weight:600;">⚡ ${overall}/100</span>` : ''}
+                            <span style="margin-left:auto;font-size:0.75rem;color:#94a3b8;">${timeStr}</span>
                         </div>
-                        <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;font-style:italic;">"${transcript}"</p>
-                        <div style="display:flex;gap:1.5rem;font-size:0.8rem;color:var(--slate-400);">
-                            <span>📖 <strong>${words}</strong> unique words</span>
-                            <span>🔊 Clarity: <strong>${clarify}</strong></span>
+                        <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.75rem;font-style:italic;line-height:1.5;">"${transcript}"</p>
+                        <div style="display:flex;gap:1.25rem;font-size:0.8rem;color:var(--slate-400);flex-wrap:wrap;">
+                            <span style="background:#f1f5f9;padding:0.25rem 0.6rem;border-radius:6px;">📖 <strong style="color:#1e293b;">${words}</strong> words</span>
+                            <span style="background:#f1f5f9;padding:0.25rem 0.6rem;border-radius:6px;">🔊 <strong style="color:#1e293b;">${clarify}</strong></span>
+                            ${modeMetrics}
                         </div>
                     </div>
-                    <button onclick="openSpeechDetailModal(decodeURIComponent('${entryJson}'))" style="flex-shrink:0;padding:0.5rem 1rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;">
-                        View Analysis
+                    <button onclick="openSpeechDetailModal(decodeURIComponent('${entryJson}'))" style="flex-shrink:0;padding:0.6rem 1.2rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        View Details
                     </button>
                 </div>`;
             }).join('');
@@ -1080,9 +1122,9 @@ var children = (window.dashboardData || {}).children || [];
     function renderSpeechCharts(entries) {
         if (typeof Chart === 'undefined' || entries.length === 0) return;
         var reversed = entries.slice().reverse();
-        var labels = reversed.map(function(e, i) { return 'Rec ' + (i + 1); });
-        var vocabData = reversed.map(function(e) { return e.vocabulary_score ? Math.round(e.vocabulary_score) : 0; });
-        var clarityData = reversed.map(function(e) { return e.clarify_score ? Math.round(e.clarify_score * 100) : 0; });
+        var labels = reversed.map(function (e, i) { return 'Rec ' + (i + 1); });
+        var vocabData = reversed.map(function (e) { return e.vocabulary_score ? Math.round(e.vocabulary_score) : 0; });
+        var clarityData = reversed.map(function (e) { return e.clarify_score ? Math.round(e.clarify_score * 100) : 0; });
 
         // Vocab chart
         var vocabEl = document.getElementById('speech-vocab-chart');
@@ -1131,7 +1173,7 @@ var children = (window.dashboardData || {}).children || [];
                     datasets: [{
                         label: 'Clarity %',
                         data: clarityData,
-                        backgroundColor: clarityData.map(function(v) { return v >= 80 ? 'rgba(34,197,94,0.7)' : v >= 50 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)'; }),
+                        backgroundColor: clarityData.map(function (v) { return v >= 80 ? 'rgba(34,197,94,0.7)' : v >= 50 ? 'rgba(245,158,11,0.7)' : 'rgba(239,68,68,0.7)'; }),
                         borderRadius: 8,
                         borderSkipped: false
                     }]
@@ -1144,67 +1186,242 @@ var children = (window.dashboardData || {}).children || [];
             });
             var clarDescEl = document.getElementById('desc-clarity-progress');
             if (clarDescEl && clarityData.length > 0) {
-                var avg = Math.round(clarityData.reduce(function(a, b) { return a + b; }, 0) / clarityData.length);
+                var avg = Math.round(clarityData.reduce(function (a, b) { return a + b; }, 0) / clarityData.length);
                 clarDescEl.textContent = 'Average clarity score is ' + avg + '%. ' + (avg >= 80 ? 'Excellent pronunciation quality!' : avg >= 50 ? 'Good clarity with room for improvement.' : 'Keep practicing for clearer speech.');
             }
         }
     }
 
-    window.openSpeechModal = function(childId) {
+    // Age-based recommended words
+    function getAgeWords(ageMonths) {
+        if (ageMonths < 18) return { label: '12–17 months', words: ['mama', 'dada', 'ball', 'cup', 'no', 'bye', 'up', 'hi', 'dog', 'cat'] };
+        if (ageMonths < 24) return { label: '18–23 months', words: ['water', 'shoe', 'bird', 'book', 'car', 'baby', 'hot', 'go', 'sit', 'more'] };
+        if (ageMonths < 36) return { label: '24–35 months', words: ['apple', 'tree', 'run', 'jump', 'play', 'happy', 'blue', 'red', 'big', 'eat'] };
+        if (ageMonths < 48) return { label: '36–47 months', words: ['orange', 'school', 'friend', 'animal', 'family', 'outside', 'music', 'color', 'dance', 'grow'] };
+        if (ageMonths < 60) return { label: '48–59 months', words: ['elephant', 'butterfly', 'teacher', 'together', 'beautiful', 'favorite', 'remember', 'always', 'village', 'garden'] };
+        return { label: '60–72 months', words: ['strawberry', 'hospital', 'experiment', 'neighborhood', 'imagination', 'celebrate', 'accomplish', 'wonderful', 'adventure', 'discovery'] };
+    }
+
+    window.openSpeechModal = function (childId) {
         let existing = document.getElementById('speech-modal');
         if (existing) existing.remove();
+
+        var d = window.dashboardData || {};
+        var children = d.children || [];
+        var child = children.find(function (c) { return c.child_id == childId; }) || children[0] || {};
+        var ageMonths = child.age_months || 24;
+        var childName = child.first_name || 'Child';
+
+        // Use static words as fallback, will be replaced by API call
+        var ageWordData = getAgeWords(ageMonths);
+        window._currentGuidedWords = ageWordData.words;
+
+        var wordPills = ageWordData.words.map(function (w) {
+            return '<span style="display:inline-block;background:#ede9fe;color:#5b21b6;padding:0.35rem 0.85rem;border-radius:999px;font-size:0.875rem;font-weight:600;margin:0.25rem;">' + w + '</span>';
+        }).join('');
+
         const modal = document.createElement('div');
         modal.id = 'speech-modal';
-        modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">
-            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2.5rem;max-width:440px;width:90%;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);">
-                <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">🎙️ New Speech Recording</h2>
-                <p style="color:var(--slate-500);font-size:0.9rem;margin-bottom:1.5rem;">Upload an audio or video file of your child speaking</p>
-                <input type="file" id="speech-file-input" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed var(--slate-300,#cbd5e1);border-radius:12px;font-size:0.9rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
-                <button onclick="submitSpeechRecording(${childId})" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;" id="speech-submit-btn">Analyze Speech</button>
-                <div id="speech-progress" style="margin-top:1rem;font-size:0.9rem;"></div>
+        modal.innerHTML = `<div id="speech-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='speech-modal-overlay')document.getElementById('speech-modal').remove()">
+            <div style="background:var(--surface-light,#fff);border-radius:22px;padding:1.5rem;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,0.3);">
+                <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:0.25rem;text-align:center;">🎙️ New Speech Recording</h2>
+                <p style="text-align:center;color:#64748b;font-size:0.875rem;margin-bottom:1.5rem;">Choose how you want to record ${childName}'s speech</p>
+
+                <!-- Mode Cards -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                    <div id="mode-card-free" onclick="selectSpeechMode('free_talk')" style="cursor:pointer;border:2.5px solid #7c3aed;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:14px;padding:1.2rem;text-align:center;transition:transform .15s;">
+                        <div style="font-size:2rem;margin-bottom:0.4rem;">🎤</div>
+                        <div style="font-weight:700;font-size:0.95rem;color:#4c1d95;">Free Talk</div>
+                        <div style="font-size:0.75rem;color:#6d28d9;margin-top:0.25rem;">Child speaks freely</div>
+                    </div>
+                    <div id="mode-card-compare" onclick="selectSpeechMode('read_compare')" style="cursor:pointer;border:2.5px solid #e2e8f0;background:#f8fafc;border-radius:14px;padding:1.2rem;text-align:center;transition:transform .15s;">
+                        <div style="font-size:2rem;margin-bottom:0.4rem;">📖</div>
+                        <div style="font-weight:700;font-size:0.95rem;color:#334155;">Read & Compare</div>
+                        <div style="font-size:0.75rem;color:#64748b;margin-top:0.25rem;">Read age-matched words</div>
+                    </div>
+                </div>
+
+                <!-- Free Talk panel -->
+                <div id="panel-free_talk">
+                    <p style="color:#64748b;font-size:0.875rem;margin-bottom:0.75rem;text-align:center;">Upload an audio or video recording of your child speaking naturally.</p>
+                    <input type="file" id="speech-file-input-free" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed #cbd5e1;border-radius:12px;font-size:0.875rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
+
+                    <!-- Parental Consent Checkbox (COPPA/GDPR) -->
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;margin-bottom:1rem;">
+                        <label style="display:flex;gap:0.5rem;align-items:flex-start;cursor:pointer;font-size:0.8rem;color:#475569;">
+                            <input type="checkbox" class="parental-consent-checkbox" style="margin-top:2px;flex-shrink:0;">
+                            <span>I give consent for my child's voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking. <a href="../../privacy.php" target="_blank" style="color:#7c3aed;text-decoration:underline;">Learn more</a></span>
+                        </label>
+                    </div>
+
+                    <button onclick="submitSpeechRecording('${childId}','free_talk','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">🔬 Analyze Speech</button>
+                </div>
+
+                <!-- Read & Compare panel -->
+                <div id="panel-read_compare" style="display:none;">
+                    <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                            <div style="font-size:0.8rem;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px;">📋 Age-matched words (${ageWordData.label})</div>
+                            <button onclick="regenerateWords(${childId},${ageMonths})" style="background:none;border:1px solid #16a34a;color:#16a34a;border-radius:6px;padding:0.25rem 0.5rem;font-size:0.7rem;cursor:pointer;display:flex;align-items:center;gap:0.25rem;">
+                                <span>🔄</span> Regenerate
+                            </button>
+                        </div>
+                        <div id="guided-words-container" style="margin-bottom:0.5rem;">${wordPills}</div>
+                        <p style="font-size:0.8rem;color:#15803d;margin:0;">Ask your child to say each word. Then upload the recording below.</p>
+                    </div>
+                    <input type="file" id="speech-file-input-compare" accept="audio/*,video/*" style="width:100%;padding:0.75rem;border:2px dashed #cbd5e1;border-radius:12px;font-size:0.875rem;margin-bottom:1rem;cursor:pointer;box-sizing:border-box;">
+
+                    <!-- Parental Consent Checkbox (COPPA/GDPR) -->
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;margin-bottom:1rem;">
+                        <label style="display:flex;gap:0.5rem;align-items:flex-start;cursor:pointer;font-size:0.8rem;color:#475569;">
+                            <input type="checkbox" class="parental-consent-checkbox" style="margin-top:2px;flex-shrink:0;">
+                            <span>I give consent for my child's voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking. <a href="../../privacy.php" target="_blank" style="color:#7c3aed;text-decoration:underline;">Learn more</a></span>
+                        </label>
+                    </div>
+
+                    <button onclick="submitSpeechRecording('${childId}','read_compare','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#16a34a,#059669);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">🔬 Compare & Analyze</button>
+                </div>
+
+                <div id="speech-progress" style="margin-top:0.75rem;font-size:0.875rem;text-align:center;"></div>
             </div>
         </div>`;
         document.body.appendChild(modal);
+
+        // Fetch dynamic words from API after modal opens
+        setTimeout(function () {
+            fetch('../../api_guided_words.php?child_id=' + childId + '&age_months=' + ageMonths)
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data.success && data.words) {
+                        window._currentGuidedWords = data.words;
+                        var container = document.getElementById('guided-words-container');
+                        if (container) {
+                            var newPills = data.words.map(function (w) {
+                                return '<span style="display:inline-block;background:#ede9fe;color:#5b21b6;padding:0.35rem 0.85rem;border-radius:999px;font-size:0.875rem;font-weight:600;margin:0.25rem;">' + w + '</span>';
+                            }).join('');
+                            container.innerHTML = '<div style="margin-bottom:0.5rem;">' + newPills + '</div><p style="font-size:0.75rem;color:#15803d;margin:0;">✨ Personalized for ' + data.child_name + ' (Age: ' + data.age_label + ')</p>';
+                        }
+                    }
+                })
+                .catch(function (e) { console.log('Using fallback word list'); });
+        }, 100);
     };
 
-    window.submitSpeechRecording = async function(childId) {
-        const fileInput = document.getElementById('speech-file-input');
+    // Regenerate guided words dynamically
+    window.regenerateWords = async function (childId, ageMonths) {
+        const container = document.getElementById('guided-words-container');
+        if (!container) return;
+
+        // Show loading state
+        container.innerHTML = '<span style="color:#16a34a;font-size:0.85rem;">🔄 Generating words...</span>';
+
+        try {
+            const res = await fetch('../../api_guided_words.php?child_id=' + childId + '&age_months=' + ageMonths);
+            const data = await res.json();
+
+            if (data.success && data.words) {
+                window._currentGuidedWords = data.words;
+                const wordPills = data.words.map(function (w) {
+                    return '<span style="display:inline-block;background:#ede9fe;color:#5b21b6;padding:0.35rem 0.85rem;border-radius:999px;font-size:0.875rem;font-weight:600;margin:0.25rem;animation:pulse 0.3s ease;">' + w + '</span>';
+                }).join('');
+                container.innerHTML = '<div style="margin-bottom:0.5rem;">' + wordPills + '</div><p style="font-size:0.75rem;color:#15803d;margin:0;">✨ New words generated for ' + data.child_name + '!</p>';
+
+                // Update the button's target text
+                const btn = document.getElementById('speech-submit-btn');
+                if (btn) {
+                    btn.setAttribute('onclick', btn.getAttribute('onclick').replace(/'[^']*'\)$/, "'" + data.words.join(' ') + "')"));
+                }
+            }
+        } catch (e) {
+            container.innerHTML = '<span style="color:#ef4444;font-size:0.85rem;">Could not regenerate words. Using saved list.</span>';
+        }
+    };
+
+    window.selectSpeechMode = function (mode) {
+        var freeCard = document.getElementById('mode-card-free');
+        var compareCard = document.getElementById('mode-card-compare');
+        var freePanel = document.getElementById('panel-free_talk');
+        var cmpPanel = document.getElementById('panel-read_compare');
+        if (!freeCard) return;
+
+        if (mode === 'free_talk') {
+            freeCard.style.border = '2.5px solid #7c3aed';
+            freeCard.style.background = 'linear-gradient(135deg,#ede9fe,#ddd6fe)';
+            compareCard.style.border = '2.5px solid #e2e8f0';
+            compareCard.style.background = '#f8fafc';
+            freePanel.style.display = 'block';
+            cmpPanel.style.display = 'none';
+        } else {
+            compareCard.style.border = '2.5px solid #16a34a';
+            compareCard.style.background = 'linear-gradient(135deg,#dcfce7,#bbf7d0)';
+            freeCard.style.border = '2.5px solid #e2e8f0';
+            freeCard.style.background = '#f8fafc';
+            freePanel.style.display = 'none';
+            cmpPanel.style.display = 'block';
+        }
+    };
+
+    window.submitSpeechRecording = async function (childId, mode, targetText) {
+        // Get the correct file input based on mode
+        const currentMode = mode || (document.getElementById('panel-read_compare').style.display === 'none' ? 'free_talk' : 'read_compare');
+        const fileInputId = currentMode === 'free_talk' ? 'speech-file-input-free' : 'speech-file-input-compare';
+        const fileInput = document.getElementById(fileInputId);
         const btn = document.getElementById('speech-submit-btn');
         const progress = document.getElementById('speech-progress');
+        const panelId = currentMode === 'free_talk' ? 'panel-free_talk' : 'panel-read_compare';
+        const consentCheckbox = document.querySelector('#' + panelId + ' .parental-consent-checkbox');
 
         if (!fileInput || !fileInput.files[0]) {
             if (progress) { progress.style.color = '#ef4444'; progress.textContent = 'Please select an audio file first.'; }
             return;
         }
+
+        // Check parental consent (COPPA/GDPR compliance)
+        if (!consentCheckbox || !consentCheckbox.checked) {
+            if (progress) { progress.style.color = '#ef4444'; progress.textContent = '⚠️ Parental consent is required to proceed.'; }
+            return;
+        }
+
+        // Get target text for read_compare mode from stored guided words
+        let actualTargetText = targetText;
+        if (currentMode === 'read_compare' && window._currentGuidedWords && window._currentGuidedWords.length > 0) {
+            actualTargetText = window._currentGuidedWords.join(' ');
+        }
+
         const formData = new FormData();
         formData.append('audio', fileInput.files[0]);
         formData.append('child_id', childId);
+        formData.append('mode', currentMode);
+        if (actualTargetText) formData.append('target_text', actualTargetText);
 
         btn.disabled = true;
         btn.textContent = 'Uploading...';
         if (progress) { progress.style.color = '#6366f1'; progress.textContent = '🚀 Sending analysis securely...'; }
 
-        // Start background upload & close modal!
-        showToast("Analysis started! We will notify you when it's done.", "info");
-        setTimeout(() => {
-            const modal = document.getElementById('speech-modal');
-            if (modal) modal.remove();
-        }, 1200);
+        // Start background upload
+        showToast("Analysis started! This may take up to 30 seconds...", "info");
 
         try {
-            // Keep fetch running in background
+            // Keep fetch running
             const res = await fetch('../../api_speech_analysis.php', { method: 'POST', body: formData });
             const data = await res.json();
-            
+
             if (typeof window.loadNotifications === 'function') {
-                window.loadNotifications(); // reload bell notification
+                window.loadNotifications();
                 if (typeof window.loadNotifCount === 'function') window.loadNotifCount();
             }
 
             if (data.success) {
+                // Close modal first
+                const modal = document.getElementById('speech-modal');
+                if (modal) modal.remove();
+
                 showToast("Speech analysis complete!", "success");
-                // Refresh speech history if they are somehow still/back on the Speech tab
-                if (document.querySelector('.nav-item.active')?.dataset.view === 'speech') {
+
+                // Immediately switch to the speech view to force a full re-render of charts and history
+                if (typeof window.switchView === 'function') {
+                    window.switchView('speech');
+                } else {
                     loadSpeechHistory(childId);
                 }
             } else {
@@ -1216,16 +1433,36 @@ var children = (window.dashboardData || {}).children || [];
                     }
                 }
                 showToast(errorMsg, "error");
+                btn.disabled = false;
+                btn.textContent = currentMode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
             }
         } catch (e) {
             showToast("Could not connect to the speech analysis server.", "error");
+            btn.disabled = false;
+            btn.textContent = currentMode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
         }
     };
 
-    window.openSpeechDetailModal = function(entryJson) {
+    // Auto-start Python speech server via PHP proxy
+    window.startSpeechServer = async function () {
+        showToast('Starting speech server…', 'info');
+        try {
+            const res = await fetch('../../api_speech_status.php?action=start');
+            const data = await res.json();
+            if (data.success && data.running) {
+                showToast('Speech server started successfully!', 'success');
+            } else {
+                showToast('Could not auto-start. Run APIs/Speech Analysis/start-server.bat manually.', 'error');
+            }
+        } catch (e) {
+            showToast('Failed to reach server status endpoint.', 'error');
+        }
+    };
+
+    window.openSpeechDetailModal = function (entryJson) {
         let existing = document.getElementById('speech-detail-modal');
         if (existing) existing.remove();
-        
+
         let entry;
         try {
             entry = JSON.parse(entryJson);
@@ -1235,24 +1472,109 @@ var children = (window.dashboardData || {}).children || [];
         }
 
         const dt = new Date(entry.sent_at);
-        const timeStr = dt.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + ' at ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-        
+        const timeStr = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
         const vocabScore = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
         const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
-        
+        const overallScore = entry.overall_development_score ? Math.round(entry.overall_development_score) : 0;
+
+        // Parse developmental feedback JSON if available
+        let feedback = null;
+        try {
+            if (entry.developmental_feedback && typeof entry.developmental_feedback === 'string') {
+                feedback = JSON.parse(entry.developmental_feedback);
+            } else if (entry.developmental_feedback && typeof entry.developmental_feedback === 'object') {
+                feedback = entry.developmental_feedback;
+            }
+        } catch (e) { /* ignore parsing errors */ }
+
         let clarityMeaning = 'Developing clear speech patterns.';
         if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation, aligning perfectly with milestones.';
         else if (clarityScore >= 75) clarityMeaning = 'Good clarity, typical for this developmental stage.';
-        
+
         let vocabMeaning = 'Still building core vocabulary.';
         if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
             vocabMeaning = 'Vocabulary size is right on track or advanced for their age!';
         }
 
+        // Overall score interpretation
+        let overallMeaning = 'Continuing to develop speech skills.';
+        if (overallScore >= 80) overallMeaning = 'Excellent overall speech development!';
+        else if (overallScore >= 60) overallMeaning = 'Good progress across all areas.';
+        else if (overallScore >= 40) overallMeaning = 'Making steady progress with practice.';
+
+        // Build feedback sections
+        let feedbackHTML = '';
+        if (feedback) {
+            const strengths = feedback.strengths || [];
+            const areasToPractice = feedback.areas_to_practice || [];
+            const recommendations = feedback.recommendations || [];
+
+            if (strengths.length > 0 || areasToPractice.length > 0) {
+                feedbackHTML = `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+                    <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.75rem;color:var(--slate-700);">📋 Developmental Feedback</h3>
+                    ${strengths.length > 0 ? `<div style="margin-bottom:0.75rem;">
+                        <p style="font-size:0.8rem;font-weight:600;color:#16a34a;margin-bottom:0.35rem;">✓ Strengths</p>
+                        ${strengths.map(s => `<p style="font-size:0.8rem;color:var(--slate-600);margin:0.2rem 0;">• ${s}</p>`).join('')}
+                    </div>` : ''}
+                    ${areasToPractice.length > 0 ? `<div style="margin-bottom:0.75rem;">
+                        <p style="font-size:0.8rem;font-weight:600;color:#d97706;margin-bottom:0.35rem;">🎯 Areas to Practice</p>
+                        ${areasToPractice.map(a => `<p style="font-size:0.8rem;color:var(--slate-600);margin:0.2rem 0;">• ${a}</p>`).join('')}
+                    </div>` : ''}
+                    ${recommendations.length > 0 ? `<div>
+                        <p style="font-size:0.8rem;font-weight:600;color:#7c3aed;margin-bottom:0.35rem;">💡 Recommendations</p>
+                        ${recommendations.map(r => `<p style="font-size:0.8rem;color:var(--slate-600);margin:0.2rem 0;">• ${r}</p>`).join('')}
+                    </div>` : ''}
+                </div>`;
+            }
+        }
+
+        // Enhanced metrics section - made parent-friendly and advanced
+        let enhancedMetricsHTML = '';
+        if (entry.sentence_count || entry.avg_sentence_length || entry.flesch_reading_ease) {
+            const getComplexityDescription = (score) => {
+                const s = parseFloat(score);
+                if (isNaN(s)) return 'Developing';
+                if (s > 70) return 'Highly Expressive';
+                if (s > 40) return 'Good Variety';
+                return 'Simple & Clear';
+            };
+            const scs = entry.sentence_complexity_score ? getComplexityDescription(entry.sentence_complexity_score) : null;
+            const fre = entry.flesch_reading_ease ? parseFloat(entry.flesch_reading_ease) : null;
+            let easeDesc = '';
+            if (fre !== null) {
+                if (fre > 80) easeDesc = 'Very conversational and easy to understand';
+                else if (fre > 60) easeDesc = 'Standard conversational level';
+                else easeDesc = 'Using more advanced vocabulary';
+            }
+
+            enhancedMetricsHTML = `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+                <h3 style="font-size:1rem;font-weight:700;margin-bottom:0.75rem;color:var(--slate-700);">📊 In-Depth Language Insights</h3>
+                <p style="font-size:0.8rem;color:var(--slate-500);margin-bottom:1rem;line-height:1.4;">An advanced breakdown of your child's speech patterns, helping you understand their growing vocabulary.</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;font-size:0.8rem;">
+                    ${entry.sentence_count ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Sentences Detected</span> <strong style="color:#1e293b;font-size:1.1rem;">${entry.sentence_count}</strong><div style="font-size:0.7rem;color:#10b981;margin-top:2px;">Distinct thoughts</div></div>` : ''}
+                    
+                    ${entry.avg_sentence_length ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Sentence Length</span> <strong style="color:#1e293b;font-size:1.1rem;">${Math.round(entry.avg_sentence_length * 10) / 10}</strong> <span style="font-size:0.8rem;">words</span><div style="font-size:0.7rem;color:#8b5cf6;margin-top:2px;">Average per sentence</div></div>` : ''}
+                    
+                    ${entry.avg_word_length ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Word Breakdown</span> <strong style="color:#1e293b;font-size:1.1rem;">${Math.round(entry.avg_word_length * 10) / 10}</strong> <span style="font-size:0.8rem;">letters</span><div style="font-size:0.7rem;color:#1e40af;margin-top:2px;">Avg. word size</div></div>` : ''}
+                    
+                    ${entry.polysyllabic_word_count !== null && entry.polysyllabic_word_count !== undefined ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Complex Words</span> <strong style="color:#1e293b;font-size:1.1rem;">${entry.polysyllabic_word_count}</strong><div style="font-size:0.7rem;color:#c026d3;margin-top:2px;">Words with 3+ syllables</div></div>` : ''}
+
+                    ${entry.avg_syllables_per_word ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Pronunciation Profile</span> <strong style="color:#1e293b;font-size:1.1rem;">${Math.round(entry.avg_syllables_per_word * 10) / 10}</strong> <span style="font-size:0.8rem;">syllables</span><div style="font-size:0.7rem;color:#f59e0b;margin-top:2px;">Average per word</div></div>` : ''}
+                    
+                    ${entry.flesch_kincaid_grade !== null && entry.flesch_kincaid_grade !== undefined ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);grid-column: span 2;"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Speaking Maturity Score</span> <strong style="color:#1e293b;font-size:0.95rem;">Grade ${Math.max(0, Math.round(entry.flesch_kincaid_grade))} Equivalent</strong><div style="font-size:0.7rem;color:#64748b;margin-top:2px;">Approximates their linguistic complexity against standard grade levels.</div></div>` : ''}
+
+                    ${scs ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);grid-column: span 2;"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Expression Variety</span> <strong style="color:#1e293b;font-size:0.95rem;">${scs}</strong><div style="font-size:0.7rem;color:#64748b;margin-top:2px;">Score: ${Math.round(entry.sentence_complexity_score)}/100 based on grammatical variety.</div></div>` : ''}
+                    
+                    ${fre !== null ? `<div style="background:#fff;padding:0.75rem;border-radius:10px;border:1px solid #f1f5f9;box-shadow:0 1px 2px rgba(0,0,0,0.02);grid-column: span 2;"><span style="color:#64748b;display:block;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.5px;">Communication Style</span> <strong style="color:#1e293b;font-size:0.95rem;">${easeDesc}</strong><div style="font-size:0.7rem;color:#64748b;margin-top:2px;">Readability metric indicates natural sentence flow.</div></div>` : ''}
+                </div>
+            </div>`;
+        }
+
         const modal = document.createElement('div');
         modal.id = 'speech-detail-modal';
         modal.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.remove()">
-            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2rem;max-width:550px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;text-align:left;">
+            <div style="background:var(--surface-light,#fff);border-radius:20px;padding:2rem;max-width:600px;width:100%;box-shadow:0 25px 50px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;text-align:left;">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">
                     <div>
                         <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:0.25rem;">Speech Analysis Details</h2>
@@ -1260,10 +1582,10 @@ var children = (window.dashboardData || {}).children || [];
                     </div>
                     <button onclick="document.getElementById('speech-detail-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);line-height:1;">&times;</button>
                 </div>
-                
+
                 <div style="margin-bottom:1.5rem;">
                     <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Listen to Recording</h3>
-                    <audio controls style="width:100%;height:40px;border-radius:8px;" src="${entry.audio_url || ''}">
+                    <audio controls style="width:100%;height:40px;border-radius:8px;" src="${entry.audio_url ? (entry.audio_url.startsWith('http') ? entry.audio_url : '../../' + entry.audio_url) : ''}">
                         Your browser does not support the audio element.
                     </audio>
                 </div>
@@ -1274,7 +1596,14 @@ var children = (window.dashboardData || {}).children || [];
                         <p style="font-style:italic;color:var(--slate-600);line-height:1.6;margin:0;">"${entry.transcript || 'No speech detected.'}"</p>
                     </div>
                 </div>
-                
+
+                <!-- Overall Development Score -->
+                <div style="background:linear-gradient(135deg,#7c3aed,#2563eb);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;color:#fff;">
+                    <span style="display:block;font-size:0.8rem;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;opacity:0.9;">Overall Development Score</span>
+                    <div style="font-size:2rem;font-weight:800;margin-bottom:0.25rem;">${overallScore}<span style="font-size:1rem;font-weight:500;">/100</span></div>
+                    <p style="font-size:0.8rem;opacity:0.9;">${overallMeaning}</p>
+                </div>
+
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
                     <div style="background:#ede9fe;border-radius:12px;padding:1.25rem;">
                         <span style="display:block;font-size:0.8rem;color:#6b21a8;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Vocabulary Score</span>
@@ -1287,7 +1616,33 @@ var children = (window.dashboardData || {}).children || [];
                         <p style="font-size:0.8rem;color:#15803d;line-height:1.4;">${clarityMeaning}</p>
                     </div>
                 </div>
-                
+
+                ${(() => {
+                // Word Match Comparison Grid for Read & Compare mode
+                if (!isCompare || !entry.target_text) return '';
+                const targetWords = entry.target_text.toLowerCase().split(/\s+/).filter(Boolean);
+                const transcriptWords = new Set((entry.transcript || '').toLowerCase().split(/\s+/).map(w => w.replace(/[.,!?]/g, '')).filter(Boolean));
+                const pillsHtml = targetWords.map(w => {
+                    const hit = transcriptWords.has(w);
+                    return `<span style="display:inline-block;padding:0.35rem 0.85rem;border-radius:999px;font-size:0.85rem;font-weight:600;margin:0.2rem;background:${hit ? '#dcfce7' : '#fee2e2'};color:${hit ? '#166534' : '#991b1b'};">${hit ? '✓' : '✗'} ${w}</span>`;
+                }).join('');
+                const mPct = matchScore !== null ? matchScore : 0;
+                const barClr = mPct >= 70 ? '#16a34a' : mPct >= 40 ? '#d97706' : '#dc2626';
+                return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                            <h3 style="font-size:1rem;font-weight:700;color:#1e293b;margin:0;">🎯 Word Match Results</h3>
+                            <span style="font-size:1.4rem;font-weight:800;color:${barClr};">${mPct}%</span>
+                        </div>
+                        <div style="background:#e2e8f0;border-radius:999px;height:8px;margin-bottom:0.75rem;overflow:hidden;">
+                            <div style="height:100%;width:${mPct}%;background:${barClr};border-radius:999px;transition:width 0.5s ease;"></div>
+                        </div>
+                        <div>${pillsHtml}</div>
+                        <p style="font-size:0.75rem;color:#64748b;margin-top:0.5rem;">✓ said correctly &nbsp; ✗ not detected</p>
+                    </div>`;
+            })()}
+                ${feedbackHTML}
+                ${enhancedMetricsHTML}
+
                 <button onclick="document.getElementById('speech-detail-modal').remove()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Close</button>
             </div>
         </div>`;
@@ -1421,17 +1776,17 @@ var children = (window.dashboardData || {}).children || [];
         `;
     }
 
-    window.openMilestonesModal = function() {
+    window.openMilestonesModal = function () {
         if (!window._currentMilestones) return;
         const gross = window._currentMilestones.gross;
         const fine = window._currentMilestones.fine;
         const childId = window._currentMilestones.childId;
-        
+
         const renderCategory = (title, icon, items, color) => {
             return `<div class="dashboard-card" style="margin-bottom:1.5rem;border-radius:16px;box-shadow:0 4px 6px rgba(0,0,0,0.02);overflow:hidden;border:1px solid #e2e8f0;">
                 <div class="card-header" style="background:#f8fafc;padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;">
                     <h3 class="card-title" style="margin:0;font-weight:800;font-size:1.1rem;color:var(--slate-800);">${icon} ${title}</h3>
-                    <span class="badge" style="background:${color}20;color:${color};font-size:0.85rem;padding:0.35rem 0.75rem;">${items.filter(m=>m.is_achieved==1).length} / ${items.length}</span>
+                    <span class="badge" style="background:${color}20;color:${color};font-size:0.85rem;padding:0.35rem 0.75rem;">${items.filter(m => m.is_achieved == 1).length} / ${items.length}</span>
                 </div>
                 <div style="display:grid;gap:1px;background:var(--slate-100);">
                     ${items.map(m => `
@@ -1442,7 +1797,7 @@ var children = (window.dashboardData || {}).children || [];
                         </div>
                         <div style="flex:1;">
                             <div style="font-size:1.05rem;font-weight:600;${m.is_achieved == 1 ? 'text-decoration:line-through;color:var(--slate-400);' : 'color:var(--slate-700);'}">${m.milestone_name}</div>
-                            ${m.achieved_at ? `<div style="font-size:0.75rem;color:var(--slate-400);margin-top:0.25rem;font-weight:500;">✓ Achieved on ${new Date(m.achieved_at).toLocaleDateString('en-US',{month:'long',day:'numeric'})}</div>` : ''}
+                            ${m.achieved_at ? `<div style="font-size:0.75rem;color:var(--slate-400);margin-top:0.25rem;font-weight:500;">✓ Achieved on ${new Date(m.achieved_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</div>` : ''}
                         </div>
                     </div>`).join('')}
                 </div>
@@ -1492,10 +1847,10 @@ var children = (window.dashboardData || {}).children || [];
 
             const gross = milestones.filter(m => m.category === 'gross_motor');
             const fine = milestones.filter(m => m.category === 'fine_motor');
-            
+
             // Save state globally so the modal can access it
             window._currentMilestones = { gross, fine, childId };
-            
+
             // If the modal is currently open, refresh its content
             if (document.getElementById('milestone-modal')) {
                 window.openMilestonesModal();
@@ -1549,17 +1904,17 @@ var children = (window.dashboardData || {}).children || [];
                     const rdate = new Date(r.recorded_at);
                     const ageM = (rdate - cdob) / (1000 * 60 * 60 * 24 * 30.44);
                     if (r.motor_milestones_score !== null && r.motor_milestones_score !== undefined) {
-                        motorDataObj.push({x: ageM, y: parseFloat(r.motor_milestones_score)});
+                        motorDataObj.push({ x: ageM, y: parseFloat(r.motor_milestones_score) });
                     }
                 });
                 plotChart('motor-chart', 'bar', 'Motor Development Milestones', 'Score', 'Age (months)', motorDataObj, [], '#10b981', true);
             }
-        } catch(e) {
+        } catch (e) {
             container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#64748b;"><div style="font-size:2rem;margin-bottom:0.5rem;">🏃</div><p>Could not load motor milestones.</p></div>';
         }
     }
 
-    window.toggleMilestone = async function(milestoneId, childId, isAchieved) {
+    window.toggleMilestone = async function (milestoneId, childId, isAchieved) {
         try {
             const res = await fetch('../../api_motor.php?action=toggle', {
                 method: 'POST',
@@ -1572,7 +1927,7 @@ var children = (window.dashboardData || {}).children || [];
             }
             // Refresh the checklist
             loadMotorMilestones(childId);
-        } catch(e) { console.error('Toggle milestone error:', e); }
+        } catch (e) { console.error('Toggle milestone error:', e); }
     };
 
     function getActivitiesView() {
@@ -1626,7 +1981,7 @@ var children = (window.dashboardData || {}).children || [];
     }
 
     // ── AI Recommendations Loader ─────────────────────────────
-    window.loadAIRecommendations = async function(childId) {
+    window.loadAIRecommendations = async function (childId) {
         const container = document.getElementById('ai-recommendations');
         const btn = document.getElementById('ai-refresh-btn');
         if (!container) return;
@@ -1668,11 +2023,11 @@ var children = (window.dashboardData || {}).children || [];
                 html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;">📚 Recommended Articles</h3>
                 <div class="ai-cards-grid">`;
                 rec.articles.forEach((art, i) => {
-                    const catColors = {parenting:'#6366f1',development:'#8b5cf6',health:'#22c55e',nutrition:'#f59e0b'};
+                    const catColors = { parenting: '#6366f1', development: '#8b5cf6', health: '#22c55e', nutrition: '#f59e0b' };
                     const color = catColors[art.category] || '#6366f1';
                     const esTitle = art.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
                     const esDesc = (art.summary || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                    
+
                     html += `<div class="ai-card ai-card-article" style="--accent:${color}">
                         <div class="ai-card-badge" style="background:${color}15;color:${color}">${art.category || 'article'}</div>
                         <h4 class="ai-card-title">${art.title}</h4>
@@ -1691,9 +2046,9 @@ var children = (window.dashboardData || {}).children || [];
                 html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;margin-top:2rem;">🎯 Real-Life Activities</h3>
                 <div class="ai-cards-grid">`;
                 rec.real_life_activities.forEach((act, i) => {
-                    const catIcons = {motor:'💪',speech:'🗣️',cognitive:'🧠',social:'🤝'};
+                    const catIcons = { motor: '💪', speech: '🗣️', cognitive: '🧠', social: '🤝' };
                     const icon = catIcons[act.category] || '🎯';
-                    const diffColors = {easy:'#22c55e',medium:'#f59e0b',hard:'#ef4444'};
+                    const diffColors = { easy: '#22c55e', medium: '#f59e0b', hard: '#ef4444' };
                     const diffColor = diffColors[act.difficulty] || '#f59e0b';
                     const esTitle = act.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
                     const esDesc = (act.description || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
@@ -1721,7 +2076,7 @@ var children = (window.dashboardData || {}).children || [];
                 html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;margin-top:2rem;">🎮 Website Games & Interactive Activities</h3>
                 <div class="ai-cards-grid">`;
                 rec.website_games.forEach((game, i) => {
-                    const typeIcons = {interactive:'🕹️',quiz:'❓',creative:'🎨'};
+                    const typeIcons = { interactive: '🕹️', quiz: '❓', creative: '🎨' };
                     const icon = typeIcons[game.type] || '🎮';
                     const esTitle = game.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
                     html += `<div class="ai-card ai-card-game">
@@ -1745,7 +2100,7 @@ var children = (window.dashboardData || {}).children || [];
             // Load activity history
             loadActivityHistory(childId);
 
-        } catch(e) {
+        } catch (e) {
             container.innerHTML = `<div class="dashboard-card" style="padding:2rem;text-align:center;">
                 <p style="color:var(--red-500);margin-bottom:1rem;">⚠️ Failed to load recommendations</p>
                 <button class="btn btn-outline" onclick="loadAIRecommendations('${childId}')">Try Again</button>
@@ -1754,7 +2109,7 @@ var children = (window.dashboardData || {}).children || [];
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     };
 
-    window.completeActivity = async function(childId, category, index) {
+    window.completeActivity = async function (childId, category, index) {
         try {
             const res = await fetch('../../api_activities.php?action=history&child_id=' + childId);
             const data = await res.json();
@@ -1763,7 +2118,7 @@ var children = (window.dashboardData || {}).children || [];
             let activityId = null;
             let count = 0;
             for (const act of activities) {
-                if (act.category === category || (category === 'real_life' && ['motor','speech','cognitive','social'].includes(act.category))) {
+                if (act.category === category || (category === 'real_life' && ['motor', 'speech', 'cognitive', 'social'].includes(act.category))) {
                     if (count === index) { activityId = act.activity_id; break; }
                     count++;
                 }
@@ -1775,8 +2130,8 @@ var children = (window.dashboardData || {}).children || [];
 
             if (activityId) {
                 const res2 = await fetch('../../api_activities.php?action=complete', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({activity_id: activityId, child_id: childId})
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activity_id: activityId, child_id: childId })
                 });
                 const result = await res2.json();
                 if (result.success) {
@@ -1787,14 +2142,14 @@ var children = (window.dashboardData || {}).children || [];
                     loadActivityHistory(childId, 'all', document.querySelector('.activity-tabs button.active'));
                 }
             }
-        } catch(e) { console.error('Complete activity error:', e); }
+        } catch (e) { console.error('Complete activity error:', e); }
     };
 
-    window.openArticleModal = function(childId, index, title, summary) {
+    window.openArticleModal = function (childId, index, title, summary) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
         const randImg = 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600&h=300';
-        
+
         const modal = document.createElement('div');
         modal.id = 'act-modal';
         modal.innerHTML = `
@@ -1817,7 +2172,7 @@ var children = (window.dashboardData || {}).children || [];
         document.body.appendChild(modal);
     };
 
-    window.openActivityModal = function(childId, index, title, desc, mat, category) {
+    window.openActivityModal = function (childId, index, title, desc, mat, category) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
         const randImg = 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&q=80&w=600&h=300';
@@ -1830,7 +2185,7 @@ var children = (window.dashboardData || {}).children || [];
                     <button onclick="document.getElementById('act-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.8);backdrop-filter:blur(4px);border:none;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#0f172a;box-shadow:0 2px 5px rgba(0,0,0,0.1);">✕</button>
                     <img src="${randImg}" style="width:100%;height:200px;object-fit:cover;" />
                     <div style="padding:2rem;overflow-y:auto;flex:1;">
-                        <span class="badge badge-green" style="margin-bottom:1rem;display:inline-block;text-transform:capitalize">${category.replace('_',' ')} Activity</span>
+                        <span class="badge badge-green" style="margin-bottom:1rem;display:inline-block;text-transform:capitalize">${category.replace('_', ' ')} Activity</span>
                         <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin:0 0 0.5rem;">${title}</h2>
                         <p style="font-size:1.1rem;color:var(--slate-600);margin-bottom:1.5rem;line-height:1.6">${desc}</p>
                         
@@ -1852,10 +2207,10 @@ var children = (window.dashboardData || {}).children || [];
         document.body.appendChild(modal);
     };
 
-    window.openGameModal = function(childId, index, title) {
+    window.openGameModal = function (childId, index, title) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
-        
+
         // Define different game templates based on the game title
         let gameHtml = '';
         let gameScript = '';
@@ -1876,7 +2231,7 @@ var children = (window.dashboardData || {}).children || [];
                 <p id="shape-msg" style="color:#64748b;margin-top:1.5rem;">Click a shape to sort it to the matching spot!</p>
             `;
             window.shapeState = { sorted: 0 };
-            window.handleShapeClick = function(el) {
+            window.handleShapeClick = function (el) {
                 const shape = el.dataset.shape;
                 const targets = document.querySelectorAll('.shape-target');
                 targets.forEach(t => {
@@ -1887,7 +2242,7 @@ var children = (window.dashboardData || {}).children || [];
                         t.classList.add('filled');
                         el.style.visibility = 'hidden';
                         window.shapeState.sorted++;
-                        if(window.shapeState.sorted === 3) {
+                        if (window.shapeState.sorted === 3) {
                             document.getElementById('shape-msg').textContent = 'Great Job! All shapes sorted.';
                             document.getElementById('game-finish-btn').disabled = false;
                             document.getElementById('game-finish-btn').innerHTML = 'Claim Points 🎉';
@@ -1905,29 +2260,29 @@ var children = (window.dashboardData || {}).children || [];
             `;
             setTimeout(() => {
                 const c = document.getElementById('balloon-container');
-                if(!c) return;
+                if (!c) return;
                 window.balloonState = { popped: 0 };
-                window.popBalloon = function(el) {
+                window.popBalloon = function (el) {
                     el.style.transform = 'scale(0)';
                     setTimeout(() => el.remove(), 200);
                     window.balloonState.popped++;
-                    if(window.balloonState.popped >= 5) {
+                    if (window.balloonState.popped >= 5) {
                         document.getElementById('game-finish-btn').disabled = false;
                         document.getElementById('game-finish-btn').innerHTML = 'Claim Points 🎉';
                         document.getElementById('game-finish-btn').classList.add('btn-gradient');
                     }
                 };
-                for(let i=0; i<6; i++) {
+                for (let i = 0; i < 6; i++) {
                     const b = document.createElement('div');
-                    const colors = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#8b5cf6'];
-                    b.style.cssText = `position:absolute;width:40px;height:50px;border-radius:50%;background:${colors[i%5]};bottom:-60px;left:${15 + Math.random()*70}%;cursor:pointer;transition:transform 0.2s;animation:float ${3 + Math.random()*2}s linear infinite;box-shadow:inset -5px -5px 10px rgba(0,0,0,0.1);`;
-                    b.onclick = function() { window.popBalloon(this); };
+                    const colors = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6'];
+                    b.style.cssText = `position:absolute;width:40px;height:50px;border-radius:50%;background:${colors[i % 5]};bottom:-60px;left:${15 + Math.random() * 70}%;cursor:pointer;transition:transform 0.2s;animation:float ${3 + Math.random() * 2}s linear infinite;box-shadow:inset -5px -5px 10px rgba(0,0,0,0.1);`;
+                    b.onclick = function () { window.popBalloon(this); };
                     c.appendChild(b);
                 }
             }, 100);
         } else {
             // Default Memory Match
-            const emojis = ['🌟','🍎','🐶','🚗','🌟','🍎','🐶','🚗'].sort(() => Math.random() - 0.5);
+            const emojis = ['🌟', '🍎', '🐶', '🚗', '🌟', '🍎', '🐶', '🚗'].sort(() => Math.random() - 0.5);
             gameHtml = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:1.5rem 0;" id="memory-board">';
             emojis.forEach((e) => {
                 gameHtml += `<button class="memory-card" data-emoji="${e}" onclick="handleMemoryClick(this)" style="height:70px;font-size:1.8rem;background:#f1f5f9;border:2px solid #e2e8f0;border-radius:12px;cursor:pointer;transition:all 0.3s;color:transparent;">❓</button>`;
@@ -1935,14 +2290,14 @@ var children = (window.dashboardData || {}).children || [];
             gameHtml += '</div>';
 
             window.memoryState = { opened: [], matched: 0 };
-            window.handleMemoryClick = function(btn) {
+            window.handleMemoryClick = function (btn) {
                 if (btn.classList.contains('matched') || btn.classList.contains('opened') || window.memoryState.opened.length >= 2) return;
                 btn.style.background = '#fff';
                 btn.style.color = '#000';
                 btn.textContent = btn.dataset.emoji;
                 btn.classList.add('opened');
                 window.memoryState.opened.push(btn);
-                
+
                 if (window.memoryState.opened.length === 2) {
                     if (window.memoryState.opened[0].dataset.emoji === window.memoryState.opened[1].dataset.emoji) {
                         window.memoryState.opened.forEach(b => { b.classList.add('matched'); b.classList.remove('opened'); b.style.borderColor = '#22c55e'; b.style.background = '#dcfce7'; });
@@ -1955,9 +2310,9 @@ var children = (window.dashboardData || {}).children || [];
                         }
                     } else {
                         setTimeout(() => {
-                            window.memoryState.opened.forEach(b => { 
-                                b.classList.remove('opened'); 
-                                b.textContent = '❓'; 
+                            window.memoryState.opened.forEach(b => {
+                                b.classList.remove('opened');
+                                b.textContent = '❓';
                                 b.style.color = 'transparent';
                                 b.style.background = '#f1f5f9';
                             });
@@ -1991,12 +2346,12 @@ var children = (window.dashboardData || {}).children || [];
         document.body.appendChild(modal);
     };
 
-    window.loadActivityHistory = async function(childId, period = 'all', btnEl = null) {
+    window.loadActivityHistory = async function (childId, period = 'all', btnEl = null) {
         if (btnEl) {
             const tabs = btnEl.parentElement.querySelectorAll('button');
-            tabs.forEach(b => { 
-                b.classList.remove('active', 'btn-gradient'); 
-                b.classList.add('btn-outline'); 
+            tabs.forEach(b => {
+                b.classList.remove('active', 'btn-gradient');
+                b.classList.add('btn-outline');
             });
             btnEl.classList.remove('btn-outline');
             btnEl.classList.add('active', 'btn-gradient');
@@ -2013,8 +2368,8 @@ var children = (window.dashboardData || {}).children || [];
             }
             container.innerHTML = completed.slice(0, 10).map(a => {
                 const dt = new Date(a.completed_at);
-                const dateStr = dt.toLocaleDateString('en-US', {month:'short',day:'numeric'});
-                const catIcons = {article:'📚',real_life:'🎯',website_game:'🎮',motor:'💪',speech:'🗣️',cognitive:'🧠',social:'🤝'};
+                const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const catIcons = { article: '📚', real_life: '🎯', website_game: '🎮', motor: '💪', speech: '🗣️', cognitive: '🧠', social: '🤝' };
                 const icon = catIcons[a.category] || '✅';
                 return `<div class="dashboard-card" style="padding:1rem;margin-bottom:0.5rem;display:flex;align-items:center;gap:1rem;">
                     <span style="font-size:1.5rem;">${icon}</span>
@@ -2023,7 +2378,7 @@ var children = (window.dashboardData || {}).children || [];
                     <span class="badge badge-green">Completed</span>
                 </div>`;
             }).join('');
-        } catch(e) {
+        } catch (e) {
             container.innerHTML = '<div class="dashboard-card" style="padding:1rem;text-align:center;color:var(--slate-500);">Could not load history</div>';
         }
     }
@@ -2034,45 +2389,45 @@ var children = (window.dashboardData || {}).children || [];
 
         setTimeout(async () => {
             const specList = document.getElementById('specialist-list');
-            if(!specList) return;
+            if (!specList) return;
             try {
                 const res = await fetch('../../api_specialists.php');
                 const data = await res.json();
-                if(data.success && data.specialists && data.specialists.length > 0) {
+                if (data.success && data.specialists && data.specialists.length > 0) {
                     window._allSpecialists = data.specialists;
-                    
+
                     // Extract unique specializations and locations for filter drops
                     let specs = [...new Set(data.specialists.map(s => s.specialization).filter(Boolean))];
                     let locs = [...new Set(data.specialists.map(s => s.location).filter(Boolean))];
-                    
+
                     let sHtml = '<option value="">All Specialties</option>' + specs.map(s => `<option value="${s}">${s}</option>`).join('');
                     let lHtml = '<option value="">All Locations</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
-                    
+
                     const specF = document.getElementById('spec-filter');
                     const locF = document.getElementById('loc-filter');
-                    if(specF) specF.innerHTML = sHtml;
-                    if(locF) locF.innerHTML = lHtml;
+                    if (specF) specF.innerHTML = sHtml;
+                    if (locF) locF.innerHTML = lHtml;
 
                     window.renderSpecialists();
                 } else {
                     specList.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">No specialists found.</div>';
                 }
-            } catch(e) {
+            } catch (e) {
                 console.error(e);
                 specList.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#ef4444;">Failed to load specialists.</div>';
             }
         }, 50);
 
-        window.renderSpecialists = function() {
+        window.renderSpecialists = function () {
             const specList = document.getElementById('specialist-list');
-            if(!specList || !window._allSpecialists) return;
-            
+            if (!specList || !window._allSpecialists) return;
+
             const q = (document.getElementById('spec-search')?.value || '').toLowerCase();
             const sf = document.getElementById('spec-filter')?.value || '';
             const lf = document.getElementById('loc-filter')?.value || '';
 
             let filtered = window._allSpecialists.filter(s => {
-                let matchQ = !q || (s.first_name+' '+s.last_name+' '+s.clinic_name+' '+s.specialization).toLowerCase().includes(q);
+                let matchQ = !q || (s.first_name + ' ' + s.last_name + ' ' + s.clinic_name + ' ' + s.specialization).toLowerCase().includes(q);
                 let matchS = !sf || s.specialization === sf;
                 let matchL = !lf || s.location === lf;
                 return matchQ && matchS && matchL;
@@ -2136,7 +2491,7 @@ var children = (window.dashboardData || {}).children || [];
                     
                     <div style="display:flex; gap:1rem; align-items:center;">
                         <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:0.5rem; text-align:center; min-width:65px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                            <div style="font-size:0.75rem; color:#ef4444; font-weight:800; text-transform:uppercase;">${dt.toLocaleDateString('en-US', {month:'short'})}</div>
+                            <div style="font-size:0.75rem; color:#ef4444; font-weight:800; text-transform:uppercase;">${dt.toLocaleDateString('en-US', { month: 'short' })}</div>
                             <div style="font-size:1.75rem; font-weight:800; color:var(--slate-800); line-height:1; padding:0.2rem 0;">${dt.getDate()}</div>
                         </div>
                         <div style="flex:1;">
@@ -2209,16 +2564,16 @@ var children = (window.dashboardData || {}).children || [];
         `;
     }
 
-    window.viewDoctorInfo = function(specialistId) {
-        if(!window._allSpecialists) return;
+    window.viewDoctorInfo = function (specialistId) {
+        if (!window._allSpecialists) return;
         const s = window._allSpecialists.find(x => x.specialist_id == specialistId);
-        if(!s) return;
-        
+        if (!s) return;
+
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
-        
+
         const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.first_name)}+${encodeURIComponent(s.last_name)}&background=random`;
-        
+
         const modal = document.createElement('div');
         modal.id = 'act-modal';
         modal.innerHTML = `
@@ -2547,7 +2902,7 @@ var children = (window.dashboardData || {}).children || [];
     }
 
     // ── Settings Handlers ─────────────────────────────────────
-    window.handleThemeToggle = function(isDark) {
+    window.handleThemeToggle = function (isDark) {
         if (isDark) {
             document.documentElement.setAttribute('data-theme', 'dark');
             localStorage.setItem('theme', 'dark');
@@ -2558,7 +2913,7 @@ var children = (window.dashboardData || {}).children || [];
         saveSettingToggle('theme', isDark ? 'dark' : 'light');
     };
 
-    window.handleLangChange = function(lang) {
+    window.handleLangChange = function (lang) {
         document.getElementById('lang-en').classList.toggle('active', lang === 'en');
         document.getElementById('lang-ar').classList.toggle('active', lang === 'ar');
         if (lang === 'ar' && document.documentElement.getAttribute('lang') !== 'ar') {
@@ -2569,10 +2924,10 @@ var children = (window.dashboardData || {}).children || [];
         saveSetting('language', lang);
     };
 
-    window.openEditProfileModal = function(fname, lname, email, phone) {
+    window.openEditProfileModal = function (fname, lname, email, phone) {
         let existing = document.getElementById('edit-profile-modal');
         if (existing) existing.remove();
-        
+
         const modal = document.createElement('div');
         modal.id = 'edit-profile-modal';
         modal.innerHTML = `
@@ -2612,7 +2967,7 @@ var children = (window.dashboardData || {}).children || [];
         document.body.appendChild(modal);
     };
 
-    window.saveProfileChanges = async function() {
+    window.saveProfileChanges = async function () {
         const btn = document.getElementById('ep-save-btn');
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner" style="width:1rem;height:1rem;margin-right:0.5rem;"></span> Saving...';
@@ -2648,10 +3003,10 @@ var children = (window.dashboardData || {}).children || [];
         }
     };
 
-    window.openChangePasswordModal = function() {
+    window.openChangePasswordModal = function () {
         let existing = document.getElementById('pwd-modal');
         if (existing) existing.remove();
-        
+
         const modal = document.createElement('div');
         modal.id = 'pwd-modal';
         modal.innerHTML = `
@@ -2670,15 +3025,15 @@ var children = (window.dashboardData || {}).children || [];
         document.body.appendChild(modal);
     };
 
-    window.sendPasswordVerificationEmail = function() {
+    window.sendPasswordVerificationEmail = function () {
         const btn = document.getElementById('send-pwd-email-btn');
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner" style="width:1rem;height:1rem;margin-right:0.5rem;"></span> Sending...';
-        
+
         try {
             const formData = new FormData();
             formData.append('action', 'request_password_change');
-            
+
             fetch('../../api_auth.php', {
                 method: 'POST',
                 body: formData
@@ -2687,23 +3042,23 @@ var children = (window.dashboardData || {}).children || [];
                 btn.classList.remove('btn-gradient');
                 btn.style.background = 'var(--green-500)';
                 btn.style.color = '#fff';
-                
+
                 setTimeout(() => {
                     document.getElementById('pwd-modal').remove();
                     showBadgeToast('Verification email sent to your inbox.');
                 }, 2000);
             });
-        } catch(e) {
+        } catch (e) {
             console.error(e);
             btn.innerHTML = 'Error Sending';
         }
     };
 
-    window.saveSettingToggle = function(key, value) {
+    window.saveSettingToggle = function (key, value) {
         const payload = {};
         payload[key] = typeof value === 'boolean' ? (value ? 1 : 0) : value;
         fetch('../../api_settings.php?action=update', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }).catch(e => console.warn('Settings save error:', e));
     };
@@ -2712,12 +3067,12 @@ var children = (window.dashboardData || {}).children || [];
         const payload = {};
         payload[key] = value;
         fetch('../../api_settings.php?action=update', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }).catch(e => console.warn('Settings save error:', e));
     }
 
-    window.confirmDeleteAccount = function() {
+    window.confirmDeleteAccount = function () {
         let existing = document.getElementById('delete-account-modal');
         if (existing) existing.remove();
         const modal = document.createElement('div');
@@ -2756,6 +3111,22 @@ var children = (window.dashboardData || {}).children || [];
     window.switchView = switchView;
 
     // ── Notification helpers ─────────────────────────────────────
+    window.markNotifRead = async function(id) {
+        try {
+            await fetch('../../api_notifications.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'read', notification_id: id }) });
+            loadNotifications();
+            if (typeof loadNotifCount === 'function') loadNotifCount();
+        } catch(e){}
+    };
+    
+    window.markAllRead = async function() {
+        try {
+            await fetch('../../api_notifications.php', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action: 'read' }) });
+            loadNotifications();
+            if (typeof loadNotifCount === 'function') loadNotifCount();
+        } catch(e){}
+    };
+
     async function loadNotifCount() {
         try {
             const res = await fetch('../../api_notifications.php?action=list&limit=1');
@@ -2780,7 +3151,7 @@ var children = (window.dashboardData || {}).children || [];
     }
     window.loadNotifCount = loadNotifCount;
 
-    window.loadNotifications = async function() {
+    window.loadNotifications = async function () {
         const container = document.getElementById('notifications-list');
         if (!container) return;
         try {
@@ -2916,44 +3287,44 @@ var children = (window.dashboardData || {}).children || [];
                         const chartContainer = document.getElementById('who-charts-container');
                         if (chartContainer) {
                             chartContainer.innerHTML = chartsHtml;
-                            
+
                             const dChild = window.dashboardData.children[window._selectedChildIndex || 0];
                             const cdob = new Date(dChild.birth_year, dChild.birth_month - 1, dChild.birth_day);
                             const now = new Date();
                             const ageInMonths = Math.floor((now - cdob) / (1000 * 60 * 60 * 24 * 30.44));
                             const ageYears = Math.floor(ageInMonths / 12);
                             const ageRemMonths = ageInMonths % 12;
-                            
+
                             const weightDataObj = []; const heightDataObj = []; const headDataObj = [];
                             const wlDataObj = []; const bmiDataObj = []; const armDataObj = [];
                             const subDataObj = []; const triDataObj = []; const motorDataObj = [];
-                            
+
                             const velWeight = []; const velHeight = []; const velHead = [];
 
                             let prevRec = null;
                             data.historical_records.forEach(r => {
                                 const rdate = new Date(r.recorded_at);
                                 const ageM = (rdate - cdob) / (1000 * 60 * 60 * 24 * 30.44);
-                                
-                                if (r.weight) weightDataObj.push({x: ageM, y: parseFloat(r.weight)});
-                                if (r.height) heightDataObj.push({x: ageM, y: parseFloat(r.height)});
+
+                                if (r.weight) weightDataObj.push({ x: ageM, y: parseFloat(r.weight) });
+                                if (r.height) heightDataObj.push({ x: ageM, y: parseFloat(r.height) });
                                 if (r.weight && r.height) {
-                                    wlDataObj.push({x: parseFloat(r.height), y: parseFloat(r.weight)});
+                                    wlDataObj.push({ x: parseFloat(r.height), y: parseFloat(r.weight) });
                                     const hm = parseFloat(r.height) / 100;
-                                    if(hm > 0) bmiDataObj.push({x: ageM, y: parseFloat(r.weight) / (hm*hm)});
+                                    if (hm > 0) bmiDataObj.push({ x: ageM, y: parseFloat(r.weight) / (hm * hm) });
                                 }
-                                if (r.head_circumference) headDataObj.push({x: ageM, y: parseFloat(r.head_circumference)});
-                                if (r.arm_circumference) armDataObj.push({x: ageM, y: parseFloat(r.arm_circumference)});
-                                if (r.motor_milestones_score) motorDataObj.push({x: ageM, y: parseFloat(r.motor_milestones_score)});
+                                if (r.head_circumference) headDataObj.push({ x: ageM, y: parseFloat(r.head_circumference) });
+                                if (r.arm_circumference) armDataObj.push({ x: ageM, y: parseFloat(r.arm_circumference) });
+                                if (r.motor_milestones_score) motorDataObj.push({ x: ageM, y: parseFloat(r.motor_milestones_score) });
 
                                 // Calculate velocity
                                 if (prevRec) {
                                     const pdate = new Date(prevRec.recorded_at);
                                     const monthsDiff = (rdate - pdate) / (1000 * 60 * 60 * 24 * 30.44);
                                     if (monthsDiff > 0) {
-                                        if (r.weight && prevRec.weight) velWeight.push({x: ageM, y: (r.weight - prevRec.weight) / monthsDiff});
-                                        if (r.height && prevRec.height) velHeight.push({x: ageM, y: (r.height - prevRec.height) / monthsDiff});
-                                        if (r.head_circumference && prevRec.head_circumference) velHead.push({x: ageM, y: (r.head_circumference - prevRec.head_circumference) / monthsDiff});
+                                        if (r.weight && prevRec.weight) velWeight.push({ x: ageM, y: (r.weight - prevRec.weight) / monthsDiff });
+                                        if (r.height && prevRec.height) velHeight.push({ x: ageM, y: (r.height - prevRec.height) / monthsDiff });
+                                        if (r.head_circumference && prevRec.head_circumference) velHead.push({ x: ageM, y: (r.head_circumference - prevRec.head_circumference) / monthsDiff });
                                     }
                                 }
                                 prevRec = r;
@@ -2961,12 +3332,12 @@ var children = (window.dashboardData || {}).children || [];
 
                             const gender = data.gender || 'male';
                             const whoPoints = data.who_curve_points;
-                            const mapWho = (whoSet) => whoSet ? Object.keys(whoSet).map(age => ({x: parseFloat(age), y: whoSet[age].median})) : [];
+                            const mapWho = (whoSet) => whoSet ? Object.keys(whoSet).map(age => ({ x: parseFloat(age), y: whoSet[age].median })) : [];
 
                             const plotChart = (ctxId, type, title, yLabel, xLabel, childLine, whoLine, color, isFill) => {
                                 const el = document.getElementById(ctxId);
                                 if (!el) return;
-                                const ds = [{ label: dChild.first_name, data: childLine, borderColor: color, backgroundColor: isFill ? color+'40' : color, fill: isFill, tension: 0.3 }];
+                                const ds = [{ label: dChild.first_name, data: childLine, borderColor: color, backgroundColor: isFill ? color + '40' : color, fill: isFill, tension: 0.3 }];
                                 if (whoLine && whoLine.length > 0) {
                                     ds.push({ label: 'WHO Standard', data: whoLine, borderColor: '#94a3b8', borderDash: [5, 5], tension: 0.3, pointRadius: 0, fill: false });
                                 }
@@ -2992,10 +3363,10 @@ var children = (window.dashboardData || {}).children || [];
                                 renderBMIGauge(bmiDataObj, dChild.first_name, ageYears, ageRemMonths);
                                 plotChart('who-head-chart', 'line', 'Head Circumference-for-Age', 'Head Circ. (cm)', 'Age (months)', headDataObj, mapWho(whoPoints.head_for_age[gender]), '#8b5cf6', false);
                                 plotChart('who-arm-chart', 'line', 'Arm Circumference-for-Age', 'Arm Circ. (cm)', 'Age (months)', armDataObj, mapWho(whoPoints.arm_for_age[gender]), '#3b82f6', false);
-                                
+
                                 plotChart('motor-chart', 'bar', 'Motor Development Milestones', 'Score', 'Age (months)', motorDataObj, [], '#10b981', true);
                                 // Velocity charts: only render if 2+ data points, else show message
-                                var showVelMsg = function(canvasId, label) {
+                                var showVelMsg = function (canvasId, label) {
                                     var c = document.getElementById(canvasId);
                                     if (c && c.parentElement) {
                                         c.parentElement.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#94a3b8;text-align:center;padding:2rem;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p style="margin:1rem 0 0;font-size:0.85rem;line-height:1.5;">' + label + ' velocity requires <strong>at least 2 measurements</strong> recorded on different dates.</p></div>';
@@ -3012,29 +3383,29 @@ var children = (window.dashboardData || {}).children || [];
                                 var cn = dChild.first_name;
                                 var whoM = m || {};
                                 function setDesc(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
-                                
-                                var latestW = weightDataObj.length > 0 ? weightDataObj[weightDataObj.length-1].y : null;
-                                var latestH = heightDataObj.length > 0 ? heightDataObj[heightDataObj.length-1].y : null;
-                                var latestHC = headDataObj.length > 0 ? headDataObj[headDataObj.length-1].y : null;
-                                
+
+                                var latestW = weightDataObj.length > 0 ? weightDataObj[weightDataObj.length - 1].y : null;
+                                var latestH = heightDataObj.length > 0 ? heightDataObj[heightDataObj.length - 1].y : null;
+                                var latestHC = headDataObj.length > 0 ? headDataObj[headDataObj.length - 1].y : null;
+
                                 if (latestW && whoM.weight) {
                                     setDesc('desc-weight', `${cn}'s weight is ${latestW} kg. Their z-score is ${whoM.weight.z_score}, placing them at the ${whoM.weight.percentile}th percentile. The WHO median for their age is ${whoM.weight.who_median}. ${whoM.weight.status === 'green' ? 'This is a healthy weight!' : whoM.weight.status === 'yellow' ? 'This is within a cautionary range, monitor closely.' : 'Please consult your pediatrician for guidance.'}`);
                                 } else { setDesc('desc-weight', 'Log weight measurements to see how ' + cn + ' compares against WHO standards for their age group.'); }
-                                
+
                                 if (latestH && whoM.height) {
                                     setDesc('desc-height', `${cn} is ${latestH} cm tall with a z-score of ${whoM.height.z_score} (${whoM.height.percentile}th percentile). The WHO median for their age is ${whoM.height.who_median}. ${whoM.height.status === 'green' ? 'Height growth is tracking well.' : 'Consider discussing growth patterns with your pediatrician.'}`);
                                 } else { setDesc('desc-height', "Log height measurements to track how " + cn + "'s stature compares to other children their age."); }
-                                
+
                                 if (latestW && latestH) {
                                     const wlStatus = whoM.weight_for_length ? whoM.weight_for_length.status : '';
                                     setDesc('desc-wl', `This chart shows how ${cn}'s weight relates to their height. A consistent curve means proportional growth. ${wlStatus === 'green' ? 'Proportions look healthy.' : wlStatus === 'yellow' ? 'Slight disproportion detected, should be monitored.' : wlStatus === 'red' ? 'Consult pediatrician regarding growth proportions.' : ''}`);
                                 } else { setDesc('desc-wl', 'Log both weight and height to see the weight-for-length relationship.'); }
-                                
+
                                 if (latestHC && whoM.head_circumference) {
                                     setDesc('desc-head', cn + "'s head measures " + latestHC + " cm (" + whoM.head_circumference.percentile + "th percentile). " + (whoM.head_circumference.status === 'green' ? 'Brain growth is progressing normally. Consistent growth along a percentile curve is what matters most.' : 'Discuss head circumference trends with your pediatrician.'));
                                 } else { setDesc('desc-head', "Head circumference tracks brain growth. Log measurements to see " + cn + "'s progress."); }
-                                
-                                setDesc('desc-arm', armDataObj.length > 0 ? cn + "'s arm circumference indicates muscle and fat mass development. " + (armDataObj.length > 1 ? 'The trend shows ' + (armDataObj[armDataObj.length-1].y > armDataObj[0].y ? 'healthy growth.' : 'a decline — consult your pediatrician.') : 'More measurements are needed to establish a trend.') : 'Arm circumference is best measured by a specialist during clinic visits.');
+
+                                setDesc('desc-arm', armDataObj.length > 0 ? cn + "'s arm circumference indicates muscle and fat mass development. " + (armDataObj.length > 1 ? 'The trend shows ' + (armDataObj[armDataObj.length - 1].y > armDataObj[0].y ? 'healthy growth.' : 'a decline — consult your pediatrician.') : 'More measurements are needed to establish a trend.') : 'Arm circumference is best measured by a specialist during clinic visits.');
                             }, 100);
                         }
                     }
@@ -3097,10 +3468,10 @@ var children = (window.dashboardData || {}).children || [];
         } catch (e) { err.textContent = 'Network error'; }
     };
 
-    window.openSpeechDetailModal = function(entryJson) {
+    window.openSpeechDetailModal = function (entryJson) {
         let existing = document.getElementById('speech-detail-modal');
         if (existing) existing.remove();
-        
+
         let entry;
         try {
             entry = JSON.parse(entryJson);
@@ -3110,15 +3481,15 @@ var children = (window.dashboardData || {}).children || [];
         }
 
         const dt = new Date(entry.sent_at);
-        const timeStr = dt.toLocaleDateString('en-US', {month:'long',day:'numeric',year:'numeric'}) + ' at ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-        
+        const timeStr = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
         const vocabScore = entry.vocabulary_score ? Math.round(entry.vocabulary_score) : 0;
         const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
-        
+
         let clarityMeaning = 'Developing clear speech patterns.';
         if (clarityScore >= 100) clarityMeaning = 'Very clear pronunciation, aligning perfectly with milestones.';
         else if (clarityScore >= 75) clarityMeaning = 'Good clarity, typical for this developmental stage.';
-        
+
         let vocabMeaning = 'Still building core vocabulary.';
         if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
             vocabMeaning = 'Vocabulary size is right on track or advanced for their age!';
@@ -3173,7 +3544,7 @@ var children = (window.dashboardData || {}).children || [];
     initNav();
     const urlParams = new URLSearchParams(window.location.search);
     const initialView = urlParams.get('view') || 'home';
-    
+
     if (document.getElementById('dashboard-content')) {
         switchView(initialView);
     } else {
@@ -3192,15 +3563,15 @@ var children = (window.dashboardData || {}).children || [];
 
 
 
-// Handle logout – Premium modal
-window.handleLogout = function() {
-    // Remove existing modal if any
-    const existing = document.getElementById('logout-modal');
-    if (existing) existing.remove();
+    // Handle logout – Premium modal
+    window.handleLogout = function () {
+        // Remove existing modal if any
+        const existing = document.getElementById('logout-modal');
+        if (existing) existing.remove();
 
-    const modal = document.createElement('div');
-    modal.id = 'logout-modal';
-    modal.innerHTML = `
+        const modal = document.createElement('div');
+        modal.id = 'logout-modal';
+        modal.innerHTML = `
         <div class="logout-overlay" onclick="closeLogoutModal()"></div>
             <div class="logout-dialog">
                 <div class="logout-icon-wrap">
@@ -3216,40 +3587,40 @@ window.handleLogout = function() {
                 </div>
             </div>
     `;
-    document.body.appendChild(modal);
-    // Trigger entrance animation
-    requestAnimationFrame(() => modal.classList.add('show'));
-}
-
-window.closeLogoutModal = function() {
-    const modal = document.getElementById('logout-modal');
-    if (modal) {
-        modal.classList.remove('show');
-        modal.classList.add('hide');
-        setTimeout(() => modal.remove(), 300);
+        document.body.appendChild(modal);
+        // Trigger entrance animation
+        requestAnimationFrame(() => modal.classList.add('show'));
     }
-}
 
-window.confirmLogout = function() {
-    clearAuth();
-    window.location.href = '../../logout.php';
-}
+    window.closeLogoutModal = function () {
+        const modal = document.getElementById('logout-modal');
+        if (modal) {
+            modal.classList.remove('show');
+            modal.classList.add('hide');
+            setTimeout(() => modal.remove(), 300);
+        }
+    }
 
-// ══════════════════════════════════════════════════════════════
-// ── Add / Edit Child Modal ─────────────────────────────────
-// ══════════════════════════════════════════════════════════════
-window.openAddChildModal = function(childDataOrEmpty) {
-    let childData = childDataOrEmpty;
-    const children = window.dashboardData?.children || [];
-    
-    // Remove existing
-    const old = document.getElementById('add-child-modal');
-    if (old) old.remove();
+    window.confirmLogout = function () {
+        clearAuth();
+        window.location.href = '../../logout.php';
+    }
 
-    // Build switcher HTML if there are children
-    let switcherHtml = '';
-    if (children.length > 0) {
-        switcherHtml = `
+    // ══════════════════════════════════════════════════════════════
+    // ── Add / Edit Child Modal ─────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.openAddChildModal = function (childDataOrEmpty) {
+        let childData = childDataOrEmpty;
+        const children = window.dashboardData?.children || [];
+
+        // Remove existing
+        const old = document.getElementById('add-child-modal');
+        if (old) old.remove();
+
+        // Build switcher HTML if there are children
+        let switcherHtml = '';
+        if (children.length > 0) {
+            switcherHtml = `
         <div style="display:flex; overflow-x:auto; gap:0.5rem; padding: 1rem 2rem 0; align-items:center;">
             <span style="font-size:0.8rem; font-weight:600; color:var(--slate-500); margin-right:0.5rem;">Select Profile:</span>
             ${children.map((c, idx) => `
@@ -3261,21 +3632,21 @@ window.openAddChildModal = function(childDataOrEmpty) {
                 + New Child
             </button>
         </div>`;
-    }
+        }
 
-    const isEdit = !!childData;
-    let birthVal = '';
-    if (isEdit && childData.birth_year) {
-        const y = childData.birth_year;
-        const m = String(childData.birth_month).padStart(2,'0');
-        const d = String(childData.birth_day).padStart(2,'0');
-        birthVal = `${y}-${m}-${d}`;
-    }
+        const isEdit = !!childData;
+        let birthVal = '';
+        if (isEdit && childData.birth_year) {
+            const y = childData.birth_year;
+            const m = String(childData.birth_month).padStart(2, '0');
+            const d = String(childData.birth_day).padStart(2, '0');
+            birthVal = `${y}-${m}-${d}`;
+        }
 
-    const modal = document.createElement('div');
-    modal.id = 'add-child-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s ease;';
-    modal.innerHTML = `
+        const modal = document.createElement('div');
+        modal.id = 'add-child-modal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s ease;';
+        modal.innerHTML = `
         <div style="position:absolute;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);" onclick="closeAddChildModal()"></div>
         <div id="acm-card" style="position:relative;background:var(--bg-card,#fff);border-radius:24px;padding:0;width:95%;max-width:520px;max-height:90vh;overflow:hidden;box-shadow:0 25px 60px rgba(0,0,0,0.15);transform:scale(0.9) translateY(20px);transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.3s ease;">
             <!-- Header -->
@@ -3334,106 +3705,106 @@ window.openAddChildModal = function(childDataOrEmpty) {
             </div>
         </div>`;
 
-    document.body.appendChild(modal);
-    
-    // Animate in
-    requestAnimationFrame(() => {
-        modal.style.opacity = '1';
-        const card = document.getElementById('acm-card');
-        if (card) {
-            card.style.transform = 'scale(1) translateY(0)';
-        }
-    });
+        document.body.appendChild(modal);
 
-    // Close on Escape
-    modal._escHandler = function(e) { if (e.key === 'Escape') closeAddChildModal(); };
-    document.addEventListener('keydown', modal._escHandler);
-};
+        // Animate in
+        requestAnimationFrame(() => {
+            modal.style.opacity = '1';
+            const card = document.getElementById('acm-card');
+            if (card) {
+                card.style.transform = 'scale(1) translateY(0)';
+            }
+        });
 
-window.closeAddChildModal = function() {
-    const modal = document.getElementById('add-child-modal');
-    if (!modal) return;
-    const card = document.getElementById('acm-card');
-    if (card) card.style.transform = 'scale(0.9) translateY(20px)';
-    modal.style.opacity = '0';
-    document.removeEventListener('keydown', modal._escHandler);
-    setTimeout(() => modal.remove(), 300);
-};
-
-window.submitChildModal = async function() {
-    const btn = document.getElementById('acm-submit');
-    const status = document.getElementById('acm-status');
-    const childId = document.getElementById('acm-child-id').value;
-    
-    const payload = {
-        child_id: childId || null,
-        first_name: document.getElementById('acm-fname').value.trim(),
-        birth_date: document.getElementById('acm-dob').value,
-        gender: document.getElementById('acm-gender').value
+        // Close on Escape
+        modal._escHandler = function (e) { if (e.key === 'Escape') closeAddChildModal(); };
+        document.addEventListener('keydown', modal._escHandler);
     };
 
-    if (!payload.first_name || !payload.birth_date) {
-        status.style.display = 'block';
-        status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Please fill in all required fields.</div>';
-        return;
-    }
+    window.closeAddChildModal = function () {
+        const modal = document.getElementById('add-child-modal');
+        if (!modal) return;
+        const card = document.getElementById('acm-card');
+        if (card) card.style.transform = 'scale(0.9) translateY(20px)';
+        modal.style.opacity = '0';
+        document.removeEventListener('keydown', modal._escHandler);
+        setTimeout(() => modal.remove(), 300);
+    };
 
-    btn.disabled = true;
-    btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...</span>';
-    status.style.display = 'none';
+    window.submitChildModal = async function () {
+        const btn = document.getElementById('acm-submit');
+        const status = document.getElementById('acm-status');
+        const childId = document.getElementById('acm-child-id').value;
 
-    try {
-        const action = childId ? 'edit' : 'add';
-        const res = await fetch('../../api_child.php?action=' + action, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
+        const payload = {
+            child_id: childId || null,
+            first_name: document.getElementById('acm-fname').value.trim(),
+            birth_date: document.getElementById('acm-dob').value,
+            gender: document.getElementById('acm-gender').value
+        };
 
-        if (data.success) {
+        if (!payload.first_name || !payload.birth_date) {
             status.style.display = 'block';
-            status.innerHTML = `<div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#16a34a;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;">
+            status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Please fill in all required fields.</div>';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...</span>';
+        status.style.display = 'none';
+
+        try {
+            const action = childId ? 'edit' : 'add';
+            const res = await fetch('../../api_child.php?action=' + action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                status.style.display = 'block';
+                status.innerHTML = `<div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#16a34a;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
                 ${data.message}</div>`;
-            
-            // Reload page after short delay to show updated data
-            setTimeout(() => {
-                window.location.reload();
-            }, 1200);
-        } else {
+
+                // Reload page after short delay to show updated data
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1200);
+            } else {
+                status.style.display = 'block';
+                status.innerHTML = `<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">${data.error || 'Something went wrong'}</div>`;
+                btn.disabled = false;
+                btn.textContent = childId ? '✏️ Save Changes' : '✨ Add Child';
+            }
+        } catch (e) {
             status.style.display = 'block';
-            status.innerHTML = `<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">${data.error || 'Something went wrong'}</div>`;
+            status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Network error. Please try again.</div>';
             btn.disabled = false;
             btn.textContent = childId ? '✏️ Save Changes' : '✨ Add Child';
         }
-    } catch (e) {
-        status.style.display = 'block';
-        status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Network error. Please try again.</div>';
-        btn.disabled = false;
-        btn.textContent = childId ? '✏️ Save Changes' : '✨ Add Child';
+    };
+
+    // Spinner animation
+    if (!document.getElementById('acm-spinner-style')) {
+        const style = document.createElement('style');
+        style.id = 'acm-spinner-style';
+        style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}';
+        document.head.appendChild(style);
     }
-};
 
-// Spinner animation
-if (!document.getElementById('acm-spinner-style')) {
-    const style = document.createElement('style');
-    style.id = 'acm-spinner-style';
-    style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}';
-    document.head.appendChild(style);
-}
+    // ══════════════════════════════════════════════════════════════
+    // ── Log Measurement Modal (historical – always INSERT) ──────
+    // ══════════════════════════════════════════════════════════════
+    window.openLogMeasurementModal = function (childId, recordId = null, w = '', h = '', hc = '') {
+        let existing = document.getElementById('log-growth-modal');
+        if (existing) existing.remove();
 
-// ══════════════════════════════════════════════════════════════
-// ── Log Measurement Modal (historical – always INSERT) ──────
-// ══════════════════════════════════════════════════════════════
-window.openLogMeasurementModal = function(childId, recordId = null, w = '', h = '', hc = '') {
-    let existing = document.getElementById('log-growth-modal');
-    if (existing) existing.remove();
-
-    const isEdit = !!recordId;
-    const modal = document.createElement('div');
-    modal.id = 'log-growth-modal';
-    modal.innerHTML = `
+        const isEdit = !!recordId;
+        const modal = document.createElement('div');
+        modal.id = 'log-growth-modal';
+        modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('log-growth-modal').remove()">
         <div style="background:#ffffff;border-radius:24px;width:100%;max-width:480px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
             <div style="background:linear-gradient(135deg,#22c55e,#16a34a);padding:1.75rem 2rem 1.5rem;">
@@ -3463,8 +3834,8 @@ window.openLogMeasurementModal = function(childId, recordId = null, w = '', h = 
                     </div>
                 </div>
                 ${isEdit ? '' : '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:0.75rem 1rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.5rem;">' +
-                    '<span style="font-size:1.25rem;">🎯</span>' +
-                    '<span style="font-size:0.85rem;color:#166534;">Each measurement earns <strong>+25 points</strong>. All previous records are kept for history!</span>' +
+                '<span style="font-size:1.25rem;">🎯</span>' +
+                '<span style="font-size:0.85rem;color:#166534;">Each measurement earns <strong>+25 points</strong>. All previous records are kept for history!</span>' +
                 '</div>'}
                 <div style="display:flex;gap:0.75rem;">
                     <button onclick="document.getElementById('log-growth-modal').remove()" style="flex:1;padding:0.75rem;border:1.5px solid var(--slate-200);border-radius:12px;background:transparent;color:var(--slate-600);font-size:0.9rem;font-weight:600;cursor:pointer;">Cancel</button>
@@ -3473,69 +3844,69 @@ window.openLogMeasurementModal = function(childId, recordId = null, w = '', h = 
             </div>
         </div>
     </div>`;
-    document.body.appendChild(modal);
-};
+        document.body.appendChild(modal);
+    };
 
-window.submitLogMeasurement = async function(childId) {
-    const btn = document.getElementById('lgm-submit');
-    const status = document.getElementById('lgm-status');
-    const recordId = document.getElementById('lgm-record-id')?.value;
-    const weight = document.getElementById('lgm-weight').value;
-    const height = document.getElementById('lgm-height').value;
-    const head = document.getElementById('lgm-head').value;
+    window.submitLogMeasurement = async function (childId) {
+        const btn = document.getElementById('lgm-submit');
+        const status = document.getElementById('lgm-status');
+        const recordId = document.getElementById('lgm-record-id')?.value;
+        const weight = document.getElementById('lgm-weight').value;
+        const height = document.getElementById('lgm-height').value;
+        const head = document.getElementById('lgm-head').value;
 
-    if (!weight && !height && !head) {
-        status.style.display = 'block';
-        status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Please enter at least one measurement.</div>';
-        return;
-    }
-
-    btn.disabled = true;
-    btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...</span>';
-
-    try {
-        const formData = new FormData();
-        formData.append('child_id', childId);
-        if (recordId) formData.append('record_id', recordId);
-        if (weight !== '') formData.append('weight', weight);
-        if (height !== '') formData.append('height', height);
-        if (head !== '') formData.append('head_circumference', head);
-
-        const res = await fetch('../../api_add_growth.php', { method: 'POST', body: formData });
-        const data = await res.json();
-
-        if (data.success) {
+        if (!weight && !height && !head) {
             status.style.display = 'block';
-            status.innerHTML = '<div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#16a34a;font-size:0.85rem;">✅ ' + data.message + '</div>';
-            setTimeout(() => { window.location.reload(); }, 1200);
-        } else {
+            status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Please enter at least one measurement.</div>';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...</span>';
+
+        try {
+            const formData = new FormData();
+            formData.append('child_id', childId);
+            if (recordId) formData.append('record_id', recordId);
+            if (weight !== '') formData.append('weight', weight);
+            if (height !== '') formData.append('height', height);
+            if (head !== '') formData.append('head_circumference', head);
+
+            const res = await fetch('../../api_add_growth.php', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (data.success) {
+                status.style.display = 'block';
+                status.innerHTML = '<div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#16a34a;font-size:0.85rem;">✅ ' + data.message + '</div>';
+                setTimeout(() => { window.location.reload(); }, 1200);
+            } else {
+                status.style.display = 'block';
+                status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">' + (data.error || 'Error saving') + '</div>';
+                btn.disabled = false;
+                btn.innerHTML = '📏 Save Measurement';
+            }
+        } catch (e) {
             status.style.display = 'block';
-            status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">' + (data.error || 'Error saving') + '</div>';
+            status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Network error. Please try again.</div>';
             btn.disabled = false;
             btn.innerHTML = '📏 Save Measurement';
         }
-    } catch(e) {
-        status.style.display = 'block';
-        status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">Network error. Please try again.</div>';
-        btn.disabled = false;
-        btn.innerHTML = '📏 Save Measurement';
-    }
-};
+    };
 
-// ══════════════════════════════════════════════════════════════
-// ── Book Specialist Modal ──────────────────────────────────────
-// ══════════════════════════════════════════════════════════════
-window.bookSpecialist = function(specId, specName) {
-    let existing = document.getElementById('book-modal');
-    if (existing) existing.remove();
+    // ══════════════════════════════════════════════════════════════
+    // ── Book Specialist Modal ──────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.bookSpecialist = function (specId, specName) {
+        let existing = document.getElementById('book-modal');
+        if (existing) existing.remove();
 
-    const dt = new Date();
-    dt.setDate(dt.getDate() + 1);
-    const minDate = dt.toISOString().split('T')[0];
+        const dt = new Date();
+        dt.setDate(dt.getDate() + 1);
+        const minDate = dt.toISOString().split('T')[0];
 
-    const modal = document.createElement('div');
-    modal.id = 'book-modal';
-    modal.innerHTML = `
+        const modal = document.createElement('div');
+        modal.id = 'book-modal';
+        modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('book-modal').remove()">
         <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
             <div style="background:var(--blue-50);padding:1.5rem 2rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--blue-100);">
@@ -3617,89 +3988,89 @@ window.bookSpecialist = function(specId, specName) {
             </div>
         </div>
     </div>`;
-    document.body.appendChild(modal);
+        document.body.appendChild(modal);
 
-    window.goToBookingStep1 = function() {
-        document.getElementById('bk-step-1').style.display = 'block';
-        document.getElementById('bk-step-2').style.display = 'none';
-        document.getElementById('bk-step-3').style.display = 'none';
-    };
+        window.goToBookingStep1 = function () {
+            document.getElementById('bk-step-1').style.display = 'block';
+            document.getElementById('bk-step-2').style.display = 'none';
+            document.getElementById('bk-step-3').style.display = 'none';
+        };
 
-    window.goToBookingStep2 = function() {
-        const d = document.getElementById('bk-date').value;
-        const t = document.getElementById('bk-time').value;
-        if (!d || !t) { alert("Please select a valid date and time."); return; }
-        
-        document.getElementById('bk-step-1').style.display = 'none';
-        document.getElementById('bk-step-2').style.display = 'block';
-        document.getElementById('bk-step-3').style.display = 'none';
-    };
+        window.goToBookingStep2 = function () {
+            const d = document.getElementById('bk-date').value;
+            const t = document.getElementById('bk-time').value;
+            if (!d || !t) { alert("Please select a valid date and time."); return; }
 
-    window.submitBooking = async function(sid) {
-        const btn = document.getElementById('bk-submit-btn');
-        btn.disabled = true;
-        const origText = btn.innerHTML;
-        btn.innerHTML = 'Processing...';
+            document.getElementById('bk-step-1').style.display = 'none';
+            document.getElementById('bk-step-2').style.display = 'block';
+            document.getElementById('bk-step-3').style.display = 'none';
+        };
 
-        const type = document.getElementById('bk-type').value;
-        const date = document.getElementById('bk-date').value;
-        const time = document.getElementById('bk-time').value;
-        const comment = document.getElementById('bk-comment').value;
-        const method = document.querySelector('input[name="bk-payment"]:checked').value;
+        window.submitBooking = async function (sid) {
+            const btn = document.getElementById('bk-submit-btn');
+            btn.disabled = true;
+            const origText = btn.innerHTML;
+            btn.innerHTML = 'Processing...';
 
-        const schedAt = date + ' ' + time + ':00';
+            const type = document.getElementById('bk-type').value;
+            const date = document.getElementById('bk-date').value;
+            const time = document.getElementById('bk-time').value;
+            const comment = document.getElementById('bk-comment').value;
+            const method = document.querySelector('input[name="bk-payment"]:checked').value;
 
-        try {
-            const fd = new FormData();
-            fd.append('specialist_id', sid);
-            fd.append('type', type);
-            fd.append('scheduled_at', schedAt);
-            fd.append('payment_method', method);
-            fd.append('comment', comment);
+            const schedAt = date + ' ' + time + ':00';
 
-            const res = await fetch('../../api_book_appointment.php', { method: 'POST', body: fd });
-            const data = await res.json();
-            
-            if (data.success) {
-                document.getElementById('bk-step-1').style.display = 'none';
-                document.getElementById('bk-step-2').style.display = 'none';
-                document.getElementById('bk-step-3').style.display = 'block';
-                if(typeof showBadgeToast === 'function') showBadgeToast("Appointment scheduled! 📅");
-            } else {
-                alert(data.error || "Failed to book appointment.");
+            try {
+                const fd = new FormData();
+                fd.append('specialist_id', sid);
+                fd.append('type', type);
+                fd.append('scheduled_at', schedAt);
+                fd.append('payment_method', method);
+                fd.append('comment', comment);
+
+                const res = await fetch('../../api_book_appointment.php', { method: 'POST', body: fd });
+                const data = await res.json();
+
+                if (data.success) {
+                    document.getElementById('bk-step-1').style.display = 'none';
+                    document.getElementById('bk-step-2').style.display = 'none';
+                    document.getElementById('bk-step-3').style.display = 'block';
+                    if (typeof showBadgeToast === 'function') showBadgeToast("Appointment scheduled! 📅");
+                } else {
+                    alert(data.error || "Failed to book appointment.");
+                    btn.disabled = false;
+                    btn.innerHTML = origText;
+                }
+            } catch (e) {
+                alert('Network error. Please try again.');
                 btn.disabled = false;
                 btn.innerHTML = origText;
             }
-        } catch(e) {
-            alert('Network error. Please try again.');
-            btn.disabled = false;
-            btn.innerHTML = origText;
-        }
+        };
     };
-};
 
-// ══════════════════════════════════════════════════════════════
-// ── Points Wallet Popup with Vouchers & Offers ──────────────
-// ══════════════════════════════════════════════════════════════
-window.openPointsWalletPopup = function() {
-    let existing = document.getElementById('wallet-modal');
-    if (existing) existing.remove();
+    // ══════════════════════════════════════════════════════════════
+    // ── Points Wallet Popup with Vouchers & Offers ──────────────
+    // ══════════════════════════════════════════════════════════════
+    window.openPointsWalletPopup = function () {
+        let existing = document.getElementById('wallet-modal');
+        if (existing) existing.remove();
 
-    const d = window.dashboardData || {};
-    const child = (d.children || [])[window._selectedChildIndex || 0] || {};
-    const totalPoints = child.total_points || 0;
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[window._selectedChildIndex || 0] || {};
+        const totalPoints = child.total_points || 0;
 
-    const vouchers = [
-        { name: 'Free Consultation', points: 500, icon: '🩺', desc: 'Book a free specialist session', color: '#3b82f6' },
-        { name: '1 Month Premium', points: 1000, icon: '💎', desc: 'Upgrade to Premium plan for a month', color: '#8b5cf6' },
-        { name: 'Activity Pack', points: 200, icon: '🎨', desc: 'Unlock exclusive activity materials', color: '#f59e0b' },
-        { name: 'Growth Report PDF', points: 150, icon: '📊', desc: 'Download detailed growth analysis', color: '#22c55e' },
-        { name: 'Certificate Badge', points: 300, icon: '🏅', desc: 'Earn a printable achievement certificate', color: '#ec4899' },
-    ];
+        const vouchers = [
+            { name: 'Free Consultation', points: 500, icon: '🩺', desc: 'Book a free specialist session', color: '#3b82f6' },
+            { name: '1 Month Premium', points: 1000, icon: '💎', desc: 'Upgrade to Premium plan for a month', color: '#8b5cf6' },
+            { name: 'Activity Pack', points: 200, icon: '🎨', desc: 'Unlock exclusive activity materials', color: '#f59e0b' },
+            { name: 'Growth Report PDF', points: 150, icon: '📊', desc: 'Download detailed growth analysis', color: '#22c55e' },
+            { name: 'Certificate Badge', points: 300, icon: '🏅', desc: 'Earn a printable achievement certificate', color: '#ec4899' },
+        ];
 
-    const voucherHtml = vouchers.map(v => {
-        const canRedeem = totalPoints >= v.points;
-        return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? v.color + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\'translateX(4px)\'" onmouseout="this.style.transform=\'\'"' : ''}>
+        const voucherHtml = vouchers.map(v => {
+            const canRedeem = totalPoints >= v.points;
+            return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? v.color + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\'translateX(4px)\'" onmouseout="this.style.transform=\'\'"' : ''}>
             <div style="width:3rem;height:3rem;background:${v.color}15;color:${v.color};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">${v.icon}</div>
             <div style="flex:1;">
                 <h4 style="font-weight:700;margin:0 0 0.25rem;font-size:0.95rem;">${v.name}</h4>
@@ -3710,11 +4081,11 @@ window.openPointsWalletPopup = function() {
                 <button style="margin-top:0.25rem;padding:0.3rem 0.75rem;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? v.color : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (v.points - totalPoints) + ' more'}</button>
             </div>
         </div>`;
-    }).join('');
+        }).join('');
 
-    const modal = document.createElement('div');
-    modal.id = 'wallet-modal';
-    modal.innerHTML = `
+        const modal = document.createElement('div');
+        modal.id = 'wallet-modal';
+        modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('wallet-modal').remove()">
         <div style="background:#ffffff;border-radius:28px;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,0.2);overflow:hidden;animation:slideUp 0.4s ease-out;">
             <div style="background:linear-gradient(135deg,#6C63FF,#a78bfa);padding:2rem;text-align:center;position:relative;">
@@ -3737,79 +4108,79 @@ window.openPointsWalletPopup = function() {
             </div>
         </div>
     </div>`;
-    document.body.appendChild(modal);
-};
+        document.body.appendChild(modal);
+    };
 
-// ══════════════════════════════════════════════════════════════
-// ── Multi-Child Switcher ────────────────────────────────────
-// ══════════════════════════════════════════════════════════════
-window._selectedChildIndex = 0;
+    // ══════════════════════════════════════════════════════════════
+    // ── Multi-Child Switcher ────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window._selectedChildIndex = 0;
 
-window.switchChild = function(index) {
-    window._selectedChildIndex = index;
-    const children = (window.dashboardData || {}).children || [];
-    const child = children[index];
+    window.switchChild = function (index) {
+        window._selectedChildIndex = index;
+        const children = (window.dashboardData || {}).children || [];
+        const child = children[index];
 
-    // Re-render current view
-    const activeNav = document.querySelector('.nav-item.active');
-    const currentView = activeNav ? activeNav.dataset.view : 'home';
-    switchView(currentView);
+        // Re-render current view
+        const activeNav = document.querySelector('.nav-item.active');
+        const currentView = activeNav ? activeNav.dataset.view : 'home';
+        switchView(currentView);
 
-    // If switching to home view, reload activities
-    if (currentView === 'home') {
-        setTimeout(() => loadHomeActivities(), 50);
-    }
+        // If switching to home view, reload activities
+        if (currentView === 'home') {
+            setTimeout(() => loadHomeActivities(), 50);
+        }
 
-    // Update topbar data
-    if (child) {
-        const ptsEl = document.getElementById('topbar-points-count');
-        if (ptsEl) ptsEl.textContent = child.total_points || 0;
-        const badgeEl = document.getElementById('topbar-badge-count');
-        if (badgeEl) badgeEl.textContent = child.badge_count || 0;
-    }
+        // Update topbar data
+        if (child) {
+            const ptsEl = document.getElementById('topbar-points-count');
+            if (ptsEl) ptsEl.textContent = child.total_points || 0;
+            const badgeEl = document.getElementById('topbar-badge-count');
+            if (badgeEl) badgeEl.textContent = child.badge_count || 0;
+        }
 
-    // Refresh chatbot greeting with new child context
-    refreshChatbotGreeting();
+        // Refresh chatbot greeting with new child context
+        refreshChatbotGreeting();
 
-    // Close dropdown
-    const dd = document.getElementById('child-switcher-dropdown');
-    if (dd) dd.style.display = 'none';
-};
+        // Close dropdown
+        const dd = document.getElementById('child-switcher-dropdown');
+        if (dd) dd.style.display = 'none';
+    };
 
-// ══════════════════════════════════════════════════════════════
-// ── Mark Article as Read & Complete ─────────────────────────
-// ══════════════════════════════════════════════════════════════
-window.markArticleRead = async function(childId, index, title, btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Marking...';
-    try {
-        // Mark as read
-        await fetch('../../api_activities.php?action=mark-read', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ title: title })
-        });
-        // Complete activity
-        await completeActivity(childId, 'article', index);
-        // Show success
-        btn.innerHTML = '✅ Completed!';
-        btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-        showBadgeToast('Article read! +15 points 📖');
-        setTimeout(() => {
-            const modal = document.getElementById('act-modal');
-            if (modal) modal.remove();
-        }, 1500);
-    } catch(e) {
-        btn.innerHTML = '❌ Error — try again';
-        btn.disabled = false;
-    }
-};
+    // ══════════════════════════════════════════════════════════════
+    // ── Mark Article as Read & Complete ─────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.markArticleRead = async function (childId, index, title, btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Marking...';
+        try {
+            // Mark as read
+            await fetch('../../api_activities.php?action=mark-read', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title: title })
+            });
+            // Complete activity
+            await completeActivity(childId, 'article', index);
+            // Show success
+            btn.innerHTML = '✅ Completed!';
+            btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+            showBadgeToast('Article read! +15 points 📖');
+            setTimeout(() => {
+                const modal = document.getElementById('act-modal');
+                if (modal) modal.remove();
+            }, 1500);
+        } catch (e) {
+            btn.innerHTML = '❌ Error — try again';
+            btn.disabled = false;
+        }
+    };
 
-// ══════════════════════════════════════════════════════════════
-// ── Messages View (Specialist + Community) ──────────────────
-// ══════════════════════════════════════════════════════════════
-window.getMessagesView = function() {
-    setTimeout(() => initParentMessages(), 100);
-    return `<div class="dashboard-content">
+    // ══════════════════════════════════════════════════════════════
+    // ── Messages View (Specialist + Community) ──────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.getMessagesView = function () {
+        setTimeout(() => initParentMessages(), 100);
+        return `<div class="dashboard-content">
         <div class="dashboard-header-section"><div>
             <h1 class="dashboard-title">Messages</h1>
             <p class="dashboard-subtitle">Communicate with your specialists</p>
@@ -3838,209 +4209,209 @@ window.getMessagesView = function() {
             </div>
         </div>
     </div>`;
-};
+    };
 
-window._parentChatData = {
-    sarah: {
-        name: 'Dr. Sarah Ahmed', initials: 'SA', detail: 'Pediatric Specialist', gradient: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-        messages: [
-            {from:'them',text:"Hello! I've reviewed your child's latest growth data. Everything looks great!",time:'10:30 AM'},
-            {from:'me',text:"Thank you Dr. Sarah! Should we continue with the same feeding plan?",time:'10:45 AM'},
-            {from:'them',text:"Yes, the current plan is working well. I'd suggest adding more iron-rich foods as your child grows.",time:'11:00 AM'},
-            {from:'me',text:"Got it! I'll make those changes. When should we schedule the next check-up?",time:'11:15 AM'},
-            {from:'them',text:"Let's do a follow-up in 3 months. You can book through the clinic section.",time:'11:20 AM'}
-        ]
-    },
-    mohamed: {
-        name: 'Dr. Mohamed Ali', initials: 'MA', detail: 'Speech Therapist', gradient: 'linear-gradient(135deg,#8b5cf6,#ec4899)',
-        messages: [
-            {from:'them',text:"I've prepared new speech exercises for your child based on our last session.",time:'Yesterday'},
-            {from:'me',text:"Thanks! How often should we practice these exercises?",time:'Yesterday'},
-            {from:'them',text:"Twice daily for 10-15 minutes each session. Consistency is key at this age.",time:'Yesterday'}
-        ]
-    },
-    hana: {
-        name: 'Dr. Hana Ibrahim', initials: 'HI', detail: 'Child Psychologist', gradient: 'linear-gradient(135deg,#14b8a6,#06b6d4)',
-        messages: [
-            {from:'them',text:"Great progress in social interactions! The play-date activities are really helping.",time:'Mar 30'},
-            {from:'me',text:"That is so good to hear! She seems much more confident now.",time:'Mar 30'}
-        ]
-    }
-};
-window._parentCurrentChat = 'sarah';
+    window._parentChatData = {
+        sarah: {
+            name: 'Dr. Sarah Ahmed', initials: 'SA', detail: 'Pediatric Specialist', gradient: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+            messages: [
+                { from: 'them', text: "Hello! I've reviewed your child's latest growth data. Everything looks great!", time: '10:30 AM' },
+                { from: 'me', text: "Thank you Dr. Sarah! Should we continue with the same feeding plan?", time: '10:45 AM' },
+                { from: 'them', text: "Yes, the current plan is working well. I'd suggest adding more iron-rich foods as your child grows.", time: '11:00 AM' },
+                { from: 'me', text: "Got it! I'll make those changes. When should we schedule the next check-up?", time: '11:15 AM' },
+                { from: 'them', text: "Let's do a follow-up in 3 months. You can book through the clinic section.", time: '11:20 AM' }
+            ]
+        },
+        mohamed: {
+            name: 'Dr. Mohamed Ali', initials: 'MA', detail: 'Speech Therapist', gradient: 'linear-gradient(135deg,#8b5cf6,#ec4899)',
+            messages: [
+                { from: 'them', text: "I've prepared new speech exercises for your child based on our last session.", time: 'Yesterday' },
+                { from: 'me', text: "Thanks! How often should we practice these exercises?", time: 'Yesterday' },
+                { from: 'them', text: "Twice daily for 10-15 minutes each session. Consistency is key at this age.", time: 'Yesterday' }
+            ]
+        },
+        hana: {
+            name: 'Dr. Hana Ibrahim', initials: 'HI', detail: 'Child Psychologist', gradient: 'linear-gradient(135deg,#14b8a6,#06b6d4)',
+            messages: [
+                { from: 'them', text: "Great progress in social interactions! The play-date activities are really helping.", time: 'Mar 30' },
+                { from: 'me', text: "That is so good to hear! She seems much more confident now.", time: 'Mar 30' }
+            ]
+        }
+    };
+    window._parentCurrentChat = 'sarah';
 
-window.initParentMessages = function() {
-    renderParentConvoList();
-    selectParentConvo('sarah');
-    var input = document.getElementById('parent-chat-input');
-    if (input) input.addEventListener('input', function() { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
-};
+    window.initParentMessages = function () {
+        renderParentConvoList();
+        selectParentConvo('sarah');
+        var input = document.getElementById('parent-chat-input');
+        if (input) input.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
+    };
 
-window.renderParentConvoList = function() {
-    var list = document.getElementById('parent-convo-list');
-    if (!list) return;
-    var html = '';
-    for (var key in window._parentChatData) {
-        var c = window._parentChatData[key];
-        var lastMsg = c.messages[c.messages.length - 1];
-        var preview = lastMsg.text.length > 35 ? lastMsg.text.substring(0, 35) + '...' : lastMsg.text;
-        var isActive = key === window._parentCurrentChat;
-        html += '<div data-convo="' + key + '" onclick="selectParentConvo(\'' + key + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
-            + '<div style="width:2.5rem;height:2.5rem;background:' + c.gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + c.initials + '</div>'
-            + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + lastMsg.time + '</span></div>'
-            + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
-    }
-    list.innerHTML = html;
-};
+    window.renderParentConvoList = function () {
+        var list = document.getElementById('parent-convo-list');
+        if (!list) return;
+        var html = '';
+        for (var key in window._parentChatData) {
+            var c = window._parentChatData[key];
+            var lastMsg = c.messages[c.messages.length - 1];
+            var preview = lastMsg.text.length > 35 ? lastMsg.text.substring(0, 35) + '...' : lastMsg.text;
+            var isActive = key === window._parentCurrentChat;
+            html += '<div data-convo="' + key + '" onclick="selectParentConvo(\'' + key + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
+                + '<div style="width:2.5rem;height:2.5rem;background:' + c.gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + c.initials + '</div>'
+                + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + lastMsg.time + '</span></div>'
+                + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
+        }
+        list.innerHTML = html;
+    };
 
-window.selectParentConvo = function(key) {
-    window._parentCurrentChat = key;
-    var data = window._parentChatData[key];
-    if (!data) return;
-    // Update header
-    var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = data.initials; avatar.style.background = data.gradient; }
-    var name = document.getElementById('pch-name'); if (name) name.textContent = data.name;
-    var detail = document.getElementById('pch-detail'); if (detail) detail.textContent = data.detail;
-    // Render messages
-    var container = document.getElementById('parent-chat-messages');
-    if (container) {
-        var html = '<div style="text-align:center;margin:0.5rem 0;"><span style="background:#e2e8f0;padding:0.2rem 0.75rem;border-radius:20px;font-size:0.7rem;color:#64748b;font-weight:600;">Today</span></div>';
-        data.messages.forEach(function(msg) {
-            var isMine = msg.from === 'me';
-            html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
-                + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
-                + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
-                + '<div>' + msg.text + '</div>'
-                + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + msg.time + '</div>'
-                + '</div></div>';
-        });
-        container.innerHTML = html;
-        container.scrollTop = container.scrollHeight;
-    }
-    renderParentConvoList();
-};
+    window.selectParentConvo = function (key) {
+        window._parentCurrentChat = key;
+        var data = window._parentChatData[key];
+        if (!data) return;
+        // Update header
+        var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = data.initials; avatar.style.background = data.gradient; }
+        var name = document.getElementById('pch-name'); if (name) name.textContent = data.name;
+        var detail = document.getElementById('pch-detail'); if (detail) detail.textContent = data.detail;
+        // Render messages
+        var container = document.getElementById('parent-chat-messages');
+        if (container) {
+            var html = '<div style="text-align:center;margin:0.5rem 0;"><span style="background:#e2e8f0;padding:0.2rem 0.75rem;border-radius:20px;font-size:0.7rem;color:#64748b;font-weight:600;">Today</span></div>';
+            data.messages.forEach(function (msg) {
+                var isMine = msg.from === 'me';
+                html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
+                    + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
+                    + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
+                    + '<div>' + msg.text + '</div>'
+                    + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + msg.time + '</div>'
+                    + '</div></div>';
+            });
+            container.innerHTML = html;
+            container.scrollTop = container.scrollHeight;
+        }
+        renderParentConvoList();
+    };
 
-window.sendParentMsg = function() {
-    var input = document.getElementById('parent-chat-input');
-    var text = input ? input.value.trim() : '';
-    if (!text) return;
-    var data = window._parentChatData[window._parentCurrentChat];
-    if (data) {
-        var now = new Date();
-        data.messages.push({ from: 'me', text: text, time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) });
-    }
-    input.value = ''; input.style.height = 'auto';
-    selectParentConvo(window._parentCurrentChat);
-};
+    window.sendParentMsg = function () {
+        var input = document.getElementById('parent-chat-input');
+        var text = input ? input.value.trim() : '';
+        if (!text) return;
+        var data = window._parentChatData[window._parentCurrentChat];
+        if (data) {
+            var now = new Date();
+            data.messages.push({ from: 'me', text: text, time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) });
+        }
+        input.value = ''; input.style.height = 'auto';
+        selectParentConvo(window._parentCurrentChat);
+    };
 
-window.filterParentConvos = function(q) {
-    var items = document.querySelectorAll('#parent-convo-list > div');
-    q = q.toLowerCase();
-    items.forEach(function(item) { var name = item.textContent.toLowerCase(); item.style.display = name.includes(q) ? '' : 'none'; });
-};
+    window.filterParentConvos = function (q) {
+        var items = document.querySelectorAll('#parent-convo-list > div');
+        q = q.toLowerCase();
+        items.forEach(function (item) { var name = item.textContent.toLowerCase(); item.style.display = name.includes(q) ? '' : 'none'; });
+    };
 
-window.loadMessages = function() {
-    initParentMessages();
-};
+    window.loadMessages = function () {
+        initParentMessages();
+    };
 
 
-// ══════════════════════════════════════════════════════════════
-// ── BMI Gauge / Scale Widget ────────────────────────────────
-// ══════════════════════════════════════════════════════════════
-window.renderBMIGauge = function(bmiDataObj, childName, ageY, ageM) {
-    const container = document.getElementById('bmi-gauge-container');
-    if (!container) return;
+    // ══════════════════════════════════════════════════════════════
+    // ── BMI Gauge / Scale Widget ────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.renderBMIGauge = function (bmiDataObj, childName, ageY, ageM) {
+        const container = document.getElementById('bmi-gauge-container');
+        if (!container) return;
 
-    const latestBMI = bmiDataObj.length > 0 ? bmiDataObj[bmiDataObj.length - 1].y : null;
+        const latestBMI = bmiDataObj.length > 0 ? bmiDataObj[bmiDataObj.length - 1].y : null;
 
-    if (!latestBMI) {
-        container.innerHTML = '<div style="text-align:center;color:#64748b;padding:2rem;"><div style="font-size:2.5rem;margin-bottom:1rem;">⚖️</div><h4 style="font-weight:700;margin-bottom:0.5rem;color:#1e293b;">BMI Not Available</h4><p style="font-size:0.85rem;line-height:1.5;">Log both <strong>weight</strong> and <strong>height</strong> measurements to calculate and display the BMI gauge.</p></div>';
-        return;
-    }
+        if (!latestBMI) {
+            container.innerHTML = '<div style="text-align:center;color:#64748b;padding:2rem;"><div style="font-size:2.5rem;margin-bottom:1rem;">⚖️</div><h4 style="font-weight:700;margin-bottom:0.5rem;color:#1e293b;">BMI Not Available</h4><p style="font-size:0.85rem;line-height:1.5;">Log both <strong>weight</strong> and <strong>height</strong> measurements to calculate and display the BMI gauge.</p></div>';
+            return;
+        }
 
-    const bmi = parseFloat(latestBMI.toFixed(1));
-    let category = '', color = '', desc = '';
-    if (bmi < 14) { category = 'Underweight'; color = '#3b82f6'; desc = childName + "'s BMI is below the healthy range. Consider nutrient-rich foods and consult your pediatrician."; }
-    else if (bmi < 18.5) { category = 'Healthy Weight'; color = '#22c55e'; desc = childName + "'s BMI is within the healthy range — great job! Keep up balanced nutrition."; }
-    else if (bmi < 25) { category = 'At Risk'; color = '#f59e0b'; desc = childName + "'s BMI is slightly above optimal. Encourage active play and monitor diet."; }
-    else { category = 'Overweight'; color = '#ef4444'; desc = childName + "'s BMI is above recommended. Please consult your pediatrician."; }
+        const bmi = parseFloat(latestBMI.toFixed(1));
+        let category = '', color = '', desc = '';
+        if (bmi < 14) { category = 'Underweight'; color = '#3b82f6'; desc = childName + "'s BMI is below the healthy range. Consider nutrient-rich foods and consult your pediatrician."; }
+        else if (bmi < 18.5) { category = 'Healthy Weight'; color = '#22c55e'; desc = childName + "'s BMI is within the healthy range — great job! Keep up balanced nutrition."; }
+        else if (bmi < 25) { category = 'At Risk'; color = '#f59e0b'; desc = childName + "'s BMI is slightly above optimal. Encourage active play and monitor diet."; }
+        else { category = 'Overweight'; color = '#ef4444'; desc = childName + "'s BMI is above recommended. Please consult your pediatrician."; }
 
-    // Render with Chart.js doughnut
-    container.innerHTML = '<div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;width:100%;box-sizing:border-box;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">⚖️ BMI-for-Age</h4><p style="margin:0.25rem 0 0;font-size:0.8rem;color:#94a3b8;">' + childName + ' · Age: ' + ageY + 'y ' + ageM + 'm</p></div>'
-        + '<div style="position:relative;width:240px;height:140px;margin:1.5rem auto 0;"><canvas id="bmi-doughnut-chart"></canvas>'
-        + '<div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);text-align:center;"><span style="font-size:2.25rem;font-weight:800;color:' + color + ';">' + bmi + '</span><span style="font-size:0.8rem;color:#94a3b8;margin-left:4px;">kg/m²</span></div></div>'
-        + '<div style="text-align:center;margin:0.75rem 0;"><span style="display:inline-flex;align-items:center;gap:0.35rem;background:' + color + '18;padding:0.4rem 1rem;border-radius:20px;font-size:0.9rem;font-weight:700;color:' + color + ';">' + category + '</span></div>'
-        + '<p style="font-size:0.8rem;color:#64748b;text-align:center;margin:0 1.5rem 1.25rem;line-height:1.5;">' + desc + '</p>';
+        // Render with Chart.js doughnut
+        container.innerHTML = '<div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;width:100%;box-sizing:border-box;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">⚖️ BMI-for-Age</h4><p style="margin:0.25rem 0 0;font-size:0.8rem;color:#94a3b8;">' + childName + ' · Age: ' + ageY + 'y ' + ageM + 'm</p></div>'
+            + '<div style="position:relative;width:240px;height:140px;margin:1.5rem auto 0;"><canvas id="bmi-doughnut-chart"></canvas>'
+            + '<div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);text-align:center;"><span style="font-size:2.25rem;font-weight:800;color:' + color + ';">' + bmi + '</span><span style="font-size:0.8rem;color:#94a3b8;margin-left:4px;">kg/m²</span></div></div>'
+            + '<div style="text-align:center;margin:0.75rem 0;"><span style="display:inline-flex;align-items:center;gap:0.35rem;background:' + color + '18;padding:0.4rem 1rem;border-radius:20px;font-size:0.9rem;font-weight:700;color:' + color + ';">' + category + '</span></div>'
+            + '<p style="font-size:0.8rem;color:#64748b;text-align:center;margin:0 1.5rem 1.25rem;line-height:1.5;">' + desc + '</p>';
 
-    setTimeout(function() {
-        var el = document.getElementById('bmi-doughnut-chart');
-        if (!el || typeof Chart === 'undefined') return;
-        // Map BMI to needle angle: BMI 10=leftmost, BMI 35=rightmost
-        var minB = 10, maxB = 35;
-        var clamped = Math.max(minB, Math.min(maxB, bmi));
-        var pct = (clamped - minB) / (maxB - minB);
-        // Zones: Underweight(16%), Normal(34%), At Risk(26%), Overweight(24%) of the half circle
-        var zones = [16, 34, 26, 24];
-        var colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444'];
-        new Chart(el, {
-            type: 'doughnut',
-            data: {
-                labels: ['Underweight', 'Healthy', 'At Risk', 'Overweight'],
-                datasets: [{
-                    data: zones,
-                    backgroundColor: colors,
-                    borderWidth: 0,
-                    cutout: '75%'
+        setTimeout(function () {
+            var el = document.getElementById('bmi-doughnut-chart');
+            if (!el || typeof Chart === 'undefined') return;
+            // Map BMI to needle angle: BMI 10=leftmost, BMI 35=rightmost
+            var minB = 10, maxB = 35;
+            var clamped = Math.max(minB, Math.min(maxB, bmi));
+            var pct = (clamped - minB) / (maxB - minB);
+            // Zones: Underweight(16%), Normal(34%), At Risk(26%), Overweight(24%) of the half circle
+            var zones = [16, 34, 26, 24];
+            var colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444'];
+            new Chart(el, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Underweight', 'Healthy', 'At Risk', 'Overweight'],
+                    datasets: [{
+                        data: zones,
+                        backgroundColor: colors,
+                        borderWidth: 0,
+                        cutout: '75%'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    rotation: -90, circumference: 180,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    }
+                },
+                plugins: [{
+                    id: 'bmiNeedle',
+                    afterDraw: function (chart) {
+                        var ctx = chart.ctx;
+                        var meta = chart.getDatasetMeta(0);
+                        var arc = meta.data[0];
+                        if (!arc) return;
+                        var cx = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
+                        var cy = chart.chartArea.bottom;
+                        var radius = arc.outerRadius * 0.65;
+                        var angle = Math.PI + (pct * Math.PI);
+                        var nx = cx + radius * Math.cos(angle);
+                        var ny = cy + radius * Math.sin(angle);
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(cx, cy);
+                        ctx.lineTo(nx, ny);
+                        ctx.strokeStyle = '#1e293b';
+                        ctx.lineWidth = 3;
+                        ctx.lineCap = 'round';
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                        ctx.fillStyle = '#1e293b';
+                        ctx.fill();
+                        ctx.restore();
+                    }
                 }]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                rotation: -90, circumference: 180,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
-                }
-            },
-            plugins: [{
-                id: 'bmiNeedle',
-                afterDraw: function(chart) {
-                    var ctx = chart.ctx;
-                    var meta = chart.getDatasetMeta(0);
-                    var arc = meta.data[0];
-                    if (!arc) return;
-                    var cx = chart.chartArea.left + (chart.chartArea.right - chart.chartArea.left) / 2;
-                    var cy = chart.chartArea.bottom;
-                    var radius = arc.outerRadius * 0.65;
-                    var angle = Math.PI + (pct * Math.PI);
-                    var nx = cx + radius * Math.cos(angle);
-                    var ny = cy + radius * Math.sin(angle);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(cx, cy);
-                    ctx.lineTo(nx, ny);
-                    ctx.strokeStyle = '#1e293b';
-                    ctx.lineWidth = 3;
-                    ctx.lineCap = 'round';
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-                    ctx.fillStyle = '#1e293b';
-                    ctx.fill();
-                    ctx.restore();
-                }
-            }]
-        });
-    }, 150);
-};
+            });
+        }, 150);
+    };
 
-// ── Notifications Popup ──────────────────────────────────────
-window.openNotificationsPopup = async function() {
-    let existing = document.getElementById('notif-popup-modal');
-    if (existing) existing.remove();
+    // ── Notifications Popup ──────────────────────────────────────
+    window.openNotificationsPopup = async function () {
+        let existing = document.getElementById('notif-popup-modal');
+        if (existing) existing.remove();
 
-    const modal = document.createElement('div');
-    modal.id = 'notif-popup-modal';
-    modal.innerHTML = `
+        const modal = document.createElement('div');
+        modal.id = 'notif-popup-modal';
+        modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('notif-popup-modal').remove()">
         <div style="background:#ffffff;border-radius:24px;width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,0.2);overflow:hidden;">
             <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:1.75rem 2rem;display:flex;align-items:center;justify-content:space-between;">
@@ -4058,56 +4429,56 @@ window.openNotificationsPopup = async function() {
             </div>
         </div>
     </div>`;
-    document.body.appendChild(modal);
+        document.body.appendChild(modal);
 
-    try {
-        const res = await fetch('../../api_notifications.php?action=list&limit=50');
-        const data = await res.json();
-        const notifs = data.notifications || [];
-        const container = document.getElementById('notif-popup-list');
-        if (!container) return;
-        if (notifs.length === 0) {
-            container.innerHTML = '<div style="text-align:center;padding:3rem;"><div style="font-size:3rem;margin-bottom:1rem;">🔕</div><h3 style="color:#64748b;font-weight:600;">No notifications yet</h3><p style="color:#94a3b8;font-size:0.875rem;">Updates about your child will appear here</p></div>';
-            return;
-        }
-        const typeIcons = { appointment_reminder: '📅', payment_success: '💳', growth_alert: '📏', milestone: '🏆', system: '🔔', badge_earned: '🏅', streak: '🔥' };
-        container.innerHTML = notifs.map(function(n) {
-            var dt = new Date(n.created_at);
-            var timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-            var icon = typeIcons[n.type] || '🔔';
-            var isUnread = n.is_read == 0;
-            return '<div style="padding:1rem;margin-bottom:0.75rem;border-radius:16px;background:' + (isUnread ? '#eff6ff' : '#f8fafc') + ';border:1px solid ' + (isUnread ? '#bfdbfe' : '#e2e8f0') + ';display:flex;gap:1rem;align-items:flex-start;cursor:pointer;transition:all 0.2s;" onclick="markNotifRead(' + n.notification_id + ').then(function(){openNotificationsPopup()})">' +
-                '<div style="width:2.75rem;height:2.75rem;border-radius:12px;background:' + (isUnread ? '#dbeafe' : '#f1f5f9') + ';display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">' + icon + '</div>' +
-                '<div style="flex:1;min-width:0;">' +
+        try {
+            const res = await fetch('../../api_notifications.php?action=list&limit=50');
+            const data = await res.json();
+            const notifs = data.notifications || [];
+            const container = document.getElementById('notif-popup-list');
+            if (!container) return;
+            if (notifs.length === 0) {
+                container.innerHTML = '<div style="text-align:center;padding:3rem;"><div style="font-size:3rem;margin-bottom:1rem;">🔕</div><h3 style="color:#64748b;font-weight:600;">No notifications yet</h3><p style="color:#94a3b8;font-size:0.875rem;">Updates about your child will appear here</p></div>';
+                return;
+            }
+            const typeIcons = { appointment_reminder: '📅', payment_success: '💳', growth_alert: '📏', milestone: '🏆', system: '🔔', badge_earned: '🏅', streak: '🔥' };
+            container.innerHTML = notifs.map(function (n) {
+                var dt = new Date(n.created_at);
+                var timeStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                var icon = typeIcons[n.type] || '🔔';
+                var isUnread = n.is_read == 0;
+                return '<div style="padding:1rem;margin-bottom:0.75rem;border-radius:16px;background:' + (isUnread ? '#eff6ff' : '#f8fafc') + ';border:1px solid ' + (isUnread ? '#bfdbfe' : '#e2e8f0') + ';display:flex;gap:1rem;align-items:flex-start;cursor:pointer;transition:all 0.2s;" onclick="markNotifRead(' + n.notification_id + ').then(function(){openNotificationsPopup()})">' +
+                    '<div style="width:2.75rem;height:2.75rem;border-radius:12px;background:' + (isUnread ? '#dbeafe' : '#f1f5f9') + ';display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;">' + icon + '</div>' +
+                    '<div style="flex:1;min-width:0;">' +
                     '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">' +
-                        '<h4 style="font-weight:' + (isUnread ? '700' : '600') + ';font-size:0.95rem;margin:0;color:#1e293b;">' + n.title + '</h4>' +
-                        (isUnread ? '<span style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;"></span>' : '') +
+                    '<h4 style="font-weight:' + (isUnread ? '700' : '600') + ';font-size:0.95rem;margin:0;color:#1e293b;">' + n.title + '</h4>' +
+                    (isUnread ? '<span style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;"></span>' : '') +
                     '</div>' +
                     '<p style="color:#64748b;font-size:0.85rem;margin:0 0 0.35rem;line-height:1.4;">' + n.message + '</p>' +
                     '<span style="font-size:0.75rem;color:#94a3b8;">' + timeStr + '</span>' +
-                '</div>' +
-            '</div>';
-        }).join('');
-    } catch(e) {
-        var container = document.getElementById('notif-popup-list');
-        if (container) container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Could not load notifications</div>';
+                    '</div>' +
+                    '</div>';
+            }).join('');
+        } catch (e) {
+            var container = document.getElementById('notif-popup-list');
+            if (container) container.innerHTML = '<div style="text-align:center;padding:2rem;color:#ef4444;">Could not load notifications</div>';
+        }
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // ── BOOTSTRAP (must be at end of file, after all functions) ──
+    // ══════════════════════════════════════════════════════════════
+    window._dashboardInitNav = initNav;
+    window._dashboardSwitchView = switchView;
+
+    try {
+        initNav();
+        var _bsUrlParams = new URLSearchParams(window.location.search);
+        var _bsInitialView = _bsUrlParams.get('view') || 'home';
+        switchView(_bsInitialView);
+    } catch (e) {
+        var _bsEl = document.getElementById('dashboard-content');
+        if (_bsEl) _bsEl.innerHTML = '<div style="padding:2rem;color:red;font-size:1.2rem;"><strong>Dashboard Error:</strong> ' + e.message + '<br><pre>' + e.stack + '</pre></div>';
+        console.error('Dashboard bootstrap error:', e);
     }
-};
-
-// ══════════════════════════════════════════════════════════════
-// ── BOOTSTRAP (must be at end of file, after all functions) ──
-// ══════════════════════════════════════════════════════════════
-window._dashboardInitNav = initNav;
-window._dashboardSwitchView = switchView;
-
-try {
-    initNav();
-    var _bsUrlParams = new URLSearchParams(window.location.search);
-    var _bsInitialView = _bsUrlParams.get('view') || 'home';
-    switchView(_bsInitialView);
-} catch(e) {
-    var _bsEl = document.getElementById('dashboard-content');
-    if (_bsEl) _bsEl.innerHTML = '<div style="padding:2rem;color:red;font-size:1.2rem;"><strong>Dashboard Error:</strong> ' + e.message + '<br><pre>' + e.stack + '</pre></div>';
-    console.error('Dashboard bootstrap error:', e);
-}
 })();

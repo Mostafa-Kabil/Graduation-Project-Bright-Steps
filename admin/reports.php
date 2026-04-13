@@ -17,13 +17,61 @@ try {
         $stmt = $connect->query("SELECT COUNT(*) as total FROM growth_record");
         $growthRecords = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-        // Voice samples count
-        $stmt = $connect->query("SELECT COUNT(*) as total FROM voice_sample");
-        $voiceSamples = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        // Growth records this month
+        $stmt = $connect->query("SELECT COUNT(*) as c FROM growth_record WHERE recorded_at >= DATE_FORMAT(NOW(), '%Y-%m-01')");
+        $growthThisMonth = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
 
-        // Flagged children (children with 'severe' or 'high' severity behaviors)
-        $stmt = $connect->query("SELECT COUNT(DISTINCT child_id) as total FROM child_exhibited_behavior WHERE severity IN ('severe', 'high', 'critical')");
-        $flaggedChildren = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        // Voice samples count
+        $voiceSamples = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM voice_sample"); $voiceSamples = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // AI Activities / Recommendations generated
+        $aiActivities = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM child_activities"); $aiActivities = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Total activities (all sources)
+        $totalActivities = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM child_activities"); $totalActivities = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Completed activities
+        $completedActivities = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM child_activities WHERE is_completed = 1"); $completedActivities = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Motor milestones
+        $motorMilestones = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM motor_milestones"); $motorMilestones = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Motor milestones achieved
+        $motorAchieved = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM motor_milestones WHERE is_achieved = 1"); $motorAchieved = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Consultations
+        $consultations = 0;
+        $completedConsultations = 0;
+        try { 
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM consultations"); $consultations = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM consultations WHERE status = 'completed'"); $completedConsultations = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        } catch(Exception $e) {}
+
+        // Appointments
+        $totalAppointments = 0;
+        $appointmentsThisMonth = 0;
+        try { 
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM appointment"); $totalAppointments = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+            $stmt = $connect->query("SELECT COUNT(*) as c FROM appointment WHERE date >= DATE_FORMAT(NOW(), '%Y-%m-01')"); $appointmentsThisMonth = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
+        } catch(Exception $e) {}
+
+        // Article reads
+        $articleReads = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM article_reads"); $articleReads = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Community messages
+        $communityMessages = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM community_messages"); $communityMessages = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+
+        // Flagged children (Needs Attention or Review -> inactive > 7 days)
+        $flaggedChildren = 0;
+        try { $stmt = $connect->query("SELECT COUNT(child_id) as total FROM child WHERE child_id NOT IN (SELECT DISTINCT child_id FROM child_last_login WHERE login_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))"); $flaggedChildren = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
 
         // Total children
         $stmt = $connect->query("SELECT COUNT(*) as total FROM child");
@@ -32,11 +80,27 @@ try {
         // On-track rate
         $onTrackRate = $totalChildren > 0 ? round((($totalChildren - $flaggedChildren) / $totalChildren) * 100) : 0;
 
+        // Activity completion rate
+        $activityCompletionRate = $totalActivities > 0 ? round(($completedActivities / $totalActivities) * 100) : 0;
+
         echo json_encode([
             'success' => true,
             'stats' => [
                 'growth_records' => (int) $growthRecords,
+                'growth_this_month' => (int) $growthThisMonth,
                 'voice_samples' => (int) $voiceSamples,
+                'ai_activities' => (int) $aiActivities,
+                'total_activities' => (int) $totalActivities,
+                'completed_activities' => (int) $completedActivities,
+                'activity_completion_rate' => $activityCompletionRate,
+                'motor_milestones' => (int) $motorMilestones,
+                'motor_achieved' => (int) $motorAchieved,
+                'consultations' => (int) $consultations,
+                'completed_consultations' => (int) $completedConsultations,
+                'total_appointments' => (int) $totalAppointments,
+                'appointments_this_month' => (int) $appointmentsThisMonth,
+                'article_reads' => (int) $articleReads,
+                'community_messages' => (int) $communityMessages,
                 'on_track_rate' => $onTrackRate,
                 'flagged_children' => (int) $flaggedChildren,
                 'total_children' => (int) $totalChildren
@@ -58,17 +122,17 @@ try {
         echo json_encode(['success' => true, 'categories' => $categories]);
 
     } elseif ($action === 'development_status') {
-        // Calculate development status percentages
+        // Calculate development status percentages based on login activity and streaks
         $stmt = $connect->query("SELECT COUNT(*) as total FROM child");
-        $totalChildren = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        $totalChildren = (int) $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-        // Children with severe/critical behaviors → "Needs Attention"
-        $stmt = $connect->query("SELECT COUNT(DISTINCT child_id) as c FROM child_exhibited_behavior WHERE severity IN ('severe', 'critical')");
-        $needsAttention = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
+        // Children inactive for > 14 days → "Needs Attention"
+        $stmt = $connect->query("SELECT COUNT(child_id) as c FROM child WHERE child_id NOT IN (SELECT DISTINCT child_id FROM child_last_login WHERE login_at >= DATE_SUB(NOW(), INTERVAL 14 DAY))");
+        $needsAttention = (int) $stmt->fetch(PDO::FETCH_ASSOC)['c'];
 
-        // Children with moderate/high behaviors → "Needs Review"
-        $stmt = $connect->query("SELECT COUNT(DISTINCT child_id) as c FROM child_exhibited_behavior WHERE severity IN ('moderate', 'high') AND child_id NOT IN (SELECT DISTINCT child_id FROM child_exhibited_behavior WHERE severity IN ('severe', 'critical'))");
-        $needsReview = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
+        // Children inactive in last 7-14 days → "Needs Review"
+        $stmt = $connect->query("SELECT COUNT(child_id) as c FROM child WHERE child_id NOT IN (SELECT DISTINCT child_id FROM child_last_login WHERE login_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AND child_id IN (SELECT DISTINCT child_id FROM child_last_login WHERE login_at >= DATE_SUB(NOW(), INTERVAL 14 DAY))");
+        $needsReview = (int) $stmt->fetch(PDO::FETCH_ASSOC)['c'];
 
         $onTrack = $totalChildren - $needsAttention - $needsReview;
 
