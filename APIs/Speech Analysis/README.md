@@ -37,6 +37,7 @@ pip install fastapi uvicorn openai-whisper torch
 **Error: "Module not found"**
 - Run: `pip install fastapi uvicorn openai-whisper torch`
 
+
 **Server won't start**
 - Check if another application is using port 8000
 - Try running the batch file as Administrator

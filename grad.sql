@@ -187,6 +187,12 @@ CREATE TABLE `clinic` (
   `email` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
   `location` varchar(255) DEFAULT NULL,
+  `bio` text DEFAULT NULL,
+  `cover_image` varchar(255) DEFAULT NULL,
+  `profile_image` varchar(255) DEFAULT NULL,
+  `opening_hours` varchar(255) DEFAULT NULL,
+  `specialties` text DEFAULT NULL,
+  `website` varchar(255) DEFAULT NULL,
   `status` varchar(20) DEFAULT 'pending',
   `rating` decimal(3,2) DEFAULT 0.00,
   `added_at` timestamp NOT NULL DEFAULT current_timestamp()

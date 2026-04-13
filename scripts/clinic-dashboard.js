@@ -2,14 +2,14 @@
 //  Clinic Dashboard – All buttons functional
 // ─────────────────────────────────────────────────────────────
 
-const CLINIC_ID = 1; // TODO: pull from PHP session via meta tag
+const CLINIC_ID = (typeof window.CLINIC_ID !== 'undefined') ? window.CLINIC_ID : 1;
 
 /* ════════════════════════════════════════════════════════════
    BOOT
 ═══════════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
     initClinicNav();
-    showClinicView('specialists');
+    showClinicView('overview');
 });
 
 function initClinicNav() {
@@ -30,11 +30,13 @@ function showClinicView(viewId) {
     const main = document.getElementById('clinic-main-content');
     if (!main) return;
     const views = {
+        overview:     loadOverviewView,
         specialists:  loadSpecialistsView,
         appointments: loadAppointmentsView,
         patients:     loadPatientsView,
         revenue:      loadRevenueView,
         reviews:      loadReviewsView,
+        profile:      loadProfileView,
         settings:     loadSettingsView
     };
     const fn = views[viewId];
@@ -105,6 +107,132 @@ document.addEventListener('click', e => {
         e.target.classList.remove('active');
     }
 });
+
+/* ════════════════════════════════════════════════════════════
+   OVERVIEW
+═══════════════════════════════════════════════════════════════ */
+function loadOverviewView(main) {
+    Promise.all([
+        apiGet(`clinic-dashboard.php?ajax=1&section=overview&action=get_overview&clinic_id=${CLINIC_ID}`),
+        apiGet(`clinic-dashboard.php?ajax=1&section=overview&action=get_appointment_distribution&clinic_id=${CLINIC_ID}`),
+        apiGet(`clinic-dashboard.php?ajax=1&section=overview&action=get_revenue_trend&clinic_id=${CLINIC_ID}`)
+    ])
+    .then(([overviewRes, distRes, trendRes]) => {
+        if (!overviewRes.success) { main.innerHTML = errorHTML('Failed to load overview'); return; }
+        renderOverview(main, overviewRes, distRes.success ? distRes.data : [], trendRes.success ? trendRes.data : []);
+    })
+    .catch(() => { main.innerHTML = errorHTML('Connection error'); });
+}
+
+function overviewStatCard(color, iconPath, value, label, sub, trend) {
+    const palettes = {
+        blue:    { grad: 'linear-gradient(135deg,rgba(59,130,246,0.1),rgba(59,130,246,0.03))', border: 'rgba(59,130,246,0.15)', iconGrad: 'linear-gradient(135deg,#3b82f6,#60a5fa)', shadow: 'rgba(59,130,246,0.15)' },
+        green:   { grad: 'linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03))', border: 'rgba(16,185,129,0.15)', iconGrad: 'linear-gradient(135deg,#10b981,#34d399)', shadow: 'rgba(16,185,129,0.15)' },
+        purple:  { grad: 'linear-gradient(135deg,rgba(139,92,246,0.1),rgba(139,92,246,0.03))', border: 'rgba(139,92,246,0.15)', iconGrad: 'linear-gradient(135deg,#8b5cf6,#a78bfa)', shadow: 'rgba(139,92,246,0.15)' },
+        emerald: { grad: 'linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03))', border: 'rgba(13,148,136,0.15)', iconGrad: 'linear-gradient(135deg,#0d9488,#14b8a6)', shadow: 'rgba(13,148,136,0.15)' },
+        amber:   { grad: 'linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03))', border: 'rgba(245,158,11,0.15)', iconGrad: 'linear-gradient(135deg,#f59e0b,#fbbf24)', shadow: 'rgba(245,158,11,0.15)' },
+        rose:    { grad: 'linear-gradient(135deg,rgba(225,29,72,0.1),rgba(225,29,72,0.03))', border: 'rgba(225,29,72,0.15)', iconGrad: 'linear-gradient(135deg,#e11d48,#fb7185)', shadow: 'rgba(225,29,72,0.15)' }
+    };
+    const p = palettes[color] || palettes.blue;
+    const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '•';
+    const trendColor = trend === 'up' ? '#16a34a' : trend === 'down' ? '#dc2626' : 'var(--text-secondary)';
+    return `<div class="overview-stat-card" style="background:${p.grad};border:1px solid ${p.border};border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px ${p.shadow}'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+        <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+            <div style="width:42px;height:42px;border-radius:12px;background:${p.iconGrad};display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:1.15rem;height:1.15rem">${iconPath}</svg></div>
+        </div>
+        <div class="stat-card-value" style="font-size:1.75rem;font-weight:800;line-height:1;color:var(--text-primary)">${value}</div>
+        <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem">${label}</div>
+        <div style="font-size:.7rem;color:${trendColor};margin-top:.35rem;font-weight:600">${trendIcon} ${sub}</div>
+    </div>`;
+}
+
+function renderOverview(main, overview, distribution, revenueTrend) {
+    const stats = overview.stats || {};
+    const totalRevenue = Number(stats.monthly_revenue || 0).toLocaleString();
+    const pendingActions = stats.pending_actions || 0;
+    const recentActivity = overview.recent_activity || [];
+    const newReviews = overview.new_reviews || [];
+
+    const activityRows = recentActivity.length > 0 ? recentActivity.map(a => {
+        const d = new Date(a.scheduled_at);
+        const statusCls = a.status === 'completed' ? 'status-active' : a.status === 'cancelled' ? 'status-danger' : 'status-warning';
+        return `<div class="patient-row" style="transition:background .15s;border-radius:10px;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+            <div class="appointment-time-badge"><div class="apt-time">${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}</div><div class="apt-date">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></div>
+            <div class="patient-info"><div class="patient-name">${a.patient_name || 'Patient'}</div><div class="patient-details">${a.doctor_name || ''} · ${a.specialization || ''}</div></div>
+            <span class="status-badge ${statusCls}">${a.status}</span>
+        </div>`;
+    }).join('') : '<div style="text-align:center;padding:3rem;color:var(--text-secondary)"><div style="font-size:2.5rem;margin-bottom:.75rem;opacity:.5">📋</div><p style="font-weight:600;margin:0">No recent activity</p><p style="font-size:.8rem;margin:.25rem 0 0">Appointments will appear here</p></div>';
+
+    const reviewRows = newReviews.length > 0 ? newReviews.map(r => {
+        const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+        return `<div class="review-card" style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+            <div class="review-header"><span class="review-stars">${stars}</span><span style="font-size:0.8rem;color:var(--text-secondary)">${new Date(r.submitted_at).toLocaleDateString()}</span></div>
+            <div class="review-text">${r.content || 'No comment'}</div>
+            <div class="review-specialist">— ${r.parent_name || 'Anonymous'} about ${r.doctor_name || 'Doctor'}</div>
+        </div>`;
+    }).join('') : '<div style="text-align:center;padding:3rem;color:var(--text-secondary)"><div style="font-size:2.5rem;margin-bottom:.75rem;opacity:.5">⭐</div><p style="font-weight:600;margin:0">No recent reviews</p><p style="font-size:.8rem;margin:.25rem 0 0">Feedback will appear here</p></div>';
+
+    main.innerHTML = `
+    <div class="dashboard-content">
+        <div style="background:linear-gradient(135deg,#0d9488,#0891b2,#0284c7);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.75rem;position:relative;overflow:hidden">
+            <div style="position:absolute;top:-20px;right:30px;font-size:80px;opacity:.1">🏥</div>
+            <div style="position:relative;z-index:1">
+                <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem">Dashboard Overview</h1>
+                <p style="opacity:.8;margin:0;font-size:.95rem">Here's what's happening at your clinic today</p>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.75rem" class="clinic-stats-grid">
+            ${overviewStatCard('blue', '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', stats.total_specialists || 0, 'Total Specialists', (stats.active_specialists || 0) + ' active', 'up')}
+            ${overviewStatCard('green', '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>', stats.today_appointments || 0, "Today's Appointments", (stats.upcoming_appointments || 0) + ' upcoming', 'neutral')}
+            ${overviewStatCard('purple', '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>', stats.total_patients || 0, 'Total Patients', 'Families served', 'up')}
+            ${overviewStatCard('emerald', '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', '$' + totalRevenue, 'Monthly Revenue', 'This month', 'up')}
+            ${overviewStatCard('amber', '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>', stats.avg_rating || '—', 'Clinic Rating', (stats.reviews_this_month || 0) + ' new reviews', 'neutral')}
+            ${overviewStatCard('rose', '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>', pendingActions, 'Pending Actions', pendingActions > 0 ? 'Needs attention' : 'All clear', pendingActions > 0 ? 'down' : 'neutral')}
+        </div>
+
+        <div class="overview-grid">
+            <div class="section-card chart-card">
+                <div class="section-card-header"><div><h2 class="section-heading">Appointment Distribution</h2><p class="card-subtitle">All appointments by status</p></div></div>
+                <div class="chart-container-large"><canvas id="appointmentDistChart"></canvas></div>
+            </div>
+            <div class="section-card chart-card">
+                <div class="section-card-header"><div><h2 class="section-heading">Revenue Trend</h2><p class="card-subtitle">Monthly revenue (last 6 months)</p></div></div>
+                <div class="chart-container-large"><canvas id="revenueTrendChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="overview-grid">
+            <div class="section-card">
+                <div class="section-card-header"><h2 class="section-heading">Recent Activity</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary)">Latest</span></div>
+                <div class="patients-list" style="max-height:380px;overflow-y:auto">${activityRows}</div>
+            </div>
+            <div class="section-card">
+                <div class="section-card-header"><h2 class="section-heading">Latest Reviews</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary)">New</span></div>
+                <div class="reviews-list" style="max-height:380px;overflow-y:auto">${reviewRows}</div>
+            </div>
+        </div>
+    </div>`;
+
+    setTimeout(() => renderOverviewCharts(distribution, revenueTrend), 100);
+}
+
+function renderOverviewCharts(distribution, revenueTrend) {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+
+    const distCtx = document.getElementById('appointmentDistChart');
+    if (distCtx && distribution.length > 0) {
+        const statusColors = { scheduled: '#3b82f6', confirmed: '#8b5cf6', completed: '#16a34a', cancelled: '#ef4444', no_show: '#f59e0b' };
+        new Chart(distCtx, { type: 'doughnut', data: { labels: distribution.map(d => d.status), datasets: [{ data: distribution.map(d => d.count), backgroundColor: distribution.map(d => statusColors[d.status] || '#94a3b8'), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor, padding: 16 } } }, cutout: '65%' } });
+    }
+
+    const trendCtx = document.getElementById('revenueTrendChart');
+    if (trendCtx && revenueTrend.length > 0) {
+        new Chart(trendCtx, { type: 'line', data: { labels: revenueTrend.map(d => d.month), datasets: [{ label: 'Revenue ($)', data: revenueTrend.map(d => d.revenue), borderColor: '#0d9488', backgroundColor: 'rgba(13,148,136,0.1)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#0d9488' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: gridColor }, ticks: { color: textColor } }, y: { grid: { color: gridColor }, ticks: { color: textColor } } } } });
+    }
+}
 
 /* ════════════════════════════════════════════════════════════
    SPECIALISTS
@@ -734,7 +862,7 @@ function renderSettings(main, c) {
     <div class="dashboard-content">
         <div class="dashboard-header-section">
             <div><h1 class="dashboard-title">Clinic Settings</h1>
-            <p class="dashboard-subtitle">Manage clinic profile and preferences</p></div>
+            <p class="dashboard-subtitle">Manage preferences, security, and account</p></div>
         </div>
 
         <div class="settings-grid">
@@ -761,27 +889,27 @@ function renderSettings(main, c) {
                 </div>
             </div>
 
-            <!-- Status Card -->
+            <!-- Appearance -->
             <div class="section-card">
-                <div class="section-card-header"><h2 class="section-heading">Clinic Status</h2></div>
+                <div class="section-card-header"><h2 class="section-heading">Appearance & Preferences</h2></div>
                 <div style="padding:1.5rem">
+                    <div class="toggle-row" style="cursor:pointer" onclick="if(typeof toggleTheme==='function')toggleTheme()">
+                        <span>Dark Mode</span>
+                        <span style="font-weight:600;color:var(--purple-600)">Toggle</span>
+                    </div>
+                    <div class="toggle-row" style="cursor:pointer" onclick="if(typeof toggleLanguage==='function')toggleLanguage()">
+                        <span>Language</span>
+                        <span style="font-weight:600;color:var(--purple-600)">عربي / EN</span>
+                    </div>
                     <div class="toggle-row">
                         <span>Verification Status</span>
                         <span class="status-badge ${c.status==='verified'?'status-active':'status-warning'}">${c.status||'Unknown'}</span>
-                    </div>
-                    <div class="toggle-row">
-                        <span>Rating</span>
-                        <span style="font-weight:700;color:#d97706">★ ${c.rating||'—'}</span>
-                    </div>
-                    <div class="toggle-row">
-                        <span>Member Since</span>
-                        <span>${c.added_at ? new Date(c.added_at).toLocaleDateString('en-US',{month:'long',year:'numeric'}) : '—'}</span>
                     </div>
                     <div class="toggle-row" style="border-bottom:none">
                         <span>Notifications</span>
                         <label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer">
                             <input type="checkbox" checked style="opacity:0;width:0;height:0" onchange="toast(this.checked?'Notifications enabled':'Notifications muted')">
-                            <span style="position:absolute;inset:0;background:${`#0d9488`};border-radius:24px;transition:.3s"></span>
+                            <span style="position:absolute;inset:0;background:#0d9488;border-radius:24px;transition:.3s"></span>
                             <span style="position:absolute;height:18px;width:18px;bottom:3px;left:3px;background:white;border-radius:50%;transition:.3s;transform:translateX(20px)"></span>
                         </label>
                     </div>
@@ -801,7 +929,7 @@ function renderSettings(main, c) {
                             <div class="form-group"><label>Confirm Password</label>
                                 <input type="password" class="form-input" id="set_conf_pw" placeholder="Repeat password"></div>
                         </div>
-                        <button type="submit" class="btn btn-outline">Update Password</button>
+                        <button type="submit" class="btn btn-outline" style="width:100%">Update Password</button>
                     </form>
                 </div>
             </div>
@@ -811,7 +939,7 @@ function renderSettings(main, c) {
                 <div class="section-card-header"><h2 class="section-heading" style="color:#dc2626">Danger Zone</h2></div>
                 <div style="padding:1.5rem">
                     <p style="color:var(--text-secondary);margin:0 0 1rem">These actions are permanent and irreversible.</p>
-                    <button class="btn btn-danger" onclick="deactivateClinic()">
+                    <button class="btn btn-danger" style="width:100%;justify-content:center" onclick="deactivateClinic()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                         Deactivate Clinic
                     </button>
@@ -866,3 +994,130 @@ function handleLogout() {
         window.location.href = 'logout.php';
     }
 }
+
+/* ════════════════════════════════════════════════════════════
+   PUBLIC PROFILE
+═══════════════════════════════════════════════════════════════ */
+function loadProfileView(main) {
+    apiGet(`clinic-dashboard.php?ajax=1&section=profile&clinic_id=${CLINIC_ID}`)
+        .then(res => {
+            if (!res.success) { main.innerHTML = errorHTML('Failed to load profile'); return; }
+            renderProfile(main, res.data);
+        })
+        .catch(() => { main.innerHTML = errorHTML('Connection error'); });
+}
+
+function renderProfile(main, p) {
+    p = p || {};
+    const coverURL = p.cover_image || 'assets/default-clinic-cover.jpg';
+    const profileURL = p.profile_image || 'assets/logo.png';
+    const verifiedBadge = p.status === 'verified' ? 'status-active' : 'status-warning';
+
+    main.innerHTML = `
+    <div class="dashboard-content">
+        <div class="dashboard-header-section" style="display:flex;justify-content:space-between;align-items:center">
+            <div><h1 class="dashboard-title">Public Profile</h1>
+            <p class="dashboard-subtitle">Manage how parents see your clinic</p></div>
+            <button class="btn btn-outline" onclick="window.open('clinic-profile.php?id=${CLINIC_ID}','_blank')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.1rem;height:1.1rem"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Preview As Parent
+            </button>
+        </div>
+
+        <div class="section-card" style="overflow:hidden;margin-bottom:2rem">
+            <div style="height:200px;background:#e2e8f0;position:relative;background-image:url('${coverURL}');background-size:cover;background-position:center">
+                <button class="btn btn-outline" style="background:var(--bg-card);position:absolute;bottom:1rem;right:1rem;border:none;box-shadow:0 4px 6px rgba(0,0,0,0.1)" onclick="document.getElementById('cover_upload').click()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Change Cover
+                </button>
+                <input type="file" id="cover_upload" hidden accept="image/*" onchange="uploadClinicImage(this,'cover')">
+            </div>
+            <div style="padding:1.5rem;display:flex;gap:1.5rem;align-items:flex-start;margin-top:-4rem">
+                <div style="width:120px;height:120px;border-radius:16px;background:white;padding:0.5rem;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);position:relative;flex-shrink:0">
+                    <img src="${profileURL}" style="width:100%;height:100%;object-fit:cover;border-radius:10px">
+                    <button style="position:absolute;bottom:-0.5rem;right:-0.5rem;background:var(--purple-500);color:white;border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.2)" onclick="document.getElementById('profile_upload').click()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </button>
+                    <input type="file" id="profile_upload" hidden accept="image/*" onchange="uploadClinicImage(this,'profile')">
+                </div>
+                <div style="flex:1;padding-top:4rem">
+                    <h2 style="font-size:1.5rem;font-weight:700;display:flex;align-items:center;gap:0.5rem">
+                        ${esc(p.clinic_name)}
+                        <span class="status-badge ${verifiedBadge}" style="font-size:0.75rem">${esc(p.status)}</span>
+                    </h2>
+                    <p style="color:var(--text-secondary);margin-top:0.25rem">${esc(p.location)}</p>
+                </div>
+            </div>
+        </div>
+
+        <form id="clinic-profile-form" onsubmit="saveClinicProfile(event)">
+            <div class="settings-grid">
+                <div class="section-card">
+                    <div class="section-card-header"><h2 class="section-heading">About Clinic</h2></div>
+                    <div style="padding:1.5rem">
+                        <div class="form-group" style="margin-bottom:1.5rem">
+                            <label>Description & Bio</label>
+                            <textarea class="form-input" id="prof_bio" rows="4" placeholder="Briefly describe your services...">${esc(p.bio)}</textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Specialties Offered (Comma-separated)</label>
+                            <input type="text" class="form-input" id="prof_specialties" placeholder="Pediatrics, Dentistry, Speech Therapy" value="${esc(p.specialties)}">
+                        </div>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <div class="section-card-header"><h2 class="section-heading">Contact & Details</h2></div>
+                    <div style="padding:1.5rem">
+                        <div class="form-group" style="margin-bottom:1.5rem">
+                            <label>Opening Hours</label>
+                            <input type="text" class="form-input" id="prof_hours" placeholder="Mon-Fri: 9AM-8PM" value="${esc(p.opening_hours)}">
+                        </div>
+                        <div class="form-group">
+                            <label>Website / Booking Link</label>
+                            <input type="url" class="form-input" id="prof_website" placeholder="https://..." value="${esc(p.website)}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:2rem;text-align:right">
+                <button type="submit" class="btn btn-gradient" style="padding:1rem 2rem;border-radius:12px;font-weight:700">Save Profile Information</button>
+            </div>
+        </form>
+    </div>`;
+}
+
+function saveClinicProfile(e) {
+    e.preventDefault();
+    const btn = e.submitter;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const formData = new FormData();
+    formData.append('action', 'update_profile');
+    formData.append('bio', document.getElementById('prof_bio').value);
+    formData.append('specialties', document.getElementById('prof_specialties').value);
+    formData.append('opening_hours', document.getElementById('prof_hours').value);
+    formData.append('website', document.getElementById('prof_website').value);
+
+    fetch(`clinic-dashboard.php?ajax=1&section=profile&clinic_id=${CLINIC_ID}`, { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(res => {
+        btn.disabled = false; btn.textContent = 'Save Profile Information';
+        if (res.success) toast('Profile updated successfully');
+        else toast(res.error || 'Failed to update', 'error');
+    }).catch(() => { btn.disabled = false; btn.textContent = 'Save Profile Information'; toast('Connection error', 'error'); });
+}
+
+function uploadClinicImage(input, type) {
+    if (!input.files || !input.files.length) return;
+    const formData = new FormData();
+    formData.append('action', 'upload_image');
+    formData.append('type', type);
+    formData.append('image', input.files[0]);
+    toast('Uploading…');
+    fetch(`clinic-dashboard.php?ajax=1&section=profile&clinic_id=${CLINIC_ID}`, { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) { toast('Image uploaded!'); loadProfileView(document.getElementById('clinic-main-content')); }
+        else toast(res.error || 'Upload failed', 'error');
+    }).catch(() => toast('Upload error', 'error'));
+}
+

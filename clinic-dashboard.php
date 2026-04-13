@@ -396,6 +396,187 @@ if (
         }
     }
 
+    // ─── OVERVIEW SECTION ────────────────────────────────
+    if ($section === 'overview') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_overview') {
+                // Get all key stats in one query
+                $stmt = $connect->prepare("
+                    SELECT
+                        (SELECT COUNT(*) FROM specialist WHERE clinic_id = :cid) AS total_specialists,
+                        (SELECT COUNT(*) FROM specialist s INNER JOIN users u ON s.specialist_id = u.user_id WHERE s.clinic_id = :cid AND u.status = 'active') AS active_specialists,
+                        (SELECT COUNT(DISTINCT c.child_id) FROM appointment a INNER JOIN specialist s ON a.specialist_id = s.specialist_id INNER JOIN child c ON c.parent_id = a.parent_id WHERE s.clinic_id = :cid) AS total_patients,
+                        (SELECT COUNT(*) FROM appointment a INNER JOIN specialist s ON a.specialist_id = s.specialist_id WHERE s.clinic_id = :cid AND DATE(a.scheduled_at) = CURDATE()) AS today_appointments,
+                        (SELECT COUNT(*) FROM appointment a INNER JOIN specialist s ON a.specialist_id = s.specialist_id WHERE s.clinic_id = :cid AND a.status IN ('scheduled','confirmed') AND a.scheduled_at >= NOW()) AS upcoming_appointments,
+                        (SELECT ROUND(AVG(f.rating), 1) FROM feedback f INNER JOIN specialist s ON f.specialist_id = s.specialist_id WHERE s.clinic_id = :cid) AS avg_rating,
+                        (SELECT COUNT(*) FROM feedback f INNER JOIN specialist s ON f.specialist_id = s.specialist_id WHERE s.clinic_id = :cid AND DATE(f.submitted_at) <= CURDATE() AND DATE(f.submitted_at) >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)) AS reviews_this_month
+                ");
+                $stmt->execute([':cid' => $clinic_id]);
+                $stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                // Revenue calculation
+                $stmt2 = $connect->prepare("
+                    SELECT COALESCE(SUM(sub.price), 0) AS monthly_revenue
+                    FROM parent_subscription ps
+                    INNER JOIN subscription sub ON ps.subscription_id = sub.subscription_id
+                    WHERE ps.parent_id IN (
+                        SELECT DISTINCT a.parent_id FROM appointment a
+                        INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                        WHERE s.clinic_id = :cid
+                    )
+                ");
+                $stmt2->execute([':cid' => $clinic_id]);
+                $revenue = $stmt2->fetch(PDO::FETCH_ASSOC);
+                $stats['monthly_revenue'] = $revenue['monthly_revenue'];
+
+                // Pending actions (appointments needing attention)
+                $stmt3 = $connect->prepare("
+                    SELECT COUNT(*) AS pending FROM appointment a
+                    INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                    WHERE s.clinic_id = :cid AND a.status = 'scheduled' AND a.scheduled_at < NOW()
+                ");
+                $stmt3->execute([':cid' => $clinic_id]);
+                $pending = $stmt3->fetch(PDO::FETCH_ASSOC);
+                $stats['pending_actions'] = $pending['pending'];
+
+                // Recent activity (last 5 appointments)
+                $stmt4 = $connect->prepare("
+                    SELECT a.appointment_id, a.status, a.scheduled_at, a.type,
+                           CONCAT(c.first_name, ' ', c.last_name) AS patient_name,
+                           CONCAT(u.first_name, ' ', u.last_name) AS doctor_name,
+                           s.specialization
+                    FROM appointment a
+                    INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                    INNER JOIN users u ON u.user_id = s.specialist_id
+                    INNER JOIN child c ON c.parent_id = a.parent_id
+                    WHERE s.clinic_id = :cid
+                    ORDER BY a.scheduled_at DESC LIMIT 5
+                ");
+                $stmt4->execute([':cid' => $clinic_id]);
+                $recent_activity = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+
+                // New reviews (last 3)
+                $stmt5 = $connect->prepare("
+                    SELECT f.feedback_id, f.rating, f.content, f.submitted_at,
+                           CONCAT(u.first_name, ' ', u.last_name) AS parent_name,
+                           CONCAT(d.first_name, ' ', d.last_name) AS doctor_name
+                    FROM feedback f
+                    INNER JOIN specialist s ON f.specialist_id = s.specialist_id
+                    INNER JOIN users d ON d.user_id = s.specialist_id
+                    LEFT JOIN users u ON u.user_id = f.parent_id
+                    WHERE s.clinic_id = :cid
+                    ORDER BY f.submitted_at DESC LIMIT 3
+                ");
+                $stmt5->execute([':cid' => $clinic_id]);
+                $new_reviews = $stmt5->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode([
+                    'success' => true,
+                    'stats' => $stats,
+                    'recent_activity' => $recent_activity,
+                    'new_reviews' => $new_reviews
+                ]);
+                exit;
+            }
+
+            if ($action === 'get_appointment_distribution') {
+                $stmt = $connect->prepare("
+                    SELECT a.status, COUNT(*) AS count
+                    FROM appointment a
+                    INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                    WHERE s.clinic_id = :cid
+                    GROUP BY a.status
+                ");
+                $stmt->execute([':cid' => $clinic_id]);
+                $distribution = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $distribution]);
+                exit;
+            }
+
+            if ($action === 'get_revenue_trend') {
+                // Get monthly revenue for last 6 months
+                $stmt = $connect->prepare("
+                    SELECT
+                        DATE_FORMAT(paid_at, '%Y-%m') AS month,
+                        SUM(amount_post_discount) AS revenue
+                    FROM payment pay
+                    INNER JOIN subscription sub ON pay.subscription_id = sub.subscription_id
+                    INNER JOIN parent_subscription ps ON ps.subscription_id = sub.subscription_id
+                    WHERE ps.parent_id IN (
+                        SELECT DISTINCT a.parent_id FROM appointment a
+                        INNER JOIN specialist s ON a.specialist_id = s.specialist_id
+                        WHERE s.clinic_id = :cid
+                    )
+                    AND pay.paid_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+                    AND pay.status = 'paid'
+                    GROUP BY DATE_FORMAT(paid_at, '%Y-%m')
+                    ORDER BY month ASC
+                ");
+                $stmt->execute([':cid' => $clinic_id]);
+                $trend = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => $trend]);
+                exit;
+            }
+        }
+    }
+
+    // ─── PROFILE SECTION (Public Profile) ──────────────────
+    if ($section === 'profile') {
+        if ($method === 'GET') {
+            $stmt = $connect->prepare("SELECT * FROM clinic WHERE clinic_id = :clinic_id");
+            $stmt->execute([':clinic_id' => $clinic_id]);
+            $clinic = $stmt->fetch(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'data' => $clinic]);
+            exit;
+        }
+        if ($method === 'POST') {
+            $action = $_POST['action'] ?? '';
+            
+            if ($action === 'update_profile') {
+                $bio = trim($_POST['bio'] ?? '');
+                $specialties = trim($_POST['specialties'] ?? '');
+                $opening_hours = trim($_POST['opening_hours'] ?? '');
+                $website = trim($_POST['website'] ?? '');
+                
+                $stmt = $connect->prepare("UPDATE clinic SET bio = :bio, specialties = :spec, opening_hours = :hours, website = :web WHERE clinic_id = :cid");
+                $stmt->execute([':bio' => $bio, ':spec' => $specialties, ':hours' => $opening_hours, ':web' => $website, ':cid' => $clinic_id]);
+                echo json_encode(['success' => true]);
+                exit;
+            }
+            
+            if ($action === 'upload_image') {
+                $type = $_POST['type'] ?? 'profile';
+                if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+                    echo json_encode(['success' => false, 'error' => 'Upload failed']);
+                    exit;
+                }
+                $file = $_FILES['image'];
+                $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $filename = 'clinic_' . $clinic_id . '_' . $type . '_' . time() . '.' . $ext;
+                
+                // Ensure dir exists
+                $upload_dir = 'uploads/clinics/';
+                if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
+                
+                $dest = $upload_dir . $filename;
+                if (move_uploaded_file($file['tmp_name'], $dest)) {
+                    $col = $type === 'cover' ? 'cover_image' : 'profile_image';
+                    $stmt = $connect->prepare("UPDATE clinic SET $col = :path WHERE clinic_id = :cid");
+                    $stmt->execute([':path' => $dest, ':cid' => $clinic_id]);
+                    echo json_encode(['success' => true, 'path' => $dest]);
+                } else {
+                    echo json_encode(['success' => false, 'error' => 'Could not save file']);
+                }
+                exit;
+            }
+        }
+    }
+
     // ─── SETTINGS SECTION ────────────────────────────────
     if ($section === 'settings') {
 
@@ -502,28 +683,22 @@ if (
                 <a href="index.php" class="sidebar-logo">
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
-                <div class="user-profile">
-                    <div class="user-avatar clinic-avatar">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                            <polyline points="9 22 9 12 15 12 15 22" />
-                        </svg>
-                    </div>
-                    <div class="user-info">
-                        <div class="user-name">City Kids Care</div>
-                        <div class="user-badge-text">Healthcare Clinic</div>
-                    </div>
-                    <div class="verified-badge" title="Verified Clinic">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                            <polyline points="22 4 12 14.01 9 11.01" />
-                        </svg>
-                    </div>
+                <div class="user-profile" id="sidebar-profile">
+                    <!-- Profile set by JS dynamically -->
                 </div>
             </div>
 
             <nav class="sidebar-nav">
-                <button class="nav-item active" data-view="specialists">
+                <button class="nav-item active" data-view="overview">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                    </svg>
+                    <span>Overview</span>
+                </button>
+                <button class="nav-item" data-view="specialists">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                         <circle cx="9" cy="7" r="4" />
@@ -564,18 +739,16 @@ if (
                     </svg>
                     <span>Reviews</span>
                 </button>
+                <button class="nav-item" data-view="profile">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    <span>Public Profile</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
-                <button class="sidebar-language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    <span>عربي</span>
-                </button>
                 <button class="nav-item" data-view="settings">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
@@ -601,18 +774,6 @@ if (
         </main>
     </div>
 
-    <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <path
-                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    </button>
-
     <!-- Language Toggle -->
     <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -623,10 +784,11 @@ if (
         عربي
     </button>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="scripts/theme-toggle.js"></script>
     <script src="scripts/language-toggle.js?v=5"></script>
     <script src="scripts/navigation.js"></script>
-    <script src="scripts/clinic-dashboard.js"></script>
+    <script src="scripts/clinic-dashboard.js?v=3"></script>
 </body>
 
 </html>
