@@ -19,16 +19,29 @@ if (!$stmt->fetch()) {
     exit();
 }
 
-// Fetch latest analyses joined with voice_sample
+// Fetch latest analyses joined with voice_sample (includes enhanced NLP metrics)
 $stmt = $connect->prepare("
     SELECT
         vs.sample_id,
         vs.audio_url,
-        vs.feedback AS status,
+        vs.feedback       AS status,
         vs.sent_at,
+        vs.mode,
+        vs.target_text,
         sa.transcript,
         sa.vocabulary_score,
         sa.clarify_score,
+        sa.match_score,
+        sa.sentence_count,
+        sa.avg_sentence_length,
+        sa.sentence_complexity_score,
+        sa.avg_word_length,
+        sa.avg_syllables_per_word,
+        sa.polysyllabic_word_count,
+        sa.flesch_reading_ease,
+        sa.flesch_kincaid_grade,
+        sa.overall_development_score,
+        sa.developmental_feedback,
         sa.analyzed_at
     FROM voice_sample vs
     LEFT JOIN speech_analysis sa ON sa.sample_id = vs.sample_id

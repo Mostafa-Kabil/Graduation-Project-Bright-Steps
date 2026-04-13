@@ -1,5 +1,12 @@
 # Bright Steps - Speech Analysis Service
 
+## Overview
+
+This service provides comprehensive speech analysis for child development tracking using:
+- **OpenAI Whisper** for accurate speech-to-text transcription
+- **NLP Analysis** for vocabulary, sentence complexity, and readability metrics
+- **Age-appropriate evaluations** based on WHO/CDC developmental milestones
+
 ## How to Start the Speech Analysis AI
 
 The speech analysis feature requires a Python FastAPI server to be running on port 8000.
@@ -24,7 +31,49 @@ python -m uvicorn app:app --port 8000 --host 0.0.0.0
 Make sure you have Python installed with the required packages:
 
 ```bash
-pip install fastapi uvicorn openai-whisper torch
+pip install -r requirements.txt
+```
+
+Or install manually:
+```bash
+pip install fastapi uvicorn torch nltk textstat
+pip install git+https://github.com/openai/whisper.git
+pip install ffmpeg-python
+```
+
+### API Endpoints
+
+#### `GET /`
+Health check endpoint.
+
+#### `POST /analyze`
+Free Talk mode analysis.
+- **Parameters:** `audio` (file), `age` (months)
+- **Returns:** Transcript, vocabulary metrics, sentence complexity, readability scores, developmental feedback
+
+#### `POST /analyze-compare`
+Read & Compare mode analysis.
+- **Parameters:** `audio` (file), `age` (months), `target_text` (string)
+- **Returns:** All Free Talk metrics plus word-by-word comparison with match score
+
+### Analysis Metrics
+
+The service calculates:
+
+| Metric | Description |
+|--------|-------------|
+| Vocabulary Size | Count of unique words used |
+| Sentence Complexity | Average sentence length, structure analysis |
+| Word Complexity | Syllable count, polysyllabic word detection |
+| Readability Scores | Flesch Reading Ease, Flesch-Kincaid Grade Level |
+| Overall Development Score | Composite score (0-100) |
+| Developmental Feedback | Strengths, areas to practice, recommendations |
+
+### Running Tests
+
+```bash
+cd "C:\xampp\htdocs\Bright Steps Website\APIs\Speech Analysis"
+python -m pytest test_analysis.py -v
 ```
 
 ### Troubleshooting
@@ -35,12 +84,16 @@ pip install fastapi uvicorn openai-whisper torch
 - Check that FFmpeg is installed and in PATH
 
 **Error: "Module not found"**
-- Run: `pip install fastapi uvicorn openai-whisper torch`
+- Run: `pip install -r requirements.txt`
 
 **Server won't start**
 - Check if another application is using port 8000
 - Try running the batch file as Administrator
 - Verify Python is installed correctly
+
+**FFmpeg errors**
+- Ensure FFmpeg is installed and the bin directory is in PATH
+- The app automatically injects the FFmpeg path, but verify it's correct
 
 ### Stopping the Server
 
