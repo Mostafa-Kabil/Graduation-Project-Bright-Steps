@@ -1,3 +1,212 @@
+<?php
+// ══════════════════════════════════════════════════════
+// Doctor Settings — PHP Backend
+// ══════════════════════════════════════════════════════
+session_start();
+require_once 'connection.php';
+
+// Session-based doctor ID (set by doctor-login.php)
+$doctor_id   = intval($_SESSION['id'] ?? 1);  // fallback to 1 for dev
+$clinic_id   = intval($_SESSION['clinic_id'] ?? 1);
+
+// ── AJAX Handler ───────────────────────────────────────
+if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest')) {
+    header('Content-Type: application/json');
+    $method = $_SERVER['REQUEST_METHOD'];
+    $action = $_GET['action'] ?? '';
+
+    // ── GET: Load profile ──────────────────────────────
+    if ($method === 'GET' && $action === 'get_profile') {
+        $stmt = $connect->prepare("
+            SELECT u.user_id, u.first_name, u.last_name, u.email, u.status,
+                   s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
+                   c.clinic_name, c.location AS clinic_location
+            FROM users u
+            INNER JOIN specialist s ON u.user_id = s.specialist_id
+            INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+            WHERE u.user_id = :uid
+        ");
+        $stmt->execute([':uid' => $doctor_id]);
+        $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$profile) {
+            echo json_encode(['success' => false, 'error' => 'Profile not found']);
+            exit;
+        }
+
+        // Load availability slots
+        $stmt2 = $connect->prepare("
+            SELECT slot_id, day_of_week, start_time, end_time, slot_duration, is_active
+            FROM appointment_slots
+            WHERE doctor_id = :did AND is_active = 1
+            ORDER BY day_of_week ASC, start_time ASC
+        ");
+        $stmt2->execute([':did' => $doctor_id]);
+        $slots = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+
+        $profile['slots'] = $slots;
+        unset($profile['password']);
+
+        echo json_encode(['success' => true, 'data' => $profile]);
+        exit;
+    }
+
+    // ── POST: Save profile ─────────────────────────────
+    if ($method === 'POST' && $action === 'save_profile') {
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $first_name   = trim($input['first_name'] ?? '');
+        $last_name    = trim($input['last_name'] ?? '');
+        $email        = trim($input['email'] ?? '');
+        $spec         = trim($input['specialization'] ?? '');
+        $exp          = intval($input['experience_years'] ?? 0);
+        $cert         = trim($input['certificate_of_experience'] ?? '');
+
+        if (!$first_name || !$last_name || !$email) {
+            echo json_encode(['success' => false, 'error' => 'Name and email are required']);
+            exit;
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid email address']);
+            exit;
+        }
+
+        // Check email uniqueness (exclude self)
+        $check = $connect->prepare("SELECT user_id FROM users WHERE email = :email AND user_id != :uid");
+        $check->execute([':email' => $email, ':uid' => $doctor_id]);
+        if ($check->fetch()) {
+            echo json_encode(['success' => false, 'error' => 'Email already in use']);
+            exit;
+        }
+
+        $connect->beginTransaction();
+        try {
+            $connect->prepare("
+                UPDATE users SET first_name = :fn, last_name = :ln, email = :email
+                WHERE user_id = :uid
+            ")->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
+
+            $connect->prepare("
+                UPDATE specialist SET
+                    first_name = :fn, last_name = :ln,
+                    specialization = :spec,
+                    experience_years = :exp,
+                    certificate_of_experience = :cert
+                WHERE specialist_id = :sid
+            ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+
+            $connect->commit();
+
+            // Update session
+            $_SESSION['fname'] = $first_name;
+            $_SESSION['lname'] = $last_name;
+            $_SESSION['email'] = $email;
+            $_SESSION['specialization'] = $spec;
+
+            echo json_encode(['success' => true, 'message' => 'Profile saved successfully']);
+        } catch (Exception $e) {
+            $connect->rollBack();
+            echo json_encode(['success' => false, 'error' => 'Failed to save profile']);
+        }
+        exit;
+    }
+
+    // ── POST: Change password ──────────────────────────
+    if ($method === 'POST' && $action === 'change_password') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $current = trim($input['current_password'] ?? '');
+        $new     = trim($input['new_password'] ?? '');
+
+        if (!$current || !$new) {
+            echo json_encode(['success' => false, 'error' => 'Both current and new password are required']);
+            exit;
+        }
+        if (strlen($new) < 6) {
+            echo json_encode(['success' => false, 'error' => 'New password must be at least 6 characters']);
+            exit;
+        }
+
+        $stmt = $connect->prepare("SELECT password FROM users WHERE user_id = :uid");
+        $stmt->execute([':uid' => $doctor_id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row || !password_verify($current, $row['password'])) {
+            echo json_encode(['success' => false, 'error' => 'Current password is incorrect']);
+            exit;
+        }
+
+        $hashed = password_hash($new, PASSWORD_DEFAULT);
+        $connect->prepare("UPDATE users SET password = :pw WHERE user_id = :uid")
+                ->execute([':pw' => $hashed, ':uid' => $doctor_id]);
+
+        echo json_encode(['success' => true, 'message' => 'Password changed successfully']);
+        exit;
+    }
+
+    // ── POST: Save availability slots ─────────────────
+    if ($method === 'POST' && $action === 'save_slots') {
+        $input  = json_decode(file_get_contents('php://input'), true);
+        $days   = $input['days'] ?? [];        // array of day ints 0-6
+        $start  = trim($input['start_time'] ?? '09:00');
+        $end    = trim($input['end_time'] ?? '17:00');
+        $duration = intval($input['slot_duration'] ?? 30);
+
+        // Deactivate all existing slots
+        $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
+                ->execute([':did' => $doctor_id]);
+
+        if (!empty($days)) {
+            $stmt = $connect->prepare("
+                INSERT INTO appointment_slots (doctor_id, clinic_id, day_of_week, start_time, end_time, slot_duration, is_active)
+                VALUES (:did, :cid, :dow, :start, :end, :dur, 1)
+                ON DUPLICATE KEY UPDATE start_time = :start2, end_time = :end2, slot_duration = :dur2, is_active = 1
+            ");
+            foreach ($days as $dow) {
+                $dow = intval($dow);
+                if ($dow < 0 || $dow > 6) continue;
+                $stmt->execute([
+                    ':did'   => $doctor_id,
+                    ':cid'   => $clinic_id,
+                    ':dow'   => $dow,
+                    ':start' => $start,
+                    ':end'   => $end,
+                    ':dur'   => $duration,
+                    ':start2'=> $start,
+                    ':end2'  => $end,
+                    ':dur2'  => $duration
+                ]);
+            }
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
+        exit;
+    }
+
+    echo json_encode(['success' => false, 'error' => 'Unknown action']);
+    exit;
+}
+
+// ── Pre-load doctor data for page rendering ────────────
+$doctor = null;
+try {
+    $stmt = $connect->prepare("
+        SELECT u.first_name, u.last_name, u.email,
+               s.specialization, s.experience_years, s.certificate_of_experience,
+               c.clinic_name, c.location AS clinic_location
+        FROM users u
+        INNER JOIN specialist s ON u.user_id = s.specialist_id
+        INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+        WHERE u.user_id = :uid
+    ");
+    $stmt->execute([':uid' => $doctor_id]);
+    $doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $doctor = null;
+}
+$dr_name     = $doctor ? htmlspecialchars($doctor['first_name'] . ' ' . $doctor['last_name']) : 'Dr. User';
+$dr_spec     = $doctor ? htmlspecialchars($doctor['specialization'] ?? 'Specialist') : 'Specialist';
+$dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($doctor['last_name'],0,1)) : 'DR';
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -6,12 +215,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - Doctor Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/doctor.css">
-    <link rel="stylesheet" href="styles/settings.css">
-    <link rel="stylesheet" href="styles/profile.css">
-    <link rel="stylesheet" href="styles/dr-settings.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
+    <link rel="stylesheet" href="styles/profile.css?v=8">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=8">
 </head>
 
 <body>
@@ -23,10 +232,10 @@
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile">
-                    <div class="user-avatar doctor-avatar">DS</div>
+                    <div class="user-avatar doctor-avatar"><?php echo $dr_initials; ?></div>
                     <div class="user-info">
-                        <div class="user-name">Dr. Sarah Mitchell</div>
-                        <div class="user-badge-text">Pediatrician</div>
+                        <div class="user-name">Dr. <?php echo $dr_name; ?></div>
+                        <div class="user-badge-text"><?php echo $dr_spec; ?></div>
                     </div>
                     <div class="verified-badge" title="Verified Provider">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -234,7 +443,7 @@
                     <div class="dr-profile-photo-section">
                         <div class="dr-avatar-wrapper" onclick="document.getElementById('photo-upload').click()"
                             title="Change profile photo">
-                            <div class="dr-avatar-large" id="avatar-display">SM</div>
+                            <div class="dr-avatar-large" id="avatar-display"><?php echo $dr_initials; ?></div>
                             <div class="dr-avatar-overlay">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path
@@ -245,8 +454,8 @@
                             <input type="file" id="photo-upload" accept="image/*" style="display: none;">
                         </div>
                         <div class="dr-profile-info">
-                            <h2>Dr. Sarah Mitchell</h2>
-                            <p class="dr-specialty-text">Pediatrician</p>
+                            <h2>Dr. <?php echo $dr_name; ?></h2>
+                            <p class="dr-specialty-text"><?php echo $dr_spec; ?></p>
                             <p class="dr-verified-text">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -273,14 +482,14 @@
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-fullname">Full Name <span
                                             class="required">*</span></label>
-                                    <input type="text" id="dr-fullname" class="dr-form-input" value="Dr. Sarah Mitchell"
+                                    <input type="text" id="dr-fullname" class="dr-form-input" value="<?php echo $dr_name; ?>"
                                         required>
                                 </div>
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-email">Email Address <span
                                             class="required">*</span></label>
                                     <input type="email" id="dr-email" class="dr-form-input"
-                                        value="sarah.mitchell@brightsteps.com" required>
+                                        value="<?php echo $doctor ? htmlspecialchars($doctor['email']) : ''; ?>" required>
                                 </div>
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-phone">Phone Number</label>
@@ -357,13 +566,13 @@
                                 <div class="dr-form-group full-width">
                                     <label class="dr-form-label" for="dr-qualifications">Certifications</label>
                                     <input type="text" id="dr-qualifications" class="dr-form-input"
-                                        value="MD, Board Certified Pediatrician, FAAP"
+                                        value="<?php echo $doctor ? htmlspecialchars($doctor['certificate_of_experience'] ?? '') : ''; ?>"
                                         placeholder="e.g. MD, FAAP, Board Certified">
                                 </div>
                                 <div class="dr-form-group full-width">
                                     <label class="dr-form-label" for="dr-bio">Bio </label>
                                     <textarea id="dr-bio" class="dr-form-input dr-form-textarea"
-                                        placeholder="Write a short bio about your practice and expertise...">Passionate pediatrician with over 10 years of experience in child development and early intervention. Specializing in developmental milestones tracking and parental guidance for children aged 0-5 years.</textarea>
+                                        placeholder="Write a short bio about your practice and expertise..."></textarea>
                                 </div>
                             </div>
                         </div>
@@ -388,12 +597,12 @@
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-clinic-name">Clinic Name</label>
                                     <input type="text" id="dr-clinic-name" class="dr-form-input readonly"
-                                        value="Bright Steps Pediatric Center" readonly>
+                                        value="<?php echo $doctor ? htmlspecialchars($doctor['clinic_name'] ?? '') : ''; ?>" readonly>
                                 </div>
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-clinic-location">Clinic Location</label>
                                     <input type="text" id="dr-clinic-location" class="dr-form-input readonly"
-                                        value="456 Healthcare Blvd, San Francisco, CA 94102" readonly>
+                                        value="<?php echo $doctor ? htmlspecialchars($doctor['clinic_location'] ?? '') : ''; ?>" readonly>
                                 </div>
                             </div>
 
@@ -518,8 +727,8 @@
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
 
     <script>
         // ── View Switching ──
@@ -572,72 +781,80 @@
         document.getElementById('dr-profile-form').addEventListener('submit', function (e) {
             e.preventDefault();
 
-            const fullName = document.getElementById('dr-fullname').value.trim();
-            const email = document.getElementById('dr-email').value.trim();
+            const nameParts  = document.getElementById('dr-fullname').value.trim().replace(/^Dr\.\s*/i, '').split(' ');
+            const first_name = nameParts[0] || '';
+            const last_name  = nameParts.slice(1).join(' ') || '';
+            const email        = document.getElementById('dr-email').value.trim();
             const specialtySelect = document.getElementById('dr-specialty').value;
-            const specialtyOther = document.getElementById('dr-specialty-other').value.trim();
-            const experience = document.getElementById('dr-experience').value;
+            const specialtyOther  = document.getElementById('dr-specialty-other').value.trim();
+            const experience = parseInt(document.getElementById('dr-experience').value || 0);
+            const cert       = document.getElementById('dr-qualifications').value.trim();
 
-            if (!fullName) {
-                showToast('Please enter your full name', 'error');
-                document.getElementById('dr-fullname').focus();
-                return;
+            if (!first_name || !email) {
+                showToast('Name and email are required', 'error'); return;
             }
-            if (!email) {
-                showToast('Please enter your email address', 'error');
-                document.getElementById('dr-email').focus();
-                return;
+            const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRx.test(email)) {
+                showToast('Please enter a valid email', 'error'); return;
             }
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                showToast('Please enter a valid email address', 'error');
-                document.getElementById('dr-email').focus();
-                return;
-            }
-            if (!specialtySelect) {
-                showToast('Please select your specialty', 'error');
-                document.getElementById('dr-specialty').focus();
-                return;
-            }
-            if (specialtySelect === 'other' && !specialtyOther) {
-                showToast('Please enter your specialty', 'error');
-                document.getElementById('dr-specialty-other').focus();
-                return;
-            }
-            // Set the final specialty value for submission
-            var finalSpecialty = (specialtySelect === 'other') ? specialtyOther : specialtySelect;
-            document.getElementById('dr-specialty-final').value = finalSpecialty;
-            if (!experience || experience < 0) {
-                showToast('Please enter valid years of experience', 'error');
-                document.getElementById('dr-experience').focus();
-                return;
-            }
+            const finalSpec = (specialtySelect === 'other') ? specialtyOther : specialtySelect;
+            document.getElementById('dr-specialty-final').value = finalSpec;
 
-            // Password validation
-            const passwordFieldsVisible = document.getElementById('password-fields').classList.contains('visible');
-            if (passwordFieldsVisible) {
+            // Password change
+            const pwVisible = document.getElementById('password-fields').classList.contains('visible');
+            if (pwVisible) {
                 const currentPw = document.getElementById('dr-current-password').value;
-                const newPw = document.getElementById('dr-new-password').value;
+                const newPw     = document.getElementById('dr-new-password').value;
                 const confirmPw = document.getElementById('dr-confirm-password').value;
+                if (!currentPw || !newPw) { showToast('Enter current and new password', 'error'); return; }
+                if (newPw.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
+                if (newPw !== confirmPw) { showToast('Passwords do not match', 'error'); return; }
 
-                if (!currentPw) {
-                    showToast('Please enter your current password', 'error');
-                    document.getElementById('dr-current-password').focus();
-                    return;
-                }
-                if (!newPw || newPw.length < 6) {
-                    showToast('New password must be at least 6 characters', 'error');
-                    document.getElementById('dr-new-password').focus();
-                    return;
-                }
-                if (newPw !== confirmPw) {
-                    showToast('Passwords do not match', 'error');
-                    document.getElementById('dr-confirm-password').focus();
-                    return;
-                }
+                // Change password first
+                fetch('dr-settings.php?ajax=1&action=change_password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+                }).then(r => r.json()).then(res => {
+                    if (!res.success) { showToast(res.error || 'Password change failed', 'error'); return; }
+                    showToast('Password changed!', 'success');
+                    togglePasswordFields();
+                }).catch(() => showToast('Connection error', 'error'));
             }
 
-            showToast('Profile updated successfully!', 'success');
+            // Save profile
+            fetch('dr-settings.php?ajax=1&action=save_profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    first_name, last_name, email,
+                    specialization: finalSpec,
+                    experience_years: experience,
+                    certificate_of_experience: cert
+                })
+            }).then(r => r.json()).then(res => {
+                if (res.success) showToast('Profile saved!', 'success');
+                else showToast(res.error || 'Save failed', 'error');
+            }).catch(() => showToast('Connection error', 'error'));
+
+            // Save availability slots
+            const selectedDays = [];
+            const dayMap = { 'sat':6,'sun':0,'mon':1,'tue':2,'wed':3,'thu':4,'fri':5 };
+            document.querySelectorAll('input[name="working-days"]:checked').forEach(cb => {
+                const d = dayMap[cb.value.substring(0,3)];
+                if (d !== undefined) selectedDays.push(d);
+            });
+            const startTime = document.getElementById('dr-start-time').value;
+            const endTime   = document.getElementById('dr-end-time').value;
+            if (selectedDays.length > 0 && startTime && endTime) {
+                fetch('dr-settings.php?ajax=1&action=save_slots', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days: selectedDays, start_time: startTime, end_time: endTime, slot_duration: 30 })
+                }).then(r => r.json()).then(res => {
+                    if (!res.success) showToast(res.error || 'Failed to save availability', 'error');
+                });
+            }
         });
 
         // ── Toast Notification ──

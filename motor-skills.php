@@ -28,8 +28,8 @@ $skills = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Motor Skills Evaluation - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
     <style>
         .evaluation-card {
             background: var(--surface-light);
@@ -181,8 +181,8 @@ $skills = [
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
     <script>
         async function submitEvaluation(e) {
             e.preventDefault();

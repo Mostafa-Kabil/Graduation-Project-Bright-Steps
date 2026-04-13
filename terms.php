@@ -6,81 +6,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Terms of Service - Bright Steps</title>
     <meta name="description" content="Bright Steps Terms of Service - Rules and guidelines for using our platform.">
-    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link rel="icon" type="image/png" href="assets/logo_white.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/landing.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/landing.css?v=8">
 </head>
 
 <body>
     <!-- Header -->
-    <header class="header">
-        <div class="header-container">
-            <div class="header-logo">
-                <a href="index.php">
-                    <img src="assets/logo.png" alt="Bright Steps Logo">
-                </a>
-            </div>
-            <div class="header-actions">
-                <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    عربي
-                </button>
-                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-login')">Doctor Portal</button>
-                <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
-                <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
-            </div>
-            <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Open menu">
-                <span></span><span></span><span></span>
-            </button>
-        </div>
-    </header>
-
-    <div class="mobile-menu-overlay" id="mobile-menu-overlay" onclick="toggleMobileMenu()"></div>
-    <nav class="mobile-menu" id="mobile-menu">
-        <div class="mobile-menu-header">
-            <img src="assets/logo.png" alt="Bright Steps">
-            <button class="mobile-menu-close" onclick="toggleMobileMenu()">✕</button>
-        </div>
-        <div class="mobile-menu-body">
-            <button class="mobile-nav-item" onclick="toggleLanguage(); toggleMobileMenu();">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <path
-                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-                عربي / English
-            </button>
-            <div class="mobile-nav-divider"></div>
-            <button class="mobile-nav-item" onclick="navigateTo('doctor-login')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                </svg>
-                Doctor Portal
-            </button>
-            <button class="mobile-nav-item" onclick="navigateTo('login')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4m-5-4l5-5-5-5m5 5H3" />
-                </svg>
-                Log In
-            </button>
-            <button class="mobile-nav-item btn-gradient" onclick="navigateTo('signup')">
-                <svg viewBox="0 0 24 24" stroke="white">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                Get Started Free
-            </button>
-        </div>
-    </nav>
+    <?php include 'includes/public_header.php'; ?>
     <div class="container">
         <div class="page-header">
             <h1 class="page-title">Terms of Service</h1>
@@ -179,48 +114,7 @@
     </main>
 
     <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-container">
-            <div class="footer-grid">
-                <div class="footer-column">
-                    <div class="footer-logo">
-                        <img src="assets/logo.png" alt="Bright Steps Logo">
-                    </div>
-                    <p class="footer-text">AI-powered child development monitoring for ages 0-5</p>
-                </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Product</h4>
-                    <ul class="footer-links">
-                        <li><a href="features.php">Features</a></li>
-                        <li><a href="pricing.php">Pricing</a></li>
-                        <li><a href="signup.php">Get Started</a></li>
-                        <li><a href="dashboard.php">Dashboard</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Resources</h4>
-                    <ul class="footer-links">
-                        <li><a href="help.php">Help Center</a></li>
-                        <li><a href="help.php">Guidelines</a></li>
-                        <li><a href="privacy.php">Privacy Policy</a></li>
-                        <li><a href="terms.php">Terms of Service</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Company</h4>
-                    <ul class="footer-links">
-                        <li><a href="about.php">About Us</a></li>
-                        <li><a href="contact.php">Contact</a></li>
-                        <li><a href="contact.php">For Clinics</a></li>
-                        <li><a href="about.php">Careers</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                © 2025 Bright Steps. All rights reserved.
-            </div>
-        </div>
-    </footer> <!-- Floating Theme Toggle -->
+    <?php include 'includes/public_footer.php'; ?> <!-- Floating Theme Toggle -->
     <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
         <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="5" />
@@ -232,10 +126,13 @@
         </svg>
     </button>
 
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/mobile-menu.js"></script>
+    
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="scripts/mobile-menu.js?v=8"></script>
+    <script src="scripts/landing.js?v=8"></script>
+    <script src="scripts/mega-menu.js?v=8"></script>
 </body>
 
 </html>

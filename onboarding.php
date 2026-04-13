@@ -12,8 +12,8 @@ if (!isset($_SESSION['id'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Onboarding - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/auth.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/auth.css?v=8">
     <style>
         .wizard-container {
             width: 100%;
@@ -238,7 +238,7 @@ if (!isset($_SESSION['id'])) {
         </div>
     </div>
 
-    <script src="scripts/theme-toggle.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
     <script>
         const formData = {
             child_name: '', child_dob: '', child_gender: '',

@@ -53,10 +53,10 @@ $planname = $stmt->fetchColumn() ?: 'Free';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Profile - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/settings.css">
-    <link rel="stylesheet" href="styles/profile.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
+    <link rel="stylesheet" href="styles/profile.css?v=8">
     <style>
         .alert-success {
             background: #d4edda;
@@ -155,8 +155,8 @@ $planname = $stmt->fetchColumn() ?: 'Free';
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
 </body>
 
 </html>

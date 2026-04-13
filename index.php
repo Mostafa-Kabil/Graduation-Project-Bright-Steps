@@ -5,11 +5,11 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
     $role = $_SESSION['role'] ?? 'parent';
     switch ($role) {
         case 'admin':
-            header("Location: dashboards/admin/dashboard.php");
+            header("Location: admin-dashboard.php");
             exit();
         case 'specialist':
         case 'doctor':
-            header("Location: dashboards/specialist/dashboard.php");
+            header("Location: doctor-dashboard.php");
             exit();
         case 'clinic':
             header("Location: dashboards/clinic/dashboard.php");
@@ -29,99 +29,15 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
     <title>Bright Steps - AI-Powered Child Development Monitoring</title>
     <meta name="description"
         content="Monitor your child's growth, speech, and development with AI-powered insights. Get personalized recommendations and early alerts.">
-    <link rel="icon" type="image/png" href="assets/logo.png">
+    <link rel="icon" type="image/png" href="assets/logo_white.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/landing.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/landing.css?v=8">
 </head>
 
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-container">
-            <div class="header-logo">
-                <a href="index.php">
-                    <img src="assets/logo.png" alt="Bright Steps Logo">
-                </a>
-            </div>
-            <div class="header-actions">
-                <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    عربي
-                </button>
-                <button class="btn btn-outline-secondary" onclick="navigateTo('doctor-dashboard')">Doctor Portal</button>
-                <button class="btn btn-outline-secondary" onclick="navigateTo('clinic-dashboard')">Clinic
-                    Portal</button>
-                <button class="btn btn-outline-secondary" onclick="navigateTo('admin-dashboard')">Admin Panel</button>
-                <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
-                <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
-            </div>
-            <!-- Hamburger Button (Mobile) -->
-            <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Open menu">
-                <span></span><span></span><span></span>
-            </button>
-        </div>
-    </header>
-
-    <!-- Mobile Menu Drawer -->
-    <div class="mobile-menu-overlay" id="mobile-menu-overlay" onclick="toggleMobileMenu()"></div>
-    <nav class="mobile-menu" id="mobile-menu">
-        <div class="mobile-menu-header">
-            <img src="assets/logo.png" alt="Bright Steps">
-            <button class="mobile-menu-close" onclick="toggleMobileMenu()" aria-label="Close menu">✕</button>
-        </div>
-        <div class="mobile-menu-body">
-            <button class="mobile-nav-item" onclick="toggleLanguage(); toggleMobileMenu();">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <path
-                        d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                </svg>
-                عربي / English
-            </button>
-            <div class="mobile-nav-divider"></div>
-            <button class="mobile-nav-item" onclick="navigateTo('doctor-dashboard')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                </svg>
-                Doctor Portal
-            </button>
-            <button class="mobile-nav-item" onclick="navigateTo('clinic-dashboard')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                    <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-                Clinic Portal
-            </button>
-            <button class="mobile-nav-item" onclick="navigateTo('admin-dashboard')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                </svg>
-                Admin Panel
-            </button>
-            <button class="mobile-nav-item" onclick="navigateTo('login')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4m-5-4l5-5-5-5m5 5H3" />
-                </svg>
-                Log In
-            </button>
-            <button class="mobile-nav-item btn-gradient" onclick="navigateTo('signup')">
-                <svg viewBox="0 0 24 24" stroke="white">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                Get Started Free
-            </button>
-        </div>
-    </nav>
+    <?php include 'includes/public_header.php'; ?>
 
     <!-- Hero Section -->
     <section class="hero-section">
@@ -205,6 +121,62 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
                     </div>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- Sliding Information Carousel -->
+    <section class="slider-section" style="padding: 5rem 1.5rem; background: var(--bg-secondary); overflow: hidden;">
+        <div class="slider-container" style="max-width: 1280px; margin: 0 auto;">
+            <div class="section-header" style="text-align: center; margin-bottom: 3.5rem;">
+                <h2 class="section-title">Empowering Every Connection</h2>
+                <p class="section-subtitle">Our platform adapts to provide vital insights and data for whoever needs it most.</p>
+            </div>
+            
+            <div id="auto-carousel" class="carousel-track-wrapper" style="overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 2rem; -webkit-overflow-scrolling: touch; scrollbar-width: none; display: flex; gap: 2rem;">
+                <!-- Slide 1 -->
+                <div class="carousel-card" style="scroll-snap-align: center; width: 380px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1); overflow: hidden; flex-shrink: 0; transition: transform 0.3s ease;">
+                    <img src="assets/parent_info_graphic.png" style="width: 100%; height: 220px; object-fit: cover;" alt="Parents">
+                    <div style="padding: 2rem;">
+                        <h3 style="font-size: 1.35rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary);">For Parents</h3>
+                        <p style="color: var(--text-secondary); font-size: 1rem; line-height: 1.6;">Track your child's milestones effortlessly with our AI-guided development tracking system and actionable growth alerts.</p>
+                    </div>
+                </div>
+                <!-- Slide 2 -->
+                <div class="carousel-card" style="scroll-snap-align: center; width: 380px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1); overflow: hidden; flex-shrink: 0; transition: transform 0.3s ease;">
+                    <img src="assets/doctor_info_graphic.png" style="width: 100%; height: 220px; object-fit: cover;" alt="Doctors">
+                    <div style="padding: 2rem;">
+                        <h3 style="font-size: 1.35rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary);">For Doctors</h3>
+                        <p style="color: var(--text-secondary); font-size: 1rem; line-height: 1.6;">Access comprehensive, AI-analyzed reports instantly, enabling faster diagnosis and data-driven clinical treatments.</p>
+                    </div>
+                </div>
+                <!-- Slide 3 -->
+                <div class="carousel-card" style="scroll-snap-align: center; width: 380px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1); overflow: hidden; flex-shrink: 0; transition: transform 0.3s ease;">
+                    <img src="assets/clinic_info_graphic.png" style="width: 100%; height: 220px; object-fit: cover;" alt="Clinics">
+                    <div style="padding: 2rem;">
+                        <h3 style="font-size: 1.35rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-primary);">For Clinics</h3>
+                        <p style="color: var(--text-secondary); font-size: 1rem; line-height: 1.6;">Boost operational efficiency and patient retention with our high-ROI clinic administration and direct booking suite.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <style>
+                #auto-carousel::-webkit-scrollbar { display: none; }
+                .carousel-card:hover { transform: translateY(-5px); }
+            </style>
+            
+            <script>
+                document.addEventListener("DOMContentLoaded", () => {
+                    const track = document.getElementById("auto-carousel");
+                    let dir = 1;
+                    if(track) {
+                        setInterval(() => {
+                            if(track.scrollLeft + track.clientWidth >= track.scrollWidth - 10) dir = -1;
+                            else if(track.scrollLeft <= 10) dir = 1;
+                            track.scrollBy({ left: 400 * dir, behavior: 'smooth' });
+                        }, 3500);
+                    }
+                });
+            </script>
         </div>
     </section>
 
@@ -345,99 +317,7 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
         </div>
     </section>
 
-    <!-- Pricing Section -->
-    <section class="pricing-section">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">Simple, transparent pricing</h2>
-                <p class="section-subtitle">Start free, upgrade when you're ready</p>
-            </div>
-            <div class="pricing-grid">
-                <div class="pricing-card card-free">
-                    <h3 class="pricing-plan-title">Free Forever</h3>
-                    <p class="pricing-plan-subtitle">Essential tracking for every parent</p>
-                    <div class="pricing-amount">$0</div>
-                    <button class="btn btn-outline btn-lg btn-full" onclick="navigateTo('signup')">Get Started
-                        Free</button>
-                    <div class="pricing-features">
-                        <div class="pricing-feature">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Growth tracking & WHO comparisons</span>
-                        </div>
-                        <div class="pricing-feature">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Basic milestone checklists</span>
-                        </div>
-                        <div class="pricing-feature">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Traffic-light alerts</span>
-                        </div>
-                        <div class="pricing-feature">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Gamification & badges</span>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="pricing-card card-premium">
-                    <div class="popular-badge">Most Popular</div>
-                    <h3 class="pricing-plan-title text-white">Premium</h3>
-                    <p class="pricing-plan-subtitle text-light">Complete AI-powered monitoring</p>
-                    <div class="pricing-amount text-white">
-                        $9.99<span class="pricing-period">/month</span>
-                    </div>
-                    <button class="btn btn-white btn-lg btn-full" onclick="navigateTo('signup')">Start 7-Day Free
-                        Trial</button>
-                    <div class="pricing-features">
-                        <div class="pricing-feature text-white">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Everything in Free, plus:</span>
-                        </div>
-                        <div class="pricing-feature text-white">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>AI speech & language analysis</span>
-                        </div>
-                        <div class="pricing-feature text-white">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Motor skills video assessment</span>
-                        </div>
-                        <div class="pricing-feature text-white">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Personalized recommendations</span>
-                        </div>
-                        <div class="pricing-feature text-white">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Doctor-ready PDF reports</span>
-                        </div>
-                        <div class="pricing-feature text-white">
-                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 6L9 17l-5-5" />
-                            </svg>
-                            <span>Clinic booking integration</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- CTA Section -->
     <section class="cta-section">
@@ -449,49 +329,7 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
         </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-container">
-            <div class="footer-grid">
-                <div class="footer-column">
-                    <div class="footer-logo">
-                        <img src="assets/logo.png" alt="Bright Steps Logo">
-                    </div>
-                    <p class="footer-text">AI-powered child development monitoring for ages 0-5</p>
-                </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Product</h4>
-                    <ul class="footer-links">
-                        <li><a href="features.php">Features</a></li>
-                        <li><a href="pricing.php">Pricing</a></li>
-                        <li><a href="signup.php">Get Started</a></li>
-                        <li><a href="dashboard.php">Dashboard</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Resources</h4>
-                    <ul class="footer-links">
-                        <li><a href="help.php">Help Center</a></li>
-                        <li><a href="help.php">Guidelines</a></li>
-                        <li><a href="privacy.php">Privacy Policy</a></li>
-                        <li><a href="terms.php">Terms of Service</a></li>
-                    </ul>
-                </div>
-                <div class="footer-column">
-                    <h4 class="footer-heading">Company</h4>
-                    <ul class="footer-links">
-                        <li><a href="about.php">About Us</a></li>
-                        <li><a href="contact.php">Contact</a></li>
-                        <li><a href="contact.php">For Clinics</a></li>
-                        <li><a href="about.php">Careers</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                © 2025 Bright Steps. All rights reserved.
-            </div>
-        </div>
-    </footer>
+    <?php include 'includes/public_footer.php'; ?>
 
 
 
@@ -507,11 +345,13 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
         </svg>
     </button>
 
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/mobile-menu.js"></script>
-    <script src="scripts/landing.js"></script>
+    <script src="scripts/language-toggle.js?v=9"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="scripts/mobile-menu.js?v=8"></script>
+    <script src="scripts/landing.js?v=8"></script>
+    <script src="scripts/mega-menu.js?v=8"></script>
+    <script src="scripts/floating-emojis.js?v=8"></script>
 </body>
 
 </html>

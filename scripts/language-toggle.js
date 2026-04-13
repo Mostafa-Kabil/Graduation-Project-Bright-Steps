@@ -187,7 +187,10 @@ async function translatePageToArabic() {
         const norm = node.textContent.replace(/\s+/g, ' ').trim();
         if (cache[norm]) {
             if (!originalData.has(node)) originalData.set(node, node.textContent);
-            node.textContent = cache[norm];
+            
+            const leadingSpace = node.textContent.match(/^\s*/)[0];
+            const trailingSpace = node.textContent.match(/\s*$/)[0];
+            node.textContent = leadingSpace + cache[norm] + trailingSpace;
         }
     });
 
@@ -211,7 +214,10 @@ async function translatePageToArabic() {
             // Check if it's already translated or needs new translation
             if (translations[norm]) {
                 if (!originalData.has(node)) originalData.set(node, node.textContent);
-                node.textContent = translations[norm];
+                
+                const leadingSpace = node.textContent.match(/^\s*/)[0];
+                const trailingSpace = node.textContent.match(/\s*$/)[0];
+                node.textContent = leadingSpace + translations[norm] + trailingSpace;
             } else if (cache[norm] && originalData.has(node)) {
                 // Already handled in Phase 1
             }

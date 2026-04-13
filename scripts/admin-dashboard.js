@@ -90,29 +90,121 @@ async function loadOverviewView(main) {
     try {
         const data = await apiGet('overview.php');
         if (!data.success) throw new Error(data.error);
-        const s = data.stats, dist = data.user_distribution, activity = data.recent_activity;
+        const s = data.stats || {}, dist = data.user_distribution || {}, sysLogs = data.system_logs || [], topClinics = data.top_clinics || [], payments = data.recent_payments || [], audit = data.recent_audit || [];
         const totalDist = (dist.parent || 0) + (dist.specialist || 0) + (dist.admin || 0) + (dist.clinic || 0);
+        const now = new Date();
+        const greeting = now.getHours() < 12 ? 'Good Morning' : now.getHours() < 18 ? 'Good Afternoon' : 'Good Evening';
+        const dateStr = now.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+        const logLevelColor = l => l === 'error' ? 'var(--red-500)' : l === 'warning' ? 'var(--yellow-500)' : 'var(--green-500)';
+        const logLevelBg = l => l === 'error' ? 'rgba(239,68,68,0.1)' : l === 'warning' ? 'rgba(245,158,11,0.1)' : 'rgba(16,185,129,0.1)';
+
         main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Platform Overview</h1><p class="dashboard-subtitle">Bright Steps system-wide analytics and activity</p></div></div>
-        <div class="admin-stats-grid">
-            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.total_users)}</div><div class="admin-stat-label">Total Users</div><div class="admin-stat-trend ${s.users_trend >= 0 ? 'trend-up' : 'trend-down'}">${s.users_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.users_trend)}% this month</div></div></div>
-            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.active_clinics)}</div><div class="admin-stat-label">Active Clinics</div><div class="admin-stat-trend trend-up">↑ ${s.new_clinics} new</div></div></div>
-            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtMoney(s.total_revenue)}</div><div class="admin-stat-label">Total Revenue</div><div class="admin-stat-trend ${s.revenue_trend >= 0 ? 'trend-up' : 'trend-down'}">${s.revenue_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.revenue_trend)}% this month</div></div></div>
-            <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.active_subscriptions)}</div><div class="admin-stat-label">Active Subscriptions</div></div></div>
+        <!-- Welcome Banner -->
+        <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-30px;right:-30px;width:150px;height:150px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
+            <div style="position:absolute;bottom:-40px;right:60px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
+            <div style="position:relative;z-index:1;">
+                <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">${greeting}, Admin 👋</h1>
+                <p style="opacity:.85;margin:0;font-size:.95rem;">${dateStr} — Here's your platform at a glance</p>
+            </div>
+            <div style="display:flex;gap:.75rem;margin-top:1.25rem;position:relative;z-index:1;">
+                <button class="btn" onclick="showAdminView('users')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">👥 Manage Users</button>
+                <button class="btn" onclick="showAdminView('reports')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">📊 View Reports</button>
+                <button class="btn" onclick="showAdminView('tickets')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">🎫 Support</button>
+            </div>
         </div>
+
+        <!-- Primary Stats -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem;">
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(99,102,241,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1rem;">👥</div><div style="font-size:.7rem;font-weight:600;color:${s.users_trend >= 0 ? 'var(--green-500)' : 'var(--red-500)'};background:${s.users_trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:5px;">${s.users_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.users_trend)}%</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.total_users)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Users</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03));border:1px solid rgba(13,148,136,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(13,148,136,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:1rem;">🏥</div><div style="font-size:.7rem;font-weight:600;color:var(--green-500);background:rgba(16,185,129,0.1);padding:2px 6px;border-radius:5px;">+${s.new_clinics} new</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.active_clinics)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Active Clinics</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(16,185,129,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:1rem;">💰</div><div style="font-size:.7rem;font-weight:600;color:${s.revenue_trend >= 0 ? 'var(--green-500)' : 'var(--red-500)'};background:${s.revenue_trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:5px;">${s.revenue_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.revenue_trend)}%</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtMoney(s.total_revenue)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Revenue</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(245,158,11,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;font-size:1rem;">💳</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.active_subscriptions)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Active Subscriptions</div>
+            </div>
+        </div>
+
+        <!-- Secondary Stats (Valuable Info) -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_children)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">👶 Children</div>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_specialists)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">🩺 Specialists</div>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_appointments)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">📅 Appointments</div>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.growth_records)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">📈 Growth Records</div>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid ${s.open_tickets > 0 ? 'rgba(239,68,68,0.3)' : 'var(--border)'};border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.5rem;font-weight:800;color:${s.open_tickets > 0 ? 'var(--red-500)' : 'var(--text-primary)'};">${fmtNum(s.open_tickets)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">🎫 Open Tickets</div>
+            </div>
+        </div>
+
+        <!-- System Logs + User Distribution -->
         <div class="overview-grid">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Recent Activity</h2></div><div class="activity-feed">
-                ${activity.map(a => `<div class="activity-item"><div class="activity-dot ${getActivityDotColor(a.activity_type)}"></div><div class="activity-info"><div class="activity-text"><strong>${getActivityLabel(a.activity_type)}</strong> ${a.description}${a.user_name ? ` <span class="activity-meta">by ${a.user_name}</span>` : ''}${a.ip_address ? ` <span class="activity-meta">(${a.ip_address})</span>` : ''}</div><div class="activity-time">${a.user_role ? `<span class="role-badge role-${a.user_role}" style="font-size:.7rem;padding:2px 6px;margin-right:6px;">${a.user_role}</span>` : ''}${timeAgo(a.created_at)}</div></div></div>`).join('')}
-                ${activity.length === 0 ? '<div style="padding:1.5rem;color:var(--text-secondary);">No recent activity</div>' : ''}
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">System Logs</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Live</span></div><div style="max-height:320px;overflow-y:auto;padding:.5rem 1rem;">
+                ${sysLogs.map(l => `<div style="display:flex;align-items:flex-start;gap:.75rem;padding:.6rem 0;border-bottom:1px solid var(--border);transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px;background:${logLevelBg(l.level)};color:${logLevelColor(l.level)};text-transform:uppercase;flex-shrink:0;margin-top:2px;">${l.level||'info'}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.8rem;color:var(--text-primary);word-break:break-word;">${l.message||'—'}</div>
+                        <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.2rem;">${l.method||''} ${l.endpoint||''} ${l.response_time_ms ? '• '+l.response_time_ms+'ms' : ''} • ${timeAgo(l.created_at)}</div>
+                    </div>
+                </div>`).join('')}
+                ${sysLogs.length === 0 ? '<div style="padding:2rem;text-align:center;color:var(--text-secondary);"><p>No system logs</p></div>' : ''}
             </div></div>
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">User Distribution</h2></div><div style="padding:1.5rem;"><div class="distribution-bar-wrap">
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">User Distribution</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${fmtNum(totalDist)} total</span></div><div style="padding:1.5rem;">
+                <div style="display:flex;justify-content:center;margin-bottom:1.5rem;">
+                    <div style="width:140px;height:140px;border-radius:50%;background:conic-gradient(#6366f1 0% ${totalDist ? ((dist.parent||0)/totalDist*100) : 0}%, #0d9488 ${totalDist ? ((dist.parent||0)/totalDist*100) : 0}% ${totalDist ? (((dist.parent||0)+(dist.specialist||0))/totalDist*100) : 0}%, #d97706 ${totalDist ? (((dist.parent||0)+(dist.specialist||0))/totalDist*100) : 0}% ${totalDist ? (((dist.parent||0)+(dist.specialist||0)+(dist.clinic||0))/totalDist*100) : 0}%, #ec4899 ${totalDist ? (((dist.parent||0)+(dist.specialist||0)+(dist.clinic||0))/totalDist*100) : 0}% 100%);display:flex;align-items:center;justify-content:center;">
+                        <div style="width:90px;height:90px;border-radius:50%;background:var(--bg-card);display:flex;align-items:center;justify-content:center;flex-direction:column;"><div style="font-size:1.25rem;font-weight:800;color:var(--text-primary);">${fmtNum(totalDist)}</div><div style="font-size:.6rem;color:var(--text-secondary);">Users</div></div>
+                    </div>
+                </div>
+                <div class="distribution-bar-wrap">
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#6366f1;"></span>Parents</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.parent || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#6366f1,#818cf8);"></div></div><div class="dist-value">${fmtNum(dist.parent || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#0d9488;"></span>Specialists</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.specialist || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#0d9488,#14b8a6);"></div></div><div class="dist-value">${fmtNum(dist.specialist || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#d97706;"></span>Clinics</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.clinic || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#d97706,#f59e0b);"></div></div><div class="dist-value">${fmtNum(dist.clinic || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#ec4899;"></span>Admins</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.admin || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#ec4899,#f472b6);"></div></div><div class="dist-value">${fmtNum(dist.admin || 0)}</div></div>
             </div></div></div>
+        </div>
+
+        <!-- Top Clinics + Recent Payments -->
+        <div class="overview-grid" style="margin-top:1rem;">
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Top Clinics</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">By Rating</span></div><div class="patients-list">
+                ${topClinics.map((c,i) => `<div class="patient-row" style="transition:background .15s;padding:.6rem;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <div style="width:28px;text-align:center;font-size:${i < 3 ? '1.1rem' : '.8rem'};font-weight:700;">${['🥇','🥈','🥉'][i] || '#'+(i+1)}</div>
+                    <div style="flex:1;"><div style="font-weight:600;font-size:.85rem;">${c.clinic_name}</div><div style="font-size:.7rem;color:var(--text-secondary);">${c.specialist_count} specialists</div></div>
+                    <div style="font-weight:700;color:var(--yellow-500);">★ ${Number(c.rating).toFixed(1)}</div>
+                </div>`).join('')}
+                ${topClinics.length === 0 ? '<div style="padding:1.5rem;text-align:center;color:var(--text-secondary);">No clinics</div>' : ''}
+            </div></div>
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Recent Payments</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Latest</span></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Plan</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
+                ${payments.map(p => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td>${p.plan_name||'—'}</td><td style="font-weight:700;color:var(--green-500);">$${Number(p.amount_post_discount).toFixed(2)}</td><td>${p.method||'—'}</td><td><span class="status-badge ${p.status==='paid'?'status-active':'status-warning'}">${p.status}</span></td><td>${p.paid_at ? fmtDate(p.paid_at) : '—'}</td></tr>`).join('')}
+                ${payments.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:var(--text-secondary);">No payments yet</td></tr>' : ''}
+            </tbody></table></div></div>
         </div></div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
+
     } catch (err) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error loading overview</h2><p>${err.message}</p></div>`; }
 }
 
@@ -349,31 +441,116 @@ function deletePlan(subId, planName) {
     }, 'error');
 }
 
-// ═══ POINTS ═══
+// ═══ POINTS (Modernized) ═══
 async function loadPointsView(main) {
     try {
-        const [sd, rd, wd] = await Promise.all([apiGet('points.php?action=stats'), apiGet('points.php?action=rules'), apiGet('points.php?action=top_wallets')]);
-        const stats = sd.stats, rules = rd.rules || [], wallets = wd.wallets || [];
+        const [sd, wd, ed] = await Promise.all([apiGet('points.php?action=stats'), apiGet('points.php?action=top_wallets'), apiGet('engagement.php?action=all_data')]);
+        const stats = sd.stats, wallets = wd.wallets || [], rules = ed.rules || [], badges = ed.badges || [], banners = ed.banners || [];
+        const medals = ['🥇','🥈','🥉'];
+        const styleColors = {info:'#6366f1',warning:'#f59e0b',success:'#10b981',error:'#ef4444'};
         main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Points & Rewards System</h1><p class="dashboard-subtitle">Configure points rules and manage wallets</p></div>
-            <div class="header-actions-inline"><button class="btn btn-gradient" onclick="showAddRuleModal()">+ Add Points Rule</button></div></div>
-        <div class="admin-stats-grid" style="grid-template-columns:repeat(3,1fr);">
-            <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.total_points_issued)}</div><div class="admin-stat-label">Total Points Issued</div></div></div>
-            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 3H8l-2 4h12l-2-4z"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.active_wallets)}</div><div class="admin-stat-label">Active Wallets</div></div></div>
-            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.badges_earned)}</div><div class="admin-stat-label">Badges Earned</div></div></div>
+        <!-- Hero Header -->
+        <div style="background:linear-gradient(135deg,#f59e0b,#d97706,#b45309);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-20px;right:20px;font-size:80px;opacity:.15;">🏆</div>
+            <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">Engagement & Rewards</h1>
+                    <p style="opacity:.85;margin:0;font-size:.95rem;">Points, badges & banners — gamify the platform experience</p>
+                </div>
+                <div style="display:flex;gap:.5rem;">
+                    <button class="btn" onclick="showAddRuleModal()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">+ Rule</button>
+                    <button class="btn" onclick="showAddBadgeModal()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">+ Badge</button>
+                    <button class="btn" onclick="showAddBannerModal()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">+ Banner</button>
+                </div>
+            </div>
         </div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;">
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(245,158,11,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;font-size:1rem;">⭐</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(stats.total_points_issued)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Points Issued</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(99,102,241,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1rem;">👛</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(stats.active_wallets)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Active Wallets</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(16,185,129,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:1rem;">🏅</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${badges.length}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Badges</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(236,72,153,0.03));border:1px solid rgba(236,72,153,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(236,72,153,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;font-size:1rem;">📢</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${banners.filter(b=>b.is_active).length}/${banners.length}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Active Banners</div>
+            </div>
+        </div>
+
+        <!-- Points Rules + Leaderboard -->
         <div class="overview-grid">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Points Rules</h2></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Action</th><th>Points</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-                ${rules.map(r => `<tr><td>${r.action_name}</td><td class="${r.adjust_sign === '+' ? 'points-plus' : 'points-minus'}">${r.adjust_sign}${r.points_value}</td><td>${r.adjust_sign === '+' ? 'Deposit' : 'Withdrawal'}</td><td><button class="btn btn-sm btn-outline" onclick="editRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\'")}',${r.points_value},'${r.adjust_sign}')">Edit</button></td></tr>`).join('')}
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Points Rules</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${rules.length} rules</span></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Action</th><th>Points</th><th>Type</th><th>Actions</th></tr></thead><tbody>
+                ${rules.map(r => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td><strong>${r.action_name}</strong></td><td><span style="font-weight:700;color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign}${r.points_value}</span></td><td><span style="font-size:.75rem;padding:3px 10px;border-radius:6px;background:${r.adjust_sign === '+' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign === '+' ? '↑ Deposit' : '↓ Withdrawal'}</span></td><td><button class="btn btn-sm btn-outline" onclick="editRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\\\'")}',${r.points_value},'${r.adjust_sign}')">Edit</button></td></tr>`).join('')}
                 ${rules.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-secondary);">No rules</td></tr>' : ''}
             </tbody></table></div></div>
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Top Wallets</h2></div><div class="patients-list">
-                ${wallets.map((w, i) => `<div class="patient-row"><div class="rank-badge">${i + 1}</div><div class="patient-avatar" style="${avatarColors.parent}">${getInitials(w.first_name, w.last_name)}</div><div class="patient-info"><div class="patient-name">${w.first_name} ${w.last_name}</div><div class="patient-details">${w.badge_count} badges</div></div><div class="wallet-points">${fmtNum(w.total_points)} pts</div></div>`).join('')}
-                ${wallets.length === 0 ? '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No wallets yet</div>' : ''}
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">🏆 Leaderboard</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Top ${wallets.length}</span></div><div class="patients-list" style="max-height:320px;overflow-y:auto;">
+                ${wallets.map((w, i) => `<div class="patient-row" style="transition:background .15s;border-radius:10px;padding:.6rem;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <div style="width:28px;text-align:center;font-size:${i < 3 ? '1.2rem' : '.8rem'};font-weight:700;">${i < 3 ? medals[i] : '#'+(i+1)}</div>
+                    <div class="patient-avatar" style="${avatarColors.parent}">${getInitials(w.first_name, w.last_name)}</div>
+                    <div class="patient-info"><div class="patient-name">${w.first_name} ${w.last_name}</div><div class="patient-details">${w.badge_count} badges</div></div>
+                    <div style="font-weight:800;font-size:.9rem;color:var(--text-primary);background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));padding:5px 12px;border-radius:8px;border:1px solid rgba(245,158,11,0.15);">${fmtNum(w.total_points)} pts</div>
+                </div>`).join('')}
+                ${wallets.length === 0 ? '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">🏆 No wallets yet</div>' : ''}
+            </div></div>
+        </div>
+
+        <!-- Badges + Banners -->
+        <div class="overview-grid" style="margin-top:1rem;">
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">🏅 Badges</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${badges.length} badges</span></div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.5rem;padding:.75rem;">
+                ${(() => {
+                    const badgeIconMap = {first_steps:'👶',voice_hero:'🎤',weekly_champion:'🏆',growth_tracker:'📈',super_parent:'⭐',rising_star:'🌟',consistency_king:'👑',weekly_champ:'🏅',monthly_master:'🎯',milestone_maker:'🎪',data_wizard:'🧙',health_hero:'💪',speech_star:'🗣️',explorer:'🧭',bookworm:'📚'};
+                    return badges.map(b => `<div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:12px;padding:.75rem .5rem;text-align:center;transition:transform .2s,box-shadow .2s;display:flex;flex-direction:column;justify-content:space-between;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 15px rgba(0,0,0,0.08)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                        <div style="font-size:1.5rem;margin-bottom:.3rem;">${badgeIconMap[b.icon] || '🏅'}</div>
+                        <div style="font-weight:700;font-size:.75rem;color:var(--text-primary);line-height:1.2;">${b.name}</div>
+                        <div style="font-size:.6rem;color:var(--text-secondary);margin-top:.3rem;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal;">${b.description || '—'}</div>
+                        <button class="btn btn-sm btn-outline" style="margin-top:.5rem;font-size:.6rem;padding:2px 6px;align-self:center;" onclick="deleteBadge(${b.badge_id},'${(b.name||'').replace(/'/g,"\\\\'")}')">Delete</button>
+                    </div>`).join('');
+                })()}
+                ${badges.length === 0 ? '<div style="padding:1.5rem;text-align:center;color:var(--text-secondary);grid-column:1/-1;">No badges defined yet</div>' : ''}
+            </div></div>
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">📢 Banners</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${banners.length} banners</span></div>
+                <div style="padding:.75rem 1rem;max-height:320px;overflow-y:auto;">
+                ${banners.map(b => `<div style="display:flex;align-items:center;gap:.75rem;padding:.6rem;border-bottom:1px solid var(--border);transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <div style="width:6px;height:40px;border-radius:3px;background:${styleColors[b.style]||'#6366f1'};flex-shrink:0;"></div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.8rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${b.message}</div>
+                        <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">${b.target_audience} • ${b.style}</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                        <span style="font-size:.65rem;padding:2px 8px;border-radius:4px;background:${b.is_active ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${b.is_active ? 'var(--green-500)' : 'var(--red-500)'};">${b.is_active ? 'Active' : 'Inactive'}</span>
+                        <button class="btn btn-sm btn-outline" style="font-size:.65rem;" onclick="deleteBannerEngagement(${b.id})">×</button>
+                    </div>
+                </div>`).join('')}
+                ${banners.length === 0 ? '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No banners yet</div>' : ''}
             </div></div>
         </div></div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
+}
+// Badge & Banner helpers for Engagement page
+function showAddBadgeModal() {
+    showModal('Add Badge', `<div class="form-group"><label>Name</label><input type="text" id="nb-name" placeholder="e.g. Early Bird"></div><div class="form-group"><label>Description</label><input type="text" id="nb-desc" placeholder="Badge description"></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="nb-icon" value="🏆" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
+        `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="nb-save">Add Badge</button>`);
+    document.getElementById('nb-save').onclick = async () => { try { const r = await apiPost('engagement.php', {action:'save_badge',name:document.getElementById('nb-name').value,description:document.getElementById('nb-desc').value,icon:document.getElementById('nb-icon').value}); if(r.success){showAlert('Badge added!','success');setTimeout(()=>{closeModal();showAdminView('points');},1000);}else showAlert(r.error||'Failed','error');} catch(e){showAlert('Error','error');} };
+}
+function deleteBadge(id, name) {
+    showConfirm(`Delete badge <strong>${name}</strong>?`, async () => { try { const r = await apiPost('engagement.php', {action:'delete_badge',badge_id:id}); if(r.success){showAlert('Badge deleted!','success');setTimeout(()=>{closeModal();showAdminView('points');},800);}else showAlert('Failed','error');} catch(e){showAlert('Error','error');} });
+}
+function deleteBannerEngagement(id) {
+    showConfirm('Delete this banner?', async () => { try { const r = await apiPost('engagement.php', {action:'delete_banner',id:id}); if(r.success){showAlert('Banner deleted!','success');setTimeout(()=>{closeModal();showAdminView('points');},800);}else showAlert('Failed','error');} catch(e){showAlert('Error','error');} });
 }
 function editRule(ruleId, name, value, sign) {
     showModal('Edit Points Rule', `<div class="form-group"><label>Action Name</label><input type="text" id="er-name" value="${name}"></div><div class="form-group"><label>Points Value</label><input type="number" id="er-val" value="${value}"></div><div class="form-group"><label>Type</label><select id="er-sign"><option value="+" ${sign === '+' ? 'selected' : ''}>+ Deposit</option><option value="-" ${sign === '-' ? 'selected' : ''}>- Withdrawal</option></select></div>`,
@@ -386,13 +563,29 @@ function showAddRuleModal() {
     document.getElementById('ar-save').onclick = async () => { const d = { action: 'add_rule', action_name: document.getElementById('ar-name').value, points_value: parseInt(document.getElementById('ar-val').value), adjust_sign: document.getElementById('ar-sign').value }; if (!d.action_name || !d.points_value) { showAlert('Please fill all fields.', 'warning'); return; } try { const res = await apiPost('points.php', d); if (res.success) { showAlert('Rule added!', 'success'); setTimeout(() => { closeModal(); showAdminView('points'); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } };
 }
 
-// ═══ REPORTS (Behavioral Charts + Export) ═══
+// ═══ REPORTS (System Analytics + Behavioral Charts + Export) ═══
 async function loadReportsView(main) {
     try {
         const [sd, cd, dd] = await Promise.all([apiGet('reports.php?action=stats'), apiGet('reports.php?action=behavior_categories'), apiGet('reports.php?action=development_status')]);
-        const stats = sd.stats, categories = cd.categories || [], dev = dd.development_status;
+        const s = sd.stats || {}, categories = cd.categories || [], dev = dd.development_status || {};
+
+        // Detect low-usage warnings
+        const warnings = [];
+        if (s.ai_activities === 0) warnings.push('⚠️ No AI activities have been generated. The OpenAI recommendation engine may be offline.');
+        if (s.voice_samples === 0) warnings.push('⚠️ No voice samples recorded. Speech analysis feature may not be discoverable by parents.');
+        if (s.motor_milestones === 0) warnings.push('⚠️ No motor milestones logged. Motor skills tracking may need attention.');
+        if (s.total_children > 0 && s.growth_records === 0) warnings.push('⚠️ Children exist but no growth records. Parents may not know how to log measurements.');
+
+        const warningHtml = warnings.length > 0 ? `<div style="margin-bottom:1.5rem;">
+            ${warnings.map(w => `<div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(234,88,12,0.05));border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:.85rem 1.25rem;margin-bottom:.5rem;display:flex;align-items:center;gap:.75rem;font-size:.875rem;color:var(--text-primary);">
+                <span style="font-size:1.1rem;flex-shrink:0;">${w.substring(0,2)}</span><span>${w.substring(3)}</span>
+            </div>`).join('')}
+        </div>` : '';
+
+        const completionColor = s.activity_completion_rate >= 70 ? 'var(--green-500)' : s.activity_completion_rate >= 40 ? 'var(--yellow-500)' : 'var(--red-500)';
+
         main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">System Reports</h1><p class="dashboard-subtitle">Platform-wide analytics, behavioral data & exports</p></div>
+        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Reports & Analytics</h1><p class="dashboard-subtitle">System-wide usage analytics, diagnostic alerts & behavioral insights</p></div>
             <div class="header-actions-inline">
                 <div class="export-btn-group">
                     <button class="btn btn-outline btn-export" onclick="exportReportPDF()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDF</button>
@@ -400,98 +593,144 @@ async function loadReportsView(main) {
                     <button class="btn btn-outline btn-export" onclick="exportReportCSV()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV</button>
                 </div>
             </div></div>
-        <div class="admin-stats-grid">
-            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.growth_records)}</div><div class="admin-stat-label">Growth Records</div></div></div>
-            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.voice_samples)}</div><div class="admin-stat-label">Voice Samples</div></div></div>
-            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${stats.on_track_rate}%</div><div class="admin-stat-label">On Track Rate</div></div></div>
-            <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.flagged_children)}</div><div class="admin-stat-label">Flagged Children</div></div></div>
-        </div>
-        <!-- Behavioral Filters -->
-        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Child Behavioral Progress</h2>
-            <div class="report-filters" id="report-filters">
-                <select id="rpt-child" class="search-input" style="width:auto;"><option value="">All Children</option></select>
-                <select id="rpt-specialist" class="search-input" style="width:auto;"><option value="">All Specialists</option></select>
-                <input type="date" id="rpt-date-from" class="search-input" style="width:auto;" placeholder="From">
-                <input type="date" id="rpt-date-to" class="search-input" style="width:auto;" placeholder="To">
-                <button class="btn btn-gradient btn-sm" onclick="loadBehavioralData()">Filter</button>
-            </div></div>
-            <div id="behavioral-charts-area" style="padding:1.5rem;">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
-                    <div><canvas id="chart-improvement" height="250"></canvas></div>
-                    <div><canvas id="chart-categories" height="250"></canvas></div>
+
+        ${warningHtml}
+
+        <!-- System Analytics Overview -->
+        <div class="section-card" style="margin-bottom:1.5rem;"><div class="section-card-header"><h2 class="section-heading">📊 System Usage Analytics</h2><span style="font-size:.75rem;color:var(--text-secondary);background:var(--bg-secondary);padding:4px 10px;border-radius:6px;">Real-time</span></div>
+        <div style="padding:1.5rem;">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;">
+                <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(99,102,241,0.02));border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.75rem;font-weight:800;color:var(--indigo-500);">${fmtNum(s.ai_activities)}</div>
+                    <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem;">AI Activities Generated</div>
+                    <div style="font-size:.7rem;color:${s.ai_activities === 0 ? 'var(--red-500)' : 'var(--green-500)'};margin-top:.5rem;font-weight:600;">${s.ai_activities === 0 ? '🔴 Inactive' : '🟢 Active'}</div>
                 </div>
-                <div id="behavioral-table-area" style="margin-top:1.5rem;"></div>
+                <div style="background:linear-gradient(135deg,rgba(13,148,136,0.08),rgba(13,148,136,0.02));border:1px solid rgba(13,148,136,0.15);border-radius:14px;padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.75rem;font-weight:800;color:var(--teal-500);">${fmtNum(s.voice_samples)}</div>
+                    <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem;">Voice Samples Analyzed</div>
+                    <div style="font-size:.7rem;color:${s.voice_samples === 0 ? 'var(--red-500)' : 'var(--green-500)'};margin-top:.5rem;font-weight:600;">${s.voice_samples === 0 ? '🔴 No data' : '🟢 Processing'}</div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(168,85,247,0.08),rgba(168,85,247,0.02));border:1px solid rgba(168,85,247,0.15);border-radius:14px;padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.75rem;font-weight:800;color:#8b5cf6;">${fmtNum(s.motor_milestones)}</div>
+                    <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem;">Motor Milestones Logged</div>
+                    <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.5rem;">${s.motor_achieved} achieved</div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(236,72,153,0.08),rgba(236,72,153,0.02));border:1px solid rgba(236,72,153,0.15);border-radius:14px;padding:1.25rem;text-align:center;">
+                    <div style="font-size:1.75rem;font-weight:800;color:#ec4899;">${fmtNum(s.consultations)}</div>
+                    <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem;">Consultations</div>
+                    <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.5rem;">${s.completed_consultations} completed</div>
+                </div>
             </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:1rem;">
+                <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:.75rem;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:18px;height:18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                    <div><div style="font-size:1.1rem;font-weight:700;">${fmtNum(s.growth_records)}</div><div style="font-size:.75rem;color:var(--text-secondary);">Growth Records</div><div style="font-size:.65rem;color:var(--indigo-500);">${s.growth_this_month} this month</div></div>
+                </div>
+                <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:.75rem;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:18px;height:18px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg></div>
+                    <div><div style="font-size:1.1rem;font-weight:700;">${fmtNum(s.total_appointments)}</div><div style="font-size:.75rem;color:var(--text-secondary);">Appointments</div><div style="font-size:.65rem;color:var(--amber-500);">${s.appointments_this_month} this month</div></div>
+                </div>
+                <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:.75rem;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:18px;height:18px;"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
+                    <div><div style="font-size:1.1rem;font-weight:700;">${fmtNum(s.article_reads)}</div><div style="font-size:.75rem;color:var(--text-secondary);">Article Reads</div></div>
+                </div>
+                <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:.75rem;">
+                    <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:18px;height:18px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+                    <div><div style="font-size:1.1rem;font-weight:700;">${fmtNum(s.community_messages)}</div><div style="font-size:.75rem;color:var(--text-secondary);">Community Posts</div></div>
+                </div>
+            </div>
+
+            <!-- Activity Completion Rate -->
+            <div style="margin-top:1.25rem;padding:1rem 1.25rem;background:var(--bg-secondary);border-radius:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                    <span style="font-weight:600;font-size:.875rem;">Activity Completion Rate</span>
+                    <span style="font-weight:700;color:${completionColor};">${s.activity_completion_rate}%</span>
+                </div>
+                <div style="background:var(--bg-primary);border-radius:8px;height:12px;overflow:hidden;">
+                    <div style="height:100%;width:${s.activity_completion_rate}%;background:${completionColor};border-radius:8px;transition:width .6s ease;"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:.5rem;font-size:.75rem;color:var(--text-secondary);">
+                    <span>${fmtNum(s.completed_activities)} completed</span>
+                    <span>${fmtNum(s.total_activities)} total activities</span>
+                </div>
+            </div>
+        </div></div>
+
+        <!-- Child Health Overview -->
+        <div class="admin-stats-grid">
+            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${s.on_track_rate}%</div><div class="admin-stat-label">Children On Track</div></div></div>
+            <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.flagged_children)}</div><div class="admin-stat-label">Flagged Children</div><div class="admin-stat-trend ${s.flagged_children > 0 ? 'trend-down' : 'trend-up'}">${s.flagged_children > 0 ? '⚠ Needs review' : '✓ All clear'}</div></div></div>
+            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.total_children)}</div><div class="admin-stat-label">Total Children</div></div></div>
+            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.growth_records)}</div><div class="admin-stat-label">Growth Records</div></div></div>
         </div>
-        <div class="overview-grid">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Behavior Categories</h2></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Category</th><th>Type</th><th>Behaviors</th><th>Children Affected</th></tr></thead><tbody>
-                ${categories.map(c => `<tr><td>${c.category_name}</td><td>${c.category_type}</td><td>${c.behavior_count}</td><td>${c.children_affected}</td></tr>`).join('')}
-                ${categories.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-secondary);">No categories</td></tr>' : ''}
-            </tbody></table></div></div>
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Development Status</h2></div><div style="padding:1.5rem;"><div class="status-overview">
-                <div class="status-bar-item"><div class="status-bar-label"><span class="dist-dot" style="background:var(--green-500);"></span>On Track</div><div class="status-bar-fill" style="width:${dev?.on_track?.percentage || 0}%;background:var(--green-500);"></div><span>${dev?.on_track?.percentage || 0}%</span></div>
-                <div class="status-bar-item"><div class="status-bar-label"><span class="dist-dot" style="background:var(--yellow-500);"></span>Needs Review</div><div class="status-bar-fill" style="width:${dev?.needs_review?.percentage || 0}%;background:var(--yellow-500);"></div><span>${dev?.needs_review?.percentage || 0}%</span></div>
-                <div class="status-bar-item"><div class="status-bar-label"><span class="dist-dot" style="background:var(--red-500);"></span>Needs Attention</div><div class="status-bar-fill" style="width:${dev?.needs_attention?.percentage || 0}%;background:var(--red-500);"></div><span>${dev?.needs_attention?.percentage || 0}%</span></div>
-            </div></div></div>
+
+        <!-- Parent Engagement & AI Adoption -->
+        <div class="overview-grid" style="margin-top:1.5rem;">
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">🧠 AI Feature Adoption</h2></div>
+            <div style="padding:1.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                    <div><div style="font-weight:700;font-size:1.1rem;color:var(--text-primary);">${s.ai_activities || 0}</div><div style="font-size:.75rem;color:var(--text-secondary);">Total Recommendations generated</div></div>
+                    <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🤖</div>
+                </div>
+                <div style="margin-bottom:.5rem;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;font-size:.75rem;font-weight:600;"><span style="color:var(--indigo-500);">Activity Completion Rate</span><span>${s.activity_completion_rate || 0}%</span></div>
+                    <div style="background:var(--bg-primary);border-radius:6px;height:8px;overflow:hidden;"><div style="height:100%;width:${s.activity_completion_rate || 0}%;background:var(--indigo-500);border-radius:6px;"></div></div>
+                </div>
+                <div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:.25rem;font-size:.75rem;font-weight:600;"><span style="color:var(--teal-500);">Voice Samples Ratio</span><span>${s.voice_samples > 0 && s.total_children > 0 ? Math.round((s.voice_samples / s.total_children) * 100) : 0}%</span></div>
+                    <div style="background:var(--bg-primary);border-radius:6px;height:8px;overflow:hidden;"><div style="height:100%;width:${s.voice_samples > 0 && s.total_children > 0 ? Math.min(100, Math.round((s.voice_samples / s.total_children) * 100)) : 0}%;background:var(--teal-500);border-radius:6px;"></div></div>
+                </div>
+            </div></div>
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">📈 Development Outcomes</h2></div>
+            <div style="padding:1.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                    <div><div style="font-weight:700;font-size:1.1rem;color:var(--text-primary);">${fmtNum((parseInt(s.growth_records)||0) + (parseInt(s.motor_milestones)||0))}</div><div style="font-size:.75rem;color:var(--text-secondary);">Total Dev Milestones Logged</div></div>
+                    <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🎯</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                    <div style="background:linear-gradient(135deg,rgba(168,85,247,0.1),rgba(168,85,247,0.02));padding:.75rem;border-radius:10px;text-align:center;border:1px solid rgba(168,85,247,0.1);">
+                        <div style="font-size:1.25rem;font-weight:800;color:var(--purple-500);">${s.motor_achieved || 0}</div>
+                        <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.25rem;">Motor Skills Reached</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.02));padding:.75rem;border-radius:10px;text-align:center;border:1px solid rgba(245,158,11,0.1);">
+                        <div style="font-size:1.25rem;font-weight:800;color:var(--yellow-500);">${s.on_track_rate || 0}%</div>
+                        <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.25rem;">Overall On-Track Rate</div>
+                    </div>
+                </div>
+            </div></div>
+        </div>
+
+        <!-- Global Platform Health & Development Status -->
+        <div class="section-card" style="margin-top:1.5rem;"><div class="section-card-header"><h2 class="section-heading">Platform Health & Development Status</h2></div>
+            <div style="padding:1.5rem;">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;">
+                    <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),transparent);border:1px solid rgba(16,185,129,0.2);border-radius:16px;padding:1.25rem;text-align:center;position:relative;overflow:hidden;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                        <div style="position:absolute;top:-10px;right:-10px;font-size:60px;opacity:.05;">✅</div>
+                        <div style="font-size:2rem;font-weight:800;color:var(--green-500);">${dev?.on_track?.percentage || 0}%</div>
+                        <div style="font-size:.9rem;font-weight:700;margin:.5rem 0 .25rem;">On Track</div>
+                        <div style="font-size:.75rem;color:var(--text-secondary);">${dev?.on_track?.count || 0} children are progressing normally according to system analytics.</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),transparent);border:1px solid rgba(245,158,11,0.2);border-radius:16px;padding:1.25rem;text-align:center;position:relative;overflow:hidden;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                        <div style="position:absolute;top:-10px;right:-10px;font-size:60px;opacity:.05;">⚠️</div>
+                        <div style="font-size:2rem;font-weight:800;color:var(--yellow-500);">${dev?.needs_review?.percentage || 0}%</div>
+                        <div style="font-size:.9rem;font-weight:700;margin:.5rem 0 .25rem;">Needs Review</div>
+                        <div style="font-size:.75rem;color:var(--text-secondary);">${dev?.needs_review?.count || 0} children show irregular patterns or missing milestones.</div>
+                    </div>
+                    <div style="background:linear-gradient(135deg,rgba(239,68,68,0.1),transparent);border:1px solid rgba(239,68,68,0.2);border-radius:16px;padding:1.25rem;text-align:center;position:relative;overflow:hidden;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                        <div style="position:absolute;top:-10px;right:-10px;font-size:60px;opacity:.05;">🚩</div>
+                        <div style="font-size:2rem;font-weight:800;color:var(--red-500);">${dev?.needs_attention?.percentage || 0}%</div>
+                        <div style="font-size:.9rem;font-weight:700;margin:.5rem 0 .25rem;">Needs Attention</div>
+                        <div style="font-size:.75rem;color:var(--text-secondary);">${dev?.needs_attention?.count || 0} children have low engagement scores and require follow-up.</div>
+                    </div>
+                </div>
+            </div>
         </div></div>`;
-        // Load filter dropdowns and initial behavioral data
-        loadReportFilters();
-        loadBehavioralData();
+        // (Behavioral functionality has been relocated to modern modules)
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
 }
 
-async function loadReportFilters() {
-    try {
-        const [cl, sl] = await Promise.all([apiGet('reports.php?action=children_list'), apiGet('reports.php?action=specialists_list')]);
-        const childSel = document.getElementById('rpt-child');
-        const specSel = document.getElementById('rpt-specialist');
-        if (childSel && cl.children) cl.children.forEach(c => { const o = document.createElement('option'); o.value = c.child_id; o.textContent = `${c.first_name} ${c.last_name}`; childSel.appendChild(o); });
-        if (specSel && sl.specialists) sl.specialists.forEach(s => { const o = document.createElement('option'); o.value = s.specialist_id; o.textContent = s.specialist_name; specSel.appendChild(o); });
-    } catch (e) { console.error('Failed to load filters:', e); }
-}
-
-let _improvChart, _catChart;
-async function loadBehavioralData() {
-    const childId = document.getElementById('rpt-child')?.value || '';
-    const specId = document.getElementById('rpt-specialist')?.value || '';
-    const dateFrom = document.getElementById('rpt-date-from')?.value || '';
-    const dateTo = document.getElementById('rpt-date-to')?.value || '';
-    let url = `reports.php?action=behavioral_progress`;
-    if (childId) url += `&child_id=${childId}`;
-    if (specId) url += `&specialist_id=${specId}`;
-    if (dateFrom) url += `&date_from=${dateFrom}`;
-    if (dateTo) url += `&date_to=${dateTo}`;
-    try {
-        const data = await apiGet(url);
-        if (!data.success) return;
-        const children = data.children || [], catDist = data.category_distribution || [];
-        // Improvement Score Chart
-        if (_improvChart) _improvChart.destroy();
-        const ctx1 = document.getElementById('chart-improvement');
-        if (ctx1 && typeof Chart !== 'undefined') {
-            _improvChart = new Chart(ctx1, { type: 'bar', data: { labels: children.map(c => c.first_name + ' ' + (c.last_name || '').charAt(0) + '.'), datasets: [
-                { label: 'Improvement Score', data: children.map(c => c.improvement_score), backgroundColor: 'rgba(99,102,241,0.7)', borderRadius: 6 },
-                { label: 'Sessions', data: children.map(c => c.therapy_sessions), backgroundColor: 'rgba(16,185,129,0.7)', borderRadius: 6 },
-                { label: 'Attendance', data: children.map(c => c.attendance_days), backgroundColor: 'rgba(245,158,11,0.7)', borderRadius: 6 }
-            ]}, options: { responsive: true, plugins: { title: { display: true, text: 'Child Progress Overview', color: getComputedStyle(document.body).getPropertyValue('--text-primary') || '#333' } }, scales: { y: { beginAtZero: true } } } });
-        }
-        // Category Distribution Chart
-        if (_catChart) _catChart.destroy();
-        const ctx2 = document.getElementById('chart-categories');
-        if (ctx2 && typeof Chart !== 'undefined' && catDist.length > 0) {
-            _catChart = new Chart(ctx2, { type: 'doughnut', data: { labels: catDist.map(c => c.category_name), datasets: [{ data: catDist.map(c => c.count), backgroundColor: ['#6366f1','#0d9488','#f59e0b','#ec4899','#8b5cf6','#ef4444'] }] }, options: { responsive: true, plugins: { title: { display: true, text: 'Behavior Category Distribution', color: getComputedStyle(document.body).getPropertyValue('--text-primary') || '#333' } } } });
-        }
-        // Table
-        const tbl = document.getElementById('behavioral-table-area');
-        if (tbl) {
-            tbl.innerHTML = `<table class="clinic-table"><thead><tr><th>Child</th><th>Improvement</th><th>Sessions</th><th>Attendance</th><th>Milestones</th><th>Engagement</th></tr></thead><tbody>
-                ${children.map(c => `<tr><td>${c.first_name} ${c.last_name}</td><td><div class="progress-bar-mini"><div class="progress-fill-mini" style="width:${c.improvement_score}%;background:${c.improvement_score >= 70 ? 'var(--green-500)' : c.improvement_score >= 40 ? 'var(--yellow-500)' : 'var(--red-500)'};"></div></div><span>${c.improvement_score}%</span></td><td>${c.therapy_sessions}</td><td>${c.attendance_days} days</td><td>${c.milestones_achieved}</td><td>${c.activity_engagement}</td></tr>`).join('')}
-                ${children.length === 0 ? '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary);">No behavioral data found</td></tr>' : ''}
-            </tbody></table>`;
-        }
-    } catch (e) { console.error('Behavioral data error:', e); }
-}
 
 // Export functions
 let _cachedExportData = null;
@@ -548,6 +787,11 @@ async function loadSettingsView(main) {
 
         let notifSettings = {};
         try { const nd = await apiGet('settings.php?action=notifications'); notifSettings = nd.settings || {}; } catch(e) {}
+        
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || localStorage.getItem('theme') === 'dark';
+
+        const fNameEnc = (profile?.first_name || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+        const lNameEnc = (profile?.last_name || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
 
         const togRow = (key, label, onchange) => `
             <div class="toggle-row"><span>${label}</span>
@@ -571,7 +815,7 @@ async function loadSettingsView(main) {
                         </div>
                     </div>
                     <div style="display:flex;gap:.75rem;flex-wrap:wrap;">
-                        <button class="btn btn-outline" onclick="showEditAdminProfile(${JSON.stringify(profile?.first_name||'')},${JSON.stringify(profile?.last_name||'')})">
+                        <button class="btn btn-outline" onclick="showEditAdminProfile('${fNameEnc}', '${lNameEnc}')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;vertical-align:middle;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             Edit Profile
                         </button>
@@ -617,12 +861,22 @@ async function loadSettingsView(main) {
             <div class="section-card">
                 <div class="section-card-header"><h2 class="section-heading">Preferences</h2></div>
                 <div style="padding:1.5rem;">
-                    <div class="toggle-row">
-                        <span>Language</span>
-                        <select class="settings-select" onchange="updateConfig('language',this.value)">
-                            <option value="en" ${(config.language||'en')==='en'?'selected':''}>English</option>
-                            <option value="ar" ${config.language==='ar'?'selected':''}>العربية</option>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-label">Language</div>
+                            <div class="settings-item-description">Choose your preferred language</div>
+                        </div>
+                        <select class="settings-select" onchange="updateConfig('language',this.value); if(this.value==='ar'){document.body.classList.add('rtl');}else{document.body.classList.remove('rtl');} toggleLanguage(this.value)" style="width:auto;min-width:120px;">
+                            <option value="en" ${(config.language || 'en') === 'en' ? 'selected' : ''}>English</option>
+                            <option value="ar" ${config.language === 'ar' ? 'selected' : ''}>العربية</option>
                         </select>
+                    </div>
+                    <div class="settings-item">
+                        <div class="settings-item-info">
+                            <div class="settings-item-label">Dark Mode</div>
+                            <div class="settings-item-description">Switch to a darker, eye-friendly theme</div>
+                        </div>
+                        <label class="toggle-switch"><input type="checkbox" id="admin-dark-mode-toggle" ${isDark?'checked':''} onchange="toggleTheme()"><span class="toggle-slider"></span></label>
                     </div>
                     ${togRow(config.data_sharing==='1'?'checked':'', 'Allow data sharing for improvements', "updateConfig('data_sharing',this.checked?'1':'0')")}
                     ${togRow(config.dark_mode_default==='1'?'checked':'', 'Default dark mode for new admins', "updateConfig('dark_mode_default',this.checked?'1':'0')")}
@@ -652,7 +906,11 @@ async function loadSettingsView(main) {
 }
 
 async function saveAdminNotifSetting(key, checked) {
-    try { await apiPost('settings.php', { action: 'update_notifications', key, value: checked ? '1' : '0' }); } catch(e) { showAlert('Error saving setting', 'error'); }
+    try {
+        const res = await apiPost('settings.php', { action: 'update_notifications', key: key, value: checked ? '1' : '0' });
+        if (res.success) showAlert('Notification setting updated', 'success');
+        else showAlert(res.error || 'Error saving setting', 'error');
+    } catch(e) { showAlert('Error saving setting', 'error'); }
 }
 
 function showEditAdminProfile(firstName, lastName) {
@@ -694,7 +952,29 @@ function showAdminChangePassword() {
     };
 }
 
-async function updateConfig(key, value) { try { await apiPost('settings.php', { action: 'update_config', setting_key: key, setting_value: value }); } catch (e) { showAlert('Error updating setting: ' + e.message, 'error'); } }
-function purgeInactiveUsers() { showConfirm('This will <strong>permanently delete</strong> all inactive parent accounts older than 6 months. This cannot be undone.', async () => { try { const res = await apiPost('settings.php', { action: 'purge_inactive' }); showAlert(res.message || 'Done', 'success'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } }, 'error'); }
-function resetPointsSystem() { showConfirm('This will <strong>reset ALL points wallets to 0</strong>. This action cannot be undone.', async () => { try { const res = await apiPost('settings.php', { action: 'reset_points' }); showAlert(res.message || 'Done', 'success'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } }, 'error'); }
+async function updateConfig(key, value) {
+    try {
+        const res = await apiPost('settings.php', { action: 'update_config', setting_key: key, setting_value: value });
+        if (res.success) showAlert(res.message || 'Setting updated', 'success');
+        else showAlert(res.error || 'Error saving setting', 'error');
+    } catch (e) { showAlert('Error updating setting: ' + e.message, 'error'); }
+}
+function purgeInactiveUsers() {
+    showConfirm('This will <strong>permanently delete</strong> all inactive parent accounts older than 6 months. This cannot be undone.', async () => {
+        try {
+            const res = await apiPost('settings.php', { action: 'purge_inactive' });
+            if (res.success) showAlert(res.message || 'Done', 'success');
+            else showAlert(res.error || 'Failed', 'error');
+        } catch (e) { showAlert('Error: ' + e.message, 'error'); }
+    }, 'error');
+}
+function resetPointsSystem() {
+    showConfirm('This will <strong>reset ALL points wallets to 0</strong>. This action cannot be undone.', async () => {
+        try {
+            const res = await apiPost('settings.php', { action: 'reset_points' });
+            if (res.success) showAlert(res.message || 'Done', 'success');
+            else showAlert(res.error || 'Failed', 'error');
+        } catch (e) { showAlert('Error: ' + e.message, 'error'); }
+    }, 'error');
+}
 function handleLogout() { showConfirm('Are you sure you want to log out?', () => { window.location.href = 'logout.php'; }, 'info'); }

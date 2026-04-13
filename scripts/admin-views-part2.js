@@ -1,27 +1,67 @@
-// ═══ NOTIFICATIONS MANAGEMENT ═══
+// ═══ NOTIFICATIONS MANAGEMENT (Modernized) ═══
 async function loadNotificationsView(main) {
     try {
         const data = await apiGet('notifications_mgmt.php?action=list');
         const notifs = data.notifications || [];
+        const sent = notifs.filter(n => n.status==='sent').length;
+        const scheduled = notifs.filter(n => n.status==='scheduled').length;
+        const failed = notifs.filter(n => n.status==='failed').length;
+        const totalRecipients = notifs.reduce((s,n) => s + (parseInt(n.recipient_count)||0), 0);
         main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Notification Management</h1><p class="dashboard-subtitle">Create and manage notifications for users</p></div>
-            <div class="header-actions-inline"><button class="btn btn-gradient" onclick="showComposeNotification()">+ Compose</button></div></div>
-        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Sent Notifications</h2></div>
+        <!-- Hero Header -->
+        <div style="background:linear-gradient(135deg,#10b981,#059669,#047857);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-20px;right:20px;font-size:80px;opacity:.12;">🔔</div>
+            <div style="position:absolute;bottom:-30px;right:80px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
+            <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">Notification Center</h1>
+                    <p style="opacity:.85;margin:0;font-size:.95rem;">Compose, schedule & track notifications — in-app and email</p>
+                </div>
+                <button class="btn" onclick="showComposeNotification()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.85rem;padding:.6rem 1.5rem;border-radius:12px;cursor:pointer;font-weight:600;">+ Compose</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;">
+            <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:1rem;">📨</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);">${notifs.length}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Notifications</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1rem;">✅</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);">${sent}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Sent Successfully</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;font-size:1rem;">⏰</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);">${scheduled}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Scheduled</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(236,72,153,0.03));border:1px solid rgba(236,72,153,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;font-size:1rem;">👥</div></div>
+                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);">${fmtNum(totalRecipients)}</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Recipients</div>
+            </div>
+        </div>
+
+        <!-- Notifications Table -->
+        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Sent Notifications</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${notifs.length} total</span></div>
             <div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Title</th><th>Type</th><th>Priority</th><th>Recipients</th><th>Status</th><th>Sent</th><th>Actions</th></tr></thead><tbody>
-                ${notifs.map(n => `<tr>
-                    <td><strong>${n.title}</strong></td>
-                    <td><span class="role-badge role-${n.type==='email'?'specialist':n.type==='both'?'admin':'parent'}">${n.type}</span></td>
-                    <td><span class="status-badge ${n.priority==='urgent'?'status-danger':n.priority==='high'?'status-warning':'status-default'}">${n.priority}</span></td>
-                    <td>${n.recipient_count}</td>
+                ${notifs.map(n => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <td><strong>${n.title}</strong>${n.first_name ? `<div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">by ${n.first_name} ${n.last_name}</div>` : ''}</td>
+                    <td><span style="font-size:.7rem;padding:3px 8px;border-radius:6px;background:${n.type==='email'?'rgba(99,102,241,0.1)':n.type==='both'?'rgba(236,72,153,0.1)':'rgba(16,185,129,0.1)'};color:${n.type==='email'?'var(--indigo-500)':n.type==='both'?'#ec4899':'var(--green-500)'};">${n.type==='in_app'?'📱 In-App':n.type==='email'?'📧 Email':'📱📧 Both'}</span></td>
+                    <td><span style="font-size:.7rem;padding:3px 8px;border-radius:6px;background:${n.priority==='urgent'?'rgba(239,68,68,0.1)':n.priority==='high'?'rgba(245,158,11,0.1)':'rgba(148,163,184,0.1)'};color:${n.priority==='urgent'?'var(--red-500)':n.priority==='high'?'var(--yellow-500)':'var(--text-secondary)'};">${n.priority}</span></td>
+                    <td><strong>${n.recipient_count||0}</strong></td>
                     <td><span class="status-badge ${n.status==='sent'?'status-active':n.status==='scheduled'?'status-warning':n.status==='cancelled'?'status-danger':'status-default'}">${n.status}</span></td>
-                    <td>${n.sent_at ? fmtDate(n.sent_at) : (n.scheduled_at ? 'Scheduled: '+fmtDate(n.scheduled_at) : '—')}</td>
+                    <td>${n.sent_at ? fmtDate(n.sent_at) : (n.scheduled_at ? '⏰ '+fmtDate(n.scheduled_at) : '—')}</td>
                     <td><div class="action-btns">
                         <button class="btn btn-sm btn-outline" onclick="viewNotification(${n.id})">View</button>
                         ${n.status==='scheduled'?`<button class="btn btn-sm btn-outline" style="color:var(--red-500);" onclick="cancelNotification(${n.id})">Cancel</button>`:''}
                         ${n.status==='failed'?`<button class="btn btn-sm btn-outline" onclick="resendNotification(${n.id})">Resend</button>`:''}
                     </div></td>
                 </tr>`).join('')}
-                ${notifs.length===0?'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary);">No notifications sent yet</td></tr>':''}
+                ${notifs.length===0?'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary);"><div style="font-size:2rem;margin-bottom:.5rem;">🔔</div>No notifications sent yet</td></tr>':''}
             </tbody></table></div></div></div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
@@ -52,19 +92,47 @@ async function viewNotification(id) {
     try {
         const d = await apiGet('notifications_mgmt.php?action=view&id='+id);
         const n = d.notification, recips = d.recipients||[];
-        showModal(`Notification — ${n.title}`, `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-                <div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${n.type}</span></div>
-                <div class="detail-row"><span class="detail-label">Priority</span><span class="detail-value">${n.priority}</span></div>
-                <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${n.status}</span></div>
-                <div class="detail-row"><span class="detail-label">Recipients</span><span class="detail-value">${n.recipient_count}</span></div>
-                <div class="detail-row"><span class="detail-label">Open Rate</span><span class="detail-value">${d.open_rate}%</span></div>
-                <div class="detail-row"><span class="detail-label">Sent</span><span class="detail-value">${fmtDate(n.sent_at)}</span></div>
+        const readCount = recips.filter(r => r.read_at).length;
+        showModal(`📬 ${n.title}`, `
+            <div style="background:linear-gradient(135deg,#10b981,#059669);border-radius:14px;padding:1.25rem;color:white;margin-bottom:1.25rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <div style="font-size:.7rem;text-transform:uppercase;opacity:.8;letter-spacing:.5px;margin-bottom:.25rem;">Notification Details</div>
+                        <div style="font-weight:700;font-size:1.1rem;">${n.title}</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:1.5rem;font-weight:800;">${d.open_rate}%</div>
+                        <div style="font-size:.65rem;opacity:.8;">Open Rate</div>
+                    </div>
+                </div>
             </div>
-            <div style="background:var(--bg-secondary);border-radius:8px;padding:1rem;margin:1rem 0;"><strong>Message:</strong><p style="margin:.5rem 0 0;">${n.body}</p></div>
-            <h4>Recipients (${recips.length})</h4>
-            <div style="max-height:200px;overflow-y:auto;">
-                ${recips.map(r=>`<div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid var(--border,#eee);"><span>${r.first_name} ${r.last_name} (${r.email})</span><span>${r.read_at?'✓ Read':'Unread'}</span></div>`).join('')}
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.75rem;margin-bottom:1rem;">
+                <div style="background:var(--bg-secondary);border-radius:10px;padding:.75rem;text-align:center;">
+                    <div style="font-size:.65rem;color:var(--text-secondary);margin-bottom:.25rem;">Type</div>
+                    <div style="font-weight:600;font-size:.85rem;">${n.type==='in_app'?'📱 In-App':n.type==='email'?'📧 Email':'📱📧 Both'}</div>
+                </div>
+                <div style="background:var(--bg-secondary);border-radius:10px;padding:.75rem;text-align:center;">
+                    <div style="font-size:.65rem;color:var(--text-secondary);margin-bottom:.25rem;">Priority</div>
+                    <div style="font-weight:600;font-size:.85rem;color:${n.priority==='urgent'?'var(--red-500)':n.priority==='high'?'var(--yellow-500)':'var(--text-primary)'};">${n.priority.toUpperCase()}</div>
+                </div>
+                <div style="background:var(--bg-secondary);border-radius:10px;padding:.75rem;text-align:center;">
+                    <div style="font-size:.65rem;color:var(--text-secondary);margin-bottom:.25rem;">Recipients</div>
+                    <div style="font-weight:600;font-size:.85rem;">${n.recipient_count} users</div>
+                </div>
+            </div>
+            <div style="background:var(--bg-secondary);border-radius:10px;padding:1rem;margin-bottom:1rem;">
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-bottom:.35rem;font-weight:600;">Message</div>
+                <p style="margin:0;font-size:.9rem;line-height:1.5;color:var(--text-primary);">${n.body}</p>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+                <h4 style="margin:0;font-size:.85rem;">Recipients (${recips.length})</h4>
+                <span style="font-size:.7rem;color:var(--text-secondary);">${readCount} read • ${recips.length - readCount} unread</span>
+            </div>
+            <div style="max-height:180px;overflow-y:auto;">
+                ${recips.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:.4rem .5rem;border-bottom:1px solid var(--border);transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                    <div><span style="font-size:.85rem;font-weight:500;">${r.first_name} ${r.last_name}</span><span style="font-size:.7rem;color:var(--text-secondary);margin-left:.5rem;">${r.email}</span></div>
+                    <span style="font-size:.7rem;padding:2px 8px;border-radius:4px;background:${r.read_at?'rgba(16,185,129,0.1)':'rgba(148,163,184,0.1)'};color:${r.read_at?'var(--green-500)':'var(--text-secondary)'};">${r.read_at?'✓ Read':'Unread'}</span>
+                </div>`).join('')}
             </div>
         `, `<button class="btn btn-outline" onclick="closeModal()">Close</button>`);
     } catch(e){showAlert('Error loading notification','error');}
