@@ -4,9 +4,27 @@
  * PHP endpoint that compares child growth data against WHO standards.
  * Works within XAMPP without the Python API.
  */
-session_start();
-include 'connection.php';
+error_reporting(0);
+ini_set('display_errors', 0);
+
+// CORS headers for fetch requests
+header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*'));
+header('Access-Control-Allow-Credentials: true');
 header('Content-Type: application/json');
+
+// Start session only if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Load connection if not in same directory
+if (file_exists('connection.php')) {
+    include 'connection.php';
+} elseif (file_exists('../connection.php')) {
+    include '../connection.php';
+} elseif (file_exists('../../connection.php')) {
+    include '../../connection.php';
+}
 
 if (!isset($_SESSION['id'])) {
     http_response_code(401);
@@ -172,6 +190,13 @@ $childId = $_GET['child_id'] ?? null;
 if (!$childId) {
     http_response_code(400);
     echo json_encode(['error' => 'child_id is required']);
+    exit();
+}
+
+// Check database connection
+if (!$connect) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Database connection failed']);
     exit();
 }
 

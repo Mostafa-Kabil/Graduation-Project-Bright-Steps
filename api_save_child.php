@@ -18,7 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $parentId = $_SESSION['id'];
 $childId = !empty($_POST['child_id']) ? (int) $_POST['child_id'] : null;
 $fname = trim($_POST['first_name'] ?? '');
-$lname = trim($_POST['last_name'] ?? '');
+// Auto-populate last_name with father's name (parent's first name from session)
+$lname = trim($_SESSION['fname'] ?? '');
 $gender = trim($_POST['gender'] ?? '');
 $ssn = trim($_POST['ssn'] ?? '');
 $birthDate = trim($_POST['birth_date'] ?? ''); // YYYY-MM-DD format
@@ -31,8 +32,7 @@ $headCirc = !empty($_POST['head_circumference']) ? (float) $_POST['head_circumfe
 $errors = [];
 if ($fname === '')
     $errors[] = 'First name is required.';
-if ($lname === '')
-    $errors[] = 'Last name is required.';
+// Last name (father's name) is auto-populated from session
 if ($birthDate === '') {
     $errors[] = 'Date of birth is required.';
 } else {

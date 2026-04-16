@@ -16,15 +16,16 @@ $isNew = !$childId;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $childId = !empty($_POST['child_id']) ? (int) $_POST['child_id'] : null;
     $cfname = trim($_POST['child_first_name'] ?? '');
-    $clname = trim($_POST['child_last_name'] ?? '');
+    // Auto-populate last_name with father's name (parent's first name from session)
+    $clname = trim($_SESSION['fname'] ?? '');
     $gender = trim($_POST['gender'] ?? '');
     $birthDate = trim($_POST['birth_date'] ?? '');
     $weight = !empty($_POST['weight']) ? (float) $_POST['weight'] : null;
     $height = !empty($_POST['height']) ? (float) $_POST['height'] : null;
     $headCirc = !empty($_POST['head_circumference']) ? (float) $_POST['head_circumference'] : null;
 
-    if ($cfname === '' || $clname === '' || $birthDate === '') {
-        $errorMsg = 'First name, last name, and date of birth are required.';
+    if ($cfname === '' || $birthDate === '') {
+        $errorMsg = 'First name and date of birth are required.';
     } else {
         $parts = explode('-', $birthDate);
         $birthYear = (int) $parts[0];
@@ -254,14 +255,15 @@ if ($childData) {
                             <h3 class="form-section-title">Basic Information</h3>
                             <div class="form-grid">
                                 <div class="form-group">
-                                    <label class="form-label" for="child-first-name">First Name</label>
+                                    <label class="form-label" for="child-first-name">Child's First Name</label>
                                     <input type="text" id="child-first-name" name="child_first_name" class="form-input"
                                         value="<?php echo htmlspecialchars($cfname); ?>" required>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label" for="child-last-name">Last Name</label>
+                                    <label class="form-label" for="child-last-name">Father's Name (Auto-filled)</label>
                                     <input type="text" id="child-last-name" name="child_last_name" class="form-input"
-                                        value="<?php echo htmlspecialchars($clname); ?>" required>
+                                        value="<?php echo htmlspecialchars($clname); ?>" readonly
+                                        style="background-color:var(--slate-100);cursor:not-allowed;">
                                 </div>
                             </div>
                             <div class="form-grid">
@@ -343,6 +345,15 @@ if ($childData) {
 
     <script src="scripts/theme-toggle.js?v=8"></script>
     <script src="scripts/navigation.js?v=8"></script>
+    <script>
+        // Auto-populate father's name for new child
+        document.addEventListener('DOMContentLoaded', function() {
+            const fatherNameField = document.getElementById('child-last-name');
+            if (fatherNameField && !fatherNameField.value) {
+                fatherNameField.value = '<?php echo htmlspecialchars($_SESSION['fname'] ?? ''); ?>';
+            }
+        });
+    </script>
 </body>
 
 </html>

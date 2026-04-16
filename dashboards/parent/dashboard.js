@@ -566,7 +566,7 @@
             <div class="child-profile-card">
                 <div class="child-avatar">${initial}</div>
                 <div class="child-info">
-                    <h2 class="child-name">${child.first_name + ' ' + p.fname}</h2>
+                    <h2 class="child-name">${child.first_name + ' ' + (child.last_name || '')}</h2>
                     <div class="child-details">
                         <span>${child.age_display || ''}</span><span>•</span><span>Born: ${child.birth_date_formatted || ''}</span>
                     </div>
@@ -923,11 +923,6 @@
                             <h5 style="font-weight:700;margin-bottom:0.5rem;color:#8b5cf6;">Head Circumference</h5>
                             <p style="font-size:0.875rem;color:var(--slate-600);margin-bottom:0.5rem;"><strong>What it means:</strong> Tracks brain growth and development.</p>
                             <p style="font-size:0.875rem;color:var(--slate-600);margin:0;"><strong>How to measure:</strong> Wrap a flexible measuring tape just above the eyebrows and ears, around the widest part.</p>
-                        </div>
-                        <div style="background:#f8fafc;padding:1.5rem;border-radius:12px;border:1px solid #e2e8f0;">
-                            <h5 style="font-weight:700;margin-bottom:0.5rem;color:#f59e0b;">Arm Circumference</h5>
-                            <p style="font-size:0.875rem;color:var(--slate-600);margin-bottom:0.5rem;"><strong>What it means:</strong> Indicates muscle and fat mass, used to assess acute malnutrition.</p>
-                            <p style="font-size:0.875rem;color:var(--slate-600);margin:0;"><strong>How to measure:</strong> Measure the middle of the left upper arm while relaxed using a MUAC tape.</p>
                         </div>
                         <div style="background:#f8fafc;padding:1.5rem;border-radius:12px;border:1px solid #e2e8f0;">
                             <h5 style="font-weight:700;margin-bottom:0.5rem;color:#10b981;">BMI</h5>
@@ -3203,8 +3198,48 @@
     // ── WHO Comparison helper ────────────────────────────────────
     async function fetchWHOComparison(childId) {
         try {
-            const res = await fetch('../../api_who_compare.php?child_id=' + childId);
-            const data = await res.json();
+            const url = '../../api_who_compare.php?child_id=' + childId;
+            console.log('📊 Fetching WHO data from:', url);
+            const res = await fetch(url);
+            console.log('WHO API Response status:', res.status);
+
+            // Check if response is JSON before parsing
+            const contentType = res.headers.get('content-type');
+            console.log('Response content-type:', contentType);
+
+            const text = await res.text();
+            console.log('Raw response:', text.substring(0, 500));
+
+            if (!text || text.startsWith('<')) {
+                console.error('API returned HTML instead of JSON. This usually means a PHP error.');
+                ['who-weight-badge', 'who-height-badge', 'who-head-badge'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = 'PHP Error'; el.className = 'badge badge-red'; }
+                });
+                return;
+            }
+
+            const data = JSON.parse(text);
+            console.log('WHO API Response data:', data);
+
+            if (data.error) {
+                console.error('WHO API Error:', data.error);
+                ['who-weight-badge', 'who-height-badge', 'who-head-badge'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = 'Error: ' + data.error; el.className = 'badge badge-red'; }
+                });
+                return;
+            }
+
+            if (data.message) {
+                console.log('WHO API Message:', data.message);
+                ['who-weight-badge', 'who-height-badge', 'who-head-badge'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) { el.textContent = 'No data yet'; el.className = 'badge badge-blue'; }
+                });
+                return;
+            }
+
             if (data.measurements) {
                 const m = data.measurements;
                 const statusColors = { green: 'badge-green', yellow: 'badge-yellow', red: 'badge-red' };
@@ -3264,11 +3299,6 @@
                                     <div style="position:relative;height:300px;padding:1rem;"><canvas id="who-head-chart"></canvas></div>
                                     <div id="desc-head" style="padding:0.75rem 1.5rem 1.25rem;font-size:0.8rem;color:#64748b;line-height:1.5;border-top:1px solid #f1f5f9;"></div>
                                 </div>
-                                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
-                                    <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">💪 Arm Circumference-for-Age</h4></div>
-                                    <div style="position:relative;height:300px;padding:1rem;"><canvas id="who-arm-chart"></canvas></div>
-                                    <div id="desc-arm" style="padding:0.75rem 1.5rem 1.25rem;font-size:0.8rem;color:#64748b;line-height:1.5;border-top:1px solid #f1f5f9;"></div>
-                                </div>
 
                                 <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
                                     <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">📈 Weight Velocity</h4></div>
@@ -3296,7 +3326,7 @@
                             const ageRemMonths = ageInMonths % 12;
 
                             const weightDataObj = []; const heightDataObj = []; const headDataObj = [];
-                            const wlDataObj = []; const bmiDataObj = []; const armDataObj = [];
+                            const wlDataObj = []; const bmiDataObj = [];
                             const subDataObj = []; const triDataObj = []; const motorDataObj = [];
 
                             const velWeight = []; const velHeight = []; const velHead = [];
@@ -3314,7 +3344,6 @@
                                     if (hm > 0) bmiDataObj.push({ x: ageM, y: parseFloat(r.weight) / (hm * hm) });
                                 }
                                 if (r.head_circumference) headDataObj.push({ x: ageM, y: parseFloat(r.head_circumference) });
-                                if (r.arm_circumference) armDataObj.push({ x: ageM, y: parseFloat(r.arm_circumference) });
                                 if (r.motor_milestones_score) motorDataObj.push({ x: ageM, y: parseFloat(r.motor_milestones_score) });
 
                                 // Calculate velocity
@@ -3362,7 +3391,6 @@
                                 // BMI Gauge Scale
                                 renderBMIGauge(bmiDataObj, dChild.first_name, ageYears, ageRemMonths);
                                 plotChart('who-head-chart', 'line', 'Head Circumference-for-Age', 'Head Circ. (cm)', 'Age (months)', headDataObj, mapWho(whoPoints.head_for_age[gender]), '#8b5cf6', false);
-                                plotChart('who-arm-chart', 'line', 'Arm Circumference-for-Age', 'Arm Circ. (cm)', 'Age (months)', armDataObj, mapWho(whoPoints.arm_for_age[gender]), '#3b82f6', false);
 
                                 plotChart('motor-chart', 'bar', 'Motor Development Milestones', 'Score', 'Age (months)', motorDataObj, [], '#10b981', true);
                                 // Velocity charts: only render if 2+ data points, else show message
@@ -3405,7 +3433,6 @@
                                     setDesc('desc-head', cn + "'s head measures " + latestHC + " cm (" + whoM.head_circumference.percentile + "th percentile). " + (whoM.head_circumference.status === 'green' ? 'Brain growth is progressing normally. Consistent growth along a percentile curve is what matters most.' : 'Discuss head circumference trends with your pediatrician.'));
                                 } else { setDesc('desc-head', "Head circumference tracks brain growth. Log measurements to see " + cn + "'s progress."); }
 
-                                setDesc('desc-arm', armDataObj.length > 0 ? cn + "'s arm circumference indicates muscle and fat mass development. " + (armDataObj.length > 1 ? 'The trend shows ' + (armDataObj[armDataObj.length - 1].y > armDataObj[0].y ? 'healthy growth.' : 'a decline — consult your pediatrician.') : 'More measurements are needed to establish a trend.') : 'Arm circumference is best measured by a specialist during clinic visits.');
                             }, 100);
                         }
                     }
@@ -3418,10 +3445,18 @@
                 });
             }
         } catch (e) {
+            console.error('WHO Comparison Error:', e);
             ['who-weight-badge', 'who-height-badge', 'who-head-badge'].forEach(id => {
                 const el = document.getElementById(id);
-                if (el) { el.textContent = 'N/A'; el.className = 'badge'; }
+                if (el) { el.textContent = 'Error'; el.className = 'badge badge-red'; }
             });
+            // Also update the summary card to show error
+            const summaryCard = document.getElementById('who-summary');
+            const summaryContent = document.getElementById('who-summary-content');
+            if (summaryCard && summaryContent) {
+                summaryContent.innerHTML = '<div style="padding:1rem;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;color:#dc2626;font-size:0.85rem;">Failed to load WHO comparison data. Please ensure XAMPP is running and refresh the page. Check browser console (F12) for details.</div>';
+                summaryCard.style.display = 'block';
+            }
         }
     }
 

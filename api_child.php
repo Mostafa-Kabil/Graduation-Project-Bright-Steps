@@ -24,11 +24,11 @@ switch ($action) {
         $childId = !empty($input['child_id']) ? (int)$input['child_id'] : null;
         $fname = trim($input['first_name'] ?? '');
         
-        // Fetch parent last name to use for the child
-        $stmtP = $connect->prepare("SELECT last_name FROM users WHERE user_id = ?");
+        // Fetch parent first name to use for the child (father's name)
+        $stmtP = $connect->prepare("SELECT first_name FROM users WHERE user_id = ?");
         $stmtP->execute([$parentId]);
         $parentRow = $stmtP->fetch(PDO::FETCH_ASSOC);
-        $lname = $parentRow ? $parentRow['last_name'] : '';
+        $lname = $parentRow ? $parentRow['first_name'] : '';
 
         $gender = trim($input['gender'] ?? 'male');
         $birthDate = trim($input['birth_date'] ?? '');
