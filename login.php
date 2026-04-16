@@ -3,18 +3,12 @@ ob_start();
 session_start();
 include 'connection.php';
 
-// If already logged in, redirect to appropriate dashboard
+// If already logged in as a parent/user, redirect to parent dashboard.
+// Doctors, admins, and clinic users are NOT auto-redirected so they can
+// switch to a parent account via this portal if needed.
 if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
-    if ($_SESSION['role'] === 'admin') {
-        header("Location: admin-dashboard.php");
-        exit;
-    } elseif ($_SESSION['role'] === 'doctor') {
-        header("Location: doctor-dashboard.php");
-        exit;
-    } elseif ($_SESSION['role'] === 'clinic') {
-        header("Location: dashboards/clinic/clinic-dashboard.php");
-        exit;
-    } else {
+    $role = $_SESSION['role'];
+    if ($role === 'parent' || ($role !== 'doctor' && $role !== 'admin' && $role !== 'clinic' && $role !== 'specialist')) {
         header("Location: dashboards/parent/dashboard.php");
         exit;
     }

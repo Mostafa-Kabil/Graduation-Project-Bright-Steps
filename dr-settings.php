@@ -336,7 +336,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                             <div class="settings-item" onclick="showProfileView()">
                                 <div class="settings-item-info">
                                     <div class="settings-item-label">My Profile</div>
-                                    <div class="settings-item-description">View and edit your personal & professional
+                                    <div class="settings-item-description">View and edit your personal &amp; professional
                                         information</div>
                                 </div>
                                 <svg class="settings-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -418,7 +418,6 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                             </div>
                         </div>
                     </div>
-
 
                 </div>
             </div>
@@ -891,11 +890,45 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
 
         // ── Logout ──
         function handleLogout() {
-            if (confirm('Are you sure you want to log out?')) {
-                window.location.href = 'doctor-login.php';
+            const existing = document.getElementById('logout-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'logout-modal';
+            modal.innerHTML = `
+                <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+                <div class="logout-dialog">
+                        <div class="logout-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                            </svg>
+                        </div>
+                        <h3>Are you sure you want to log out?</h3>
+                        <p>You will need to sign in again to access your dashboard.</p>
+                        <div class="logout-actions">
+                            <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                            <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                        </div>
+                    </div>
+            `;
+            document.body.appendChild(modal);
+            requestAnimationFrame(() => modal.classList.add('show'));
+        }
+
+        function closeLogoutModal() {
+            const modal = document.getElementById('logout-modal');
+            if (modal) {
+                modal.classList.remove('show');
+                modal.classList.add('hide');
+                setTimeout(() => modal.remove(), 300);
             }
         }
+
+        function confirmLogout() {
+            window.location.href = 'logout.php';
+        }
     </script>
+
 </body>
 
 </html>

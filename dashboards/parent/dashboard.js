@@ -1,4 +1,4 @@
-// Dashboard JavaScript
+﻿// Dashboard JavaScript
 (function () {
     var children = (window.dashboardData || {}).children || [];
 
@@ -2382,182 +2382,291 @@
         const d = window.dashboardData || {};
         const appts = d.appointments || [];
 
-        setTimeout(async () => {
+        // ── Helper: render star rating ────────────────────────────
+        function renderStars(rating) {
+            const r = parseFloat(rating) || 0;
+            let html = '';
+            for (let i = 1; i <= 5; i++) {
+                if (r >= i) {
+                    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+                } else if (r >= i - 0.5) {
+                    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="#fcd34d" stroke="#f59e0b" stroke-width="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+                } else {
+                    html += '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" stroke-width="1.5"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+                }
+            }
+            return html;
+        }
+
+        // ── Helper: 08:00:00 → 8:00 AM ───────────────────────────
+        function fmtTime(t) {
+            if (!t) return '';
+            const [hh, mm] = t.split(':');
+            const h = parseInt(hh);
+            const suffix = h >= 12 ? 'PM' : 'AM';
+            const h12 = h % 12 || 12;
+            return h12 + ':' + mm + ' ' + suffix;
+        }
+
+        // ── Helper: 3-day availability columns ────────────────────
+        function buildAvailSlots(availability, specId, firstName, lastName) {
+            if (!availability || availability.length === 0) {
+                return '<div class="avail-no-data">No availability data</div>';
+            }
+            return availability.map(function(slot) {
+                if (slot.available) {
+                    return (
+                        '<div class="doctor-avail-slot doctor-avail-active">' +
+                            '<div class="avail-day-label">' + slot.label + '</div>' +
+                            '<div class="avail-time-range">' +
+                                '<span>' + fmtTime(slot.start_time) + '</span>' +
+                                '<span class="avail-to">to ' + fmtTime(slot.end_time) + '</span>' +
+                            '</div>' +
+                            '<button class="avail-book-btn" onclick="bookSpecialist(' + specId + ', \'Dr. ' + firstName + ' ' + lastName + '\', \'' + slot.date + '\')">' +
+                                'Book' +
+                            '</button>' +
+                        '</div>'
+                    );
+                } else {
+                    return (
+                        '<div class="doctor-avail-slot doctor-avail-off">' +
+                            '<div class="avail-day-label">' + slot.label + '</div>' +
+                            '<div class="avail-no-slots">Not available</div>' +
+                            '<button class="avail-book-btn avail-book-disabled" disabled>Book</button>' +
+                        '</div>'
+                    );
+                }
+            }).join('');
+        }
+
+        // ── Fetch specialists from backend ────────────────────────
+        setTimeout(async function() {
             const specList = document.getElementById('specialist-list');
             if (!specList) return;
             try {
-                const res = await fetch('../../api_specialists.php');
+                const res  = await fetch('../../api_specialists.php');
                 const data = await res.json();
                 if (data.success && data.specialists && data.specialists.length > 0) {
                     window._allSpecialists = data.specialists;
 
-                    // Extract unique specializations and locations for filter drops
-                    let specs = [...new Set(data.specialists.map(s => s.specialization).filter(Boolean))];
-                    let locs = [...new Set(data.specialists.map(s => s.location).filter(Boolean))];
-
-                    let sHtml = '<option value="">All Specialties</option>' + specs.map(s => `<option value="${s}">${s}</option>`).join('');
-                    let lHtml = '<option value="">All Locations</option>' + locs.map(l => `<option value="${l}">${l}</option>`).join('');
+                    const specVals = [...new Set(data.specialists.map(function(s){ return s.specialization; }).filter(Boolean))];
+                    const locVals  = [...new Set(data.specialists.map(function(s){ return s.location; }).filter(Boolean))];
 
                     const specF = document.getElementById('spec-filter');
-                    const locF = document.getElementById('loc-filter');
-                    if (specF) specF.innerHTML = sHtml;
-                    if (locF) locF.innerHTML = lHtml;
+                    const locF  = document.getElementById('loc-filter');
+                    if (specF) specF.innerHTML = '<option value="">All Specialties</option>' + specVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
+                    if (locF)  locF.innerHTML  = '<option value="">All Locations</option>'   + locVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
 
                     window.renderSpecialists();
                 } else {
-                    specList.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">No specialists found.</div>';
+                    specList.innerHTML = '<div class="doctor-empty-state"><div class="doctor-empty-icon">🩺</div><h3>No specialists found</h3><p>Doctors will appear here once added to the system.</p></div>';
                 }
-            } catch (e) {
-                console.error(e);
-                specList.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#ef4444;">Failed to load specialists.</div>';
+            } catch (err) {
+                console.error('Specialists fetch error:', err);
+                specList.innerHTML = '<div class="doctor-empty-state" style="--ec:#ef4444"><div class="doctor-empty-icon">⚠️</div><h3>Could not load specialists</h3><p>Please check your connection and try again.</p><button class="btn btn-outline btn-sm" onclick="window._dashboardSwitchView(\'clinic\')" style="margin-top:1rem">Retry</button></div>';
             }
         }, 50);
 
-        window.renderSpecialists = function () {
+        // ── renderSpecialists: filter + paint cards ───────────────
+        window.renderSpecialists = function() {
             const specList = document.getElementById('specialist-list');
             if (!specList || !window._allSpecialists) return;
 
-            const q = (document.getElementById('spec-search')?.value || '').toLowerCase();
-            const sf = document.getElementById('spec-filter')?.value || '';
-            const lf = document.getElementById('loc-filter')?.value || '';
+            const q  = (document.getElementById('spec-search') ? document.getElementById('spec-search').value : '').toLowerCase();
+            const sf = document.getElementById('spec-filter') ? document.getElementById('spec-filter').value : '';
+            const lf = document.getElementById('loc-filter')  ? document.getElementById('loc-filter').value  : '';
 
-            let filtered = window._allSpecialists.filter(s => {
-                let matchQ = !q || (s.first_name + ' ' + s.last_name + ' ' + s.clinic_name + ' ' + s.specialization).toLowerCase().includes(q);
-                let matchS = !sf || s.specialization === sf;
-                let matchL = !lf || s.location === lf;
+            const filtered = window._allSpecialists.filter(function(s) {
+                const matchQ = !q || (s.first_name + ' ' + s.last_name + ' ' + (s.clinic_name || '') + ' ' + (s.specialization || '')).toLowerCase().includes(q);
+                const matchS = !sf || s.specialization === sf;
+                const matchL = !lf || s.location === lf;
                 return matchQ && matchS && matchL;
             });
 
             if (filtered.length === 0) {
-                specList.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">No specialists match your filters.</div>';
+                specList.innerHTML = '<div class="doctor-empty-state"><div class="doctor-empty-icon">🔍</div><h3>No results found</h3><p>Try adjusting your filters or search term.</p></div>';
                 return;
             }
 
-            let h = '';
-            filtered.forEach(s => {
-                const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.first_name)}+${encodeURIComponent(s.last_name)}&background=random`;
-                h += `
-                <div class="dashboard-card" style="display: flex; flex-direction:column; padding: 0; transition: transform 0.2s, box-shadow 0.2s; border: 1px solid #e2e8f0; overflow:hidden;" onmouseover="this.style.boxShadow='0 10px 15px -3px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 4px 6px -1px rgba(0,0,0,0.05)'">
-                    <div style="display: flex; gap: 1.5rem; padding: 1.5rem; border-bottom: 1px solid #f1f5f9;">
-                        <img src="${avatar}" style="width: 5.5rem; height: 5.5rem; border-radius: 50%; object-fit: cover; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border:3px solid #fff;">
-                        <div style="flex: 1;">
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.25rem;">
-                                <div>
-                                   <div style="color:var(--slate-500); font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Doctor</div>
-                                   <h3 style="font-size: 1.25rem; font-weight: 800; color:var(--blue-600); margin:0;">${s.first_name} ${s.last_name}</h3>
-                                </div>
-                            </div>
-                            <p style="color: var(--slate-700); font-weight: 600; font-size: 0.95rem; margin: 0.25rem 0 0.5rem;">${s.specialization || 'Specialist'}</p>
-                            
-                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
-                                <div style="display:flex;align-items:center;background:#fff5f5;color:#e53e3e;padding:0.25rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:700;">⭐ ${s.rating || 'New'} Rating</div>
-                                <div style="display:flex;align-items:center;background:#f0fdf4;color:#16a34a;padding:0.25rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:700;">💼 ${s.experience_years || 0} Years Exp</div>
-                                <div style="display:flex;align-items:center;background:#eff6ff;color:#2563eb;padding:0.25rem 0.6rem;border-radius:6px;font-size:0.8rem;font-weight:700;">💵 Fees: 200 EGP</div>
-                            </div>
+            specList.innerHTML = filtered.map(function(s) {
+                const avatarUrl = s.profile_photo
+                    ? ('../../' + s.profile_photo)
+                    : ('https://ui-avatars.com/api/?name=' + encodeURIComponent(s.first_name) + '+' + encodeURIComponent(s.last_name) + '&background=6366f1&color=ffffff&size=128&bold=true');
 
-                            <p style="color: var(--slate-600); font-size: 0.85rem; margin: 0; display:flex; align-items:center; gap:0.35rem;">
-                                📍 <strong>Clinic:</strong> ${s.clinic_name || 'Independent'}, ${s.location || 'Online'}
-                            </p>
-                        </div>
-                    </div>
-                    <div style="background:#f8fafc; padding:1rem 1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem;">
-                        <span style="font-size:0.85rem; color:var(--slate-500); font-weight:600;">🕒 Next available slot: Tomorrow, 10:00 AM</span>
-                        <div style="display:flex; gap:0.5rem;">
-                            <button class="btn btn-outline btn-sm" onclick="viewDoctorInfo(${s.specialist_id})" style="padding:0.5rem 1rem; border-color:var(--slate-300); color:var(--slate-700);">View Doctor Profile</button>
-                            <button class="btn btn-gradient btn-sm" onclick="bookSpecialist(${s.specialist_id}, 'Dr. ${s.first_name} ${s.last_name}')" style="padding:0.5rem 1.25rem; background:linear-gradient(135deg, #e11d48, #be123c); color:white; border:none; box-shadow:0 10px 15px -3px rgba(225, 29, 72, 0.3);">Book Now</button>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            specList.innerHTML = h;
+                const rating    = parseFloat(s.rating) || 0;
+                const ratingVal = s.rating ? rating.toFixed(1) : 'New';
+                const fee       = s.consultation_fee ? s.consultation_fee + ' EGP' : '200 EGP';
+                const patients  = parseInt(s.total_appointments) || 0;
+                const cert      = s.certificate_of_experience || '';
+                const bio       = s.bio ? ('<p class="doctor-bio">' + s.bio + '</p>') : '';
+                const ctypes    = s.consultation_types || 'onsite';
+                const onlineTag = ctypes.includes('online') ? '<span class="doctor-tag doctor-tag-online">💻 Online</span>' : '';
+                const onsiteTag = ctypes.includes('onsite') ? '<span class="doctor-tag doctor-tag-onsite">🏥 On-site</span>' : '';
+                const expPill   = s.experience_years ? ('<div class="doctor-pill doctor-pill-exp"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>' + s.experience_years + ' yrs exp</div>') : '';
+                const certPill  = cert ? ('<div class="doctor-pill doctor-pill-cert"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg>' + cert + '</div>') : '';
+                const patientsHtml = patients > 0 ? ('<span class="doctor-patients-count">' + patients + ' patients</span>') : '';
+                const availHtml = buildAvailSlots(s.availability, s.specialist_id, s.first_name, s.last_name);
+
+                return (
+                    '<div class="doctor-card">' +
+
+                        '<!-- Header -->' +
+                        '<div class="doctor-card-header">' +
+                            '<div class="doctor-avatar-wrap">' +
+                                '<img src="' + avatarUrl + '" alt="Dr. ' + s.first_name + ' ' + s.last_name + '" class="doctor-avatar-img" ' +
+                                'onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(s.first_name) + '+' + encodeURIComponent(s.last_name) + '&background=6366f1&color=ffffff&size=128&bold=true\'">' +
+                            '</div>' +
+
+                            '<div class="doctor-info-block">' +
+                                '<div class="doctor-name-row">' +
+                                    '<h3 class="doctor-name">Dr. ' + s.first_name + ' ' + s.last_name + '</h3>' +
+                                    '<div class="doctor-tags-row">' + onlineTag + onsiteTag + '</div>' +
+                                '</div>' +
+                                '<p class="doctor-specialty">' + (s.specialization || 'Specialist') + '</p>' +
+
+                                '<div class="doctor-rating-row">' +
+                                    '<div class="doctor-stars">' + renderStars(rating) + '</div>' +
+                                    '<span class="doctor-rating-val">' + ratingVal + '</span>' +
+                                    patientsHtml +
+                                '</div>' +
+
+                                bio +
+
+                                '<div class="doctor-pills-row">' +
+                                    '<div class="doctor-pill doctor-pill-loc">' +
+                                        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+                                        (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                    '</div>' +
+                                    '<div class="doctor-pill doctor-pill-fee">' +
+                                        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
+                                        fee +
+                                    '</div>' +
+                                    expPill + certPill +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+
+                        '<!-- Availability -->' +
+                        '<div class="doctor-avail-section">' +
+                            '<div class="doctor-avail-label">Next Available Slots</div>' +
+                            '<div class="doctor-avail-grid">' + availHtml + '</div>' +
+                            '<p class="doctor-avail-note">Pre-booking required — please arrive a few minutes early</p>' +
+                        '</div>' +
+
+                        '<!-- Footer Actions -->' +
+                        '<div class="doctor-card-footer">' +
+                            '<button class="btn-doctor-profile" onclick="viewDoctorInfo(' + s.specialist_id + ')">' +
+                                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>' +
+                                'View Profile' +
+                            '</button>' +
+                            '<button class="btn-doctor-book" onclick="bookSpecialist(' + s.specialist_id + ', \'Dr. ' + s.first_name + ' ' + s.last_name + '\')">' +
+                                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="10" y1="14" x2="14" y2="14"/><line x1="12" y1="12" x2="12" y2="16"/></svg>' +
+                                'Book Appointment' +
+                            '</button>' +
+                        '</div>' +
+                    '</div>'
+                );
+            }).join('');
         };
 
+        // ── Appointment sidebar ───────────────────────────────────
         let apptHtml = '';
         if (appts.length > 0) {
-            appts.forEach(a => {
+            appts.forEach(function(a) {
                 const dt = new Date(a.scheduled_at);
-                const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                apptHtml += `
-                <div class="appointment-item" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:1.25rem; margin-bottom:1rem; transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-                        <span class="badge ${a.status === 'Scheduled' ? 'badge-blue' : 'badge-green'}" style="font-size:0.75rem;">${a.status}</span>
-                        <span style="font-weight: 600; color:var(--slate-600); font-size:0.8rem;">${a.type === 'onsite' ? '📍 Clinic Visit' : '💻 Online Session'}</span>
-                    </div>
-                    
-                    <div style="display:flex; gap:1rem; align-items:center;">
-                        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:0.5rem; text-align:center; min-width:65px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                            <div style="font-size:0.75rem; color:#ef4444; font-weight:800; text-transform:uppercase;">${dt.toLocaleDateString('en-US', { month: 'short' })}</div>
-                            <div style="font-size:1.75rem; font-weight:800; color:var(--slate-800); line-height:1; padding:0.2rem 0;">${dt.getDate()}</div>
-                        </div>
-                        <div style="flex:1;">
-                            <h4 style="margin:0 0 0.35rem; font-size:1.05rem; font-weight:800; color:var(--slate-900);">Dr. ${a.doc_fname} ${a.doc_lname}</h4>
-                            <div style="font-size: 0.85rem; color: var(--slate-500); display:flex; align-items:center; gap:0.35rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> ${dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</div>
-                        </div>
-                    </div>
-                </div>`;
+                const statusCls = a.status === 'Scheduled' ? 'badge-blue' : 'badge-green';
+                apptHtml += (
+                    '<div class="appt-sidebar-item">' +
+                        '<div class="appt-sidebar-top">' +
+                            '<span class="badge ' + statusCls + '" style="font-size:0.7rem;">' + a.status + '</span>' +
+                            '<span class="appt-sidebar-type">' + (a.type === 'onsite' ? '📍 Clinic' : '💻 Online') + '</span>' +
+                        '</div>' +
+                        '<div class="appt-sidebar-body">' +
+                            '<div class="appt-sidebar-cal">' +
+                                '<div class="appt-cal-month">' + dt.toLocaleDateString('en-US', { month: 'short' }) + '</div>' +
+                                '<div class="appt-cal-day">' + dt.getDate() + '</div>' +
+                            '</div>' +
+                            '<div class="appt-sidebar-info">' +
+                                '<h4>Dr. ' + a.doc_fname + ' ' + a.doc_lname + '</h4>' +
+                                '<p>' + (a.specialization || '') + '</p>' +
+                                '<div class="appt-sidebar-time">' +
+                                    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
+                                    dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) +
+                                '</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>'
+                );
             });
         } else {
-            apptHtml = '<p style="color:var(--slate-500);text-align:center;padding:1.5rem 0;">No upcoming appointments</p>';
+            apptHtml = (
+                '<div class="appt-sidebar-empty">' +
+                    '<div style="font-size:2.5rem;margin-bottom:0.75rem;">📅</div>' +
+                    '<p>No upcoming appointments</p>' +
+                    '<small>Book your first appointment below!</small>' +
+                '</div>'
+            );
         }
 
-        return `
-        <div class="dashboard-content">
-                <div class="dashboard-header-section">
-                    <div>
-                        <h1 class="dashboard-title">Book Appointments 🏥</h1>
-                        <p class="dashboard-subtitle">Connect with trusted healthcare providers</p>
-                    </div>
-                </div>
+        return (
+            '<div class="dashboard-content">' +
+                '<div class="dashboard-header-section">' +
+                    '<div>' +
+                        '<h1 class="dashboard-title">Book Appointments 🏥</h1>' +
+                        '<p class="dashboard-subtitle">Connect with trusted specialists for your child\'s care</p>' +
+                    '</div>' +
+                    '<div class="clinic-stats-pill">' +
+                        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+                        'Verified Specialists' +
+                    '</div>' +
+                '</div>' +
 
-                <div class="dashboard-grid" style="grid-template-columns: 3fr 2fr; gap: 2rem;">
-                    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                        <!-- Filters & Search Bar -->
-                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                            <div style="position: relative; flex: 2; min-width: 200px;">
-                                <input type="text" id="spec-search" placeholder="Search by name, clinic..." onkeyup="window.renderSpecialists()"
-                                    style="width: 100%; padding: 1.15rem 1rem 1.15rem 3.5rem; border: 2px solid var(--slate-200); border-radius: 16px; font-size: 0.95rem; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='var(--blue-500)'" onblur="this.style.borderColor='var(--slate-200)'">
-                                <svg style="position: absolute; left: 1.25rem; top: 50%; transform:translateY(-50%); width: 1.25rem; height: 1.25rem; color: var(--slate-400);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="11" cy="11" r="8"></circle>
-                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                </svg>
-                            </div>
-                            <div style="flex: 1; min-width: 150px;">
-                                <select id="spec-filter" onchange="window.renderSpecialists()" style="width: 100%; padding: 1.15rem 1rem; border: 2px solid var(--slate-200); border-radius: 16px; font-size: 0.95rem; outline:none; background:#fff; cursor:pointer;">
-                                    <option value="">All Specialties</option>
-                                </select>
-                            </div>
-                            <div style="flex: 1; min-width: 150px;">
-                                <select id="loc-filter" onchange="window.renderSpecialists()" style="width: 100%; padding: 1.15rem 1rem; border: 2px solid var(--slate-200); border-radius: 16px; font-size: 0.95rem; outline:none; background:#fff; cursor:pointer;">
-                                    <option value="">All Locations</option>
-                                </select>
-                            </div>
-                        </div>
+                '<div class="clinic-layout">' +
 
-                        <!-- Doctors List -->
-                        <div id="specialist-list" style="display:flex; flex-direction:column; gap:1.25rem;">
-                            <div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.5rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                                Loading specialists...
-                            </div>
-                        </div>
-                    </div>
+                    '<!-- LEFT: Search + Doctor Cards -->' +
+                    '<div class="clinic-main-col">' +
 
-                    <!-- Side Panel: Upcoming -->
-                    <div>
-                        <div class="dashboard-card" style="position:sticky; top:2rem;">
-                            <div class="card-header" style="padding: 1.5rem 1.5rem 1rem;">
-                                <h3 class="card-title" style="font-size: 1.1rem; display:flex; align-items:center; gap:0.5rem;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg> Your Appointments</h3>
-                            </div>
-                            <div class="card-content" style="padding: 0 1.5rem 1.5rem;">
-                                ${apptHtml}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            </div>
-        `;
+                        '<!-- Filter Bar -->' +
+                        '<div class="clinic-filter-bar">' +
+                            '<div class="clinic-search-wrap">' +
+                                '<svg class="clinic-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
+                                '<input type="text" id="spec-search" placeholder="Search by name, specialty, or clinic…" class="clinic-search-input" oninput="window.renderSpecialists()">' +
+                            '</div>' +
+                            '<select id="spec-filter" class="clinic-filter-select" onchange="window.renderSpecialists()">' +
+                                '<option value="">All Specialties</option>' +
+                            '</select>' +
+                            '<select id="loc-filter" class="clinic-filter-select" onchange="window.renderSpecialists()">' +
+                                '<option value="">All Locations</option>' +
+                            '</select>' +
+                        '</div>' +
+
+                        '<!-- Doctor Cards -->' +
+                        '<div id="specialist-list" class="specialist-list-wrap">' +
+                            '<div class="doctor-loading-state">' +
+                                '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.5" style="animation:spin 1s linear infinite;display:block;margin:0 auto 1rem"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>' +
+                                '<p>Loading specialists…</p>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+
+                    '<!-- RIGHT: Sidebar -->' +
+                    '<div class="clinic-sidebar-col">' +
+                        '<div class="clinic-appt-sidebar">' +
+                            '<div class="clinic-appt-sidebar-header">' +
+                                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+                                'Your Appointments' +
+                            '</div>' +
+                            '<div class="clinic-appt-sidebar-body">' + apptHtml + '</div>' +
+                            '<div class="clinic-appt-sidebar-footer">' +
+                                '<p>Appointments are confirmed after booking and payment.</p>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        );
     }
+
 
     window.viewDoctorInfo = function (specialistId) {
         if (!window._allSpecialists) return;
@@ -3931,7 +4040,7 @@
     // ══════════════════════════════════════════════════════════════
     // ── Book Specialist Modal ──────────────────────────────────────
     // ══════════════════════════════════════════════════════════════
-    window.bookSpecialist = function (specId, specName) {
+    window.bookSpecialist = function (specId, specName, preDate) {
         let existing = document.getElementById('book-modal');
         if (existing) existing.remove();
 
@@ -4024,6 +4133,9 @@
         </div>
     </div>`;
         document.body.appendChild(modal);
+
+        // Pre-fill date if a slot was pre-selected
+        if (typeof preDate !== 'undefined' && preDate) { var el = document.getElementById('bk-date'); if (el) { el.value = preDate; el.min = preDate; } }
 
         window.goToBookingStep1 = function () {
             document.getElementById('bk-step-1').style.display = 'block';
