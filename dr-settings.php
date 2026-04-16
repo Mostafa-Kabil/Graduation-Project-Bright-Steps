@@ -336,7 +336,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                             <div class="settings-item" onclick="showProfileView()">
                                 <div class="settings-item-info">
                                     <div class="settings-item-label">My Profile</div>
-                                    <div class="settings-item-description">View and edit your personal & professional
+                                    <div class="settings-item-description">View and edit your personal &amp; professional
                                         information</div>
                                 </div>
                                 <svg class="settings-item-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -418,7 +418,6 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                             </div>
                         </div>
                     </div>
-
 
                 </div>
             </div>
@@ -929,6 +928,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
             window.location.href = 'logout.php';
         }
     </script>
+
 </body>
 
 </html>
