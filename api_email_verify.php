@@ -6,6 +6,7 @@
  */
 session_start();
 include 'connection.php';
+require_once __DIR__ . '/includes/mailer.php';
 header('Content-Type: application/json');
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -30,35 +31,21 @@ switch ($action) {
 
         // Build branded HTML email
         $subject = "Bright Steps – Verify Your Email";
-        $htmlBody = '
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:2rem;background:#f8fafc;border-radius:16px;">
-            <div style="text-align:center;margin-bottom:1.5rem;">
-                <h1 style="color:#6C63FF;margin:0;">Bright Steps</h1>
-                <p style="color:#64748b;font-size:14px;">Child Development Platform</p>
-            </div>
-            <div style="background:white;border-radius:12px;padding:2rem;text-align:center;">
-                <h2 style="color:#1e293b;margin:0 0 0.5rem;">Verify Your Email</h2>
-                <p style="color:#475569;margin:0 0 1.5rem;">Enter this code to complete your registration:</p>
+        $content = '
+            <p style="color:#475569;margin:0 0 1.5rem;">Enter this code to complete your registration:</p>
+            <div style="text-align:center;margin:1.5rem 0;">
                 <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#6C63FF;background:#f1f0ff;border-radius:12px;padding:1rem;display:inline-block;">
                     ' . $code . '
                 </div>
-                <p style="color:#94a3b8;font-size:13px;margin-top:1.5rem;">This code expires in 10 minutes.</p>
             </div>
-            <p style="text-align:center;color:#94a3b8;font-size:12px;margin-top:1rem;">If you didn\'t request this, ignore this email.</p>
-        </div>';
+            <p style="color:#94a3b8;font-size:0.875rem;">This code expires in 10 minutes.</p>';
+        
+        $htmlBody = buildEmailTemplate('Verify Your Email', $content);
+        $result = sendMail($email, $subject, $htmlBody);
 
-        $headers = "MIME-Version: 1.0\r\n";
-        $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-        $headers .= "From: Bright Steps <noreply@brightsteps.com>\r\n";
-
-        $sent = @mail($email, $subject, $htmlBody, $headers);
-
-        // Even if mail() fails (common on XAMPP without SMTP), still allow verification
-        // In production, you'd want to check $sent
         echo json_encode([
             'success' => true,
             'message' => 'Verification code sent to ' . $email,
-            // For development only – remove in production
             'dev_code' => $code
         ]);
         break;
@@ -130,27 +117,17 @@ switch ($action) {
         $_SESSION['reset_email'] = $email;
         $_SESSION['reset_expiry'] = time() + 600;
 
-        // Send email
-        $subject = "Bright Steps – Password Reset Code";
-        $htmlBody = '
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:2rem;background:#f8fafc;border-radius:16px;">
-            <div style="text-align:center;margin-bottom:1.5rem;">
-                <h1 style="color:#6C63FF;margin:0;">Bright Steps</h1>
-            </div>
-            <div style="background:white;border-radius:12px;padding:2rem;text-align:center;">
-                <h2 style="color:#1e293b;">Reset Your Password</h2>
-                <p style="color:#475569;">Enter this code on the reset page:</p>
+        $content = '
+            <p style="color:#475569;">Enter this code on the reset page:</p>
+            <div style="text-align:center;margin:1.5rem 0;">
                 <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#ef4444;background:#fef2f2;border-radius:12px;padding:1rem;display:inline-block;">
                     ' . $code . '
                 </div>
-                <p style="color:#94a3b8;font-size:13px;margin-top:1.5rem;">Expires in 10 minutes.</p>
             </div>
-        </div>';
-
-        $headers = "MIME-Version: 1.0\r\n";
-        $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-        $headers .= "From: Bright Steps <noreply@brightsteps.com>\r\n";
-        @mail($email, $subject, $htmlBody, $headers);
+            <p style="color:#94a3b8;font-size:0.875rem;">This code expires in 10 minutes.</p>';
+        
+        $htmlBody = buildEmailTemplate('Reset Your Password', $content);
+        sendMail($email, $subject, $htmlBody);
 
         echo json_encode([
             'success' => true,
@@ -160,6 +137,38 @@ switch ($action) {
         break;
 
     // ── Verify reset code & change password ────────────────────────
+    case 'verify_code':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $email = $input['email'] ?? '';
+        $code = $input['code'] ?? '';
+
+        if (!$email || !$code) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Email and code are required.']);
+            exit();
+        }
+
+        if (!isset($_SESSION['reset_code']) || $_SESSION['reset_email'] !== $email) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid reset session. Request a new code.']);
+            exit();
+        }
+
+        if (time() > $_SESSION['reset_expiry']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Code expired.']);
+            exit();
+        }
+
+        if ($_SESSION['reset_code'] !== $code) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid code.']);
+            exit();
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Code verified successfully.']);
+        exit();
+
     case 'reset':
         $input = json_decode(file_get_contents('php://input'), true);
         $email = $input['email'] ?? '';
@@ -207,6 +216,97 @@ switch ($action) {
         echo json_encode(['success' => true, 'message' => 'Password updated successfully!']);
         break;
 
+    // ── Send change password verification code ─────────────────────
+    case 'send-change-pw-code':
+        if (!isset($_SESSION['id']) || !isset($_SESSION['email'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Not authenticated']);
+            exit();
+        }
+        $email = $_SESSION['email'];
+        $code = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        $_SESSION['verify_code'] = $code;
+        $_SESSION['verify_email'] = $email;
+        $_SESSION['verify_expiry'] = time() + 600;
+
+        $subject = "Bright Steps – Password Change Verification";
+        $content = '
+            <p style="color:#475569;">Enter this code to change your password:</p>
+            <div style="text-align:center;margin:1.5rem 0;">
+                <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.5rem;color:#6C63FF;background:#f1f0ff;border-radius:12px;padding:1rem;display:inline-block;">
+                    ' . $code . '
+                </div>
+            </div>
+            <p style="color:#94a3b8;font-size:0.875rem;">This code expires in 10 minutes.</p>';
+        
+        $htmlBody = buildEmailTemplate('Change Password', $content);
+        sendMail($email, $subject, $htmlBody);
+        
+        echo json_encode(['success' => true, 'message' => 'Verification code sent.', 'dev_code' => $code]);
+        break;
+
+    // ── Verify code & Change password (authenticated) ───────────────
+    case 'change-password-verify':
+        if (!isset($_SESSION['id'])) {
+            http_response_code(401);
+            echo json_encode(['error' => 'Not authenticated']);
+            exit();
+        }
+
+        $input = json_decode(file_get_contents('php://input'), true);
+        $code = $input['code'] ?? '';
+        $currentPwd = $input['current_password'] ?? '';
+        $newPwd = $input['new_password'] ?? '';
+
+        if (!$code || !$currentPwd || !$newPwd) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Code, current password, and new password are required.']);
+            exit();
+        }
+
+        if (!isset($_SESSION['verify_code']) || $_SESSION['verify_email'] !== $_SESSION['email']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'No verification pending.']);
+            exit();
+        }
+
+        if (time() > $_SESSION['verify_expiry']) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Code expired. Request a new one.']);
+            exit();
+        }
+
+        if ($_SESSION['verify_code'] !== $code) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid verification code.']);
+            exit();
+        }
+
+        if (strlen($newPwd) < 8) {
+            http_response_code(400);
+            echo json_encode(['error' => 'New password must be at least 8 characters.']);
+            exit();
+        }
+
+        $stmt = $connect->prepare("SELECT password FROM users WHERE user_id = ?");
+        $stmt->execute([$_SESSION['id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!password_verify($currentPwd, $user['password'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Current password is incorrect.']);
+            exit();
+        }
+
+        $hashed = password_hash($newPwd, PASSWORD_DEFAULT);
+        $stmt = $connect->prepare("UPDATE users SET password = ? WHERE user_id = ?");
+        $stmt->execute([$hashed, $_SESSION['id']]);
+
+        unset($_SESSION['verify_code'], $_SESSION['verify_email'], $_SESSION['verify_expiry']);
+
+        echo json_encode(['success' => true, 'message' => 'Password changed successfully!']);
+        break;
+
     // ── Change password (authenticated) ────────────────────────────
     case 'change-password':
         if (!isset($_SESSION['id'])) {
@@ -250,6 +350,6 @@ switch ($action) {
 
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Invalid action. Use: send, verify, forgot, reset, change-password']);
+        echo json_encode(['error' => 'Invalid action. Use: send, verify, forgot, reset, change-password, send-change-pw-code, change-password-verify']);
         break;
 }

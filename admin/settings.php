@@ -11,6 +11,22 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Helper: log activity with user info
+function logActivity($connect, $type, $desc, $relatedUserId = null) {
+    $adminId = $_SESSION['id'] ?? null;
+    $userName = '';
+    $userRole = 'admin';
+    if ($adminId) {
+        $s = $connect->prepare("SELECT first_name, last_name FROM users WHERE user_id = :id");
+        $s->execute(['id' => $adminId]);
+        $u = $s->fetch(PDO::FETCH_ASSOC);
+        if ($u) $userName = $u['first_name'] . ' ' . $u['last_name'];
+    }
+    $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+    $stmt = $connect->prepare("INSERT INTO activity_log (activity_type, description, related_user_id, user_name, user_role, ip_address) VALUES (:type, :desc, :uid, :uname, :urole, :ip)");
+    $stmt->execute(['type' => $type, 'desc' => $desc, 'uid' => $relatedUserId, 'uname' => $userName, 'urole' => $userRole, 'ip' => $ip]);
+}
+
 try {
     if ($method === 'GET') {
         $action = $_GET['action'] ?? 'profile';
@@ -37,6 +53,14 @@ try {
             }
 
             echo json_encode(['success' => true, 'config' => $settings]);
+        } elseif ($action === 'notifications') {
+            $stmt = $connect->prepare("SELECT setting_key, setting_value FROM user_settings WHERE user_id = ?");
+            $stmt->execute([$_SESSION['id']]);
+            $settings = [];
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $settings[$row['setting_key']] = $row['setting_value'];
+            }
+            echo json_encode(['success' => true, 'settings' => $settings]);
         }
 
     } elseif ($method === 'POST') {
@@ -45,48 +69,7 @@ try {
             $data = $_POST;
         $action = $data['action'] ?? '';
 
-        if ($action === 'update_profile') {
-            $adminId = $_SESSION['id'];
-            $email = $data['email'] ?? '';
-            $password = $data['password'] ?? '';
-
-            $fields = [];
-            $params = ['id' => $adminId];
-
-            if ($email !== '') {
-                // Check email uniqueness
-                $check = $connect->prepare("SELECT user_id FROM users WHERE email = :email AND user_id != :id");
-                $check->execute(['email' => $email, 'id' => $adminId]);
-                if ($check->fetch()) {
-                    echo json_encode(['success' => false, 'error' => 'Email already in use']);
-                    exit;
-                }
-                $fields[] = "email = :email";
-                $params['email'] = $email;
-            }
-
-            if ($password !== '') {
-                $fields[] = "password = :pass";
-                $params['pass'] = password_hash($password, PASSWORD_DEFAULT);
-            }
-
-            if (empty($fields)) {
-                echo json_encode(['success' => false, 'error' => 'No fields to update']);
-                exit;
-            }
-
-            $sql = "UPDATE users SET " . implode(', ', $fields) . " WHERE user_id = :id";
-            $stmt = $connect->prepare($sql);
-            $stmt->execute($params);
-
-            // Update session email if changed
-            if ($email !== '') {
-                $_SESSION['email'] = $email;
-            }
-
-            echo json_encode(['success' => true, 'message' => 'Profile updated']);
-
-        } elseif ($action === 'update_config') {
+        if ($action === 'update_config') {
             $key = $data['setting_key'] ?? '';
             $value = $data['setting_value'] ?? '';
 
@@ -98,18 +81,19 @@ try {
             $stmt = $connect->prepare("INSERT INTO platform_settings (setting_key, setting_value) VALUES (:key, :val) ON DUPLICATE KEY UPDATE setting_value = :val2");
             $stmt->execute(['key' => $key, 'val' => $value, 'val2' => $value]);
 
+            logActivity($connect, 'config_updated', "Platform setting updated: {$key} = {$value}");
+
             echo json_encode(['success' => true, 'message' => 'Setting updated']);
 
         } elseif ($action === 'purge_inactive') {
             // Delete users who have been inactive for 6+ months (status = 'inactive')
-            // Only delete parents, not admins or doctors
+            // Only delete parents, not admins or specialists
             $stmt = $connect->query("SELECT COUNT(*) as c FROM users WHERE status = 'inactive' AND role = 'parent' AND created_at < NOW() - INTERVAL 6 MONTH");
             $count = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
 
             $stmt = $connect->query("DELETE FROM users WHERE status = 'inactive' AND role = 'parent' AND created_at < NOW() - INTERVAL 6 MONTH");
 
-            $logStmt = $connect->prepare("INSERT INTO activity_log (activity_type, description) VALUES ('purge_inactive', :desc)");
-            $logStmt->execute(['desc' => "Purged {$count} inactive users"]);
+            logActivity($connect, 'purge_inactive', "Purged {$count} inactive users");
 
             echo json_encode(['success' => true, 'message' => "Purged {$count} inactive users"]);
 
@@ -117,10 +101,35 @@ try {
             $stmt = $connect->query("UPDATE points_wallet SET total_points = 0");
             $affected = $stmt->rowCount();
 
-            $logStmt = $connect->prepare("INSERT INTO activity_log (activity_type, description) VALUES ('points_reset', :desc)");
-            $logStmt->execute(['desc' => "All points wallets reset ({$affected} wallets affected)"]);
+            logActivity($connect, 'points_reset', "All points wallets reset ({$affected} wallets affected)");
 
             echo json_encode(['success' => true, 'message' => "Reset {$affected} wallets to 0 points"]);
+
+        } elseif ($action === 'update_profile') {
+            $firstName = $data['first_name'] ?? '';
+            $lastName = $data['last_name'] ?? '';
+            if (!$firstName || !$lastName) {
+                echo json_encode(['success' => false, 'error' => 'First and last name required']);
+                exit;
+            }
+            $stmt = $connect->prepare("UPDATE users SET first_name = ?, last_name = ? WHERE user_id = ?");
+            $stmt->execute([$firstName, $lastName, $_SESSION['id']]);
+            $_SESSION['fname'] = $firstName;
+            $_SESSION['lname'] = $lastName;
+            logActivity($connect, 'config_updated', "Admin profile updated: {$firstName} {$lastName}");
+            echo json_encode(['success' => true, 'message' => 'Profile updated']);
+
+        } elseif ($action === 'update_notifications') {
+            $key = $data['key'] ?? '';
+            $value = $data['value'] ?? '0';
+            $validKeys = ['push_notifications', 'email_updates', 'system_alerts', 'weekly_reports'];
+            if (!in_array($key, $validKeys)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid setting']);
+                exit;
+            }
+            $stmt = $connect->prepare("INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value = ?");
+            $stmt->execute([$_SESSION['id'], $key, $value, $value]);
+            echo json_encode(['success' => true]);
 
         } else {
             echo json_encode(['success' => false, 'error' => 'Unknown action']);

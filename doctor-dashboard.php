@@ -1,14 +1,29 @@
 <?php
+session_start();
+require_once 'connection.php';
+
+// ─── Auth: only authenticated doctors/specialists can access ─────────────
+$isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') || isset($_GET['ajax']);
+if (!$isAjax) {
+    // For HTML page requests: enforce login
+    if (!isset($_SESSION['id']) || ($_SESSION['role'] !== 'doctor' && $_SESSION['role'] !== 'specialist')) {
+        header('Location: doctor-login.php');
+        exit;
+    }
+}
+
+// Session-derived variables for the HTML view
+$sessionSpecialistId = intval($_SESSION['specialist_id'] ?? $_SESSION['id'] ?? 0);
+$sessionDoctorName = 'Dr. ' . htmlspecialchars($_SESSION['fname'] ?? '') . ' ' . htmlspecialchars($_SESSION['lname'] ?? '');
+$sessionDoctorInitials = strtoupper(substr($_SESSION['fname'] ?? 'D', 0, 1) . substr($_SESSION['lname'] ?? 'S', 0, 1));
+$sessionSpecialization = htmlspecialchars($_SESSION['specialization'] ?? 'Specialist');
+
 // ═══════════════════════════════════════════════════════
 // Doctor Dashboard — Backend API Handler
 // Handles AJAX requests for Reports & Messages
 // ═══════════════════════════════════════════════════════
-if (
-    isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest'
-    || isset($_GET['ajax'])
-) {
+if ($isAjax) {
     header('Content-Type: application/json');
-    require_once 'connection.php';
 
     $method = $_SERVER['REQUEST_METHOD'];
     $section = $_GET['section'] ?? '';
@@ -59,6 +74,40 @@ if (
                 ");
                 $stmt->execute([':sid' => $specialist_id]);
                 echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                exit;
+
+            } elseif ($action === 'get_report_stats') {
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'specialist_id required']);
+                    exit;
+                }
+                // Count doctor reports
+                $stmt = $connect->prepare("
+                    SELECT
+                        COUNT(*) AS total_reports,
+                        SUM(CASE WHEN created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS this_month
+                    FROM doctor_report WHERE specialist_id = :sid
+                ");
+                $stmt->execute([':sid' => $specialist_id]);
+                $dr_stats = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                // Count shared child reports (pending = no doctor_report reply)
+                $stmt2 = $connect->prepare("
+                    SELECT COUNT(*) AS shared_total FROM child_generated_system_report csr
+                    JOIN child c ON csr.child_id = c.child_id
+                    JOIN parent p ON c.parent_id = p.parent_id
+                    JOIN appointment a ON a.parent_id = p.parent_id AND a.specialist_id = :sid
+                ");
+                $stmt2->execute([':sid' => $specialist_id]);
+                $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
+
+                echo json_encode(['success' => true, 'data' => [
+                    'total_reports' => intval($dr_stats['total_reports'] ?? 0),
+                    'this_month' => intval($dr_stats['this_month'] ?? 0),
+                    'shared_total' => intval($shared_stats['shared_total'] ?? 0),
+                    'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
+                ]]);
                 exit;
             }
 
@@ -435,6 +484,17 @@ if (
                 $sql = "UPDATE appointment SET " . implode(', ', $fields) . " WHERE appointment_id = :aid";
                 $stmt = $connect->prepare($sql);
                 $stmt->execute($params);
+
+                if (isset($input['status'])) {
+                    $pst = $connect->prepare("SELECT p.user_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                    $pst->execute([$appointment_id]);
+                    $uid = $pst->fetchColumn();
+                    if ($uid) {
+                        $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                        $nst->execute([$uid, 'Appointment Update', "Your appointment status was updated to: " . $input['status']]);
+                    }
+                }
+
                 echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
                 exit;
 
@@ -446,6 +506,15 @@ if (
                 }
                 $stmt = $connect->prepare("UPDATE appointment SET status = 'cancelled' WHERE appointment_id = :aid");
                 $stmt->execute([':aid' => $appointment_id]);
+
+                $pst = $connect->prepare("SELECT p.user_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                $pst->execute([$appointment_id]);
+                $uid = $pst->fetchColumn();
+                if ($uid) {
+                    $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                    $nst->execute([$uid, 'Appointment Cancelled', "Your appointment has been cancelled by the doctor."]);
+                }
+
                 echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
                 exit;
             }
@@ -565,9 +634,9 @@ if (
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doctor Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/doctor.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=8">
 </head>
 
 <body>
@@ -579,10 +648,10 @@ if (
                     <img src="assets/logo.png" alt="Bright Steps" style="height: 2.5rem; width: auto;">
                 </a>
                 <div class="user-profile">
-                    <div class="user-avatar doctor-avatar">DS</div>
+                    <div class="user-avatar doctor-avatar"><?php echo $sessionDoctorInitials; ?></div>
                     <div class="user-info">
-                        <div class="user-name">Dr. Sarah Mitchell</div>
-                        <div class="user-badge-text">Pediatrician</div>
+                        <div class="user-name"><?php echo $sessionDoctorName; ?></div>
+                        <div class="user-badge-text"><?php echo $sessionSpecialization; ?></div>
                     </div>
                     <div class="verified-badge" title="Verified Provider">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -751,7 +820,7 @@ if (
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
 
     <!-- Language Toggle -->
     <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
@@ -762,10 +831,19 @@ if (
         </svg>
         عربي
     </button>
-    <script src="scripts/language-toggle.js?v=5"></script>
+    <script src="scripts/language-toggle.js?v=8"></script>
 
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/doctor-dashboard.js?v=6"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js?v=8"></script>
+    <script>
+        // Session-based specialist ID — overrides the hardcoded constant in doctor-dashboard.js
+        const SESSION_SPECIALIST_ID = <?php echo $sessionSpecialistId; ?>;
+        const SESSION_DOCTOR_NAME = <?php echo json_encode($sessionDoctorName); ?>;
+        const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
+        const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
+    </script>
+    <script src="scripts/doctor-dashboard.js?v=9"></script>
+    
 </body>
 
 </html>

@@ -14,11 +14,12 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/doctor.css">
-    <link rel="stylesheet" href="styles/clinic.css">
-    <link rel="stylesheet" href="styles/admin.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/clinic.css?v=8">
+    <link rel="stylesheet" href="styles/admin.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
 </head>
 
 <body>
@@ -96,6 +97,49 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                     </svg>
                     <span>Reports</span>
                 </button>
+
+                <button class="nav-item" data-view="notifications_mgmt">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                    <span>Notifications</span>
+                </button>
+                <button class="nav-item" data-view="moderation">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    <span>Moderation</span>
+                </button>
+                <button class="nav-item" data-view="system_health">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <span>System Health</span>
+                </button>
+                <button class="nav-item" data-view="roles">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="8.5" cy="7" r="4"/>
+                        <path d="M20 8v6M23 11h-6"/>
+                    </svg>
+                    <span>Roles</span>
+                </button>
+                <button class="nav-item" data-view="tickets">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>Tickets</span>
+                </button>
+                <button class="nav-item" data-view="banners">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                        <line x1="4" y1="22" x2="4" y2="15"/>
+                    </svg>
+                    <span>Banners</span>
+                </button>
             </nav>
 
             <div class="sidebar-footer">
@@ -155,10 +199,18 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
         عربي
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/navigation.js"></script>
-    <script src="scripts/admin-dashboard.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js?v=8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js?v=8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js?v=8"></script>
+    <script src="scripts/admin-dashboard.js?v=8"></script>
+    <script src="scripts/admin-views-extended.js?v=8"></script>
+    <script src="scripts/admin-views-part2.js?v=8"></script>
+    <script src="scripts/admin-views-part3.js?v=8"></script>
+    <script src="scripts/admin-views-part4.js?v=8"></script>
 </body>
 
 </html>

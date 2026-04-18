@@ -64,6 +64,18 @@ function errorHTML(msg) {
         </div></div>`;
 }
 
+function statCard(color, icon, value, label) {
+    return `<div class="stat-card stat-card-${color}">
+        <div class="stat-icon-bg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${icon}</svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">${value}</div>
+            <div class="stat-label">${label}</div>
+        </div>
+    </div>`;
+}
+
 function toast(msg, type = 'success') {
     document.querySelectorAll('.clinic-toast').forEach(t => t.remove());
     const t = document.createElement('div');
@@ -77,9 +89,31 @@ function toast(msg, type = 'success') {
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); }, 3200);
 }
 
-function apiGet(url) { return fetch(url).then(r => r.json()); }
+function apiGet(url) { 
+    return fetch(url)
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP error ${r.status}`);
+            return r.json();
+        })
+        .catch(err => {
+            console.error('API GET Error:', err);
+            throw err;
+        });
+}
 function apiPost(url, body) {
-    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+    return fetch(url, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(body) 
+    })
+    .then(r => {
+        if (!r.ok) throw new Error(`HTTP error ${r.status}`);
+        return r.json();
+    })
+    .catch(err => {
+        console.error('API POST Error:', err);
+        throw err;
+    });
 }
 
 function calcAge(year, month, day) {
@@ -112,10 +146,17 @@ document.addEventListener('click', e => {
 function loadSpecialistsView(main) {
     apiGet(`clinic-dashboard.php?ajax=1&section=specialists&action=get_specialists&clinic_id=${CLINIC_ID}`)
         .then(res => {
-            if (!res.success) { main.innerHTML = errorHTML('Failed to load specialists'); return; }
+            if (!res.success) { 
+                main.innerHTML = errorHTML(res.error || 'Failed to load specialists'); 
+                return; 
+            }
             renderSpecialists(main, res.data, res.stats);
         })
-        .catch(() => { main.innerHTML = errorHTML('Connection error'); });
+        .catch(err => { 
+            main.innerHTML = errorHTML(err.message === 'Unexpected token < in JSON at position 0' 
+                ? 'Server Error (Invalid JSON)' 
+                : 'Connection error: ' + err.message); 
+        });
 }
 
 function renderSpecialists(main, list, stats) {
@@ -862,7 +903,40 @@ function deactivateClinic() {
 }
 
 function handleLogout() {
-    if (confirm('Log out of the clinic dashboard?')) {
-        window.location.href = 'logout.php';
+    const existing = document.getElementById('logout-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'logout-modal';
+    modal.innerHTML = `
+        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+        <div class="logout-dialog">
+                <div class="logout-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                    </svg>
+                </div>
+                <h3>Are you sure you want to log out?</h3>
+                <p>You will need to sign in again to access your dashboard.</p>
+                <div class="logout-actions">
+                    <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                    <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                </div>
+            </div>
+    `;
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('show'));
+}
+
+function closeLogoutModal() {
+    const modal = document.getElementById('logout-modal');
+    if (modal) {
+        modal.classList.remove('show');
+        modal.classList.add('hide');
+        setTimeout(() => modal.remove(), 300);
     }
+}
+
+function confirmLogout() {
+    window.location.href = 'logout.php';
 }

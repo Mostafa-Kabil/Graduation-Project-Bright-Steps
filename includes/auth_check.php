@@ -1,7 +1,10 @@
 <?php
-session_start();
-include __DIR__ . "/../connection.php";
-if (!isset($_SESSION['email'])) {
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+require_once "connection.php";
+
+if (!isset($_SESSION['email']) || $_SESSION['role'] !== 'parent') {
     header("Location: login.php");
     exit();
 }

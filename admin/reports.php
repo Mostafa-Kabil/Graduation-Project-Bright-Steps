@@ -76,7 +76,6 @@ try {
         $pctReview = $totalChildren > 0 ? round(($needsReview / $totalChildren) * 100) : 0;
         $pctAttention = $totalChildren > 0 ? round(($needsAttention / $totalChildren) * 100) : 0;
 
-        // Ensure percentages sum to 100 if there are children
         if ($totalChildren > 0 && ($pctOnTrack + $pctReview + $pctAttention) !== 100) {
             $pctOnTrack = 100 - $pctReview - $pctAttention;
         }
@@ -91,7 +90,7 @@ try {
         ]);
 
     } elseif ($action === 'export') {
-        // Export report data as CSV-ready JSON
+        // Export report data as JSON (client-side will convert to PDF/Excel/CSV)
         $period = $_GET['period'] ?? '30';
         $interval = (int) $period;
 
@@ -106,6 +105,114 @@ try {
         $records = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         echo json_encode(['success' => true, 'records' => $records]);
+
+    } elseif ($action === 'children_list') {
+        // Get list of children for dropdown filter
+        $stmt = $connect->query("
+            SELECT c.child_id, c.first_name, c.last_name, 
+                   CONCAT(u.first_name, ' ', u.last_name) as parent_name
+            FROM child c
+            JOIN parent p ON c.parent_id = p.parent_id
+            JOIN users u ON p.parent_id = u.user_id
+            ORDER BY c.first_name ASC
+        ");
+        $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'children' => $children]);
+
+    } elseif ($action === 'specialists_list') {
+        // Get list of specialists for dropdown filter
+        $stmt = $connect->query("
+            SELECT s.specialist_id, 
+                   CONCAT(u.first_name, ' ', u.last_name) as specialist_name,
+                   s.specialization
+            FROM specialist s
+            JOIN users u ON s.specialist_id = u.user_id
+            ORDER BY u.first_name ASC
+        ");
+        $specialists = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'specialists' => $specialists]);
+
+    } elseif ($action === 'behavioral_progress') {
+        // Get behavioral progress data for charts
+        $childId = isset($_GET['child_id']) ? (int) $_GET['child_id'] : null;
+        $specialistId = isset($_GET['specialist_id']) ? (int) $_GET['specialist_id'] : null;
+        $dateFrom = $_GET['date_from'] ?? null;
+        $dateTo = $_GET['date_to'] ?? null;
+
+        // Build child behavioral data query
+        $sql = "
+            SELECT c.child_id, c.first_name, c.last_name,
+                (SELECT COUNT(*) FROM appointment a WHERE a.parent_id = c.parent_id" .
+                ($specialistId ? " AND a.specialist_id = :spec_appt" : "") . ") as therapy_sessions,
+                (SELECT COUNT(*) FROM child_exhibited_behavior ceb WHERE ceb.child_id = c.child_id) as total_behaviors,
+                (SELECT COUNT(*) FROM child_exhibited_behavior ceb2 WHERE ceb2.child_id = c.child_id AND ceb2.severity IN ('low', 'mild')) as positive_behaviors,
+                (SELECT COUNT(*) FROM child_milestones cm WHERE cm.child_id = c.child_id) as milestones_achieved,
+                (SELECT COUNT(DISTINCT DATE(cl.login_at)) FROM child_last_login cl WHERE cl.child_id = c.child_id" .
+                ($dateFrom ? " AND cl.login_at >= :date_from_login" : "") .
+                ($dateTo ? " AND cl.login_at <= :date_to_login" : "") . ") as attendance_days,
+                (SELECT COUNT(*) FROM growth_record gr WHERE gr.child_id = c.child_id) as growth_records
+            FROM child c
+            WHERE 1=1
+        ";
+        $params = [];
+
+        if ($childId) {
+            $sql .= " AND c.child_id = :child_id";
+            $params['child_id'] = $childId;
+        }
+
+        if ($specialistId) {
+            $params['spec_appt'] = $specialistId;
+        }
+
+        if ($dateFrom) {
+            $params['date_from_login'] = $dateFrom;
+        }
+        if ($dateTo) {
+            $params['date_to_login'] = $dateTo;
+        }
+
+        $sql .= " ORDER BY c.first_name ASC LIMIT 50";
+
+        $stmt = $connect->prepare($sql);
+        $stmt->execute($params);
+        $children = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Calculate improvement score for each child
+        foreach ($children as &$child) {
+            $total = (int) $child['total_behaviors'];
+            $positive = (int) $child['positive_behaviors'];
+            $milestones = (int) $child['milestones_achieved'];
+            // Improvement score: weighted combination of positive behaviors and milestones
+            $child['improvement_score'] = $total > 0
+                ? min(100, round(($positive / $total) * 60 + min($milestones * 5, 40)))
+                : ($milestones > 0 ? min(100, $milestones * 10) : 0);
+            $child['activity_engagement'] = (int) $child['growth_records'] + (int) $child['attendance_days'];
+        }
+
+        // Get behavior category distribution
+        $catSql = "
+            SELECT bc.category_name, COUNT(ceb.child_id) as count
+            FROM child_exhibited_behavior ceb
+            JOIN behavior b ON ceb.behavior_id = b.behavior_id
+            JOIN behavior_category bc ON b.category_id = bc.category_id
+        ";
+        $catParams = [];
+        if ($childId) {
+            $catSql .= " WHERE ceb.child_id = :child_id";
+            $catParams['child_id'] = $childId;
+        }
+        $catSql .= " GROUP BY bc.category_name ORDER BY count DESC";
+        
+        $catStmt = $connect->prepare($catSql);
+        $catStmt->execute($catParams);
+        $categoryDist = $catStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode([
+            'success' => true,
+            'children' => $children,
+            'category_distribution' => $categoryDist
+        ]);
 
     } else {
         echo json_encode(['success' => false, 'error' => 'Unknown action']);

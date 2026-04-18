@@ -6,9 +6,9 @@
         </a>
         <div class="user-profile">
             <?php
-            $text1 = $_SESSION['fname'];
+            $text1 = $_SESSION['fname'] ?? 'U';
             $fletter = $text1[0];
-            $text2 = $_SESSION['lname'];
+            $text2 = $_SESSION['lname'] ?? 'S';
             $lletter = $text2[0];
             ?>
             <div class="user-avatar">
@@ -16,11 +16,11 @@
             </div>
             <div class="user-info">
                 <div class="user-name">
-                    <?php echo ($_SESSION['fname']) ?>
-                    <?php echo ($_SESSION['lname']) ?>
+                    <?php echo htmlspecialchars($_SESSION['fname'] ?? '') ?>
+                    <?php echo htmlspecialchars($_SESSION['lname'] ?? '') ?>
                 </div>
                 <div class="user-badge-text">
-                    <?php echo ($planname ?? 'Free') ?> Member
+                    <?php echo htmlspecialchars($planname ?? 'Free') ?> Member
                 </div>
             </div>
             <div class="user-badge-icon">
@@ -49,7 +49,7 @@
             </svg>
             <span>عربي</span>
         </button>
-        <button class="nav-item" data-view="settings" onclick="switchView('settings')">
+        <button class="nav-item" data-view="settings" onclick="window.location.href='settings.php'">
             <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M12 1v6m0 6v6m-9-9h6m6 0h6" />

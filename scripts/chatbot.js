@@ -1,7 +1,7 @@
 /**
- * Bright Steps – Chatbot Widget (Self-Contained)
- * Runs entirely in the browser — no Python server needed!
- * Knowledge base is embedded directly in JavaScript.
+ * Bright Steps – Chatbot Widget (Hybrid: Embedded KB + OpenAI Fallback)
+ * First pass: keyword-matching against a rich embedded knowledge base.
+ * Second pass: if no confident match or explicit child-data question, calls OpenAI via api_chatbot.php.
  */
 
 (function () {
@@ -9,210 +9,26 @@
     const KNOWLEDGE = {
         greetings: {
             keywords: ["hello", "hi", "hey", "good morning", "good evening", "help", "start"],
-            response:
-                "Hello! 👋 I'm the Bright Steps Assistant. I can help you with:\n\n" +
-                "🏃 <strong>Motor skills</strong> milestones\n" +
-                "🗣️ <strong>Speech & language</strong> development\n" +
-                "🧠 <strong>Cognitive</strong> milestones\n" +
-                "🍼 <strong>Feeding & nutrition</strong> tips\n" +
-                "😴 <strong>Sleep</strong> guidance\n" +
-                "📊 <strong>Growth</strong> tracking help\n" +
-                "👶 <strong>General</strong> parenting tips\n\n" +
-                "Just ask me anything about your child's development!"
-        },
-        motor_skills: {
-            keywords: ["motor", "crawl", "walk", "sit", "stand", "roll", "run", "jump", "climb", "balance", "coordination", "movement", "physical", "step"],
-            response:
-                "<strong>Motor Skills Milestones by Age:</strong>\n\n" +
-                "🔹 <strong>0-3 months:</strong> Lifts head during tummy time, moves arms and legs\n" +
-                "🔹 <strong>4-6 months:</strong> Rolls over, reaches for toys, sits with support\n" +
-                "🔹 <strong>7-9 months:</strong> Sits alone, starts crawling, pulls to stand\n" +
-                "🔹 <strong>10-12 months:</strong> Stands alone, may take first steps\n" +
-                "🔹 <strong>13-18 months:</strong> Walks independently, starts climbing\n" +
-                "🔹 <strong>19-24 months:</strong> Runs, kicks a ball, walks up stairs\n" +
-                "🔹 <strong>2-3 years:</strong> Jumps, pedals tricycle, catches large ball\n" +
-                "🔹 <strong>3-5 years:</strong> Hops on one foot, skips, rides bike with training wheels\n\n" +
-                "💡 <strong>Tip:</strong> Encourage tummy time daily and provide safe spaces for exploring movement!"
-        },
-        speech_language: {
-            keywords: ["speech", "talk", "word", "language", "babble", "sentence", "speak", "communicate", "verbal", "vocabulary", "say", "first word"],
-            response:
-                "<strong>Speech & Language Milestones:</strong>\n\n" +
-                "🔹 <strong>0-3 months:</strong> Coos, makes vowel sounds\n" +
-                "🔹 <strong>4-6 months:</strong> Babbles (ba-ba, da-da), laughs\n" +
-                "🔹 <strong>7-9 months:</strong> Responds to name, understands 'no'\n" +
-                "🔹 <strong>10-12 months:</strong> Says first words (mama, dada)\n" +
-                "🔹 <strong>13-18 months:</strong> Uses 10-20 words, points to objects\n" +
-                "🔹 <strong>19-24 months:</strong> Combines 2 words, 50+ word vocabulary\n" +
-                "🔹 <strong>2-3 years:</strong> 3-4 word sentences, asks questions\n" +
-                "🔹 <strong>3-5 years:</strong> Tells stories, uses past tense, 1000+ words\n\n" +
-                "💡 <strong>Tips to boost speech:</strong>\n" +
-                "• Read aloud daily 📚\n" +
-                "• Narrate your activities\n" +
-                "• Ask open-ended questions\n" +
-                "• Sing songs together 🎵"
-        },
-        cognitive: {
-            keywords: ["cognitive", "brain", "think", "learn", "smart", "intelligence", "problem", "solve", "memory", "attention", "focus", "count", "color", "shape"],
-            response:
-                "<strong>Cognitive Development Milestones:</strong>\n\n" +
-                "🔹 <strong>0-3 months:</strong> Tracks objects with eyes, recognizes faces\n" +
-                "🔹 <strong>4-6 months:</strong> Explores with hands and mouth\n" +
-                "🔹 <strong>7-9 months:</strong> Object permanence (knows hidden toys still exist)\n" +
-                "🔹 <strong>10-12 months:</strong> Imitates actions, finds hidden objects\n" +
-                "🔹 <strong>13-18 months:</strong> Simple problem-solving, stacks blocks\n" +
-                "🔹 <strong>19-24 months:</strong> Sorts shapes, begins pretend play\n" +
-                "🔹 <strong>2-3 years:</strong> Counts to 10, knows some colors\n" +
-                "🔹 <strong>3-5 years:</strong> Understands time concepts, writes name\n\n" +
-                "💡 <strong>Boost cognitive development with:</strong>\n" +
-                "• Puzzles and building blocks 🧩\n" +
-                "• Sorting games (by color, shape, size)\n" +
-                "• Counting during daily activities\n" +
-                "• Reading interactive books"
-        },
-        feeding: {
-            keywords: ["feed", "food", "eat", "nutrition", "solid", "breast", "formula", "diet", "meal", "snack", "picky", "allergy", "vitamin", "milk", "weaning"],
-            response:
-                "<strong>Feeding & Nutrition Guide:</strong>\n\n" +
-                "🍼 <strong>0-6 months:</strong> Breast milk or formula only\n" +
-                "🥣 <strong>6 months:</strong> Introduce single-ingredient purees (rice cereal, sweet potato, banana)\n" +
-                "🥕 <strong>7-8 months:</strong> Thicker purees, soft finger foods\n" +
-                "🍌 <strong>9-11 months:</strong> Chopped soft foods, self-feeding practice\n" +
-                "🍽️ <strong>12+ months:</strong> Family foods (cut small), transition from bottle\n" +
-                "🥗 <strong>2-5 years:</strong> Balanced meals, introduce variety\n\n" +
-                "💡 <strong>Tips for picky eaters:</strong>\n" +
-                "• Offer new foods 10-15 times before giving up\n" +
-                "• Let them see you eat the same food\n" +
-                "• Make food fun with shapes and colors 🌈\n" +
-                "• Don't force — keep mealtimes positive"
-        },
-        sleep: {
-            keywords: ["sleep", "nap", "bedtime", "night", "wake", "routine", "tired", "rest", "crib", "bed"],
-            response:
-                "<strong>Sleep Guidelines by Age:</strong>\n\n" +
-                "😴 <strong>Newborn (0-3 months):</strong> 14-17 hours total\n" +
-                "😴 <strong>4-11 months:</strong> 12-15 hours (including 2-3 naps)\n" +
-                "😴 <strong>1-2 years:</strong> 11-14 hours (including 1-2 naps)\n" +
-                "😴 <strong>3-5 years:</strong> 10-13 hours (may drop nap)\n\n" +
-                "💡 <strong>Healthy sleep tips:</strong>\n" +
-                "• Consistent bedtime routine (bath → book → bed)\n" +
-                "• Dark, cool room with white noise\n" +
-                "• Put baby down drowsy but awake\n" +
-                "• Avoid screens 1 hour before bed 📱❌\n" +
-                "• Same wake time every day\n\n" +
-                "⚠️ <strong>Consult your pediatrician</strong> if your child snores loudly, has frequent night terrors, or excessive daytime sleepiness."
-        },
-        growth: {
-            keywords: ["growth", "height", "weight", "tall", "heavy", "percentile", "chart", "who", "measure", "grow", "head circumference", "bmi"],
-            response:
-                "<strong>Growth Tracking Tips:</strong>\n\n" +
-                "📊 Your child's growth is tracked using WHO standards.\n\n" +
-                "<strong>Key measurements:</strong>\n" +
-                "• <strong>Height/Length</strong> — Track monthly for infants, quarterly for toddlers\n" +
-                "• <strong>Weight</strong> — Most variable, don't worry about daily changes\n" +
-                "• <strong>Head circumference</strong> — Important in first 2 years\n\n" +
-                "<strong>Understanding percentiles:</strong>\n" +
-                "• Percentiles show how your child compares to others the same age\n" +
-                "• <strong>Consistent growth</strong> on their curve matters most\n" +
-                "• A sudden jump or drop is worth discussing with your doctor\n\n" +
-                "💡 Use the <strong>Growth Chart</strong> on your dashboard to visualize trends!"
-        },
-        social_emotional: {
-            keywords: ["social", "emotional", "friend", "play", "share", "cry", "tantrum", "behavior", "empathy", "feeling", "anxiety", "separation", "emotion"],
-            response:
-                "<strong>Social-Emotional Milestones:</strong>\n\n" +
-                "🔹 <strong>0-3 months:</strong> Social smile, calms when picked up\n" +
-                "🔹 <strong>4-6 months:</strong> Laughs, enjoys social play\n" +
-                "🔹 <strong>7-12 months:</strong> Stranger anxiety, attachment to caregivers\n" +
-                "🔹 <strong>1-2 years:</strong> Parallel play, shows empathy, has tantrums\n" +
-                "🔹 <strong>2-3 years:</strong> Takes turns, begins cooperative play\n" +
-                "🔹 <strong>3-5 years:</strong> Has friends, follows rules, expresses complex emotions\n\n" +
-                "💡 <strong>Supporting emotional development:</strong>\n" +
-                "• Name emotions: 'I can see you're frustrated'\n" +
-                "• Validate feelings before problem-solving\n" +
-                "• Model healthy emotional expression\n" +
-                "• Read books about feelings 📚"
-        },
-        self_care: {
-            keywords: ["potty", "toilet", "train", "dress", "brush", "teeth", "wash", "hand", "shoe", "independent", "self care"],
-            response:
-                "<strong>Self-Care Milestones:</strong>\n\n" +
-                "🔹 <strong>6-12 months:</strong> Drinks from a cup with help\n" +
-                "🔹 <strong>12-18 months:</strong> Uses a spoon, helps with undressing\n" +
-                "🔹 <strong>18-24 months:</strong> Washes hands with help, brushes teeth with help\n" +
-                "🔹 <strong>2-3 years:</strong> Toilet training readiness, puts on simple clothes\n" +
-                "🔹 <strong>3-4 years:</strong> Dresses independently, uses toilet alone\n" +
-                "🔹 <strong>4-5 years:</strong> Brushes teeth alone, ties shoelaces\n\n" +
-                "💡 <strong>Potty training tips:</strong>\n" +
-                "• Wait for readiness signs (stays dry 2+ hours, interest in toilet)\n" +
-                "• Use positive reinforcement 🌟\n" +
-                "• Expect accidents — stay patient!\n" +
-                "• Keep a consistent schedule"
-        },
-        safety: {
-            keywords: ["safe", "danger", "childproof", "poison", "fall", "choke", "burn", "drown", "emergency", "first aid", "accident"],
-            response:
-                "<strong>Child Safety Essentials:</strong>\n\n" +
-                "🏠 <strong>Home safety checklist:</strong>\n" +
-                "• Cover electrical outlets\n" +
-                "• Secure furniture to walls (anti-tip brackets)\n" +
-                "• Lock cabinets with chemicals/medicines\n" +
-                "• Use stair gates\n" +
-                "• Keep small objects out of reach (choking hazard)\n\n" +
-                "🚗 <strong>Car safety:</strong>\n" +
-                "• Rear-facing car seat until age 2+\n" +
-                "• Never leave children alone in cars\n\n" +
-                "💧 <strong>Water safety:</strong>\n" +
-                "• Never leave child unattended near water\n" +
-                "• Start swim lessons around age 4\n\n" +
-                "📞 <strong>Emergency:</strong> Save your pediatrician's number and local emergency number!"
-        },
-        appointment: {
-            keywords: ["appointment", "doctor", "visit", "checkup", "specialist", "clinic", "book", "schedule", "vaccination", "vaccine"],
-            response:
-                "<strong>Appointment & Health Checkups:</strong>\n\n" +
-                "📅 <strong>Recommended well-child visits:</strong>\n" +
-                "• 1, 2, 4, 6, 9, 12, 15, 18, 24 months\n" +
-                "• Then annually from age 3+\n\n" +
-                "💉 <strong>Key vaccinations:</strong>\n" +
-                "• Follow your country's immunization schedule\n" +
-                "• Keep a vaccination record\n\n" +
-                "💡 You can <strong>book appointments</strong> with specialists directly from your dashboard!\n\n" +
-                "📋 <strong>Before your visit:</strong>\n" +
-                "• Note any concerns or questions\n" +
-                "• Bring growth measurements\n" +
-                "• Export a PDF report to share with your doctor"
+            confidence: 0.9,
+            response: null // dynamically generated with child name
         },
         bright_steps: {
             keywords: ["bright steps", "platform", "app", "feature", "how to", "use", "dashboard", "account", "profile"],
+            confidence: 0.85,
             response:
                 "<strong>Bright Steps Platform Guide:</strong>\n\n" +
-                "📊 <strong>Dashboard</strong> — View your child's progress at a glance\n" +
-                "👶 <strong>Child Profile</strong> — Manage your child's information\n" +
-                "📈 <strong>Growth Charts</strong> — Track height, weight, head circumference\n" +
-                "⭐ <strong>Milestones</strong> — Track developmental achievements\n" +
-                "🏆 <strong>Badges & Points</strong> — Earn rewards for tracking progress\n" +
-                "📅 <strong>Appointments</strong> — Book sessions with specialists\n" +
-                "🗣️ <strong>Speech Analysis</strong> — Analyze your child's speech development\n" +
-                "📊 <strong>WHO Comparison</strong> — Compare growth to WHO standards\n\n" +
+                "📊 <strong>Dashboard</strong> — Overview at a glance\n" +
+                "👶 <strong>Child Profile</strong> — Manage child info\n" +
+                "📈 <strong>Growth Charts</strong> — WHO-standard tracking\n" +
+                "🏆 <strong>Badges & Points</strong> — Earn rewards\n" +
+                "📅 <strong>Appointments</strong> — Book specialists\n" +
+                "🗣️ <strong>Speech Analysis</strong> — AI-powered analysis\n" +
+                "🏃 <strong>Motor Skills</strong> — Milestone checklist\n\n" +
                 "Need help with a specific feature? Just ask! 😊"
         }
     };
 
-    const FALLBACK =
-        "I'm not sure about that specific topic, but I'd love to help! 😊\n\n" +
-        "Here are some things I can help with:\n" +
-        "• 🏃 Motor skills development\n" +
-        "• 🗣️ Speech & language milestones\n" +
-        "• 🧠 Cognitive development\n" +
-        "• 🍼 Feeding & nutrition\n" +
-        "• 😴 Sleep guidance\n" +
-        "• 📊 Growth tracking\n" +
-        "• ❤️ Social-emotional development\n" +
-        "• 🚽 Self-care (potty training, etc.)\n" +
-        "• 🛡️ Child safety\n" +
-        "• 📅 Appointments & checkups\n\n" +
-        "Try asking about one of these topics!";
+    const CONFIDENCE_THRESHOLD = 3; // minimum keyword-length score to trust the match
 
     // ── Knowledge Matching ────────────────────────────────────────────
     function findResponse(message) {
@@ -231,36 +47,111 @@
             }
         }
 
-        let reply = bestTopic ? KNOWLEDGE[bestTopic].response : FALLBACK;
+        // Return null if not confident enough — triggers OpenAI fallback
+        if (bestScore < CONFIDENCE_THRESHOLD) return null;
 
-        // Add age-specific note if child data is available
-        if (window.dashboardData && window.dashboardData.children && window.dashboardData.children.length > 0) {
-            const age = window.dashboardData.children[0].age_months;
-            if (age && bestTopic && bestTopic !== 'greetings') {
-                let tip = '';
-                if (age <= 6) tip = 'focus on tummy time, sensory play, and responding to coos and babbles.';
-                else if (age <= 12) tip = 'encourage crawling, object exploration, and simple word repetition.';
-                else if (age <= 24) tip = 'support first steps, expand vocabulary with narration, and introduce self-feeding.';
-                else if (age <= 36) tip = 'encourage running, simple sentences, and pretend play.';
-                else if (age <= 60) tip = 'practice counting, storytelling, and social skills with peers.';
-                else tip = 'support reading readiness, creative play, and emotional expression.';
-                reply += '\n\n📌 <em>Based on your child\'s age (' + age + ' months), ' + tip + '</em>';
-            }
+        let reply = KNOWLEDGE[bestTopic].response;
+
+        // Handle dynamic greeting
+        if (bestTopic === 'greetings') {
+            const ctx = getChildContext();
+            reply = `Hello! 👋 I'm the Bright Steps Assistant.${ctx.name ? ` I see you're tracking <strong>${ctx.name}</strong>'s development` + (ctx.age ? ` (${ctx.age})` : '') + '.' : ''}\n\n` +
+                "I can help you with:\n" +
+                "🏃 <strong>Motor skills</strong> milestones\n" +
+                "🗣️ <strong>Speech & language</strong> development\n" +
+                "🧠 <strong>Cognitive</strong> milestones\n" +
+                "🍼 <strong>Feeding & nutrition</strong> tips\n" +
+                "😴 <strong>Sleep</strong> guidance\n" +
+                "📊 <strong>Growth</strong> tracking help\n" +
+                "🧼 <strong>Hygiene</strong> & self-care\n" +
+                "🛡️ <strong>Safety</strong> essentials\n" +
+                "🏥 <strong>Health</strong> & appointments\n\n" +
+                "Just ask me anything about your child's development!";
+            return reply;
         }
 
+        // Add personalized child context epilogue only for bright_steps if needed
         return reply;
+    }
+
+    // ── Get child context from dashboard data ────────────────────────
+    function getChildContext() {
+        const d = window.dashboardData;
+        if (!d || !d.children || d.children.length === 0) return {};
+        const idx = window._selectedChildIndex || 0;
+        const c = d.children[idx];
+        if (!c) return {};
+
+        return {
+            name: c.first_name,
+            childId: c.child_id,
+            age: c.age_display || '',
+            ageMonths: c.age_months || 0,
+            gender: c.gender,
+            growth: c.growth || null,
+            speech: c._speech || null,  // may not be in dashboardData
+            motorPct: c._motorPct,       // may not be in dashboardData
+            conditions: c.health_condition || ''
+        };
     }
 
     // ── Create Widget HTML ────────────────────────────────────────────
     function createChatWidget() {
+        if (!document.getElementById('chatbot-styles')) {
+            const style = document.createElement('style');
+            style.id = 'chatbot-styles';
+            style.textContent = `
+                .chatbot-toggle{position:fixed;bottom:1.5rem;right:1.5rem;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 20px rgba(99,102,241,0.4);z-index:10000;display:flex;align-items:center;justify-content:center;transition:all .3s ease}
+                .chatbot-toggle:hover{transform:scale(1.1);box-shadow:0 6px 25px rgba(99,102,241,0.5)}
+                .chatbot-toggle.active{background:linear-gradient(135deg,#ef4444,#f97316);box-shadow:0 4px 20px rgba(239,68,68,0.4)}
+                .chatbot-toggle svg{width:24px;height:24px}
+                .chatbot-panel{position:fixed;bottom:6rem;right:1.5rem;width:400px;max-height:560px;background:#fff;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.18);display:flex;flex-direction:column;z-index:9999;opacity:0;visibility:hidden;transform:translateY(20px) scale(0.95);transition:all .3s ease;overflow:hidden}
+                .chatbot-panel.open{opacity:1;visibility:visible;transform:translateY(0) scale(1)}
+                .chatbot-header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff}
+                .chatbot-header-info{display:flex;align-items:center;gap:.75rem}
+                .chatbot-avatar{font-size:1.5rem;width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center}
+                .chatbot-name{font-weight:600;font-size:.95rem}
+                .chatbot-status{font-size:.75rem;opacity:.8;color:#a5f3c4}
+                .chatbot-close{background:none;border:none;color:#fff;font-size:1.25rem;cursor:pointer;opacity:.7;transition:opacity .2s}
+                .chatbot-close:hover{opacity:1}
+                .chatbot-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.75rem;max-height:360px;min-height:200px}
+                .chat-msg{display:flex;max-width:85%}
+                .chat-msg.user{align-self:flex-end}
+                .chat-msg.bot{align-self:flex-start}
+                .chat-bubble{padding:.75rem 1rem;border-radius:12px;font-size:.875rem;line-height:1.6;word-wrap:break-word}
+                .chat-msg.user .chat-bubble{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px}
+                .chat-msg.bot .chat-bubble{background:#f1f5f9;color:#1e293b;border-bottom-left-radius:4px}
+                .chat-bubble.typing{display:flex;align-items:center;gap:4px;padding:1rem 1.25rem}
+                .chat-bubble.typing span{width:8px;height:8px;background:#94a3b8;border-radius:50%;animation:cbTyping 1.4s ease-in-out infinite}
+                .chat-bubble.typing span:nth-child(2){animation-delay:.2s}
+                .chat-bubble.typing span:nth-child(3){animation-delay:.4s}
+                @keyframes cbTyping{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+                .chatbot-topics{display:flex;flex-wrap:wrap;gap:.5rem;padding:.5rem 1rem;border-top:1px solid #e2e8f0}
+                .topic-chip{padding:.35rem .75rem;background:#f1f5f9;border-radius:20px;font-size:.75rem;cursor:pointer;transition:all .2s;white-space:nowrap;color:#475569}
+                .topic-chip:hover{background:#e0e7ff;color:#4338ca}
+                .chatbot-input-area{display:flex;gap:.5rem;padding:.75rem 1rem;border-top:1px solid #e2e8f0}
+                .chatbot-input{flex:1;padding:.6rem 1rem;border:2px solid #e2e8f0;border-radius:12px;font-size:.875rem;outline:none;transition:border-color .2s;font-family:inherit;background:#fff;color:#1e293b}
+                .chatbot-input:focus{border-color:#6366f1}
+                .chatbot-send{width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s;flex-shrink:0}
+                .chatbot-send:hover{transform:scale(1.05)}
+                .chatbot-send svg{width:18px;height:18px}
+                .chatbot-ai-badge{display:inline-flex;align-items:center;gap:3px;font-size:.65rem;color:#6366f1;background:#eef2ff;padding:2px 6px;border-radius:6px;margin-top:4px}
+                @media(max-width:480px){.chatbot-panel{right:.5rem;left:.5rem;bottom:5rem;width:auto;max-height:70vh}.chatbot-toggle{bottom:1rem;right:1rem}}
+            `;
+            document.head.appendChild(style);
+        }
+
+        const ctx = getChildContext();
+        const childGreeting = ctx.name ? `I'm here to help with <strong>${ctx.name}</strong>'s development!` : 'Ask me anything about your child\'s development!';
+
         const btn = document.createElement('button');
         btn.id = 'chatbot-toggle';
         btn.className = 'chatbot-toggle';
         btn.innerHTML = `
-            <svg class="chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="chat-icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-            <svg class="close-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none">
+            <svg class="close-icon" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" style="display:none">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
         `;
@@ -283,22 +174,23 @@
             <div class="chatbot-messages" id="chatbot-messages">
                 <div class="chat-msg bot">
                     <div class="chat-bubble">
-                        Hello! 👋 I'm your Bright Steps Assistant.<br>
-                        Ask me anything about your child's development!<br><br>
+                        Hello! 👋 ${childGreeting}<br><br>
                         Try: <em>"When should my baby start walking?"</em>
                     </div>
                 </div>
             </div>
             <div class="chatbot-topics" id="chatbot-topics">
-                <span class="topic-chip" onclick="sendTopicMessage('motor skills')">🏃 Motor Skills</span>
+                <span class="topic-chip" onclick="sendTopicMessage('motor skills')">🏃 Motor</span>
                 <span class="topic-chip" onclick="sendTopicMessage('speech development')">🗣️ Speech</span>
                 <span class="topic-chip" onclick="sendTopicMessage('sleep guidance')">😴 Sleep</span>
                 <span class="topic-chip" onclick="sendTopicMessage('feeding tips')">🍼 Feeding</span>
                 <span class="topic-chip" onclick="sendTopicMessage('growth tracking')">📊 Growth</span>
+                <span class="topic-chip" onclick="sendTopicMessage('activities for my child')">🎮 Activities</span>
+                <span class="topic-chip" onclick="sendTopicMessage('health checkup')">🏥 Health</span>
             </div>
             <div class="chatbot-input-area">
                 <input type="text" id="chatbot-input" class="chatbot-input" 
-                       placeholder="Ask about child development..." 
+                       placeholder="Ask about ${ctx.name || 'your child'}'s development..." 
                        autocomplete="off">
                 <button class="chatbot-send" id="chatbot-send" onclick="sendMessage()" aria-label="Send">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -332,8 +224,8 @@
         if (isOpen) document.getElementById('chatbot-input').focus();
     };
 
-    // ── Send Message (fully client-side) ──────────────────────────────
-    window.sendMessage = function () {
+    // ── Send Message (Hybrid: KB first, then OpenAI fallback) ────────
+    window.sendMessage = async function () {
         const input = document.getElementById('chatbot-input');
         const msg = input.value.trim();
         if (!msg) return;
@@ -344,14 +236,80 @@
         const topics = document.getElementById('chatbot-topics');
         if (topics) topics.style.display = 'none';
 
-        // Simulate typing delay for natural feel
-        const typingId = addTypingIndicator();
-        setTimeout(() => {
-            removeTypingIndicator(typingId);
-            const reply = findResponse(msg);
-            addMessage(reply, 'bot');
-        }, 400 + Math.random() * 600);
+        // 1) Try embedded knowledge base first
+        const kbReply = findResponse(msg);
+
+        if (kbReply) {
+            // Confident KB match — respond instantly
+            const typingId = addTypingIndicator();
+            setTimeout(() => {
+                removeTypingIndicator(typingId);
+                addMessage(kbReply, 'bot');
+            }, 300 + Math.random() * 400);
+        } else {
+            // 2) No confident match — call OpenAI via api_chatbot.php
+            const typingId = addTypingIndicator();
+            try {
+                const ctx = getChildContext();
+
+                // Debug: log context being sent
+                const ctx = getChildContext();
+                console.log('🤖 Chatbot context:', ctx);
+                console.log('🤖 Sending message:', msg, 'child_id:', ctx.childId);
+
+                const res = await fetch('../../api_chatbot.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ message: msg, child_id: ctx.childId || null })
+                });
+
+                console.log('🤖 HTTP Response:', res.status, res.statusText);
+
+                if (!res.ok) {
+                    console.error('Chatbot HTTP error:', res.status, res.statusText);
+                    throw new Error('HTTP ' + res.status);
+                }
+
+                const data = await res.json();
+                console.log('🤖 API response:', data);
+                removeTypingIndicator(typingId);
+
+                if (data.success && data.reply) {
+                    addMessage(data.reply + '\n<span class="chatbot-ai-badge">✨ AI-powered response</span>', 'bot');
+                } else if (data.error) {
+                    let errorMsg = '⚠️ ' + data.error;
+                    if (data.debug) {
+                        console.error('API Error Details:', data.debug);
+                        if (typeof data.debug === 'object') {
+                            errorMsg += ' (Session: ' + (data.debug.session_data ? 'active' : 'empty') + ')';
+                        }
+                    }
+                    addMessage(errorMsg, 'bot');
+                } else {
+                    addMessage(getFallbackResponse(), 'bot');
+                }
+            } catch (e) {
+                console.error('🤖 Chatbot API error:', e);
+                removeTypingIndicator(typingId);
+                const errorMsg = e.message || 'Unknown error';
+                addMessage('⚠️ Error: ' + errorMsg + '. Check browser console (F12) for details.', 'bot');
+            }
+        }
     };
+
+    function getFallbackResponse() {
+        return "I'm having a little trouble connecting to my AI brain right now, but I still have my local knowledge base! 😊<br><br>" +
+            "Please select a topic you want advice on:<br>" +
+            "<div style='margin-top:1rem;display:flex;flex-wrap:wrap;gap:0.5rem;'>" +
+            "<span class='topic-chip' onclick='sendTopicMessage(\"motor skills\")' style='display:inline-block;margin:0;'>🏃 Motor</span>" +
+            "<span class='topic-chip' onclick='sendTopicMessage(\"speech development\")' style='display:inline-block;margin:0;'>🗣️ Speech</span>" +
+            "<span class='topic-chip' onclick='sendTopicMessage(\"sleep guidance\")' style='display:inline-block;margin:0;'>😴 Sleep</span>" +
+            "<span class='topic-chip' onclick='sendTopicMessage(\"feeding tips\")' style='display:inline-block;margin:0;'>🍼 Feeding</span>" +
+            "<span class='topic-chip' onclick='sendTopicMessage(\"growth tracking\")' style='display:inline-block;margin:0;'>📊 Growth</span>" +
+            "<span class='topic-chip' onclick='sendTopicMessage(\"health checkup\")' style='display:inline-block;margin:0;'>🏥 Health</span>" +
+            "</div>";
+    }
 
     window.sendTopicMessage = function (topic) {
         document.getElementById('chatbot-input').value = topic;
@@ -384,6 +342,33 @@
         const el = document.getElementById(id);
         if (el) el.remove();
     }
+
+    // ── Refresh greeting when child changes ───────────────────────────
+    window.refreshChatbotGreeting = function() {
+        const ctx = getChildContext();
+        const childGreeting = ctx.name ? `I'm here to help with <strong>${ctx.name}</strong>'s development!` : 'Ask me anything about your child\'s development!';
+
+        // Update the greeting in the chat panel
+        const container = document.getElementById('chatbot-messages');
+        if (container) {
+            const firstMsg = container.querySelector('.chat-msg.bot .chat-bubble');
+            if (firstMsg) {
+                firstMsg.innerHTML = `Hello! 👋 ${childGreeting}<br><br>Try: <em>"When should my baby start walking?"</em>`;
+            }
+
+            // Update input placeholder
+            const input = document.getElementById('chatbot-input');
+            if (input) {
+                input.placeholder = `Ask about ${ctx.name || 'your child'}'s development...`;
+            }
+        }
+
+        // Also update the panel header child name if it exists
+        const headerStatus = document.querySelector('.chatbot-status');
+        if (headerStatus && ctx.name) {
+            headerStatus.textContent = `● Online - Helping with ${ctx.name}`;
+        }
+    };
 
     // ── Init ──────────────────────────────────────────────────────────
     if (document.readyState === 'loading') {

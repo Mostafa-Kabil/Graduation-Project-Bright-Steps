@@ -29,8 +29,8 @@ try {
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/payment.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/payment.css?v=8">
 </head>
 
 <body>
@@ -245,9 +245,9 @@ try {
         عربي
     </button>
 
-    <script src="scripts/language-toggle.js?v=5"></script>
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
+    <script src="scripts/language-toggle.js?v=8"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
 
     <script>
         // ── Card input formatting ─────────────────────────────────────

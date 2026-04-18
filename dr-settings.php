@@ -215,12 +215,12 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - Doctor Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles/doctor.css">
-    <link rel="stylesheet" href="styles/settings.css">
-    <link rel="stylesheet" href="styles/profile.css">
-    <link rel="stylesheet" href="styles/dr-settings.css">
+    <link rel="stylesheet" href="styles/globals.css?v=8">
+    <link rel="stylesheet" href="styles/dashboard.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
+    <link rel="stylesheet" href="styles/profile.css?v=8">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=8">
 </head>
 
 <body>
@@ -727,8 +727,8 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
         </svg>
     </button>
 
-    <script src="scripts/theme-toggle.js"></script>
-    <script src="scripts/navigation.js"></script>
+    <script src="scripts/theme-toggle.js?v=8"></script>
+    <script src="scripts/navigation.js?v=8"></script>
 
     <script>
         // ── View Switching ──
@@ -891,9 +891,42 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
 
         // ── Logout ──
         function handleLogout() {
-            if (confirm('Are you sure you want to log out?')) {
-                window.location.href = 'doctor-login.php';
+            const existing = document.getElementById('logout-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'logout-modal';
+            modal.innerHTML = `
+                <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+                <div class="logout-dialog">
+                        <div class="logout-icon-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14l5-5-5-5m5 5H9" />
+                            </svg>
+                        </div>
+                        <h3>Are you sure you want to log out?</h3>
+                        <p>You will need to sign in again to access your dashboard.</p>
+                        <div class="logout-actions">
+                            <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
+                            <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                        </div>
+                    </div>
+            `;
+            document.body.appendChild(modal);
+            requestAnimationFrame(() => modal.classList.add('show'));
+        }
+
+        function closeLogoutModal() {
+            const modal = document.getElementById('logout-modal');
+            if (modal) {
+                modal.classList.remove('show');
+                modal.classList.add('hide');
+                setTimeout(() => modal.remove(), 300);
             }
+        }
+
+        function confirmLogout() {
+            window.location.href = 'logout.php';
         }
     </script>
 </body>
