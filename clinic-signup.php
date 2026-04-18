@@ -109,7 +109,7 @@ if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
 
                     <div class="modern-auth-footer">
                         <div class="footer-divider"></div>
-                        <p class="auth-footer-text">Already registered? <a href="login.php" class="auth-link font-semibold">Log in here</a></p>
+                        <p class="auth-footer-text">Already registered? <a href="clinic-login.php" class="auth-link font-semibold">Log in here</a></p>
                     </div>
                 </div>
             </div>
@@ -125,7 +125,7 @@ if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
                     <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
                 </button>
             </div>
-            <img src="assets/auth-illustration.png" class="auth-illustration" alt="Bright Steps Growth and Care">
+            <img src="assets/clinic-login-illustration.png" class="auth-illustration" alt="Bright Steps Clinic Portal">
         </div>
     </div>
 
