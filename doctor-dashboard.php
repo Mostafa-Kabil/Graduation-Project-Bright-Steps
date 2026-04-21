@@ -102,12 +102,15 @@ if ($isAjax) {
                 $stmt2->execute([':sid' => $specialist_id]);
                 $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
 
-                echo json_encode(['success' => true, 'data' => [
-                    'total_reports' => intval($dr_stats['total_reports'] ?? 0),
-                    'this_month' => intval($dr_stats['this_month'] ?? 0),
-                    'shared_total' => intval($shared_stats['shared_total'] ?? 0),
-                    'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
-                ]]);
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'total_reports' => intval($dr_stats['total_reports'] ?? 0),
+                        'this_month' => intval($dr_stats['this_month'] ?? 0),
+                        'shared_total' => intval($shared_stats['shared_total'] ?? 0),
+                        'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
+                    ]
+                ]);
                 exit;
             }
 
@@ -637,6 +640,9 @@ if ($isAjax) {
     <link rel="stylesheet" href="styles/globals.css?v=8">
     <link rel="stylesheet" href="styles/dashboard.css?v=8">
     <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
+    <link rel="stylesheet" href="styles/profile.css?v=8">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=8">
 </head>
 
 <body>
@@ -708,7 +714,7 @@ if ($isAjax) {
             </nav>
 
             <div class="sidebar-footer">
-                <button class="nav-item" data-view="settings">
+                <button class="nav-item" onclick="window.location.href='dr-settings.php'">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
                         <path
@@ -842,8 +848,8 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=9"></script>
-    
+    <script src="scripts/doctor-dashboard.js?v=11"></script>
+
 </body>
 
 </html>
