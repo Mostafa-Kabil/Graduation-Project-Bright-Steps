@@ -32,9 +32,19 @@ try {
         $action = $_GET['action'] ?? 'plans';
 
         if ($action === 'plans') {
+            // Check if limits column exists
+            $hasLimits = false;
+            try {
+                $colCheck = $connect->query("SHOW COLUMNS FROM subscription LIKE 'limits'");
+                $hasLimits = $colCheck->rowCount() > 0;
+            } catch(Exception $e) {}
+
+            $selectCols = "s.subscription_id, s.plan_name, s.plan_period, s.price, s.description, s.status";
+            if ($hasLimits) $selectCols .= ", s.limits";
+
             // Get plans with active user counts and features
             $stmt = $connect->query("
-                SELECT s.subscription_id, s.plan_name, s.plan_period, s.price, s.description, s.status, s.limits,
+                SELECT {$selectCols},
                     (SELECT COUNT(*) FROM parent_subscription ps WHERE ps.subscription_id = s.subscription_id) as active_users
                 FROM subscription s
                 ORDER BY s.price ASC
@@ -47,7 +57,7 @@ try {
                 $fStmt->execute(['sid' => $plan['subscription_id']]);
                 $plan['features'] = $fStmt->fetchAll(PDO::FETCH_COLUMN);
                 $plan['mrr'] = round((float) $plan['price'] * (int) $plan['active_users'], 2);
-                $plan['limits'] = $plan['limits'] ? json_decode($plan['limits'], true) : null;
+                $plan['limits'] = isset($plan['limits']) && $plan['limits'] ? json_decode($plan['limits'], true) : null;
             }
 
             echo json_encode(['success' => true, 'plans' => $plans]);
@@ -137,9 +147,18 @@ try {
                 exit;
             }
 
-            $limitsJson = $limits ? json_encode($limits) : null;
-            $stmt = $connect->prepare("INSERT INTO subscription (plan_name, plan_period, price, description, status, limits) VALUES (:name, :period, :price, :desc, :status, :limits)");
-            $stmt->execute(['name' => $planName, 'period' => $planPeriod, 'price' => $price, 'desc' => $description, 'status' => $status, 'limits' => $limitsJson]);
+            // Check if limits column exists
+            $hasLimits = false;
+            try { $colCheck = $connect->query("SHOW COLUMNS FROM subscription LIKE 'limits'"); $hasLimits = $colCheck->rowCount() > 0; } catch(Exception $e) {}
+
+            if ($hasLimits && $limits) {
+                $limitsJson = json_encode($limits);
+                $stmt = $connect->prepare("INSERT INTO subscription (plan_name, plan_period, price, description, status, limits) VALUES (:name, :period, :price, :desc, :status, :limits)");
+                $stmt->execute(['name' => $planName, 'period' => $planPeriod, 'price' => $price, 'desc' => $description, 'status' => $status, 'limits' => $limitsJson]);
+            } else {
+                $stmt = $connect->prepare("INSERT INTO subscription (plan_name, plan_period, price, description, status) VALUES (:name, :period, :price, :desc, :status)");
+                $stmt->execute(['name' => $planName, 'period' => $planPeriod, 'price' => $price, 'desc' => $description, 'status' => $status]);
+            }
             $newId = $connect->lastInsertId();
 
             // Insert features
@@ -193,8 +212,14 @@ try {
             }
 
             if ($limits !== null) {
-                $fields[] = "limits = :limits";
-                $params['limits'] = json_encode($limits);
+                // Only set limits if column exists
+                try {
+                    $colCheck = $connect->query("SHOW COLUMNS FROM subscription LIKE 'limits'");
+                    if ($colCheck->rowCount() > 0) {
+                        $fields[] = "limits = :limits";
+                        $params['limits'] = json_encode($limits);
+                    }
+                } catch(Exception $e) {}
             }
 
             if (!empty($fields)) {

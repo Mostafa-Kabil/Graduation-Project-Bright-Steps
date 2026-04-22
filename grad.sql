@@ -184,6 +184,12 @@ CREATE TABLE `clinic` (
   `email` varchar(255) DEFAULT NULL,
   `password` varchar(255) DEFAULT NULL,
   `location` varchar(255) DEFAULT NULL,
+  `bio` text DEFAULT NULL,
+  `cover_image` varchar(255) DEFAULT NULL,
+  `profile_image` varchar(255) DEFAULT NULL,
+  `opening_hours` varchar(255) DEFAULT NULL,
+  `specialties` text DEFAULT NULL,
+  `website` varchar(255) DEFAULT NULL,
   `status` varchar(20) DEFAULT 'pending',
   `rating` decimal(3,2) DEFAULT 0.00,
   `added_at` timestamp NOT NULL DEFAULT current_timestamp()
@@ -1281,6 +1287,403 @@ INSERT INTO `badge` (`name`, `description`, `icon`) VALUES
 ('Super Parent', 'Login for 30 consecutive days', 'super_parent');
 
 -- =====================================================
+
+-- Admin Dashboard Expansion Tables
+-- =====================================================
+
+--
+-- Table: admin_notifications (admin-created bulk/targeted notifications)
+--
+CREATE TABLE IF NOT EXISTS `admin_notifications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `body` text NOT NULL,
+  `type` enum('in_app','email','both') DEFAULT 'in_app',
+  `priority` enum('low','normal','high','urgent') DEFAULT 'normal',
+  `target_type` enum('all','specific','segment') DEFAULT 'all',
+  `target_filter` text DEFAULT NULL COMMENT 'JSON: user IDs or segment criteria',
+  `scheduled_at` datetime DEFAULT NULL,
+  `sent_at` datetime DEFAULT NULL,
+  `status` enum('draft','scheduled','sent','cancelled','failed') DEFAULT 'draft',
+  `recipient_count` int(11) DEFAULT 0,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_admin_notif_status` (`status`),
+  KEY `idx_admin_notif_created_by` (`created_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: admin_notification_recipients (per-user delivery tracking)
+--
+CREATE TABLE IF NOT EXISTS `admin_notification_recipients` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `notification_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `delivered` tinyint(1) DEFAULT 0,
+  `read_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_anr_notif` (`notification_id`),
+  KEY `idx_anr_user` (`user_id`),
+  CONSTRAINT `anr_notif_fk` FOREIGN KEY (`notification_id`) REFERENCES `admin_notifications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `anr_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: flagged_content (content moderation)
+--
+CREATE TABLE IF NOT EXISTS `flagged_content` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `content_type` varchar(50) NOT NULL COMMENT 'feedback, message, report',
+  `content_id` int(11) NOT NULL,
+  `content_text` text DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL COMMENT 'user who posted the content',
+  `reason` varchar(255) DEFAULT NULL,
+  `flagged_by` varchar(50) DEFAULT 'auto' COMMENT 'auto or user_id',
+  `status` enum('pending','approved','removed','warned') DEFAULT 'pending',
+  `reviewed_by` int(11) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_fc_status` (`status`),
+  KEY `idx_fc_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: moderation_log (admin moderation actions)
+--
+CREATE TABLE IF NOT EXISTS `moderation_log` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `admin_id` int(11) NOT NULL,
+  `action` varchar(50) NOT NULL COMMENT 'approve, remove, warn, ban',
+  `target_user_id` int(11) DEFAULT NULL,
+  `content_id` int(11) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ml_admin` (`admin_id`),
+  KEY `idx_ml_target` (`target_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: system_logs (API errors, performance)
+--
+CREATE TABLE IF NOT EXISTS `system_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `level` enum('info','warning','error','critical') DEFAULT 'info',
+  `message` text NOT NULL,
+  `endpoint` varchar(255) DEFAULT NULL,
+  `method` varchar(10) DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `stack_trace` text DEFAULT NULL,
+  `request_payload` text DEFAULT NULL,
+  `response_time_ms` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_sl_level` (`level`),
+  KEY `idx_sl_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: admin_roles (role definitions with permissions)
+--
+CREATE TABLE IF NOT EXISTS `admin_roles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `permissions` text DEFAULT NULL COMMENT 'JSON array of permission strings',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `role_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Seed default admin roles
+INSERT IGNORE INTO `admin_roles` (`name`, `description`, `permissions`) VALUES
+('Super Admin', 'Full access to all features', '["all"]'),
+('Moderator', 'Can moderate content and manage users', '["users","moderation","tickets"]'),
+('Support Agent', 'Can manage support tickets', '["tickets","users_view"]'),
+('Analyst', 'View-only access to analytics', '["overview","reports","revenue","marketing"]');
+
+--
+-- Table: support_tickets
+--
+CREATE TABLE IF NOT EXISTS `support_tickets` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `priority` enum('low','medium','high','critical') DEFAULT 'medium',
+  `status` enum('open','in_progress','waiting','resolved','closed') DEFAULT 'open',
+  `assigned_to` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_st_user` (`user_id`),
+  KEY `idx_st_status` (`status`),
+  KEY `idx_st_assigned` (`assigned_to`),
+  CONSTRAINT `st_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: ticket_messages (conversation thread)
+--
+CREATE TABLE IF NOT EXISTS `ticket_messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ticket_id` int(11) NOT NULL,
+  `sender_id` int(11) NOT NULL,
+  `sender_type` enum('user','admin') DEFAULT 'user',
+  `message` text NOT NULL,
+  `is_internal` tinyint(1) DEFAULT 0 COMMENT 'Internal admin notes',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_tm_ticket` (`ticket_id`),
+  CONSTRAINT `tm_ticket_fk` FOREIGN KEY (`ticket_id`) REFERENCES `support_tickets` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: announcement_banners
+--
+CREATE TABLE IF NOT EXISTS `announcement_banners` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `message` text NOT NULL,
+  `style` enum('info','warning','success','error') DEFAULT 'info',
+  `link` varchar(255) DEFAULT NULL,
+  `target_audience` enum('all','parents','specialists','admins') DEFAULT 'all',
+  `starts_at` datetime DEFAULT NULL,
+  `ends_at` datetime DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ab_active` (`is_active`),
+  KEY `idx_ab_dates` (`starts_at`, `ends_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Seed sample data
+INSERT IGNORE INTO `support_tickets` (`user_id`, `subject`, `priority`, `status`) VALUES
+(2, 'Cannot access growth charts', 'high', 'open'),
+(3, 'Billing question about Premium plan', 'medium', 'in_progress'),
+(4, 'Account recovery request', 'high', 'waiting');
+
+INSERT IGNORE INTO `announcement_banners` (`message`, `style`, `target_audience`, `is_active`) VALUES
+('Welcome to Bright Steps v2.1! Check out the new growth tracking features.', 'info', 'all', 1);
+
+INSERT IGNORE INTO `system_logs` (`level`, `message`, `endpoint`, `method`, `response_time_ms`) VALUES
+('info', 'System started successfully', '/admin/overview.php', 'GET', 45),
+('warning', 'Slow query detected: 2.3s', '/api_who_compare.php', 'GET', 2300),
+('error', 'Failed to send notification email', '/api_email_verify.php', 'POST', 1500);
+
+-- =====================================================
+-- Parent Dashboard Enhancement Tables
+-- =====================================================
+
+--
+-- Table: user_settings (per-user preferences)
+--
+CREATE TABLE IF NOT EXISTS `user_settings` (
+  `user_id` int(11) NOT NULL,
+  `theme` enum('light','dark') DEFAULT 'light',
+  `language` enum('en','ar') DEFAULT 'en',
+  `push_notifications` tinyint(1) DEFAULT 1,
+  `email_notifications` tinyint(1) DEFAULT 1,
+  `appointment_reminders` tinyint(1) DEFAULT 1,
+  `daily_reminders` tinyint(1) DEFAULT 1,
+  `milestone_alerts` tinyint(1) DEFAULT 1,
+  `data_sharing` tinyint(1) DEFAULT 1,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`user_id`),
+  CONSTRAINT `user_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Table: child_activities (tracks AI-recommended and completed activities)
+--
+CREATE TABLE IF NOT EXISTS `child_activities` (
+  `activity_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `category` enum('article','real_life','website_game','speech','motor','cognitive','social') DEFAULT 'real_life',
+  `duration_minutes` int(11) DEFAULT 15,
+  `difficulty` enum('easy','medium','hard') DEFAULT 'medium',
+  `source` enum('ai','system','specialist') DEFAULT 'ai',
+  `external_url` varchar(500) DEFAULT NULL,
+  `is_completed` tinyint(1) DEFAULT 0,
+  `completed_at` datetime DEFAULT NULL,
+  `points_earned` int(11) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`activity_id`),
+  KEY `idx_ca_child` (`child_id`),
+  KEY `idx_ca_completed` (`is_completed`),
+  KEY `idx_ca_category` (`category`),
+  KEY `idx_ca_created` (`created_at`),
+  CONSTRAINT `child_activities_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- Additional streak-based badge seed data
+INSERT IGNORE INTO `badge` (`name`, `description`, `icon`) VALUES
+('Rising Star', 'Maintain a 3-day login streak', 'rising_star'),
+('Consistency King', 'Maintain a 7-day login streak', 'consistency_king'),
+('Weekly Champion', 'Complete 5 activities in one week', 'weekly_champion_streak'),
+('Monthly Master', 'Complete 20 activities in one month', 'monthly_master'),
+('Explorer', 'Try activities from 3 different categories', 'explorer'),
+('Knowledge Seeker', 'Read 5 recommended articles', 'knowledge_seeker');
+
+-- ── Contact Messages ──────────────────────────────
+CREATE TABLE IF NOT EXISTS `contact_messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `subject` varchar(500) NOT NULL,
+  `message` text NOT NULL,
+  `is_read` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Newsletter Subscribers ───────────────────────────
+CREATE TABLE IF NOT EXISTS `newsletter_subscribers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `email` varchar(255) NOT NULL,
+  `subscribed` tinyint(1) DEFAULT 1,
+  `preferences` text DEFAULT NULL,
+  `subscribed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_newsletter_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Newsletter History ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `newsletter_history` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `subject` varchar(500) NOT NULL,
+  `content` text DEFAULT NULL,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_nh_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Onboarding ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `parent_onboarding` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `parent_id` INT NOT NULL,
+  `child_name` VARCHAR(100),
+  `child_dob` DATE,
+  `child_gender` VARCHAR(10),
+  `primary_concerns` TEXT,
+  `preferred_activities` TEXT,
+  `development_goals` TEXT,
+  `completed_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`parent_id`) REFERENCES `users`(`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Article Tracking ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `article_reads` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `article_title` VARCHAR(255) NOT NULL,
+  `read_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Parent Onboarding ──────────────────────────────
+CREATE TABLE IF NOT EXISTS `parent_onboarding` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `parent_id` INT NOT NULL,
+  `child_name` VARCHAR(100) NOT NULL,
+  `child_dob` DATE DEFAULT NULL,
+  `child_gender` VARCHAR(20) DEFAULT NULL,
+  `primary_concerns` JSON DEFAULT NULL,
+  `preferred_activities` JSON DEFAULT NULL,
+  `development_goals` JSON DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`parent_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Article Reads ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS `article_reads` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `article_title` VARCHAR(255) NOT NULL,
+  `read_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Notifications ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `notification_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `type` VARCHAR(50) DEFAULT 'system',
+  `title` VARCHAR(255) NOT NULL,
+  `message` TEXT NOT NULL,
+  `is_read` TINYINT(1) DEFAULT 0,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Motor Milestones ───────────────────────────────
+CREATE TABLE IF NOT EXISTS `motor_milestones` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `child_id` INT NOT NULL,
+  `milestone_name` VARCHAR(150) NOT NULL,
+  `category` VARCHAR(50) DEFAULT 'gross_motor',
+  `is_achieved` TINYINT(1) DEFAULT 0,
+  `achieved_at` TIMESTAMP NULL DEFAULT NULL,
+  `notes` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`child_id`) REFERENCES `child`(`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Consultations ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS `consultations` (
+  `consultation_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `parent_id` INT NOT NULL,
+  `specialist_id` INT NOT NULL,
+  `child_id` INT DEFAULT NULL,
+  `consultation_type` ENUM('video','voice','chat') DEFAULT 'video',
+  `status` ENUM('scheduled','in_progress','completed','cancelled') DEFAULT 'scheduled',
+  `scheduled_at` DATETIME NOT NULL,
+  `duration_minutes` INT DEFAULT 30,
+  `notes` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`parent_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`specialist_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`child_id`) REFERENCES `child`(`child_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Consultation Messages ──────────────────────────
+CREATE TABLE IF NOT EXISTS `consultation_messages` (
+  `message_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `consultation_id` INT NOT NULL,
+  `sender_id` INT NOT NULL,
+  `message` TEXT NOT NULL,
+  `is_read` TINYINT(1) DEFAULT 0,
+  `sent_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`consultation_id`) REFERENCES `consultations`(`consultation_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`sender_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Community Messages ─────────────────────────────
+CREATE TABLE IF NOT EXISTS `community_messages` (
+  `message_id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `message` TEXT NOT NULL,
+  `likes` INT DEFAULT 0,
+  `reply_count` INT DEFAULT 0,
+  `parent_message_id` INT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- ── Article Reads ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS `article_reads` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `user_id` INT NOT NULL,
+  `article_title` VARCHAR(255) NOT NULL,
+  `read_at` TIMESTAMP DEFAULT current_timestamp(),
+  FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
+
 -- Clinic Module Tables
 -- =====================================================
 
@@ -1356,6 +1759,7 @@ CREATE TABLE IF NOT EXISTS `appointment_slots` (
   KEY `fk_slot_clinic` (`clinic_id`),
   CONSTRAINT `fk_slot_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_slot_clinic` FOREIGN KEY (`clinic_id`) REFERENCES `clinic` (`clinic_id`) ON DELETE CASCADE
+
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 COMMIT;

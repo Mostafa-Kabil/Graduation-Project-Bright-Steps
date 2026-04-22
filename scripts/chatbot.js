@@ -253,7 +253,6 @@
                 const ctx = getChildContext();
 
                 // Debug: log context being sent
-                const ctx = getChildContext();
                 console.log('🤖 Chatbot context:', ctx);
                 console.log('🤖 Sending message:', msg, 'child_id:', ctx.childId);
 

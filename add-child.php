@@ -160,16 +160,16 @@ $isSetup = isset($_GET['setup']) ? true : false;
                 <form id="add-child-form" class="auth-form" novalidate onsubmit="submitChild(event)">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">First Name *</label>
+                            <label class="form-label">Child's First Name *</label>
                             <input type="text" id="first_name" name="first_name" class="form-input" required
                                 placeholder="Emma">
                             <div class="error-message" id="err-fname"
                                 style="color:#ef4444;font-size:12px;margin-top:4px;"></div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Last Name *</label>
-                            <input type="text" id="last_name" name="last_name" class="form-input" required
-                                placeholder="Johnson">
+                            <label class="form-label">Father's Name (Auto-filled)</label>
+                            <input type="text" id="last_name" name="last_name" class="form-input" readonly
+                                style="background-color:var(--slate-100);cursor:not-allowed;">
                             <div class="error-message" id="err-lname"
                                 style="color:#ef4444;font-size:12px;margin-top:4px;"></div>
                         </div>
@@ -291,6 +291,21 @@ $isSetup = isset($_GET['setup']) ? true : false;
 
     <script src="scripts/theme-toggle.js?v=8"></script>
     <script>
+        // Expose parent data for auto-filling father's name
+        window.parentData = {
+            fname: '<?php echo htmlspecialchars($_SESSION['fname'] ?? ''); ?>',
+            lname: '<?php echo htmlspecialchars($_SESSION['lname'] ?? ''); ?>'
+        };
+    </script>
+    <script>
+        // Auto-populate father's name from session
+        document.addEventListener('DOMContentLoaded', function() {
+            const fatherNameField = document.getElementById('last_name');
+            if (fatherNameField && window.parentData && window.parentData.fname) {
+                fatherNameField.value = window.parentData.fname;
+            }
+        });
+
         function showSsnModal() {
             document.getElementById('ssn-modal').style.display = 'flex';
         }
@@ -313,7 +328,7 @@ $isSetup = isset($_GET['setup']) ? true : false;
             // simple validation
             let hasErr = false;
             if (!data.get('first_name').trim()) { document.getElementById('err-fname').textContent = 'Required'; hasErr = true; }
-            if (!data.get('last_name').trim()) { document.getElementById('err-lname').textContent = 'Required'; hasErr = true; }
+            // last_name (father's name) is auto-populated, no validation needed
             if (!data.get('ssn').trim()) { document.getElementById('err-ssn').textContent = 'Required'; hasErr = true; }
             if (!data.get('birth_date')) { document.getElementById('err-dob').textContent = 'Required'; hasErr = true; }
             if (!data.get('gender')) { document.getElementById('err-gender').textContent = 'Required'; hasErr = true; }

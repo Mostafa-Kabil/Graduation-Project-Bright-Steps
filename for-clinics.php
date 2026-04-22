@@ -1,4 +1,14 @@
-<?php session_start(); ?>
+<?php
+ob_start();
+session_start();
+include 'connection.php';
+
+// If already logged in as clinic, redirect
+if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 'clinic') {
+    header("Location: clinic-dashboard.php");
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,11 +29,16 @@
         .metric-card:hover { transform: translateY(-5px); box-shadow: 0 30px 50px -15px rgba(0,0,0,0.08); }
         .metric-card h3 { font-size: 4rem; font-weight: 800; background: linear-gradient(135deg, var(--blue-500), var(--purple-500)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; display: flex; align-items: baseline; justify-content: center; }
         
-        .calculator { background: var(--bg-secondary); padding: 3rem; border-radius: var(--radius-2xl); margin-top: 5rem; border: 1px solid var(--border-color); }
+        .calculator { background: var(--bg-secondary); padding: 3rem; border-radius: var(--radius-2xl); margin-top: 5rem; margin-bottom: 4rem; border: 1px solid var(--border-color); }
         .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem;}
         .calc-input { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; }
         .calc-input input { padding: 0.75rem; border-radius: 8px; border: 1px solid var(--border-color); font-size: 1rem; }
         .calc-result { display: flex; align-items: center; justify-content: center; font-size: 3rem; font-weight: 800; color: var(--green-600); }
+
+        .hero-buttons { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .btn-outline-lg { padding: 0.875rem 2rem; border-radius: 12px; font-weight: 700; font-size: 1rem; border: 2px solid var(--purple-500); color: var(--purple-600); background: transparent; cursor: pointer; transition: all 0.2s ease; }
+        .btn-outline-lg:hover { background: var(--purple-50, rgba(168,85,247,0.08)); transform: translateY(-1px); }
+
         @media(max-width:900px){ .hero, .calc-grid, .metric-cards { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -35,8 +50,9 @@
             <div>
                 <h1>Modernize your <br><span style="color:var(--purple-600);">Pediatric Clinic</span></h1>
                 <p>Equip your administration and specialists with a unified management system. Bright Steps for Clinics handles patient flows, subscriptions, doctor assignments, and aggregated revenue analytics smoothly and securely.</p>
-                <div style="display:flex;gap:1rem;">
-                    <button class="btn btn-gradient btn-lg" onclick="navigateTo('contact')">Request Enterprise Demo</button>
+                <div class="hero-buttons">
+                    <a href="clinic-login.php" class="btn btn-gradient btn-lg">Clinic Login</a>
+                    <a href="clinic-signup.php" class="btn-outline-lg">Register Clinic</a>
                 </div>
             </div>
             <div>
@@ -79,6 +95,7 @@
                 </div>
             </div>
         </div>
+
     </main>
 
     

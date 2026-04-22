@@ -14,12 +14,12 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
-    <link rel="stylesheet" href="styles/globals.css?v=8">
-    <link rel="stylesheet" href="styles/dashboard.css?v=8">
-    <link rel="stylesheet" href="styles/doctor.css?v=8">
-    <link rel="stylesheet" href="styles/clinic.css?v=8">
-    <link rel="stylesheet" href="styles/admin.css?v=8">
-    <link rel="stylesheet" href="styles/settings.css?v=8">
+    <link rel="stylesheet" href="styles/globals.css?v=11">
+    <link rel="stylesheet" href="styles/dashboard.css?v=11">
+    <link rel="stylesheet" href="styles/doctor.css?v=11">
+    <link rel="stylesheet" href="styles/clinic.css?v=11">
+    <link rel="stylesheet" href="styles/admin.css?v=11">
+    <link rel="stylesheet" href="styles/settings.css?v=11">
 </head>
 
 <body>
@@ -84,10 +84,9 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                 </button>
                 <button class="nav-item" data-view="points">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="8" r="7" />
-                        <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                     </svg>
-                    <span>Points System</span>
+                    <span>Engagement & Rewards</span>
                 </button>
                 <button class="nav-item" data-view="reports">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -105,11 +104,11 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                     </svg>
                     <span>Notifications</span>
                 </button>
-                <button class="nav-item" data-view="moderation">
+                <button class="nav-item" data-view="tickets">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
-                    <span>Moderation</span>
+                    <span>Contact & Support</span>
                 </button>
                 <button class="nav-item" data-view="system_health">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -127,31 +126,10 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                     </svg>
                     <span>Roles</span>
                 </button>
-                <button class="nav-item" data-view="tickets">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    <span>Tickets</span>
-                </button>
-                <button class="nav-item" data-view="banners">
-                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                        <line x1="4" y1="22" x2="4" y2="15"/>
-                    </svg>
-                    <span>Banners</span>
-                </button>
+
             </nav>
 
             <div class="sidebar-footer">
-                <button class="sidebar-language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    <span>عربي</span>
-                </button>
                 <button class="nav-item" data-view="settings">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
@@ -177,40 +155,21 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
         </main>
     </div>
 
-    <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <path
-                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    </button>
+    <!-- Toggles removed and securely relocated to Settings view -->
 
-    <!-- Language Toggle -->
-    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-        عربي
-    </button>
-
-    <script src="scripts/theme-toggle.js?v=8"></script>
-    <script src="scripts/language-toggle.js?v=8"></script>
-    <script src="scripts/navigation.js?v=8"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js?v=8"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js?v=8"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js?v=8"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js?v=8"></script>
-    <script src="scripts/admin-dashboard.js?v=8"></script>
-    <script src="scripts/admin-views-extended.js?v=8"></script>
-    <script src="scripts/admin-views-part2.js?v=8"></script>
-    <script src="scripts/admin-views-part3.js?v=8"></script>
-    <script src="scripts/admin-views-part4.js?v=8"></script>
+    <script src="scripts/theme-toggle.js?v=16"></script>
+    <script src="scripts/theme-toggle.js?v=17"></script>
+    <script src="scripts/language-toggle.js?v=17"></script>
+    <script src="scripts/navigation.js?v=17"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="scripts/admin-dashboard.js?v=19"></script>
+    <script src="scripts/admin-views-extended.js?v=19"></script>
+    <script src="scripts/admin-views-part2.js?v=19"></script>
+    <script src="scripts/admin-views-part3.js?v=19"></script>
+    <script src="scripts/admin-views-part4.js?v=19"></script>
 </body>
 
 </html>
