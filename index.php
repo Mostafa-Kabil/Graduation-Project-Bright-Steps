@@ -12,7 +12,7 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
             header("Location: doctor-dashboard.php");
             exit();
         case 'clinic':
-            header("Location: dashboards/clinic/dashboard.php");
+            header("Location: dashboards/clinic/clinic-dashboard.php");
             exit();
         default:
             header("Location: dashboards/parent/dashboard.php");

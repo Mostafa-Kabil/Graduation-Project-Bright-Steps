@@ -22,6 +22,39 @@ try {
 
         $db = get_db();
 
+        // SELF-HEALING: Ensure tables exist
+        $db->exec("CREATE TABLE IF NOT EXISTS `medical_records` (
+          `record_id` int(11) NOT NULL AUTO_INCREMENT,
+          `child_id` int(11) NOT NULL,
+          `doctor_id` int(11) NOT NULL,
+          `diagnosis` varchar(255) DEFAULT NULL,
+          `symptoms` text DEFAULT NULL,
+          `notes` text DEFAULT NULL,
+          `follow_up_date` date DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+          PRIMARY KEY (`record_id`),
+          KEY `child_id` (`child_id`),
+          KEY `doctor_id` (`doctor_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $db->exec("CREATE TABLE IF NOT EXISTS `prescriptions` (
+          `prescription_id` int(11) NOT NULL AUTO_INCREMENT,
+          `child_id` int(11) NOT NULL,
+          `doctor_id` int(11) NOT NULL,
+          `record_id` int(11) DEFAULT NULL,
+          `medication_name` varchar(255) NOT NULL,
+          `dosage` varchar(100) DEFAULT NULL,
+          `frequency` varchar(100) DEFAULT NULL,
+          `duration` varchar(100) DEFAULT NULL,
+          `instructions` text DEFAULT NULL,
+          `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (`prescription_id`),
+          KEY `child_id` (`child_id`),
+          KEY `doctor_id` (`doctor_id`),
+          KEY `record_id` (`record_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
         // Child info
         $stmt = $db->prepare("
             SELECT c.child_id, c.ssn, c.first_name, c.last_name, c.gender,

@@ -107,8 +107,7 @@ async function refreshClinicData(viewId) {
             
             // Update Clinic Name in UI if found
             if (data.clinic_name) {
-                const subtitle = document.querySelector('.dashboard-subtitle');
-                if (subtitle) subtitle.textContent = `Healthcare Management - ${data.clinic_name}`;
+                updateSidebarProfile(data.clinic_name);
             }
 
             if (viewId === 'specialists') {
@@ -122,6 +121,13 @@ async function refreshClinicData(viewId) {
     } catch (err) {
         console.error("Error fetching clinic data:", err);
     }
+}
+
+function updateSidebarProfile(name) {
+    const nameEl = document.querySelector('.user-info .user-name');
+    const subtitle = document.querySelector('.dashboard-subtitle');
+    if (nameEl) nameEl.textContent = name;
+    if (subtitle) subtitle.textContent = `Healthcare Management - ${name}`;
 }
 
 async function fetchAppointments() {
