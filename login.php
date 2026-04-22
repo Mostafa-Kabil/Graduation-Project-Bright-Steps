@@ -9,6 +9,7 @@ include 'connection.php';
 if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
     $role = $_SESSION['role'];
     if ($role === 'parent' || ($role !== 'doctor' && $role !== 'admin' && $role !== 'clinic' && $role !== 'specialist')) {
+        session_write_close();
         header("Location: dashboards/parent/dashboard.php");
         exit;
     }
@@ -44,6 +45,7 @@ if (isset($_POST['login'])) {
                 $_SESSION['role'] = $user['role'];
 
                 // route by role
+                session_write_close();
                 if ($user['role'] === 'admin') {
                     header("Location: admin-dashboard.php");
                     exit;

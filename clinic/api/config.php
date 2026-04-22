@@ -32,20 +32,36 @@ define('JWT_EXPIRY', 86400); // 24 hours in seconds
 function get_db() {
     static $pdo = null;
     if ($pdo === null) {
-        try {
-            $dsn = "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-            $pdo = new PDO($dsn, DB_USER, DB_PASS);
-            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-            $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
-        } catch (PDOException $e) {
-            http_response_code(500);
-            echo json_encode([
-                'success' => false,
-                'error' => 'Database connection failed'
-            ]);
-            exit();
+        $db_name = DB_NAME;
+        $db_user = DB_USER;
+        $db_pass = DB_PASS;
+        $hosts = ["localhost", "127.0.0.1"];
+        $ports = ["3306", "3307", "3308"];
+        $last_error = "";
+
+        foreach ($hosts as $host) {
+            foreach ($ports as $port) {
+                try {
+                    $dsn = "mysql:host=$host;port=$port;dbname=$db_name;charset=" . DB_CHARSET;
+                    $pdo = new PDO($dsn, $db_user, $db_pass);
+                    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+                    $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+                    return $pdo;
+                } catch (PDOException $e) {
+                    $last_error = $e->getMessage();
+                }
+            }
         }
+
+        // If we reach here, connection failed for all combinations
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'success' => false,
+            'error' => 'Database connection failed. ' . $last_error
+        ]);
+        exit();
     }
     return $pdo;
 }

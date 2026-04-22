@@ -103,18 +103,32 @@ function require_auth() {
         }
     }
 
-    if (empty($authHeader) || !str_starts_with($authHeader, 'Bearer ')) {
-        json_error('Missing or invalid Authorization header. Use: Bearer <token>', 401);
-    }
-
-    $token = substr($authHeader, 7);
-    $payload = verify_token($token);
-
-    if (!$payload) {
+    // 1. Try JWT Bearer Token (for Mobile/Apps)
+    if (!empty($authHeader) && strpos($authHeader, 'Bearer ') === 0) {
+        $token = substr($authHeader, 7);
+        $payload = verify_token($token);
+        if ($payload) {
+            return $payload;
+        }
         json_error('Invalid or expired token. Please login again.', 401);
     }
 
-    return $payload;
+    // 2. Fallback to PHP Session (for Web Dashboards)
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    if (isset($_SESSION['id']) && isset($_SESSION['role'])) {
+        return [
+            'user_id' => (int)$_SESSION['id'],
+            'email'   => $_SESSION['email'] ?? '',
+            'role'    => $_SESSION['role'],
+            'fname'   => $_SESSION['fname'] ?? '',
+            'lname'   => $_SESSION['lname'] ?? ''
+        ];
+    }
+
+    json_error('Missing or invalid Authorization header. Use: Bearer <token>', 401);
 }
 
 /**
@@ -147,7 +161,7 @@ function optional_auth() {
         }
     }
 
-    if (empty($authHeader) || !str_starts_with($authHeader, 'Bearer ')) {
+    if (empty($authHeader) || strpos($authHeader, 'Bearer ') !== 0) {
         return null;
     }
 

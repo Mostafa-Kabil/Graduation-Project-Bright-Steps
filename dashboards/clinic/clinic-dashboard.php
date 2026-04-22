@@ -1,3 +1,10 @@
+<?php
+session_start();
+if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
+    header("Location: ../../login.php");
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -144,7 +151,7 @@
     <script src="../../scripts/theme-toggle.js"></script>
     <script src="../../scripts/language-toggle.js?v=5"></script>
     <script src="../../scripts/navigation.js"></script>
-    <script src="clinic-dashboard.js"></script>
+    <script src="clinic-dashboard.js?v=<?= time() ?>"></script>
 </body>
 
 </html>
