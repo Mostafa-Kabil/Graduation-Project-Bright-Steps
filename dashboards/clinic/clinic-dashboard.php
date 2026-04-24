@@ -92,15 +92,6 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
             </nav>
 
             <div class="sidebar-footer">
-                <button class="sidebar-language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path
-                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                    </svg>
-                    <span>عربي</span>
-                </button>
                 <button class="nav-item" data-view="settings">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
@@ -120,33 +111,16 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
             </div>
         </aside>
 
-        <!-- Main Content -->
-        <main class="dashboard-main" id="clinic-main-content">
-            <!-- Content loaded by JavaScript -->
-        </main>
+        <!-- Main Content Wrapper -->
+        <div class="dashboard-main-wrapper" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Topbar will be injected here before main -->
+            <main class="dashboard-main" id="clinic-main-content">
+                <!-- Content loaded by JavaScript -->
+            </main>
+        </div>
     </div>
 
-    <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <path
-                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    </button>
 
-    <!-- Language Toggle -->
-    <button class="language-toggle" onclick="toggleLanguage()" aria-label="Toggle language">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="2" y1="12" x2="22" y2="12" />
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-        </svg>
-        عربي
-    </button>
 
     <script src="../../scripts/theme-toggle.js"></script>
     <script src="../../scripts/language-toggle.js?v=5"></script>
