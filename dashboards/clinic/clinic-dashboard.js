@@ -102,16 +102,24 @@ function renderClinicTopBar() {
                 </svg>
                 <span id="topbar-notif-badge" style="display:none; position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:#ef4444; border-radius:50%; border:2px solid var(--bg-card);"></span>
             </div>
-            <div class="topbar-notification-dropdown" id="clinic-notif-dropdown" style="display:none; position:absolute; top:50px; right:2rem; width:320px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,0.1); overflow:hidden; z-index:1000;">
-                <div style="padding:1rem 1.5rem; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
-                    <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--text-primary);">Notifications</h4>
-                    <span style="font-size:0.75rem; color:var(--teal-600); font-weight:600; cursor:pointer;">Mark all read</span>
-                </div>
-                <div style="padding:2.5rem 1.5rem; text-align:center;">
-                    <div style="width:48px; height:48px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem;">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <div class="topbar-notification-dropdown" id="clinic-notif-dropdown" style="display:none; position:absolute; top:55px; right:2rem; width:380px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.08); overflow:hidden; z-index:1000; backdrop-filter:blur(20px);">
+                <div style="padding:1.25rem 1.5rem; background:linear-gradient(135deg, #0d9488, #0891b2); display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <h4 style="margin:0; font-size:1rem; font-weight:700; color:#fff;">Notifications</h4>
+                        <span id="topbar-notif-count" style="display:none; background:rgba(255,255,255,0.25); color:#fff; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:20px;"></span>
                     </div>
-                    <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">No new notifications</p>
+                    <div style="display:flex; gap:0.75rem;">
+                        <span style="font-size:0.75rem; color:rgba(255,255,255,0.8); cursor:pointer; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.8)'" onclick="loadClinicNotifications()">Refresh</span>
+                        <span style="font-size:0.75rem; color:rgba(255,255,255,0.8); font-weight:600; cursor:pointer; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.8)'" onclick="markAllClinicNotifRead()">Mark all read</span>
+                    </div>
+                </div>
+                <div id="clinic-notif-content" style="max-height:420px; overflow-y:auto;">
+                    <div style="padding:3rem 1.5rem; text-align:center;">
+                        <div style="width:48px; height:48px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                        </div>
+                        <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading notifications...</p>
+                    </div>
                 </div>
             </div>
             <div id="topbar-avatar" onclick="showClinicView('settings')" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #0d9488, #0891b2); color:white; display:flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; font-size:0.9rem;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
@@ -134,10 +142,272 @@ function renderClinicTopBar() {
     });
 }
 
-function toggleClinicNotifDropdown() {
+async function toggleClinicNotifDropdown() {
     const dropdown = document.getElementById('clinic-notif-dropdown');
-    if (!dropdown) return;
-    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    if (!dropdown) {
+        console.error('❌ Dropdown element not found!');
+        return;
+    }
+
+    const isVisible = dropdown.style.display !== 'none';
+    console.log('🔔 toggleClinicNotifDropdown called, isVisible:', isVisible);
+
+    if (!isVisible) {
+        // Fetch notifications when opening
+        console.log('🔔 Opening dropdown, fetching notifications...');
+        await loadClinicNotifications();
+        dropdown.style.display = 'block';
+        console.log('🔔 Dropdown displayed');
+    } else {
+        console.log('🔔 Closing dropdown');
+        dropdown.style.display = 'none';
+    }
+}
+
+// Load notifications from clinicData (bundled with dashboard API)
+async function loadClinicNotifications() {
+    const contentDiv = document.getElementById('clinic-notif-content');
+    if (!contentDiv) return;
+
+    try {
+        let notifications = [];
+        let unreadCount = 0;
+
+        // Use data already loaded from api_get_clinic_data.php
+        if (window.clinicData && window.clinicData.notifications) {
+            notifications = window.clinicData.notifications;
+            unreadCount = window.clinicData.unread_count || 0;
+        } else {
+            // Fallback: re-fetch from clinic data API
+            const res = await fetch('../../api_get_clinic_data.php', { credentials: 'same-origin' });
+            const data = await res.json();
+            if (data.notifications) {
+                notifications = data.notifications;
+                unreadCount = data.unread_count || 0;
+            }
+        }
+
+        console.log('🔔 Notifications loaded:', notifications.length, 'unread:', unreadCount);
+
+        // Update badges
+        const badge = document.getElementById('topbar-notif-badge');
+        if (badge) {
+            badge.style.display = unreadCount > 0 ? 'block' : 'none';
+        }
+        const countBadge = document.getElementById('topbar-notif-count');
+        if (countBadge) {
+            if (unreadCount > 0) {
+                countBadge.textContent = unreadCount + ' new';
+                countBadge.style.display = 'inline-block';
+            } else {
+                countBadge.style.display = 'none';
+            }
+        }
+
+        if (notifications.length === 0) {
+            contentDiv.style.cssText = 'padding:2.5rem 1.5rem; text-align:center;';
+            contentDiv.innerHTML = `
+                <div style="width:48px; height:48px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                </div>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">No new notifications</p>
+            `;
+        } else {
+            contentDiv.style.cssText = 'max-height:400px; overflow-y:auto; padding:0;';
+
+            const getIcon = (type) => {
+                const icons = {
+                    'appointment_reminder': { bg: 'rgba(13,148,136,0.12)', color: '#0d9488', path: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+                    'payment_success': { bg: 'rgba(34,197,94,0.12)', color: '#16a34a', path: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+                    'growth_alert': { bg: 'rgba(251,191,36,0.12)', color: '#d97706', path: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>' },
+                    'milestone': { bg: 'rgba(168,85,247,0.12)', color: '#7c3aed', path: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>' },
+                    'system': { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', path: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' }
+                };
+                const i = icons[type] || icons['system'];
+                return `<div style="width:38px;height:38px;border-radius:12px;background:${i.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${i.color}" stroke-width="2">${i.path}</svg></div>`;
+            };
+
+            const timeAgo = (dateStr) => {
+                const now = new Date();
+                const d = new Date(dateStr);
+                const diff = Math.floor((now - d) / 1000);
+                if (diff < 60) return 'Just now';
+                if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+                if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+                if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+                return d.toLocaleDateString([], {month:'short', day:'numeric'});
+            };
+
+            let html = notifications.map(n => `
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color); display:flex; gap:0.875rem; align-items:flex-start; transition:background 0.15s ease; cursor:pointer; ${n.is_read == 0 ? 'background:rgba(13,148,136,0.04);' : ''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'rgba(13,148,136,0.04)' : 'transparent'}'">
+                    ${getIcon(n.type)}
+                    <div style="flex:1; min-width:0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
+                            <span style="font-weight:600; font-size:0.9rem; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${n.title || 'Notification'}</span>
+                            <span style="font-size:0.7rem; color:var(--text-muted); white-space:nowrap;">${timeAgo(n.created_at)}</span>
+                        </div>
+                        <p style="margin:0; font-size:0.82rem; color:var(--text-secondary); line-height:1.4;">${n.message || ''}</p>
+                        ${n.is_read == 0 ? '<div style="width:6px;height:6px;background:#0d9488;border-radius:50%;position:absolute;right:1.25rem;top:50%;transform:translateY(-50%);"></div>' : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            html += `
+                <div style="padding:1rem 1.5rem; text-align:center; background:var(--bg-card); border-top:1px solid var(--border-color);">
+                    <span style="font-size:0.85rem; font-weight:600; color:#0d9488; cursor:pointer; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'" onclick="openAllNotificationsModal()">View all notifications →</span>
+                </div>
+            `;
+
+            contentDiv.innerHTML = html;
+        }
+    } catch (err) {
+        console.error('Failed to load notifications:', err);
+        contentDiv.innerHTML = `
+            <div style="padding:2rem 1.5rem; text-align:center;">
+                <p style="color:#ef4444; font-size:0.85rem; margin:0;">Failed to load notifications</p>
+                <p style="color:var(--text-secondary); font-size:0.75rem; margin-top:0.5rem;">${err.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Mark single notification as read
+async function markClinicNotifRead(notificationId, btnElement) {
+    try {
+        const res = await fetch('../../api_notifications.php?action=read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notification_id: notificationId })
+        });
+        const data = await res.json();
+        if (data.success && btnElement) {
+            // Remove the "Mark as read" link
+            btnElement.parentElement.remove();
+            // Remove background highlight
+            const notifEl = btnElement.closest('[data-notif-id]');
+            if (notifEl) notifEl.style.background = 'transparent';
+            // Update badge count
+            const badge = document.getElementById('topbar-notif-badge');
+            if (badge) {
+                const current = parseInt(badge.textContent) || 1;
+                if (current > 1) {
+                    badge.textContent = current - 1;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Failed to mark notification as read:', err);
+    }
+}
+
+// Mark all notifications as read
+async function markAllClinicNotifRead() {
+    try {
+        const clinicId = window.clinicSessionId || (window.clinicData && window.clinicData.clinic ? window.clinicData.clinic.clinic_id : null);
+        let url = '../../api_notifications.php?action=read';
+        if (clinicId) url += '&clinic_id=' + clinicId;
+        
+        const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        
+        // Also update local data
+        if (window.clinicData && window.clinicData.notifications) {
+            window.clinicData.notifications.forEach(n => n.is_read = 1);
+            window.clinicData.unread_count = 0;
+        }
+        
+        // Hide badge
+        const badge = document.getElementById('topbar-notif-badge');
+        if (badge) badge.style.display = 'none';
+        const countBadge = document.getElementById('topbar-notif-count');
+        if (countBadge) countBadge.style.display = 'none';
+        
+        // Reload
+        await loadClinicNotifications();
+    } catch (err) {
+        console.error('Failed to mark all notifications as read:', err);
+    }
+}
+
+// Open full notifications modal
+function openAllNotificationsModal() {
+    // Close dropdown
+    const dropdown = document.getElementById('clinic-notif-dropdown');
+    if (dropdown) dropdown.style.display = 'none';
+
+    const notifications = (window.clinicData && window.clinicData.notifications) ? window.clinicData.notifications : [];
+
+    const getIcon = (type) => {
+        const icons = {
+            'appointment_reminder': { bg: 'rgba(13,148,136,0.12)', color: '#0d9488', path: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+            'payment_success': { bg: 'rgba(34,197,94,0.12)', color: '#16a34a', path: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+            'growth_alert': { bg: 'rgba(251,191,36,0.12)', color: '#d97706', path: '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>' },
+            'milestone': { bg: 'rgba(168,85,247,0.12)', color: '#7c3aed', path: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>' },
+            'system': { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', path: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' }
+        };
+        const i = icons[type] || icons['system'];
+        return `<div style="width:44px;height:44px;border-radius:14px;background:${i.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${i.color}" stroke-width="2">${i.path}</svg></div>`;
+    };
+
+    const timeAgo = (dateStr) => {
+        const now = new Date();
+        const d = new Date(dateStr);
+        const diff = Math.floor((now - d) / 1000);
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return Math.floor(diff/60) + ' min ago';
+        if (diff < 86400) return Math.floor(diff/3600) + ' hours ago';
+        if (diff < 604800) return Math.floor(diff/86400) + ' days ago';
+        return d.toLocaleDateString([], {month:'long', day:'numeric', year:'numeric'});
+    };
+
+    const notifRows = notifications.length > 0 ? notifications.map(n => `
+        <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-color); display:flex; gap:1rem; align-items:flex-start; transition:background 0.15s; cursor:pointer; position:relative; ${n.is_read == 0 ? 'background:rgba(13,148,136,0.04);' : ''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'rgba(13,148,136,0.04)' : 'transparent'}'">
+            ${getIcon(n.type)}
+            <div style="flex:1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
+                    <span style="font-weight:600; font-size:1rem; color:var(--text-primary);">${n.title || 'Notification'}</span>
+                    <span style="font-size:0.78rem; color:var(--text-muted);">${timeAgo(n.created_at)}</span>
+                </div>
+                <p style="margin:0; font-size:0.9rem; color:var(--text-secondary); line-height:1.5;">${n.message || ''}</p>
+                <span style="display:inline-block; margin-top:0.5rem; font-size:0.75rem; padding:2px 10px; border-radius:20px; background:${n.type === 'appointment_reminder' ? 'rgba(13,148,136,0.1)' : n.type === 'payment_success' ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)'}; color:${n.type === 'appointment_reminder' ? '#0d9488' : n.type === 'payment_success' ? '#16a34a' : '#2563eb'}; text-transform:capitalize;">${(n.type || 'system').replace(/_/g, ' ')}</span>
+            </div>
+            ${n.is_read == 0 ? '<div style="width:8px;height:8px;background:#0d9488;border-radius:50%;position:absolute;right:1.5rem;top:1.5rem;"></div>' : ''}
+        </div>
+    `).join('') : `
+        <div style="padding:4rem 2rem; text-align:center;">
+            <div style="width:64px; height:64px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1.5rem;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </div>
+            <h3 style="margin:0 0 0.5rem; color:var(--text-primary); font-size:1.1rem;">All caught up!</h3>
+            <p style="margin:0; color:var(--text-secondary); font-size:0.9rem;">No notifications to display.</p>
+        </div>
+    `;
+
+    const modal = document.createElement('div');
+    modal.className = 'clinic-modal-overlay active';
+    modal.innerHTML = `
+        <div class="clinic-modal glass-effect" style="max-width:650px; width:95%; max-height:85vh; display:flex; flex-direction:column;">
+            <div class="clinic-modal-header" style="background:linear-gradient(135deg, #0d9488, #0891b2); padding:1.5rem 2rem;">
+                <div>
+                    <h2 style="margin:0; font-size:1.3rem; color:#fff;">All Notifications</h2>
+                    <p style="margin:0.25rem 0 0; font-size:0.85rem; color:rgba(255,255,255,0.75);">${notifications.length} notification${notifications.length !== 1 ? 's' : ''}</p>
+                </div>
+                <button class="clinic-modal-close" onclick="this.closest('.clinic-modal-overlay').remove()" style="color:#fff;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div style="flex:1; overflow-y:auto;">
+                ${notifRows}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 }
 
 function showClinicView(viewId) {
@@ -1464,10 +1734,34 @@ function getSettingsView() {
                 <div class="section-card">
                     <div class="section-card-header"><h2 class="section-heading">Notification Preferences</h2></div>
                     <div style="padding: 1.5rem;">
-                        <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;"><span>New appointment</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-                        <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;"><span>Payment confirmations</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-                        <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;"><span>New review alerts</span><label class="toggle-switch"><input type="checkbox" checked><span class="toggle-slider"></span></label></div>
-                        <div class="toggle-row" style="display:flex; justify-content:space-between;"><span>Weekly summary</span><label class="toggle-switch"><input type="checkbox"><span class="toggle-slider"></span></label></div>
+                        <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;">
+                            <span>Push Notifications</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="notif-push-toggle" onchange="updateClinicNotificationSetting('push_notifications', this.checked ? 1 : 0)" ${clinicSettings?.push_notifications ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;">
+                            <span>Email Notifications</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="notif-email-toggle" onchange="updateClinicNotificationSetting('email_notifications', this.checked ? 1 : 0)" ${clinicSettings?.email_notifications ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;">
+                            <span>Appointment Reminders</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="notif-appointment-toggle" onchange="updateClinicNotificationSetting('appointment_reminders', this.checked ? 1 : 0)" ${clinicSettings?.appointment_reminders ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row" style="display:flex; justify-content:space-between;">
+                            <span>System Alerts</span>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="notif-system-toggle" onchange="updateClinicNotificationSetting('system_alerts', this.checked ? 1 : 0)" ${clinicSettings?.system_alerts ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -1814,10 +2108,59 @@ function submitAddSpecialist(event) {
     });
 }
 
+// Global variable to store clinic notification settings
+let clinicSettings = null;
+
+// Load clinic notification settings from user_settings table
+async function loadClinicNotificationSettings() {
+    try {
+        const res = await fetch('../../api_settings.php?action=get');
+        const data = await res.json();
+        if (data.success) {
+            clinicSettings = data.settings;
+            // Update toggle states if on settings page
+            const pushToggle = document.getElementById('notif-push-toggle');
+            const emailToggle = document.getElementById('notif-email-toggle');
+            const apptToggle = document.getElementById('notif-appointment-toggle');
+            const systemToggle = document.getElementById('notif-system-toggle');
+            if (pushToggle) pushToggle.checked = !!clinicSettings.push_notifications;
+            if (emailToggle) emailToggle.checked = !!clinicSettings.email_notifications;
+            if (apptToggle) apptToggle.checked = !!clinicSettings.appointment_reminders;
+            if (systemToggle) systemToggle.checked = !!clinicSettings.system_alerts;
+        }
+    } catch (err) {
+        console.error('Failed to load notification settings:', err);
+    }
+}
+
+// Update clinic notification setting
+async function updateClinicNotificationSetting(key, value) {
+    try {
+        const res = await fetch('../../api_settings.php?action=update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [key]: value })
+        });
+        const data = await res.json();
+        if (data.success) {
+            if (clinicSettings) clinicSettings[key] = value;
+            showClinicToast('Notification preference updated', 'success');
+        } else {
+            showClinicToast('Failed to update setting', 'error');
+        }
+    } catch (err) {
+        console.error('Failed to update notification setting:', err);
+        showClinicToast('Network error', 'error');
+    }
+}
+
 function renderSettingsData() {
     if (!window.clinicData || !window.clinicData.clinic) return;
     const c = window.clinicData.clinic;
-    
+
+    // Load notification settings
+    loadClinicNotificationSettings();
+
     // Set view mode values
     const viewContainer = document.getElementById('clinic-profile-view');
     if (viewContainer) {
@@ -1835,12 +2178,12 @@ function renderSettingsData() {
                     </div>
                 </div>
             </div>
-            
+
             <div style="margin-bottom: 1.5rem;">
                 <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">About</h4>
                 <p style="color: var(--text-secondary); line-height: 1.6; margin: 0; font-size: 0.95rem;">${c.bio || 'No description provided.'}</p>
             </div>
-            
+
             <div>
                 <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">Operating Hours</h4>
                 <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">${c.opening_hours || 'Standard Business Hours'}</p>

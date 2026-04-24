@@ -1490,6 +1490,8 @@ CREATE TABLE IF NOT EXISTS `user_settings` (
   `daily_reminders` tinyint(1) DEFAULT 1,
   `milestone_alerts` tinyint(1) DEFAULT 1,
   `data_sharing` tinyint(1) DEFAULT 1,
+  `system_alerts` tinyint(1) DEFAULT 1,
+  `weekly_reports` tinyint(1) DEFAULT 1,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`user_id`),
   CONSTRAINT `user_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE

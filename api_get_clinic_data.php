@@ -114,6 +114,28 @@ try {
         $avgReviewRating = round($totalRating / $reviewCount, 1);
     }
 
+    // 6. Fetch Notifications for this clinic (both clinic_id and user_id based)
+    $notifications = [];
+    $unreadCount = 0;
+    try {
+        $notifStmt = $connect->prepare("
+            SELECT * FROM notifications 
+            WHERE clinic_id = ? OR user_id = ?
+            ORDER BY created_at DESC 
+            LIMIT 20
+        ");
+        $notifStmt->execute([$clinic_id, $clinic_id]);
+        $notifications = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $unreadStmt = $connect->prepare("
+            SELECT COUNT(*) FROM notifications WHERE (clinic_id = ? OR user_id = ?) AND is_read = 0
+        ");
+        $unreadStmt->execute([$clinic_id, $clinic_id]);
+        $unreadCount = (int)$unreadStmt->fetchColumn();
+    } catch (Exception $e) {
+        $notifications = [];
+    }
+
     echo json_encode([
         "success" => true,
         "clinic" => $clinic,
@@ -132,7 +154,9 @@ try {
             "count" => $reviewCount,
             "avg_rating" => $avgReviewRating,
             "positive_pct" => $reviewCount > 0 ? round(($positiveCount / $reviewCount) * 100) : 0
-        ]
+        ],
+        "notifications" => $notifications,
+        "unread_count" => $unreadCount
     ]);
 
 } catch (Exception $e) {

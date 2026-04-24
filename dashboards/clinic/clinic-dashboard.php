@@ -122,6 +122,10 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
 
 
 
+    <script>
+        window.clinicSessionId = <?= json_encode($_SESSION['id']) ?>;
+        window.clinicSessionRole = <?= json_encode($_SESSION['role'] ?? '') ?>;
+    </script>
     <script src="../../scripts/theme-toggle.js"></script>
     <script src="../../scripts/language-toggle.js?v=5"></script>
     <script src="../../scripts/navigation.js"></script>
