@@ -555,6 +555,7 @@ function getSettingsView() {
                             <button class="btn btn-gradient" onclick="saveAccountSettings()">Save Changes</button>
                         </div>
                     </div>
+                    <div id="dr-profile-section"><div class="settings-section" style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:0.9rem;">Loading profile…</div></div>
                     <div class="settings-section settings-danger-zone">
                         <h2 class="settings-section-title danger">Danger Zone</h2>
                         <p class="settings-section-subtitle">Irreversible and destructive actions</p>
@@ -651,6 +652,7 @@ function getSettingsView() {
 function initSettingsPage() {
     const darkPref = document.getElementById('pref-dark');
     if (darkPref) darkPref.checked = document.documentElement.getAttribute('data-theme') === 'dark';
+    loadProfileData();
 }
 
 function switchSettingsTab(tab, btn) {
@@ -674,6 +676,196 @@ function changePassword() {
     if (nw.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
     showToast('Password updated successfully!', 'success');
 }
+
+// ── My Profile (embedded in Settings) ──────────────────
+function loadProfileData() {
+    const sec = document.getElementById('dr-profile-section');
+    fetch('dr-settings.php?ajax=1&action=get_profile')
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                renderProfileSection(res.data);
+            } else {
+                if (sec) sec.innerHTML = `<div class="settings-section"><p style="color:var(--text-secondary);padding:1rem 0;">Profile data unavailable: ${res.error || 'Not found'}. Make sure your account has a linked specialist record.</p></div>`;
+            }
+        })
+        .catch(err => {
+            if (sec) sec.innerHTML = `<div class="settings-section"><p style="color:var(--text-secondary);padding:1rem 0;">Could not load profile. Please refresh and try again.</p></div>`;
+        });
+}
+
+function renderProfileSection(d) {
+    const initials = ((d.first_name||'').charAt(0) + (d.last_name||'').charAt(0)).toUpperCase();
+    const fullName = ('Dr. ' + (d.first_name||'') + ' ' + (d.last_name||'')).trim();
+    const spec = d.specialization || '';
+    const activeSlots = (d.slots || []).map(s => parseInt(s.day_of_week));
+    const startTime = d.slots && d.slots[0] ? (d.slots[0].start_time||'09:00').substring(0,5) : '09:00';
+    const endTime   = d.slots && d.slots[0] ? (d.slots[0].end_time||'17:00').substring(0,5) : '17:00';
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const daysHtml = dayNames.map((day,i) => `<div class="dr-day-checkbox"><input type="checkbox" id="dd-day-${i}" value="${i}" ${activeSlots.includes(i)?'checked':''}><label for="dd-day-${i}">${day}</label></div>`).join('');
+    const specVals = ['pediatrician','child-psychiatrist','developmental-pediatrician','neurologist','speech-therapist','occupational-therapist','behavioral-therapist','psychologist','other'];
+    const specLabels = ['Pediatrician','Child Psychiatrist','Developmental Pediatrician','Pediatric Neurologist','Speech-Language Pathologist','Occupational Therapist','Behavioral Therapist','Child Psychologist','Other'];
+    const specOpts = specVals.map((v,i) => `<option value="${v}" ${spec===v?'selected':''}>${specLabels[i]}</option>`).join('');
+
+    const html = `<div class="settings-section" style="padding:0;background:none;box-shadow:none;border:none;">
+        <div class="dr-profile-photo-section">
+            <div class="dr-avatar-wrapper" onclick="document.getElementById('dd-photo-upload').click()" title="Change profile photo">
+                <div class="dr-avatar-large" id="dd-avatar-display">${initials}</div>
+                <div class="dr-avatar-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+                <input type="file" id="dd-photo-upload" accept="image/*" style="display:none;">
+            </div>
+            <div class="dr-profile-info">
+                <h2>${fullName}</h2>
+                <p class="dr-specialty-text">${spec}</p>
+                <p class="dr-verified-text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Verified Healthcare Provider</p>
+            </div>
+        </div>
+        <form class="dr-profile-form" id="dd-profile-form" novalidate>
+            <div class="dr-form-section">
+                <div class="dr-form-section-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><h3 class="dr-form-section-title">Personal Information</h3></div>
+                <div class="dr-form-grid">
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-fullname">Full Name <span class="required">*</span></label><input type="text" id="dd-fullname" class="dr-form-input" value="${fullName}" required></div>
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-email">Email Address <span class="required">*</span></label><input type="email" id="dd-email" class="dr-form-input" value="${d.email||''}" required></div>
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-phone">Phone Number</label><input type="tel" id="dd-phone" class="dr-form-input" value="${d.phone||''}"></div>
+                </div>
+                <button type="button" class="dr-password-toggle-btn" id="dd-toggle-pw-btn" onclick="toggleDrPasswordFields()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Change Password</button>
+                <div class="dr-password-fields" id="dd-password-fields">
+                    <div class="dr-form-grid">
+                        <div class="dr-form-group"><label class="dr-form-label" for="dd-cur-pw">Current Password</label><input type="password" id="dd-cur-pw" class="dr-form-input" placeholder="Current password"></div>
+                        <div class="dr-form-group"><label class="dr-form-label" for="dd-new-pw">New Password</label><input type="password" id="dd-new-pw" class="dr-form-input" placeholder="New password"></div>
+                        <div class="dr-form-group"><label class="dr-form-label" for="dd-confirm-pw">Confirm Password</label><input type="password" id="dd-confirm-pw" class="dr-form-input" placeholder="Confirm password"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="dr-form-section">
+                <div class="dr-form-section-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg><h3 class="dr-form-section-title">Professional Information</h3></div>
+                <div class="dr-form-grid">
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-specialty">Specialty <span class="required">*</span></label><select id="dd-specialty" class="dr-form-select" required onchange="handleDrSpecialtyChange()">${specOpts}</select><input type="text" id="dd-specialty-other" class="dr-form-input" placeholder="Enter your specialty" style="display:none;margin-top:0.5rem;"></div>
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-experience">Years of Experience <span class="required">*</span></label><input type="number" id="dd-experience" class="dr-form-input" value="${d.experience_years||0}" min="0" max="60" required></div>
+                    <div class="dr-form-group full-width"><label class="dr-form-label" for="dd-cert">Certifications</label><input type="text" id="dd-cert" class="dr-form-input" value="${d.certificate_of_experience||''}" placeholder="e.g. MD, FAAP, Board Certified"></div>
+                    <div class="dr-form-group full-width"><label class="dr-form-label" for="dd-bio">Bio</label><textarea id="dd-bio" class="dr-form-input dr-form-textarea" placeholder="Write a short bio about your practice…"></textarea></div>
+                </div>
+            </div>
+            <div class="dr-form-section">
+                <div class="dr-form-section-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg><h3 class="dr-form-section-title">Clinic Information</h3><span class="dr-readonly-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span></div>
+                <div class="dr-form-grid">
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-clinic-name">Clinic Name</label><input type="text" id="dd-clinic-name" class="dr-form-input readonly" value="${d.clinic_name||''}" readonly></div>
+                    <div class="dr-form-group"><label class="dr-form-label" for="dd-clinic-loc">Clinic Location</label><input type="text" id="dd-clinic-loc" class="dr-form-input readonly" value="${d.clinic_location||''}" readonly></div>
+                </div>
+            </div>
+            <div class="dr-form-section">
+                <div class="dr-form-section-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><h3 class="dr-form-section-title">Availability Settings</h3></div>
+                <label class="dr-form-label" style="margin-bottom:0.75rem;display:block;">Working Days</label>
+                <div class="dr-days-grid">${daysHtml}</div>
+                <label class="dr-form-label" style="margin:1rem 0 0.75rem;display:block;">Working Hours</label>
+                <div class="dr-hours-row"><label for="dd-start-time">From</label><input type="time" id="dd-start-time" class="dr-time-input" value="${startTime}"><span class="dr-hours-separator">—</span><label for="dd-end-time">To</label><input type="time" id="dd-end-time" class="dr-time-input" value="${endTime}"></div>
+                <label class="dr-form-label" style="margin:1.25rem 0 0.5rem;display:block;">Consultation Types</label>
+                <div class="dr-consult-types">
+                    <div class="dr-consult-toggle"><input type="checkbox" id="dd-consult-online" checked><label for="dd-consult-online"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/><rect x="1" y="6" width="14" height="12" rx="2" ry="2"/></svg> Online</label></div>
+                    <div class="dr-consult-toggle"><input type="checkbox" id="dd-consult-onsite" checked><label for="dd-consult-onsite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> On-site</label></div>
+                </div>
+            </div>
+            <div class="dr-form-actions">
+                <button type="button" class="btn btn-outline" onclick="loadProfileData()">Reset</button>
+                <button type="submit" class="btn btn-gradient">Save Changes</button>
+            </div>
+        </form>
+    </div>`;
+
+    const sec = document.getElementById('dr-profile-section');
+    if (sec) sec.innerHTML = html;
+
+    const photoInput = document.getElementById('dd-photo-upload');
+    if (photoInput) {
+        photoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) { showToast('Image must be smaller than 5MB', 'error'); return; }
+            const reader = new FileReader();
+            reader.onload = ev => { const av = document.getElementById('dd-avatar-display'); if (av) av.innerHTML = `<img src="${ev.target.result}" alt="Photo" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`; };
+            reader.readAsDataURL(file);
+        });
+    }
+    const form = document.getElementById('dd-profile-form');
+    if (form) form.addEventListener('submit', submitDrProfileForm);
+    handleDrSpecialtyChange();
+}
+
+function handleDrSpecialtyChange() {
+    const sel = document.getElementById('dd-specialty');
+    const other = document.getElementById('dd-specialty-other');
+    if (!sel || !other) return;
+    other.style.display = sel.value === 'other' ? 'block' : 'none';
+    if (sel.value !== 'other') other.value = '';
+}
+
+function toggleDrPasswordFields() {
+    const fields = document.getElementById('dd-password-fields');
+    const btn = document.getElementById('dd-toggle-pw-btn');
+    if (!fields) return;
+    fields.classList.toggle('visible');
+    if (fields.classList.contains('visible')) {
+        if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel Password Change';
+        document.getElementById('dd-cur-pw')?.focus();
+    } else {
+        if (btn) btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Change Password';
+        ['dd-cur-pw','dd-new-pw','dd-confirm-pw'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    }
+}
+
+function submitDrProfileForm(e) {
+    e.preventDefault();
+    const nameParts = (document.getElementById('dd-fullname')?.value||'').trim().replace(/^Dr\.\s*/i,'').split(' ');
+    const first_name = nameParts[0]||'';
+    const last_name  = nameParts.slice(1).join(' ')||'';
+    const email = (document.getElementById('dd-email')?.value||'').trim();
+    const phone = (document.getElementById('dd-phone')?.value||'').trim();
+    const sel   = document.getElementById('dd-specialty');
+    const other = document.getElementById('dd-specialty-other');
+    const specialization = (sel?.value === 'other' ? other?.value : sel?.value)||'';
+    const experience_years = parseInt(document.getElementById('dd-experience')?.value||0);
+    const certificate_of_experience = (document.getElementById('dd-cert')?.value||'').trim();
+
+    if (!first_name || !email) { showToast('Name and email are required', 'error'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Please enter a valid email', 'error'); return; }
+
+    const pwVisible = document.getElementById('dd-password-fields')?.classList.contains('visible');
+    if (pwVisible) {
+        const cur = document.getElementById('dd-cur-pw')?.value;
+        const nw  = document.getElementById('dd-new-pw')?.value;
+        const conf= document.getElementById('dd-confirm-pw')?.value;
+        if (!cur || !nw) { showToast('Enter current and new password', 'error'); return; }
+        if (nw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+        if (nw !== conf) { showToast('Passwords do not match', 'error'); return; }
+        fetch('dr-settings.php?ajax=1&action=change_password', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({current_password:cur, new_password:nw})
+        }).then(r=>r.json()).then(res => {
+            if (res.success) { showToast('Password changed!','success'); toggleDrPasswordFields(); }
+            else showToast(res.error||'Password change failed','error');
+        }).catch(()=>showToast('Connection error','error'));
+    }
+
+    fetch('dr-settings.php?ajax=1&action=save_profile', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({first_name, last_name, email, phone, specialization, experience_years, certificate_of_experience})
+    }).then(r=>r.json()).then(res => {
+        if (res.success) showToast('Profile saved successfully!','success');
+        else showToast(res.error||'Save failed','error');
+    }).catch(()=>showToast('Connection error','error'));
+
+    const selectedDays = [];
+    for (let i=0;i<=6;i++) { if (document.getElementById(`dd-day-${i}`)?.checked) selectedDays.push(i); }
+    const startTime = document.getElementById('dd-start-time')?.value;
+    const endTime   = document.getElementById('dd-end-time')?.value;
+    if (selectedDays.length > 0 && startTime && endTime) {
+        fetch('dr-settings.php?ajax=1&action=save_slots', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({days:selectedDays, start_time:startTime, end_time:endTime, slot_duration:30})
+        }).catch(()=>{});
+    }
+}
+
 function handleLogout() {
     // Remove existing modal if any
     const existing = document.getElementById('logout-modal');

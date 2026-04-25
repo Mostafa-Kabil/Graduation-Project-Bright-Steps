@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 include "validation.php";
 include "connection.php";
@@ -89,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $_SESSION['email'] = $email;
         $_SESSION['role'] = $role;
         $_SESSION['signup_success'] = true;
+        session_write_close();
         header("Location: signup.php");
         exit();
     }

@@ -18,6 +18,55 @@ $sessionDoctorName = 'Dr. ' . htmlspecialchars($_SESSION['fname'] ?? '') . ' ' .
 $sessionDoctorInitials = strtoupper(substr($_SESSION['fname'] ?? 'D', 0, 1) . substr($_SESSION['lname'] ?? 'S', 0, 1));
 $sessionSpecialization = htmlspecialchars($_SESSION['specialization'] ?? 'Specialist');
 
+// ─── Onboarding Check: redirect if not completed ─────────────
+if (!$isAjax) {
+    $needsOnboarding = true;
+    try {
+        // Check doctor_onboarding table
+        $connect->exec("CREATE TABLE IF NOT EXISTS `doctor_onboarding` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `doctor_id` INT NOT NULL,
+            `specialization` VARCHAR(100),
+            `experience_years` INT DEFAULT 0,
+            `certifications` VARCHAR(255),
+            `focus_areas` TEXT,
+            `working_days` TEXT,
+            `start_time` TIME DEFAULT '09:00:00',
+            `end_time` TIME DEFAULT '17:00:00',
+            `consultation_types` TEXT,
+            `goals` TEXT,
+            `completed_at` TIMESTAMP DEFAULT current_timestamp()
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+
+        $obStmt = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = ? LIMIT 1");
+        $obStmt->execute([intval($_SESSION['id'])]);
+        if ($obStmt->fetch(PDO::FETCH_ASSOC)) {
+            $needsOnboarding = false;
+        }
+    } catch (Exception $e) {
+        $needsOnboarding = false; // Don't block if table issue
+    }
+
+    // Also skip if specialist already has specialization configured
+    if ($needsOnboarding) {
+        try {
+            $specCheck = $connect->prepare("SELECT specialization, experience_years FROM specialist WHERE specialist_id = ? LIMIT 1");
+            $specCheck->execute([$sessionSpecialistId]);
+            $specRow = $specCheck->fetch(PDO::FETCH_ASSOC);
+            if ($specRow && !empty($specRow['specialization']) && intval($specRow['experience_years']) > 0) {
+                $needsOnboarding = false;
+            }
+        } catch (Exception $e) {
+            $needsOnboarding = false;
+        }
+    }
+
+    if ($needsOnboarding) {
+        header('Location: doctor-onboarding.php');
+        exit;
+    }
+}
+
 // ═══════════════════════════════════════════════════════
 // Doctor Dashboard — Backend API Handler
 // Handles AJAX requests for Reports & Messages
@@ -102,12 +151,15 @@ if ($isAjax) {
                 $stmt2->execute([':sid' => $specialist_id]);
                 $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
 
-                echo json_encode(['success' => true, 'data' => [
-                    'total_reports' => intval($dr_stats['total_reports'] ?? 0),
-                    'this_month' => intval($dr_stats['this_month'] ?? 0),
-                    'shared_total' => intval($shared_stats['shared_total'] ?? 0),
-                    'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
-                ]]);
+                echo json_encode([
+                    'success' => true,
+                    'data' => [
+                        'total_reports' => intval($dr_stats['total_reports'] ?? 0),
+                        'this_month' => intval($dr_stats['this_month'] ?? 0),
+                        'shared_total' => intval($shared_stats['shared_total'] ?? 0),
+                        'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
+                    ]
+                ]);
                 exit;
             }
 
@@ -637,6 +689,9 @@ if ($isAjax) {
     <link rel="stylesheet" href="styles/globals.css?v=8">
     <link rel="stylesheet" href="styles/dashboard.css?v=8">
     <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/settings.css?v=8">
+    <link rel="stylesheet" href="styles/profile.css?v=8">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=8">
 </head>
 
 <body>
@@ -708,7 +763,7 @@ if ($isAjax) {
             </nav>
 
             <div class="sidebar-footer">
-                <button class="nav-item" data-view="settings">
+                <button class="nav-item" onclick="window.location.href='dr-settings.php'">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
                         <path
@@ -842,8 +897,8 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=9"></script>
-    
+    <script src="scripts/doctor-dashboard.js?v=11"></script>
+
 </body>
 
 </html>

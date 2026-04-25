@@ -99,7 +99,7 @@ CREATE TABLE `behavior_category` (
 
 CREATE TABLE `child` (
   `ssn` varchar(20) NOT NULL,
-  `child_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
   `parent_id` int(11) NOT NULL,
   `first_name` varchar(100) DEFAULT NULL,
   `last_name` varchar(100) DEFAULT NULL,
@@ -107,10 +107,7 @@ CREATE TABLE `child` (
   `birth_month` int(11) DEFAULT NULL,
   `birth_year` int(11) DEFAULT NULL,
   `gender` varchar(10) DEFAULT NULL,
-  `birth_certificate` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`child_id`),
-  UNIQUE KEY `ssn` (`ssn`),
-  KEY `parent_id` (`parent_id`)
+  `birth_certificate` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -236,10 +233,6 @@ CREATE TABLE `growth_record` (
   `height` decimal(5,2) DEFAULT NULL,
   `weight` decimal(5,2) DEFAULT NULL,
   `head_circumference` decimal(5,2) DEFAULT NULL,
-  `arm_circumference` decimal(5,2) DEFAULT NULL,
-  `subscapular_skinfold` decimal(5,2) DEFAULT NULL,
-  `triceps_skinfold` decimal(5,2) DEFAULT NULL,
-  `motor_milestones_score` int(11) DEFAULT 0,
   `recorded_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -411,9 +404,7 @@ CREATE TABLE `subscription` (
   `subscription_id` int(11) NOT NULL,
   `plan_name` varchar(100) DEFAULT NULL,
   `plan_period` varchar(50) DEFAULT NULL,
-  `price` decimal(10,2) DEFAULT NULL,
-  `description` text DEFAULT NULL,
-  `status` varchar(20) DEFAULT 'active'
+  `price` decimal(10,2) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -486,12 +477,12 @@ ALTER TABLE `behavior_category`
   ADD PRIMARY KEY (`category_id`);
 
 --
--- Indexes for table `child` (already defined inline in CREATE TABLE)
+-- Indexes for table `child`
 --
--- ALTER TABLE `child`
---   ADD PRIMARY KEY (`child_id`),
---   ADD UNIQUE KEY `ssn` (`ssn`),
---   ADD KEY `parent_id` (`parent_id`);
+ALTER TABLE `child`
+  ADD PRIMARY KEY (`ssn`,`child_id`),
+  ADD UNIQUE KEY `child_id` (`child_id`),
+  ADD KEY `parent_id` (`parent_id`);
 
 --
 -- Indexes for table `child_badge`
@@ -1161,9 +1152,6 @@ CREATE TABLE IF NOT EXISTS `activity_log` (
   `activity_type` varchar(50) NOT NULL,
   `description` text NOT NULL,
   `related_user_id` int(11) DEFAULT NULL,
-  `user_name` varchar(200) DEFAULT NULL,
-  `user_role` varchar(50) DEFAULT NULL,
-  `ip_address` varchar(45) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`log_id`),
   KEY `related_user_id` (`related_user_id`)
@@ -1223,11 +1211,11 @@ SET @p1 = LAST_INSERT_ID();
 INSERT IGNORE INTO `parent` (`parent_id`, `number_of_children`) VALUES
 (@p1, 2), (@p1 + 1, 1), (@p1 + 2, 1), (@p1 + 3, 2);
 
--- Sample Specialist Users
+-- Sample Doctor Users
 INSERT INTO `users` (`first_name`, `last_name`, `email`, `password`, `role`, `status`) VALUES
-('Sarah', 'Mitchell', 'sarah.m@citykids.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'specialist', 'active'),
-('Ahmed', 'Hassan', 'ahmed.h@sunrisepeds.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'specialist', 'active'),
-('Layla', 'Noor', 'layla.n@citykids.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'specialist', 'active');
+('Sarah', 'Mitchell', 'sarah.m@citykids.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'doctor', 'active'),
+('Ahmed', 'Hassan', 'ahmed.h@sunrisepeds.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'doctor', 'active'),
+('Layla', 'Noor', 'layla.n@citykids.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'doctor', 'active');
 
 -- Sample Clinics
 INSERT INTO `clinic` (`admin_id`, `clinic_name`, `email`, `password`, `location`, `status`, `rating`) VALUES
@@ -1299,7 +1287,7 @@ INSERT INTO `badge` (`name`, `description`, `icon`) VALUES
 ('Super Parent', 'Login for 30 consecutive days', 'super_parent');
 
 -- =====================================================
-<<<<<<< HEAD
+
 -- Admin Dashboard Expansion Tables
 -- =====================================================
 
@@ -1502,6 +1490,8 @@ CREATE TABLE IF NOT EXISTS `user_settings` (
   `daily_reminders` tinyint(1) DEFAULT 1,
   `milestone_alerts` tinyint(1) DEFAULT 1,
   `data_sharing` tinyint(1) DEFAULT 1,
+  `system_alerts` tinyint(1) DEFAULT 1,
+  `weekly_reports` tinyint(1) DEFAULT 1,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`user_id`),
   CONSTRAINT `user_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
@@ -1695,7 +1685,7 @@ CREATE TABLE IF NOT EXISTS `article_reads` (
   `article_title` VARCHAR(255) NOT NULL,
   `read_at` TIMESTAMP DEFAULT current_timestamp(),
   FOREIGN KEY (`user_id`) REFERENCES `users`(`user_id`) ON DELETE CASCADE
-=======
+
 -- Clinic Module Tables
 -- =====================================================
 
@@ -1771,7 +1761,7 @@ CREATE TABLE IF NOT EXISTS `appointment_slots` (
   KEY `fk_slot_clinic` (`clinic_id`),
   CONSTRAINT `fk_slot_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_slot_clinic` FOREIGN KEY (`clinic_id`) REFERENCES `clinic` (`clinic_id`) ON DELETE CASCADE
->>>>>>> d45c7513f23a5924c3ee01d693a6712e6eff99c6
+
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 COMMIT;
@@ -1779,138 +1769,3 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
-> "CREATE TABLE IF NOT EXISTS `motor_milestones` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `child_id` int(11) NOT NULL,
-    `milestone_name` varchar(255) NOT NULL,
-    `category` varchar(100) NOT NULL,
-    `is_achieved` tinyint(1) DEFAULT 0,
-    `achieved_at` datetime DEFAULT NULL,
-    `created_at` timestamp DEFAULT current_timestamp(),
-    PRIMARY KEY (`id`),
-    KEY `child_id` (`child_id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-  
-> "CREATE TABLE IF NOT EXISTS `child_activities` (
-    `activity_id` int(11) NOT NULL AUTO_INCREMENT,
-    `child_id` int(11) NOT NULL,
-    `title` varchar(255) NOT NULL,
-    `description` text,
-    `category` varchar(100) NOT NULL,
-    `duration_minutes` int(11) DEFAULT 15,
-    `difficulty` varchar(50) DEFAULT 'medium',
-    `source` varchar(50) DEFAULT 'ai',
-    `is_completed` tinyint(1) DEFAULT 0,
-    `completed_at` datetime DEFAULT NULL,
-    `points_earned` int(11) DEFAULT 0,
-    `created_at` timestamp DEFAULT current_timestamp(),
-    PRIMARY KEY (`activity_id`),
-    KEY `child_id` (`child_id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-  
-> "CREATE TABLE IF NOT EXISTS `child_milestones` (
-    `id` int(11) NOT NULL AUTO_INCREMENT,
-    `child_id` int(11) NOT NULL,
-    `milestone_id` int(11) NOT NULL,
-    `achieved_at` datetime NOT NULL,
-    PRIMARY KEY (`id`),
-    KEY `child_id` (`child_id`),
-    KEY `milestone_id` (`milestone_id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-  
-  // Wait, milestones table might also be needed? Let's assume milestones exists or create it too
-> "CREATE TABLE IF NOT EXISTS `milestones` (
-    `milestone_id` int(11) NOT NULL AUTO_INCREMENT,
-    `title` varchar(255) NOT NULL,
-    `category` varchar(100) NOT NULL,
-    PRIMARY KEY (`milestone_id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
-  
-> "CREATE TABLE IF NOT EXISTS `points_wallet` (
-    `wallet_id` int(11) NOT NULL AUTO_INCREMENT,
-    `child_id` int(11) NOT NULL,
-    `total_points` int(11) DEFAULT 0,
-    `updated_at` timestamp DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-    PRIMARY KEY (`wallet_id`),
-    KEY `child_id` (`child_id`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
-  ];
-  
-  foreach ($queries as $sql) {
-      try {
-          $connect->exec($sql);
-          echo "Successfully executed query.\n";
-      } catch (PDOException $e) {
-          echo "Error: " . $e->getMessage() . "\n";
-      }
-  }
-  echo "Migration finished.\n";
-  ?>
-
-<<<<<<< HEAD
-
-
-DELIMITER 
-CREATE TRIGGER trg_users_signup_log AFTER INSERT ON users FOR EACH ROW BEGIN
-    INSERT INTO activity_log (activity_type, description, related_user_id, user_name, user_role, created_at)
-    VALUES (
-        'user_signup',
-        CONCAT('New User signed up: ', IFNULL(NEW.first_name, ''), ' ', IFNULL(NEW.last_name, ''), ' (', NEW.role, ')'),
-        NEW.user_id,
-        CONCAT(IFNULL(NEW.first_name, ''), ' ', IFNULL(NEW.last_name, '')),
-        NEW.role,
-        NOW()
-    );
-END
-DELIMITER ;
-
-DELIMITER 
-CREATE TRIGGER trg_clinic_insert_log AFTER INSERT ON clinic FOR EACH ROW BEGIN
-    INSERT INTO activity_log (activity_type, description, created_at)
-    VALUES (
-        'clinic_registered',
-        CONCAT('New Clinic registered: ', IFNULL(NEW.clinic_name, '')),
-        NOW()
-    );
-END
-DELIMITER ;
-
-DELIMITER 
-CREATE TRIGGER trg_clinic_update_log AFTER UPDATE ON clinic FOR EACH ROW BEGIN
-    IF OLD.status != 'verified' AND NEW.status = 'verified' THEN
-        INSERT INTO activity_log (activity_type, description, created_at)
-        VALUES (
-            'clinic_verified',
-            CONCAT('Clinic verified: ', IFNULL(NEW.clinic_name, '')),
-            NOW()
-        );
-    END IF;
-END
-DELIMITER ;
-
-DELIMITER 
-CREATE TRIGGER trg_payment_insert_log AFTER INSERT ON payment FOR EACH ROW BEGIN
-    INSERT INTO activity_log (activity_type, description, created_at)
-    VALUES (
-        'payment_received',
-        CONCAT('Payment Received: $', FORMAT(NEW.amount_post_discount, 2)),
-        NOW()
-    );
-END
-DELIMITER ;
-
-DELIMITER 
-CREATE TRIGGER trg_parent_sub_log AFTER INSERT ON parent_subscription FOR EACH ROW BEGIN
-    INSERT INTO activity_log (activity_type, description, related_user_id, created_at)
-    VALUES (
-        'subscription_upgrade',
-        CONCAT('Subscription Purchased (Plan ID: ', NEW.subscription_id, ')'),
-        NEW.parent_id,
-        NOW()
-    );
-END
-DELIMITER ;
-
-=======
->>>>>>> 39b714dea30f2934727c97f4ec8aff6d17893e00
