@@ -573,6 +573,162 @@ if ($isAjax) {
         }
     }
 
+    // ─── SETTINGS SECTION ──────────────────────────────────
+    if ($section === 'settings') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_profile') {
+                try {
+                    $stmt = $connect->prepare("
+                        SELECT u.user_id, u.first_name, u.last_name, u.email,
+                               s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
+                               COALESCE(c.clinic_name, '') AS clinic_name,
+                               COALESCE(c.location, '') AS clinic_location
+                        FROM users u
+                        LEFT JOIN specialist s ON u.user_id = s.specialist_id
+                        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+                        WHERE u.user_id = :uid
+                    ");
+                    $stmt->execute([':uid' => intval($_SESSION['id'])]);
+                    $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$profile) {
+                        // Fallback: build from session
+                        $profile = [
+                            'user_id' => intval($_SESSION['id']),
+                            'first_name' => $_SESSION['fname'] ?? '',
+                            'last_name' => $_SESSION['lname'] ?? '',
+                            'email' => $_SESSION['email'] ?? '',
+                            'specialization' => $_SESSION['specialization'] ?? '',
+                            'experience_years' => 0,
+                            'certificate_of_experience' => '',
+                            'clinic_name' => '',
+                            'clinic_location' => ''
+                        ];
+                    }
+
+                    $slots = [];
+                    try {
+                        $stmt2 = $connect->prepare("
+                            SELECT slot_id, day_of_week, start_time, end_time, slot_duration, is_active
+                            FROM appointment_slots
+                            WHERE doctor_id = :did AND is_active = 1
+                            ORDER BY day_of_week ASC, start_time ASC
+                        ");
+                        $stmt2->execute([':did' => intval($_SESSION['id'])]);
+                        $slots = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (Exception $e) { /* table may not exist */ }
+
+                    $profile['slots'] = $slots;
+                    unset($profile['password']);
+
+                    echo json_encode(['success' => true, 'data' => $profile]);
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+                }
+                exit;
+            }
+        } elseif ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'save_profile') {
+                $doctor_id = intval($_SESSION['id']);
+                $first_name = trim($input['first_name'] ?? '');
+                $last_name  = trim($input['last_name'] ?? '');
+                $email      = trim($input['email'] ?? '');
+                $spec       = trim($input['specialization'] ?? '');
+                $exp        = intval($input['experience_years'] ?? 0);
+                $cert       = trim($input['certificate_of_experience'] ?? '');
+
+                if (!$first_name || !$last_name || !$email) {
+                    echo json_encode(['success' => false, 'error' => 'Name and email are required']);
+                    exit;
+                }
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    echo json_encode(['success' => false, 'error' => 'Invalid email address']);
+                    exit;
+                }
+                $check = $connect->prepare("SELECT user_id FROM users WHERE email = :email AND user_id != :uid");
+                $check->execute([':email' => $email, ':uid' => $doctor_id]);
+                if ($check->fetch()) {
+                    echo json_encode(['success' => false, 'error' => 'Email already in use']);
+                    exit;
+                }
+                $connect->beginTransaction();
+                try {
+                    $connect->prepare("UPDATE users SET first_name = :fn, last_name = :ln, email = :email WHERE user_id = :uid")
+                            ->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
+                    $connect->prepare("UPDATE specialist SET first_name = :fn, last_name = :ln, specialization = :spec, experience_years = :exp, certificate_of_experience = :cert WHERE specialist_id = :sid")
+                            ->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+                    $connect->commit();
+                    $_SESSION['fname'] = $first_name;
+                    $_SESSION['lname'] = $last_name;
+                    $_SESSION['email'] = $email;
+                    $_SESSION['specialization'] = $spec;
+                    echo json_encode(['success' => true, 'message' => 'Profile saved successfully']);
+                } catch (Exception $e) {
+                    $connect->rollBack();
+                    echo json_encode(['success' => false, 'error' => 'Failed to save profile']);
+                }
+                exit;
+            }
+
+            if ($action === 'change_password') {
+                $doctor_id = intval($_SESSION['id']);
+                $current = trim($input['current_password'] ?? '');
+                $new     = trim($input['new_password'] ?? '');
+                if (!$current || !$new) {
+                    echo json_encode(['success' => false, 'error' => 'Both passwords required']);
+                    exit;
+                }
+                if (strlen($new) < 6) {
+                    echo json_encode(['success' => false, 'error' => 'New password must be at least 6 characters']);
+                    exit;
+                }
+                $stmt = $connect->prepare("SELECT password FROM users WHERE user_id = :uid");
+                $stmt->execute([':uid' => $doctor_id]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$row || !password_verify($current, $row['password'])) {
+                    echo json_encode(['success' => false, 'error' => 'Current password is incorrect']);
+                    exit;
+                }
+                $connect->prepare("UPDATE users SET password = :pw WHERE user_id = :uid")
+                        ->execute([':pw' => password_hash($new, PASSWORD_DEFAULT), ':uid' => $doctor_id]);
+                echo json_encode(['success' => true, 'message' => 'Password changed successfully']);
+                exit;
+            }
+
+            if ($action === 'save_slots') {
+                $doctor_id = intval($_SESSION['id']);
+                $clinic_id = intval($_SESSION['clinic_id'] ?? 1);
+                $days     = $input['days'] ?? [];
+                $start    = trim($input['start_time'] ?? '09:00');
+                $end      = trim($input['end_time'] ?? '17:00');
+                $duration = intval($input['slot_duration'] ?? 30);
+
+                $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
+                        ->execute([':did' => $doctor_id]);
+                if (!empty($days)) {
+                    $stmt = $connect->prepare("
+                        INSERT INTO appointment_slots (doctor_id, clinic_id, day_of_week, start_time, end_time, slot_duration, is_active)
+                        VALUES (:did, :cid, :dow, :start, :end, :dur, 1)
+                        ON DUPLICATE KEY UPDATE start_time = :start2, end_time = :end2, slot_duration = :dur2, is_active = 1
+                    ");
+                    foreach ($days as $dow) {
+                        $dow = intval($dow);
+                        if ($dow < 0 || $dow > 6) continue;
+                        $stmt->execute([':did'=>$doctor_id,':cid'=>$clinic_id,':dow'=>$dow,':start'=>$start,':end'=>$end,':dur'=>$duration,':start2'=>$start,':end2'=>$end,':dur2'=>$duration]);
+                    }
+                }
+                echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
+                exit;
+            }
+        }
+    }
+
     // ─── ANALYTICS SECTION ─────────────────────────────────
     if ($section === 'analytics') {
 
@@ -691,7 +847,7 @@ if ($isAjax) {
     <link rel="stylesheet" href="styles/doctor.css?v=8">
     <link rel="stylesheet" href="styles/settings.css?v=8">
     <link rel="stylesheet" href="styles/profile.css?v=8">
-    <link rel="stylesheet" href="styles/dr-settings.css?v=8">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=9">
 </head>
 
 <body>
@@ -763,7 +919,7 @@ if ($isAjax) {
             </nav>
 
             <div class="sidebar-footer">
-                <button class="nav-item" onclick="window.location.href='dr-settings.php'">
+                <button class="nav-item" data-view="settings">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
                         <path
@@ -904,6 +1060,7 @@ if ($isAjax) {
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
     <script src="scripts/doctor-dashboard.js?v=11"></script>
+    <script src="scripts/doctor-settings.js?v=3"></script>
 
 </body>
 

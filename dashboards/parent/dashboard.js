@@ -1,4 +1,4 @@
-﻿// Dashboard JavaScript
+// Dashboard JavaScript
 (function () {
     var children = (window.dashboardData || {}).children || [];
 
@@ -1683,71 +1683,220 @@
             devTip = 'Sports and structured play activities help refine both gross and fine motor skills.';
         }
 
-        if (childId) setTimeout(() => loadMotorMilestones(childId), 100);
-
-        return `
-        <div class="dashboard-content">
+        const viewHtml = `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title">Motor Skills</h1>
-                        <p class="dashboard-subtitle">${name}'s gross and fine motor development tracking</p>
+                        <h1 class="dashboard-title">Motor Skills Checklist</h1>
+                        <p class="dashboard-subtitle">Track and evaluate ${name}'s physical development milestones via AI</p>
                     </div>
+                    <button class="btn btn-gradient" onclick="openBehaviorChecklistModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;box-shadow:0 10px 25px rgba(108,99,255,0.4);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        Open Checklist
+                    </button>
                 </div>
 
-                <!-- Overview Cards -->
-                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:2rem;">
-                    <div style="background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:20px;padding:1.75rem;color:#fff;position:relative;overflow:hidden;">
-                        <div style="position:absolute;top:-15px;right:-15px;width:100px;height:100px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
-                        <div style="font-size:2rem;margin-bottom:0.5rem;">🦵</div>
-                        <h3 style="font-weight:700;font-size:1.1rem;margin-bottom:0.25rem;color:#fff;">Gross Motor</h3>
-                        <p style="font-size:0.8rem;opacity:0.85;margin-bottom:0.75rem;">Walking, running, jumping</p>
-                        <div id="gross-motor-progress" style="font-size:1.5rem;font-weight:800;">Loading...</div>
-                    </div>
-                    <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);border-radius:20px;padding:1.75rem;color:#fff;position:relative;overflow:hidden;">
-                        <div style="position:absolute;top:-15px;right:-15px;width:100px;height:100px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
-                        <div style="font-size:2rem;margin-bottom:0.5rem;">✋</div>
-                        <h3 style="font-weight:700;font-size:1.1rem;margin-bottom:0.25rem;color:#fff;">Fine Motor</h3>
-                        <p style="font-size:0.8rem;opacity:0.85;margin-bottom:0.75rem;">Grasping, drawing, stacking</p>
-                        <div id="fine-motor-progress" style="font-size:1.5rem;font-weight:800;">Loading...</div>
-                    </div>
-                    <div style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);border-radius:20px;padding:1.75rem;color:#fff;position:relative;overflow:hidden;">
-                        <div style="position:absolute;top:-15px;right:-15px;width:100px;height:100px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
-                        <div style="font-size:2rem;margin-bottom:0.5rem;">📊</div>
-                        <h3 style="font-weight:700;font-size:1.1rem;margin-bottom:0.25rem;color:#fff;">Overall Progress</h3>
-                        <p style="font-size:0.8rem;opacity:0.85;margin-bottom:0.75rem;">Combined milestone score</p>
-                        <div id="motor-overall-progress" style="font-size:1.5rem;font-weight:800;">Loading...</div>
-                    </div>
-                </div>
-
-                <!-- Charts + WHO -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem;">
-                    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
-                        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">📊 Milestone Progress</h4></div>
-                        <div style="padding:1.5rem;display:flex;align-items:center;justify-content:center;height:200px;">
-                            <canvas id="motor-progress-doughnut" style="max-width:200px;max-height:200px;"></canvas>
-                        </div>
-                        <div style="padding:0 1.5rem 1.25rem;"><p id="motor-chart-desc" style="font-size:0.8rem;color:#64748b;line-height:1.5;margin:0;text-align:center;">Loading milestone data...</p></div>
-                    </div>
-                    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
-                        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">🌍 WHO Motor Standards</h4></div>
-                        <div style="padding:1.5rem;">
-                            <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 1rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Expected at ${ageMonths} months</p>
-                            <div style="margin-bottom:1rem;">
-                                <p style="font-weight:700;font-size:0.85rem;color:#22c55e;margin:0 0 0.5rem;">🦵 Gross Motor</p>
-                                ${whoGross.map(m => '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;font-size:0.8rem;color:#334155;"><span style="color:#22c55e;">✓</span> ' + m + '</div>').join('')}
+                <!-- 4-Pillar Summary Cards with Traffic Light Alerts -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.25rem;margin-bottom:1.5rem;">
+                    <!-- Attention Pillar Card -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                             </div>
                             <div>
-                                <p style="font-weight:700;font-size:0.85rem;color:#3b82f6;margin:0 0 0.5rem;">✋ Fine Motor</p>
-                                ${whoFine.map(m => '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;font-size:0.8rem;color:#334155;"><span style="color:#3b82f6;">✓</span> ' + m + '</div>').join('')}
+                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">🧠 Attention</h3>
+                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
+                            </div>
+                            <span id="alert-attention" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="background:rgba(245,158,11,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
+                            <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:10px;transition:width 0.5s ease;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                            <span style="color:var(--slate-500,#64748b);"><span id="attention-count">0</span>/<span id="attention-total">0</span></span>
+                            <span id="attention-percent" style="color:#f59e0b;font-weight:600;">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Communication Pillar Card -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </div>
+                            <div>
+                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">💬 Communication</h3>
+                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Speech & expression</p>
+                            </div>
+                            <span id="alert-communication" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="background:rgba(59,130,246,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
+                            <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:10px;transition:width 0.5s ease;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                            <span style="color:var(--slate-500,#64748b);"><span id="communication-count">0</span>/<span id="communication-total">0</span></span>
+                            <span id="communication-percent" style="color:#3b82f6;font-weight:600;">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Social Skills Pillar Card -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#10b981,#06b6d4);display:flex;align-items:center;justify-content:center;">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.77"/></svg>
+                            </div>
+                            <div>
+                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">🤝 Social Skills</h3>
+                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Interaction & play</p>
+                            </div>
+                            <span id="alert-social" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="background:rgba(16,185,129,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
+                            <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:10px;transition:width 0.5s ease;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                            <span style="color:var(--slate-500,#64748b);"><span id="social-count">0</span>/<span id="social-total">0</span></span>
+                            <span id="social-percent" style="color:#10b981;font-weight:600;">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Motor Skills Pillar Card -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                            </div>
+                            <div>
+                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">🦵 Motor Skills</h3>
+                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Physical development</p>
+                            </div>
+                            <span id="alert-motor" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="background:rgba(102,126,234,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
+                            <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:10px;transition:width 0.5s ease;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                            <span style="color:var(--slate-500,#64748b);"><span id="motor-count">0</span>/<span id="motor-total">0</span></span>
+                            <span id="motor-percent" style="color:#667eea;font-weight:600;">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Section with Radar Chart -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.5rem;margin-bottom:1.5rem;">
+                    <!-- 4-Pillar Radar Chart -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);">
+                        <h3 style="margin:0 0 1rem 0;font-size:1.1rem;color:var(--text-color,#1e293b);display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                            🎯 Development Balance
+                        </h3>
+                        <div style="display:flex;justify-content:center;align-items:center;height:220px;">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Milestone Progress Bar Chart -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);">
+                        <h3 style="margin:0 0 1rem 0;font-size:1.1rem;color:var(--text-color,#1e293b);display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                            📊 Milestone Progress
+                        </h3>
+                        <div style="display:flex;align-items:flex-end;gap:1rem;height:180px;padding:1rem 0;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                                <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
+                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Attention</span>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                                <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
+                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Communication</span>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                                <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
+                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Social</span>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                                <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
+                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Motor</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Motor Development Graph -->
-                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;margin-bottom:2rem;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
-                    <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">📈 Motor Development Trends</h4></div>
-                    <div style="position:relative;height:300px;padding:1rem;"><canvas id="motor-chart"></canvas></div>
+                <!-- Weekly Plan & Milestone Journey Row -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:1.5rem;margin-bottom:1.5rem;">
+                    <!-- Weekly Plan Generator -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                            <h3 style="margin:0;font-size:1.1rem;color:var(--text-color,#1e293b);display:flex;align-items:center;gap:0.5rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                📅 Weekly Plan
+                            </h3>
+                            <button onclick="generateWeeklyActivities()" style="background:linear-gradient(135deg,#10b981,#06b6d4);color:white;border:none;padding:0.5rem 1rem;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.35rem;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                                Shuffle
+                            </button>
+                        </div>
+                        <div id="weekly-plan-container" style="display:grid;gap:0.75rem;">
+                            <div style="text-align:center;padding:2rem;color:var(--slate-500,#64748b);font-size:0.9rem;">
+                                Open the checklist to generate personalized activities
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Milestone Journey Map -->
+                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                            <h3 style="margin:0;font-size:1.1rem;color:var(--text-color,#1e293b);display:flex;align-items:center;gap:0.5rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+                                🏆 Milestone Journey
+                            </h3>
+                        </div>
+                        <div id="milestone-journey-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
+                            <div style="text-align:center;padding:1rem;background:rgba(245,158,11,0.1);border-radius:12px;opacity:0.5;">
+                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🌟</div>
+                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Steps</div>
+                            </div>
+                            <div style="text-align:center;padding:1rem;background:rgba(59,130,246,0.1);border-radius:12px;opacity:0.5;">
+                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
+                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Words</div>
+                            </div>
+                            <div style="text-align:center;padding:1rem;background:rgba(16,185,129,0.1);border-radius:12px;opacity:0.5;">
+                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
+                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Social Play</div>
+                            </div>
+                            <div style="text-align:center;padding:1rem;background:rgba(102,126,234,0.1);border-radius:12px;opacity:0.5;">
+                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🎯</div>
+                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Focus Master</div>
+                            </div>
+                        </div>
+                        <div id="badges-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;"></div>
+                    </div>
+                </div>
+
+                <!-- Therapist Export Section -->
+                <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);margin-bottom:1.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                        <h3 style="margin:0;font-size:1.1rem;color:var(--text-color,#1e293b);display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                            📋 Therapist Report
+                        </h3>
+                        <button onclick="generateTherapistReport()" style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;padding:0.75rem 1.5rem;border-radius:12px;font-size:0.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.5rem;transition:transform 0.2s;box-shadow:0 4px 15px rgba(102,126,234,0.3);" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Generate Report
+                        </button>
+                    </div>
+                    <p style="color:var(--slate-500,#64748b);font-size:0.9rem;margin:0;">Generate a comprehensive PDF-ready report summarizing all developmental pillars, activities, and recommendations for therapist review.</p>
+                </div>
+
+                <!-- AI Feedback Section -->
+                <div style="background:linear-gradient(135deg,#667eea,#764ba2);border-radius:20px;padding:1.75rem;margin-bottom:2rem;box-shadow:0 10px 30px rgba(102,126,234,0.3);">
+                    <div style="display:flex;gap:1rem;align-items:flex-start;">
+                        <div style="font-size:2.5rem;flex-shrink:0;">🤖</div>
+                        <div style="flex:1;color:#fff;">
+                            <h4 style="font-weight:800;font-size:1.1rem;margin:0 0 0.5rem;letter-spacing:0.5px;">AI Developmental Insights</h4>
+                            <p id="ai-feedback-text" style="font-size:0.95rem;line-height:1.6;margin:0;opacity:0.95;">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Developmental Tips -->
@@ -1759,16 +1908,57 @@
                     </div>
                 </div>
 
-                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:2.5rem 2rem;text-align:center;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);margin-bottom:2rem;background:linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);">
-                    <div style="font-size:3.5rem;margin-bottom:1rem;line-height:1;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.1));">📋</div>
-                    <h3 style="font-weight:800;font-size:1.4rem;color:#1e293b;margin-bottom:0.5rem;letter-spacing:-0.5px;">Milestones Checklist</h3>
-                    <p style="color:#64748b;font-size:1rem;margin-bottom:2rem;max-width:450px;margin-left:auto;margin-right:auto;line-height:1.6;">Track ${name}'s progress. Every achieved milestone earns <strong style="color:#22c55e;font-weight:800;background:#dcfce7;padding:0.2rem 0.5rem;border-radius:8px;">+15 points</strong>!</p>
-                    <button onclick="openMilestonesModal(${childId})" class="btn btn-gradient" style="padding:1rem 2.5rem;font-size:1.1rem;border-radius:14px;box-shadow:0 10px 15px -3px rgba(99,102,241,0.3);transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 15px 20px -3px rgba(99,102,241,0.4)';" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 15px -3px rgba(99,102,241,0.3)';">
-                        Open Growth Checklist
-                    </button>
+                <!-- Behavior Checklist Summary -->
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:2rem;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);margin-bottom:2rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+                        <div>
+                            <h3 style="font-weight:700;font-size:1.2rem;color:#1e293b;margin:0 0 0.25rem;">📋 AI-Powered Behavior Checklist</h3>
+                            <p style="color:#64748b;font-size:0.9rem;margin:0;">Personalized based on ${name}'s age (${ageMonths} months)</p>
+                        </div>
+                        <button onclick="openBehaviorChecklistModal(${childId})" class="btn btn-gradient" style="padding:0.75rem 1.5rem;font-size:0.95rem;border-radius:12px;">
+                            Open Full Checklist
+                        </button>
+                    </div>
+                    <div id="behavior-checklist-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">
+                        <div style="padding:1.25rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:2rem;margin-bottom:0.25rem;">🦵</div>
+                            <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Gross Motor</div>
+                            <div id="summary-gross-motor" style="font-size:1.25rem;font-weight:700;color:#22c55e;">Loading...</div>
+                        </div>
+                        <div style="padding:1.25rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:2rem;margin-bottom:0.25rem;">✋</div>
+                            <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Fine Motor</div>
+                            <div id="summary-fine-motor" style="font-size:1.25rem;font-weight:700;color:#3b82f6;">Loading...</div>
+                        </div>
+                        <div style="padding:1.25rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:2rem;margin-bottom:0.25rem;">👀</div>
+                            <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Sensory</div>
+                            <div id="summary-sensory" style="font-size:1.25rem;font-weight:700;color:#8b5cf6;">Loading...</div>
+                        </div>
+                        <div style="padding:1.25rem;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:12px;text-align:center;color:#fff;">
+                            <div style="font-size:2rem;margin-bottom:0.25rem;">✅</div>
+                            <div style="font-size:0.85rem;opacity:0.9;margin-bottom:0.5rem;">Total Behaviors</div>
+                            <div id="summary-total" style="font-size:1.25rem;font-weight:800;">Loading...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
+
+        // Trigger checklist data load + show privacy disclaimer on first visit (unless dismissed)
+        const _motorChildId = childId;
+        setTimeout(() => {
+            // Show privacy disclaimer modal only if not dismissed in localStorage
+            if (!localStorage.getItem('bs_motor_privacy_dismissed')) {
+                showMotorPrivacyModal();
+            }
+            // Load checklist data to populate all cards
+            if (_motorChildId && typeof loadBehaviorChecklist === 'function') {
+                loadBehaviorChecklist(_motorChildId);
+            }
+        }, 150);
+
+        return viewHtml;
     }
 
     window.openMilestonesModal = function () {
@@ -1923,6 +2113,1552 @@
             // Refresh the checklist
             loadMotorMilestones(childId);
         } catch (e) { console.error('Toggle milestone error:', e); }
+    };
+
+    // ── Behavior Checklist Functions ────────────────────────────────────
+    let _behaviorChecklistData = null;
+    let _pillarRadarChart = null; // Store radar chart instance
+    let _currentChildId = null; // Store current child ID for activities
+
+    // Enhanced Activity database for Weekly Plan Generator with difficulty, materials, and steps
+    const activityDatabase = {
+        attention: [
+            {
+                name: 'Puzzle Time',
+                duration: '10 min',
+                difficulty: 'Easy',
+                description: 'Complete age-appropriate puzzles to build focus and problem-solving',
+                materials: ['Age-appropriate puzzle (4-12 pieces)', 'Quiet space'],
+                steps: ['Start with corner pieces together', 'Guide child to match colors/shapes', 'Celebrate each piece placed', 'Gradually reduce assistance'],
+                ageRange: '18-48 months',
+                targetSkills: ['Visual tracking', 'Problem solving', 'Sustained attention']
+            },
+            {
+                name: 'Memory Match Game',
+                duration: '8 min',
+                difficulty: 'Medium',
+                description: 'Match pairs of cards to strengthen working memory',
+                materials: ['Picture cards or memory game', 'Flat surface'],
+                steps: ['Lay 6-8 cards face down', 'Take turns flipping 2 cards', 'Name each image when revealed', 'Keep matched pairs'],
+                ageRange: '24-48 months',
+                targetSkills: ['Visual memory', 'Concentration', 'Turn-taking']
+            },
+            {
+                name: 'Follow the Leader',
+                duration: '10 min',
+                difficulty: 'Easy',
+                description: 'Copy parent movements and sounds to build joint attention',
+                materials: ['Open space', 'Optional: music'],
+                steps: ['Start with simple actions (clap, wave)', 'Add sound effects', 'Let child lead sometimes', 'Increase complexity gradually'],
+                ageRange: '12-36 months',
+                targetSkills: ['Joint attention', 'Imitation', 'Auditory processing']
+            },
+            {
+                name: 'Sorting Colors & Shapes',
+                duration: '10 min',
+                difficulty: 'Medium',
+                description: 'Sort objects by color or shape to develop categorization',
+                materials: ['Colored blocks/buttons', 'Small bowls for sorting'],
+                steps: ['Demonstrate sorting by one feature', 'Let child try with guidance', 'Name colors/shapes aloud', 'Switch sorting rule after mastery'],
+                ageRange: '18-48 months',
+                targetSkills: ['Categorization', 'Visual discrimination', 'Executive function']
+            },
+            {
+                name: 'Sound Hunting Game',
+                duration: '5 min',
+                difficulty: 'Easy',
+                description: 'Identify environmental sounds with eyes closed',
+                materials: ['Quiet room', 'Optional: sound-making objects'],
+                steps: ['Have child close eyes', 'Make a sound (bell, clap)', 'Ask "What was that?"', 'Take turns making sounds'],
+                ageRange: '12-48 months',
+                targetSkills: ['Auditory attention', 'Sound discrimination', 'Listening skills']
+            }
+        ],
+        communication: [
+            {
+                name: 'Interactive Story Time',
+                duration: '12 min',
+                difficulty: 'Easy',
+                description: 'Read picture books with questions and discussion',
+                materials: ['Age-appropriate picture book', 'Comfortable seating'],
+                steps: ['Point to pictures while naming', 'Ask "Where is the...?"', 'Pause for child to fill in words', 'Discuss story briefly after'],
+                ageRange: '12-48 months',
+                targetSkills: ['Vocabulary', 'Narrative skills', 'Joint attention']
+            },
+            {
+                name: 'Sing & Action Songs',
+                duration: '8 min',
+                difficulty: 'Easy',
+                description: 'Sing nursery rhymes with coordinated movements',
+                materials: ['Song list', 'Optional: props (scarves, shakers)'],
+                steps: ['Start with familiar songs (Wheels, ITSY)', 'Add hand motions', 'Pause for child to complete phrases', 'Repeat favorites'],
+                ageRange: '12-36 months',
+                targetSkills: ['Verbal imitation', 'Rhythm', 'Sequential memory']
+            },
+            {
+                name: 'Name That Object',
+                duration: '5 min',
+                difficulty: 'Easy',
+                description: 'Point and name everyday items during routines',
+                materials: ['Household objects', 'Natural environment'],
+                steps: ['During daily activities, name objects', 'Ask "What is this?"', 'Expand with attributes ("red ball")', 'Celebrate attempts'],
+                ageRange: '12-48 months',
+                targetSkills: ['Labeling', 'Receptive language', 'Functional vocabulary']
+            },
+            {
+                name: 'Animal Sound Imitation',
+                duration: '8 min',
+                difficulty: 'Medium',
+                description: 'Imitate animal sounds with visual cues',
+                materials: ['Animal figures or pictures', 'Farm animal book'],
+                steps: ['Show animal, make its sound', 'Encourage imitation', 'Add movements (hop like bunny)', 'Progress to less familiar animals'],
+                ageRange: '12-30 months',
+                targetSkills: ['Oral motor planning', 'Sound imitation', 'Auditory memory']
+            },
+            {
+                name: 'Show & Tell Circle',
+                duration: '10 min',
+                difficulty: 'Medium',
+                description: 'Describe favorite toy or object to family',
+                materials: ['Child\'s favorite object', 'Family audience'],
+                steps: ['Child picks special item', 'Prompt: "Tell us about..."', 'Ask follow-up questions', 'Applaud effort'],
+                ageRange: '24-48 months',
+                targetSkills: ['Expressive language', 'Descriptive words', 'Confidence']
+            }
+        ],
+        social: [
+            {
+                name: 'Parallel Play Setup',
+                duration: '20 min',
+                difficulty: 'Easy',
+                description: 'Play alongside another child with similar toys',
+                materials: ['Duplicate toys (blocks, cars)', 'Shared play space'],
+                steps: ['Arrange children near each other', 'Provide similar materials', 'Narrate both children\'s actions', 'Don\'t force interaction'],
+                ageRange: '12-30 months',
+                targetSkills: ['Social tolerance', 'Observation', 'Foundational play']
+            },
+            {
+                name: 'Turn-Taking Tower',
+                duration: '10 min',
+                difficulty: 'Medium',
+                description: 'Build a tower by taking turns adding blocks',
+                materials: ['Large blocks or stacking cups', 'Timer (optional)'],
+                steps: ['Say "My turn" clearly', 'Place one block', 'Say "Your turn" with gesture', 'Celebrate completed tower'],
+                ageRange: '18-48 months',
+                targetSkills: ['Turn-taking', 'Impulse control', 'Shared goals']
+            },
+            {
+                name: 'Pretend Play Scenarios',
+                duration: '15 min',
+                difficulty: 'Hard',
+                description: 'Act out familiar scenarios (cooking, shopping, doctor)',
+                materials: ['Play kitchen/tools', 'Props (pots, dolls, toy food)'],
+                steps: ['Choose familiar scenario', 'Assign roles', 'Model appropriate language', 'Follow child\'s lead'],
+                ageRange: '24-48 months',
+                targetSkills: ['Symbolic play', 'Role understanding', 'Social scripts']
+            },
+            {
+                name: 'Emotion Card Match',
+                duration: '10 min',
+                difficulty: 'Medium',
+                description: 'Identify feelings in pictures and mirror them',
+                materials: ['Emotion flashcards', 'Small mirror'],
+                steps: ['Show emotion card, name it', 'Make face in mirror together', 'Ask "When do you feel...?"', 'Validate all feelings'],
+                ageRange: '18-48 months',
+                targetSkills: ['Emotional literacy', 'Empathy', 'Self-awareness']
+            },
+            {
+                name: 'Cooperative Ball Roll',
+                duration: '10 min',
+                difficulty: 'Easy',
+                description: 'Sit in circle and roll ball to each other',
+                materials: ['Soft ball', '3+ participants'],
+                steps: ['Sit in small circle', 'Demonstrate rolling to someone', 'Say their name when rolling', 'Add "catch" as skill grows'],
+                ageRange: '18-48 months',
+                targetSkills: ['Joint activity', 'Name recognition', 'Motor planning']
+            }
+        ],
+        motor: [
+            {
+                name: 'Indoor Obstacle Course',
+                duration: '15 min',
+                difficulty: 'Hard',
+                description: 'Crawl under, step over, and navigate obstacles',
+                materials: ['Pillows', 'Chairs', 'Blankets', 'Tape for lines'],
+                steps: ['Create 4-5 stations (crawl under table, step over pillow)', 'Demonstrate each movement', 'Use timer for fun', 'Celebrate completion'],
+                ageRange: '18-48 months',
+                targetSkills: ['Gross motor planning', 'Balance', 'Spatial awareness']
+            },
+            {
+                name: 'Ball Skills Circuit',
+                duration: '12 min',
+                difficulty: 'Medium',
+                description: 'Throw, catch, kick, and roll balls of various sizes',
+                materials: ['Different sized balls', 'Target (bucket/box)'],
+                steps: ['Start with rolling ball back/forth', 'Progress to throwing at target', 'Practice kicking stationary ball', 'Try two-hand catch'],
+                ageRange: '18-48 months',
+                targetSkills: ['Hand-eye coordination', 'Bilateral coordination', 'Force modulation']
+            },
+            {
+                name: 'Pre-Writing Art Studio',
+                duration: '12 min',
+                difficulty: 'Easy',
+                description: 'Scribble, draw lines, and make marks with various tools',
+                materials: ['Thick crayons', 'Large paper', 'Washable markers', 'Easel (optional)'],
+                steps: ['Demonstrate making marks', 'Encourage different grips', 'Name lines/shapes made', 'Display artwork proudly'],
+                ageRange: '12-48 months',
+                targetSkills: ['Fine motor control', 'Pincer grasp', 'Pre-writing strokes']
+            },
+            {
+                name: 'Block Building Challenge',
+                duration: '15 min',
+                difficulty: 'Medium',
+                description: 'Stack, arrange, and build structures with blocks',
+                materials: ['Wooden or plastic blocks (20+ pieces)', 'Base plate'],
+                steps: ['Start with simple stacking', 'Demonstrate bridge building', 'Add challenge cards (\"build tall\", \"make a house\")', 'Count blocks used'],
+                ageRange: '15-48 months',
+                targetSkills: ['Fine motor precision', 'Spatial reasoning', 'Hand-eye coordination']
+            },
+            {
+                name: 'Movement Dance Party',
+                duration: '10 min',
+                difficulty: 'Easy',
+                description: 'Move to music with varied tempos and actions',
+                materials: ['Music player', 'Upbeat songs', 'Scarves or ribbons'],
+                steps: ['Play music with clear beat', 'Model actions (jump, spin, sway)', 'Add props for grasping', 'Freeze dance variation'],
+                ageRange: '12-48 months',
+                targetSkills: ['Rhythmic movement', 'Gross motor coordination', 'Auditory-motor integration']
+            }
+        ]
+    };
+
+    // Badge definitions for Milestone Journey
+    const badgeDefinitions = [
+        { id: 'first_steps', name: 'First Steps', icon: '👣', threshold: 10, pillar: 'motor' },
+        { id: 'first_words', name: 'First Words', icon: '💬', threshold: 10, pillar: 'communication' },
+        { id: 'social_star', name: 'Social Star', icon: '⭐', threshold: 10, pillar: 'social' },
+        { id: 'focus_master', name: 'Focus Master', icon: '🎯', threshold: 10, pillar: 'attention' },
+        { id: 'climber', name: 'Little Climber', icon: '🧗', threshold: 20, pillar: 'motor' },
+        { id: 'storyteller', name: 'Storyteller', icon: '📚', threshold: 20, pillar: 'communication' },
+        { id: 'friend_maker', name: 'Friend Maker', icon: '🤗', threshold: 20, pillar: 'social' },
+        { id: 'super_focused', name: 'Super Focused', icon: '🌟', threshold: 20, pillar: 'attention' },
+        { id: 'champion', name: 'Champion', icon: '🏆', threshold: 50, pillar: 'all' }
+    ];
+
+    // Traffic Light Logic - returns status based on percentage
+    function getTrafficLightStatus(percent) {
+        if (percent >= 70) return { icon: '🟢', color: '#10b981', level: 'On Track', label: 'On Track' };
+        if (percent >= 40) return { icon: '🟡', color: '#f59e0b', level: 'Developing', label: 'Developing' };
+        return { icon: '🔴', color: '#ef4444', level: 'Needs Attention', label: 'Needs Attention' };
+    }
+
+    // Update traffic light alerts for each pillar (with text labels)
+    function updateTrafficLightAlerts(stats) {
+        const pillars = ['attention', 'communication', 'social', 'motor'];
+        pillars.forEach(pillar => {
+            const s = stats[pillar];
+            // Use expected (age-appropriate) as denominator, not total checklist items
+            const percent = s.expected > 0 ? Math.round((s.achieved / s.expected) * 100) : 0;
+            const status = getTrafficLightStatus(percent);
+            const alertEl = document.getElementById(`alert-${pillar}`);
+            if (alertEl) {
+                alertEl.innerHTML = `${status.icon} <span style="font-size:0.7rem;margin-left:0.25rem;color:${status.color};font-weight:600;">${status.label}</span>`;
+                alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
+            }
+        });
+    }
+
+    // Update Radar Chart (supports both old and new stats structure)
+    function updateRadarChart(stats, useAgeExpectations = false) {
+        // Support new stats structure with 'expected' field for age-based calculation
+        let attentionPercent, communicationPercent, socialPercent, motorPercent;
+
+        if (useAgeExpectations) {
+            // New structure: calculate based on age-expected milestones
+            attentionPercent = stats.attention.expected > 0 ? Math.min((stats.attention.achieved / stats.attention.expected) * 100, 100) : 0;
+            communicationPercent = stats.communication.expected > 0 ? Math.min((stats.communication.achieved / stats.communication.expected) * 100, 100) : 0;
+            socialPercent = stats.social.expected > 0 ? Math.min((stats.social.achieved / stats.social.expected) * 100, 100) : 0;
+            motorPercent = stats.motor.expected > 0 ? Math.min((stats.motor.achieved / stats.motor.expected) * 100, 100) : 0;
+        } else {
+            // Fallback to old structure
+            attentionPercent = stats.attention.total > 0 ? (stats.attention.achieved / stats.attention.total) * 100 : 0;
+            communicationPercent = stats.communication.total > 0 ? (stats.communication.achieved / stats.communication.total) * 100 : 0;
+            socialPercent = stats.social.total > 0 ? (stats.social.achieved / stats.social.total) * 100 : 0;
+            motorPercent = stats.motor.total > 0 ? (stats.motor.achieved / stats.motor.total) * 100 : 0;
+        }
+
+        if (_pillarRadarChart) {
+            _pillarRadarChart.data.datasets[0].data = [attentionPercent, communicationPercent, socialPercent, motorPercent];
+            _pillarRadarChart.update();
+        } else {
+            // Initialize chart
+            const ctx = document.getElementById('radarChart');
+            if (ctx && typeof Chart !== 'undefined') {
+                _pillarRadarChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: ['Attention', 'Communication', 'Social', 'Motor'],
+                        datasets: [{
+                            label: 'Development Progress',
+                            data: [attentionPercent, communicationPercent, socialPercent, motorPercent],
+                            backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                            borderColor: '#667eea',
+                            pointBackgroundColor: '#667eea',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: '#667eea'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            r: {
+                                angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                                grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                                pointLabels: { font: { size: 12 } },
+                                suggestedMin: 0,
+                                suggestedMax: 100
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // Update Milestone Journey badges
+    function updateMilestoneJourney(stats) {
+        const totalAchieved = stats.attention.achieved + stats.communication.achieved + stats.social.achieved + stats.motor.achieved;
+        const badgesContainer = document.getElementById('badges-container');
+
+        if (!badgesContainer) return;
+
+        // Calculate pillar-specific achievements
+        const pillarAchievements = {
+            attention: stats.attention.achieved,
+            communication: stats.communication.achieved,
+            social: stats.social.achieved,
+            motor: stats.motor.achieved
+        };
+
+        let earnedBadges = [];
+        badgeDefinitions.forEach(badge => {
+            let earned = false;
+            if (badge.pillar === 'all') {
+                earned = totalAchieved >= badge.threshold;
+            } else {
+                earned = pillarAchievements[badge.pillar] >= badge.threshold;
+            }
+            if (earned) {
+                earnedBadges.push(badge);
+            }
+        });
+
+        // Render badges with unlock animation
+        badgesContainer.innerHTML = earnedBadges.map(badge => `
+            <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:10px;animation:pulse 2s infinite;cursor:pointer;" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
+                <div style="font-size:1.5rem;">${badge.icon}</div>
+                <div style="font-size:0.65rem;color:var(--slate-600,#475569);font-weight:600;">${badge.name}</div>
+            </div>
+        `).join('');
+
+        // Show locked badges for milestones not yet earned
+        const lockedBadges = badgeDefinitions.filter(b => !earnedBadges.find(eb => eb.id === b.id));
+        if (lockedBadges.length > 0 && earnedBadges.length < badgeDefinitions.length) {
+            badgesContainer.innerHTML += lockedBadges.map(badge => `
+                <div style="text-align:center;padding:0.75rem;background:rgba(148,163,184,0.1);border-radius:10px;opacity:0.5;filter:grayscale(100%);">
+                    <div style="font-size:1.5rem;filter:grayscale(100%);">${badge.icon}</div>
+                    <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);font-weight:600;">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:var(--slate-500,#64748b);margin-top:0.25rem;">🔒 ${badge.threshold} needed</div>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Generate Weekly Activities based on lowest scoring pillar (with shuffle)
+    window.generateWeeklyActivities = function(forceRandom = false) {
+        if (!_behaviorChecklistData) {
+            document.getElementById('weekly-plan-container').innerHTML = `
+                <div style="text-align:center;padding:2rem;color:var(--slate-500,#64748b);font-size:0.9rem;">
+                    Open the checklist first to generate personalized activities
+                </div>
+            `;
+            return;
+        }
+
+        const stats = {
+            attention: { total: 0, achieved: 0 },
+            communication: { total: 0, achieved: 0 },
+            social: { total: 0, achieved: 0 },
+            motor: { total: 0, achieved: 0 }
+        };
+
+        // Calculate stats from checklist data
+        _behaviorChecklistData.categories.forEach(cat => {
+            const type = cat.category_type?.toLowerCase();
+            let pillar = 'motor';
+            if (type === 'attention' || type === 'cognitive') pillar = 'attention';
+            else if (type === 'communication' || type === 'language') pillar = 'communication';
+            else if (type === 'social' || type === 'social-emotional') pillar = 'social';
+
+            stats[pillar].total += cat.behaviors.length;
+            cat.behaviors.forEach(b => {
+                if (b.is_exhibited) stats[pillar].achieved++;
+            });
+        });
+
+        // Find weakest pillar (or random if shuffle requested)
+        const pillars = ['attention', 'communication', 'social', 'motor'];
+        let weakestPillar = 'motor';
+
+        if (forceRandom) {
+            weakestPillar = pillars[Math.floor(Math.random() * pillars.length)];
+        } else {
+            let lowestPercent = 100;
+            pillars.forEach(pillar => {
+                const percent = stats[pillar].total > 0 ? (stats[pillar].achieved / stats[pillar].total) * 100 : 0;
+                if (percent < lowestPercent) {
+                    lowestPercent = percent;
+                    weakestPillar = pillar;
+                }
+            });
+        }
+
+        // Get activities for weakest pillar (or random if shuffle)
+        const activities = activityDatabase[weakestPillar] || activityDatabase.motor;
+        const shuffled = activities.sort(() => Math.random() - 0.5).slice(0, 3);
+
+        const days = ['Monday', 'Wednesday', 'Friday'];
+        const container = document.getElementById('weekly-plan-container');
+        const colors = [
+            { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', numBg: '#fef3c7', numColor: '#92400e' },
+            { bg: 'rgba(59,130,246,0.1)',  border: '#3b82f6',  numBg: '#dbeafe', numColor: '#1e40af' },
+            { bg: 'rgba(16,185,129,0.1)',  border: '#10b981', numBg: '#d1fae5', numColor: '#065f46' }
+        ];
+
+        container.innerHTML = shuffled.map((act, i) => {
+            const materials = act.materials ? act.materials.join(', ') : 'Household items';
+            const difficultyColor = act.difficulty === 'Easy' ? '#22c55e' : act.difficulty === 'Medium' ? '#f59e0b' : '#ef4444';
+            return `
+            <div style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};">
+                <div style="display:flex;align-items:center;gap:1rem;">
+                    <div style="width:40px;height:40px;border-radius:8px;background:${colors[i].numBg};display:flex;align-items:center;justify-content:center;font-weight:700;color:${colors[i].numColor};flex-shrink:0;">${i + 1}</div>
+                    <div style="flex:1;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                            <div style="font-weight:600;color:var(--text-color,#1e293b);">${act.name}</div>
+                            <span style="font-size:0.65rem;padding:0.2rem 0.5rem;background:${difficultyColor}20;color:${difficultyColor};border-radius:999px;font-weight:600;">${act.difficulty}</span>
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--slate-500,#64748b);">${act.description}</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:0.75rem;color:var(--slate-500,#64748b);font-weight:600;">${days[i]}</div>
+                        <div style="font-size:0.7rem;color:var(--slate-400,#94a3b8);">⏱ ${act.duration}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;font-size:0.7rem;color:var(--slate-600,#475569);padding-top:0.5rem;border-top:1px dashed ${colors[i].border}30;">
+                    <span>📦 <strong>Materials:</strong> ${materials}</span>
+                </div>
+                <div style="font-size:0.68rem;color:var(--slate-500,#64748b);">
+                    <strong>Steps:</strong> ${act.steps ? act.steps.join(' → ') : 'Follow child\'s lead'}
+                </div>
+                <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);margin-top:0.25rem;">
+                    🎯 Targets: ${act.targetSkills ? act.targetSkills.join(', ') : weakestPillar + ' development'}
+                </div>
+            </div>
+        `}).join('');
+
+        // Show toast indicating which pillar was targeted
+        const pillarNames = { attention: 'Attention', communication: 'Communication', social: 'Social Skills', motor: 'Motor Skills' };
+        showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
+    }
+
+    // Generate Advanced Doctor Report (Comprehensive PDF-ready)
+    window.generateTherapistReport = function() {
+        if (!_behaviorChecklistData) {
+            alert('Please open the checklist first to generate a report.');
+            return;
+        }
+
+        const childName = _behaviorChecklistData.child_name || 'Child';
+        const ageMonths = _behaviorChecklistData.age_months || 0;
+        const feedback = _behaviorChecklistData.feedback || '';
+        const reportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        // Calculate stats with detailed breakdown
+        const stats = {
+            attention: { total: 0, achieved: 0, behaviors: [] },
+            communication: { total: 0, achieved: 0, behaviors: [] },
+            social: { total: 0, achieved: 0, behaviors: [] },
+            motor: { total: 0, achieved: 0, behaviors: [] }
+        };
+
+        const pillarMap = {
+            'attention': 'attention', 'cognitive': 'attention',
+            'communication': 'communication', 'language': 'communication',
+            'social': 'social', 'social-emotional': 'social', 'emotional': 'social',
+            'motor': 'motor', 'gross_motor': 'motor', 'fine_motor': 'motor',
+            'sensory': 'motor', 'physical': 'motor'
+        };
+
+        _behaviorChecklistData.categories.forEach(cat => {
+            const type = cat.category_type?.toLowerCase();
+            const pillar = pillarMap[type] || 'motor';
+            cat.behaviors.forEach(b => {
+                stats[pillar].total++;
+                if (b.is_exhibited) {
+                    stats[pillar].achieved++;
+                    stats[pillar].behaviors.push({
+                        name: b.behavior_details,
+                        frequency: b.frequency,
+                        severity: b.severity
+                    });
+                }
+            });
+        });
+
+        // Calculate overall and per-pillar percentages
+        let totalAchieved = 0, totalMilestones = 0;
+        Object.values(stats).forEach(s => {
+            totalAchieved += s.achieved;
+            totalMilestones += s.total;
+        });
+        const overallPercent = totalMilestones > 0 ? Math.round((totalAchieved / totalMilestones) * 100) : 0;
+
+        // Age expectation comparison
+        const ageExpectations = {
+            '0-12': { attention: 3, communication: 4, social: 3, motor: 8 },
+            '13-24': { attention: 6, communication: 8, social: 6, motor: 12 },
+            '25-36': { attention: 9, communication: 12, social: 9, motor: 15 },
+            '37-48': { attention: 12, communication: 15, social: 12, motor: 18 }
+        };
+        function getAgeRange(months) {
+            if (months <= 12) return '0-12';
+            if (months <= 24) return '13-24';
+            if (months <= 36) return '25-36';
+            return '37-48';
+        }
+        const ageRange = getAgeRange(ageMonths);
+        const expectations = ageExpectations[ageRange];
+
+        // Build comprehensive report HTML
+        const reportContent = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;">
+                    <!-- Report Header -->
+                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:2rem;color:#fff;">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <div>
+                                <h2 style="margin:0 0 0.25rem;font-size:1.6rem;font-weight:800;">📋 Developmental Progress Report</h2>
+                                <p style="margin:0;opacity:0.95;font-size:1rem;">Bright Steps Early Development Tracking</p>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:0.85rem;opacity:0.9;">Report Date</div>
+                                <div style="font-weight:600;">${reportDate}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Child Info Bar -->
+                    <div style="display:flex;justify-content:space-around;padding:1.25rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                        <div style="text-align:center;">
+                            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Child Name</div>
+                            <div style="font-weight:700;color:#1e293b;font-size:1.1rem;">${childName}</div>
+                        </div>
+                        <div style="width:1px;background:#e2e8f0;"></div>
+                        <div style="text-align:center;">
+                            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Age</div>
+                            <div style="font-weight:700;color:#1e293b;font-size:1.1rem;">${ageMonths} months</div>
+                        </div>
+                        <div style="width:1px;background:#e2e8f0;"></div>
+                        <div style="text-align:center;">
+                            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Overall Progress</div>
+                            <div style="font-weight:700;color:#10b981;font-size:1.1rem;">${overallPercent}%</div>
+                        </div>
+                        <div style="width:1px;background:#e2e8f0;"></div>
+                        <div style="text-align:center;">
+                            <div style="font-size:0.75rem;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Assessment Date</div>
+                            <div style="font-weight:700;color:#1e293b;font-size:1.1rem;">${reportDate}</div>
+                        </div>
+                    </div>
+
+                    <!-- Scrollable Content -->
+                    <div style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
+                        <!-- Executive Summary -->
+                        <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem;">
+                            <h3 style="margin:0 0 0.5rem;font-size:1rem;font-weight:700;color:#0369a1;display:flex;align-items:center;gap:0.5rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                                Executive Summary
+                            </h3>
+                            <p style="margin:0;font-size:0.9rem;color:#0c4a6e;line-height:1.6;">
+                                ${childName} is ${ageMonths} months old and has been assessed on ${totalMilestones} developmental milestones across 4 domains.
+                                ${totalAchieved} milestones (${overallPercent}%) are currently observed.
+                                ${overallPercent >= 70 ? 'Development appears to be progressing within expected ranges.' : overallPercent >= 40 ? 'Some areas show emerging skills that may benefit from targeted support.' : 'Multiple areas show delays that warrant professional evaluation.'}
+                            </p>
+                        </div>
+
+                        <!-- Pillar Progress Grid -->
+                        <h3 style="margin:0 0 0.75rem;font-size:1rem;font-weight:700;color:#1e293b;">Domain-Specific Assessment</h3>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                            ${Object.entries(stats).map(([pillar, data]) => {
+                                const percent = data.total > 0 ? Math.round((data.achieved / data.total) * 100) : 0;
+                                const status = getTrafficLightStatus(percent);
+                                const expected = expectations[pillar] || 0;
+                                const vsExpected = data.achieved >= expected ? '✓ Age-appropriate' : `⚠ ${expected - data.achieved} below expectation`;
+                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵' };
+                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea' };
+                                return `
+                                    <div style="padding:1.25rem;background:#f8fafc;border-radius:16px;border:1px solid #e2e8f0;">
+                                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                                            <span style="font-size:1.25rem;">${pillarIcons[pillar]}</span>
+                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillar}</span>
+                                            <span style="margin-left:auto;font-size:1.25rem;">${status.icon}</span>
+                                        </div>
+                                        <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;margin-bottom:0.5rem;">
+                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]},${pillarColors[pillar]}88);height:100%;width:${percent}%;border-radius:8px;"></div>
+                                        </div>
+                                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#64748b;margin-bottom:0.5rem;">
+                                            <span>${data.achieved}/${data.total} skills observed</span>
+                                            <span>${percent}%</span>
+                                        </div>
+                                        <div style="font-size:0.75rem;color:${data.achieved >= expected ? '#16a34a' : '#ea580c'};font-weight:600;">${vsExpected}</div>
+                                        ${data.behaviors.length > 0 ? `
+                                            <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed #e2e8f0;">
+                                                <div style="font-size:0.7rem;color:#94a3b8;margin-bottom:0.25rem;">Observed behaviors:</div>
+                                                <ul style="margin:0;padding-left:1rem;font-size:0.75rem;color:#475569;line-height:1.5;">
+                                                    ${data.behaviors.slice(0, 4).map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
+                                                    ${data.behaviors.length > 4 ? `<li>+${data.behaviors.length - 4} more...</li>` : ''}
+                                                </ul>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+
+                        <!-- AI Insights -->
+                        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem;">
+                            <h3 style="margin:0 0 0.5rem;font-size:1rem;font-weight:700;color:#166534;display:flex;align-items:center;gap:0.5rem;">
+                                <span>🤖</span> AI Developmental Analysis
+                            </h3>
+                            <p style="margin:0;font-size:0.9rem;color:#166534;line-height:1.6;">${feedback || 'No AI insights available for this assessment.'}</p>
+                        </div>
+
+                        <!-- Clinical Recommendations -->
+                        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:16px;padding:1.25rem;">
+                            <h3 style="margin:0 0 0.75rem;font-size:1rem;font-weight:700;color:#92400e;display:flex;align-items:center;gap:0.5rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="4"/></svg>
+                                Clinical Recommendations
+                            </h3>
+                            <ul style="margin:0;padding-left:1.25rem;font-size:0.85rem;color:#78350f;line-height:1.8;">
+                                ${overallPercent < 40 ? `
+                                    <li><strong>Pediatric referral recommended:</strong> Consider developmental pediatrician or early intervention evaluation</li>
+                                    <li><strong>Focus areas:</strong> ${Object.entries(stats).filter(([_, d]) => d.total > 0 && (d.achieved/d.total)*100 < 40).map(([p]) => p).join(', ')}</li>
+                                ` : overallPercent < 70 ? `
+                                    <li><strong>Targeted enrichment:</strong> Implement daily structured activities for developing domains</li>
+                                    <li><strong>Re-assessment:</strong> Repeat checklist in 4-6 weeks to monitor progress</li>
+                                ` : `
+                                    <li><strong>Continue enrichment:</strong> Maintain current activity levels and variety</li>
+                                    <li><strong>Next screening:</strong> Routine developmental surveillance at next well-child visit</li>
+                                `}
+                                <li><strong>Parent guidance:</strong> This report is a screening tool, not a diagnostic assessment</li>
+                                <li><strong>Documentation:</strong> Share with pediatrician at next visit or sooner if concerns persist</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Footer Actions -->
+                    <div style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+                        <div style="font-size:0.8rem;color:#64748b;">
+                            Generated by Bright Steps Developmental Tracking
+                        </div>
+                        <div style="display:flex;gap:0.75rem;">
+                            <button onclick="document.getElementById('doctor-report-modal').remove()" style="padding:0.75rem 1.25rem;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#64748b;font-size:0.9rem;font-weight:600;cursor:pointer;">Close</button>
+                            <button onclick="window.print()" style="padding:0.75rem 1.5rem;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.5rem;box-shadow:0 4px 12px rgba(102,126,234,0.3);">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                Print Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const existing = document.getElementById('doctor-report-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'doctor-report-modal';
+        modal.innerHTML = reportContent;
+        document.body.appendChild(modal);
+    }
+
+    // Print report function
+    window.printReport = function() {
+        window.print();
+    }
+
+    async function loadBehaviorChecklist(childId) {
+        if (!childId) return;
+
+        try {
+            const res = await fetch('../../api_behavior_checklist.php?action=list&child_id=' + childId);
+            const data = await res.json();
+            console.log('Behavior Checklist Data:', data);
+
+            if (data.error) {
+                console.error('Behavior API Error:', data.error);
+                return;
+            }
+
+            // Store the data with a timestamp for cache validation
+            _behaviorChecklistData = {
+                ...data,
+                loadedAt: Date.now(),
+                childId: childId
+            };
+
+            // Cache in sessionStorage for quick reloads (persists for session)
+            sessionStorage.setItem('behavior_checklist_' + childId, JSON.stringify({
+                data: data,
+                loadedAt: Date.now()
+            }));
+
+            // Update summary cards
+            updateBehaviorSummary(data);
+
+            // Refresh modal if open
+            if (document.getElementById('behavior-checklist-modal')) {
+                openBehaviorChecklistModal(childId);
+            }
+        } catch (e) {
+            console.error('Load behavior checklist error:', e);
+        }
+    }
+
+    function updateBehaviorSummary(data) {
+        if (!data || !data.categories) return;
+
+        const ageMonths = data.age_months || 24; // Default to 24 months if not available
+
+        // ── Map category types → 4 developmental pillars (new + legacy support) ──────────────
+        const pillarMap = {
+            // New 4-pillar API types
+            'motor_skills': 'motor',
+            'attention': 'attention',
+            'communication': 'communication',
+            'social_skills': 'social',
+            // Legacy types for backward compatibility
+            'cognitive': 'attention',
+            'language': 'communication',
+            'social': 'social', 'social-emotional': 'social', 'emotional': 'social',
+            'motor': 'motor', 'gross_motor': 'motor', 'fine_motor': 'motor',
+            'sensory': 'motor', 'physical': 'motor'
+        };
+
+        // Age-based expected milestones (WHO standards - minimum expected for age)
+        const ageExpectations = {
+            '0-12': { attention: 3, communication: 4, social: 3, motor: 8 },
+            '13-24': { attention: 6, communication: 8, social: 6, motor: 12 },
+            '25-36': { attention: 9, communication: 12, social: 9, motor: 15 },
+            '37-48': { attention: 12, communication: 15, social: 12, motor: 18 },
+            '49-60': { attention: 15, communication: 18, social: 15, motor: 20 }
+        };
+
+        function getAgeRange(months) {
+            if (months <= 12) return '0-12';
+            if (months <= 24) return '13-24';
+            if (months <= 36) return '25-36';
+            if (months <= 48) return '37-48';
+            return '49-60';
+        }
+
+        const ageRange = getAgeRange(ageMonths);
+        const expectations = ageExpectations[ageRange];
+
+        const stats = {
+            attention:     { total: 0, achieved: 0, expected: expectations.attention },
+            communication: { total: 0, achieved: 0, expected: expectations.communication },
+            social:        { total: 0, achieved: 0, expected: expectations.social },
+            motor:         { total: 0, achieved: 0, expected: expectations.motor }
+        };
+        // Legacy counts kept for backward-compat DOM elements
+        const counts = { gross_motor: 0, fine_motor: 0, sensory: 0, total: 0 };
+        const exhibitedCounts = { gross_motor: 0, fine_motor: 0, sensory: 0, total: 0 };
+
+        data.categories.forEach(cat => {
+            const type = cat.category_type.toLowerCase();
+            const pillar = pillarMap[type] || 'motor';
+
+            stats[pillar].total += cat.behaviors.length;
+            cat.behaviors.forEach(b => {
+                if (b.is_exhibited) stats[pillar].achieved++;
+            });
+
+            // legacy
+            if (counts.hasOwnProperty(type)) {
+                counts[type] += cat.behaviors.length;
+                cat.behaviors.forEach(b => { if (b.is_exhibited) exhibitedCounts[type]++; });
+            }
+            counts.total += cat.behaviors.length;
+            cat.behaviors.forEach(b => { if (b.is_exhibited) exhibitedCounts.total++; });
+        });
+
+        // ── 1. Update 4-Pillar Summary Cards (showing achieved vs expected for age) ──────────────────────────
+        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+            const s = stats[pillar];
+            // Progress is based on age-appropriate expectation, not just total behaviors in checklist
+            const percent = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+            const countEl   = document.getElementById(`${pillar}-count`);
+            const totalEl2  = document.getElementById(`${pillar}-total`);
+            const percentEl = document.getElementById(`${pillar}-percent`);
+            const progressEl= document.getElementById(`${pillar}-progress`);
+            if (countEl)    countEl.textContent   = s.achieved;
+            if (totalEl2)   totalEl2.textContent  = s.expected; // Show expected milestones for age
+            if (percentEl)  percentEl.textContent = percent + '%';
+            if (progressEl) progressEl.style.width = percent + '%';
+        });
+
+        // ── 2. Traffic Light Alerts ────────────────────────────────────
+        updateTrafficLightAlerts(stats);
+
+        // ── 3. Bar Chart (4-pillar bars showing age-appropriate progress) ───────────────────────────────
+        setTimeout(() => {
+            ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+                const bar = document.getElementById(`bar-${pillar}`);
+                if (bar) {
+                    const s = stats[pillar];
+                    // Calculate percentage based on age expectation
+                    const pct = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+                    const displayPct = Math.max(pct, 5); // Minimum 5% for visibility
+                    bar.style.height = displayPct + '%';
+                    bar.setAttribute('data-pillar', pillar);
+                    bar.setAttribute('data-percent', pct);
+                    console.log(`Bar ${pillar}: ${pct}% (${s.achieved}/${s.expected} expected)`);
+                } else {
+                    console.warn(`Bar element bar-${pillar} not found in DOM`);
+                }
+            });
+        }, 100);
+
+        // ── 4. Radar Chart ─────────────────────────────────────────────
+        updateRadarChart(stats, true); // Pass flag indicating age-based calculation
+
+        // ── 5. Milestone Journey Badges ────────────────────────────────
+        updateMilestoneJourney(stats);
+
+        // ── 6. Auto-generate Weekly Activities ────────────────────────
+        if (document.getElementById('weekly-plan-container')) {
+            generateWeeklyActivitiesFromStats(stats);
+        }
+
+        // ── 7. Empathetic micro-copy for AI Feedback ──────────────────
+        updateEmpathyFeedback(data, stats);
+
+        // ── 8. Legacy summary DOM (backward compat) ───────────────────
+        const grossEl   = document.getElementById('summary-gross-motor');
+        const fineEl    = document.getElementById('summary-fine-motor');
+        const sensoryEl = document.getElementById('summary-sensory');
+        const legTotalEl= document.getElementById('summary-total');
+        if (grossEl)    grossEl.textContent   = `${exhibitedCounts.gross_motor}/${counts.gross_motor}`;
+        if (fineEl)     fineEl.textContent    = `${exhibitedCounts.fine_motor}/${counts.fine_motor}`;
+        if (sensoryEl)  sensoryEl.textContent = `${exhibitedCounts.sensory}/${counts.sensory}`;
+        if (legTotalEl) legTotalEl.textContent= `${exhibitedCounts.total}/${counts.total}`;
+    }
+
+    // ── AI-Specific Developmental Insights (Age-Appropriate Analysis) ──────────────────────────────────────────
+    function updateEmpathyFeedback(data, stats) {
+        const el = document.getElementById('ai-feedback-text');
+        if (!el) return;
+
+        const name = data.child_name || 'Your child';
+        const ageMonths = data.age_months || 0;
+        const serverFeedback = data.feedback || '';
+
+        // Age-based milestone expectations (WHO standards simplified)
+        const ageExpectations = {
+            attention: {
+                '0-12': { expected: 3, description: 'brief visual tracking, object interest' },
+                '13-24': { expected: 6, description: 'short play sequences, joint attention' },
+                '25-36': { expected: 9, description: 'focused play 5+ min, follows 2-step directions' },
+                '37-48': { expected: 12, description: 'sustained attention 10+ min, completes tasks' }
+            },
+            communication: {
+                '0-12': { expected: 4, description: 'babbling, first words by 12mo' },
+                '13-24': { expected: 8, description: '10-50 words, 2-word phrases emerging' },
+                '25-36': { expected: 12, description: '200+ words, 3-4 word sentences' },
+                '37-48': { expected: 15, description: 'clear speech, tells simple stories' }
+            },
+            social: {
+                '0-12': { expected: 3, description: 'social smile, stranger anxiety' },
+                '13-24': { expected: 6, description: 'parallel play, imitates others' },
+                '25-36': { expected: 9, description: 'cooperative play, shares occasionally' },
+                '37-48': { expected: 12, description: 'friendships, understands turn-taking' }
+            },
+            motor: {
+                '0-12': { expected: 8, description: 'sitting, crawling, cruising, first steps' },
+                '13-24': { expected: 12, description: 'walking well, running, stacking blocks' },
+                '25-36': { expected: 15, description: 'jumping, pedaling tricycle, drawing circles' },
+                '37-48': { expected: 18, description: 'hopping, catching ball, cutting with scissors' }
+            }
+        };
+
+        function getAgeRange(months) {
+            if (months <= 12) return '0-12';
+            if (months <= 24) return '13-24';
+            if (months <= 36) return '25-36';
+            return '37-48';
+        }
+
+        const ageRange = getAgeRange(ageMonths);
+        const messages = [];
+        const analysisPoints = [];
+
+        // AI Analysis per pillar - using stats.expected (age-appropriate benchmark)
+        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+            const s = stats[pillar];
+            if (!s || s.expected === 0) return;
+
+            // Calculate percentage based on age expectation
+            const pct = Math.round((s.achieved / s.expected) * 100);
+            const status = getTrafficLightStatus(pct);
+            const expectation = ageExpectations[pillar][ageRange];
+
+            // Generate AI analysis based on actual data patterns
+            if (status.icon === '🟢') {
+                messages.push(`✓ ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} demonstrates ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${expectation ? expectation.description + '.' : 'Healthy developmental progress.'}`);
+                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.expected} age-expected skills` });
+            } else if (status.icon === '🟡') {
+                const gap = s.expected - s.achieved;
+                messages.push(`⚠ ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} shows ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend: targeted play activities 10-15 min daily.`);
+                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} skills below age expectation; focus area identified` });
+            } else {
+                const gap = s.expected - s.achieved;
+                messages.push(`🔴 ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} has ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${gap} skills below expectation. Suggest: pediatric consultation + daily structured activities.`);
+                analysisPoints.push({ pillar, status: 'concern', detail: `Significant gap (${gap} skills); early intervention may benefit` });
+            }
+        });
+
+        // Overall AI synthesis - based on age expectations
+        let totalExpected = 0;
+        let totalAchieved = 0;
+        Object.values(stats).forEach(s => {
+            if (s && s.expected) {
+                totalExpected += s.expected;
+                totalAchieved += s.achieved;
+            }
+        });
+        const overallPercent = totalExpected > 0 ? Math.round((totalAchieved / totalExpected) * 100) : 0;
+
+        const strengths = analysisPoints.filter(p => p.status === 'strength');
+        const concerns = analysisPoints.filter(p => p.status === 'concern');
+        const developing = analysisPoints.filter(p => p.status === 'developing');
+
+        let aiSummary = '';
+        if (strengths.length >= 3) {
+            aiSummary = `\n\n🌟 Developmental Summary: ${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
+        } else if (concerns.length === 0) {
+            aiSummary = `\n\n💪 Developmental Summary: ${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
+        } else if (concerns.length <= 1) {
+            aiSummary = `\n\n📋 Developmental Summary: ${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
+        } else {
+            aiSummary = `\n\n📋 Developmental Summary: Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
+        }
+
+        // Combine server feedback with AI analysis
+        let finalText = '';
+        if (serverFeedback) {
+            finalText = serverFeedback + '\n\n';
+        }
+        finalText += '📊 AI Developmental Analysis:\n' + messages.join('\n') + aiSummary;
+
+        // Add specific recommendations
+        if (concerns.length > 0 || developing.length > 0) {
+            const focusAreas = [...concerns, ...developing].map(a => a.pillar);
+            finalText += `\n\n🎯 Priority Focus: ${focusAreas.join(', ')} - See Weekly Plan for targeted activities.`;
+        }
+
+        el.textContent = finalText;
+    }
+
+    // ── Auto Weekly Activities (called from updateBehaviorSummary) ────────
+    function generateWeeklyActivitiesFromStats(stats) {
+        const container = document.getElementById('weekly-plan-container');
+        if (!container) return;
+
+        const pillars = ['attention', 'communication', 'social', 'motor'];
+        let weakestPillar = 'motor';
+        let lowestPercent = 101;
+
+        // Find weakest pillar based on age-expected progress
+        pillars.forEach(pillar => {
+            const s = stats[pillar];
+            // Use expected (age-appropriate) as denominator
+            const pct = s.expected > 0 ? (s.achieved / s.expected) * 100 : 0;
+            if (pct < lowestPercent) {
+                lowestPercent = pct;
+                weakestPillar = pillar;
+            }
+        });
+
+        const activities = (activityDatabase[weakestPillar] || activityDatabase.motor)
+            .slice().sort(() => Math.random() - 0.5).slice(0, 3);
+        const days = ['Monday', 'Wednesday', 'Friday'];
+        const colors = [
+            { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', numBg: '#fef3c7', numColor: '#92400e' },
+            { bg: 'rgba(59,130,246,0.1)',  border: '#3b82f6',  numBg: '#dbeafe', numColor: '#1e40af' },
+            { bg: 'rgba(16,185,129,0.1)',  border: '#10b981', numBg: '#d1fae5', numColor: '#065f46' }
+        ];
+
+        container.innerHTML = activities.map((act, i) => {
+            const materials = act.materials ? act.materials.join(', ') : 'Household items';
+            const difficultyColor = act.difficulty === 'Easy' ? '#22c55e' : act.difficulty === 'Medium' ? '#f59e0b' : '#ef4444';
+            return `
+            <div style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};">
+                <div style="display:flex;align-items:center;gap:1rem;">
+                    <div style="width:40px;height:40px;border-radius:8px;background:${colors[i].numBg};display:flex;align-items:center;justify-content:center;font-weight:700;color:${colors[i].numColor};flex-shrink:0;">${i + 1}</div>
+                    <div style="flex:1;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                            <div style="font-weight:600;color:var(--text-color,#1e293b);">${act.name}</div>
+                            <span style="font-size:0.65rem;padding:0.2rem 0.5rem;background:${difficultyColor}20;color:${difficultyColor};border-radius:999px;font-weight:600;">${act.difficulty}</span>
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--slate-500,#64748b);">${act.description}</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:0.75rem;color:var(--slate-500,#64748b);font-weight:600;">${days[i]}</div>
+                        <div style="font-size:0.7rem;color:var(--slate-400,#94a3b8);">⏱ ${act.duration}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;font-size:0.7rem;color:var(--slate-600,#475569);padding-top:0.5rem;border-top:1px dashed ${colors[i].border}30;">
+                    <span>📦 <strong>Materials:</strong> ${materials}</span>
+                </div>
+                <div style="font-size:0.68rem;color:var(--slate-500,#64748b);">
+                    <strong>Steps:</strong> ${act.steps ? act.steps.join(' → ') : 'Follow child\'s lead'}
+                </div>
+                <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);margin-top:0.25rem;">
+                    🎯 Targets: ${act.targetSkills ? act.targetSkills.join(', ') : weakestPillar + ' development'}
+                </div>
+            </div>
+        `}).join('');
+    }
+
+    function updateProgressCard(type, achieved, total) {
+        const percent = total > 0 ? Math.round((achieved / total) * 100) : 0;
+
+        const countEl = document.getElementById(`${type}-count`);
+        const totalEl = document.getElementById(`${type}-total`);
+        const percentEl = document.getElementById(`${type}-percent`);
+        const progressEl = document.getElementById(`${type}-progress`);
+
+        if (countEl) countEl.textContent = achieved;
+        if (totalEl) totalEl.textContent = total;
+        if (percentEl) percentEl.textContent = percent + '%';
+        if (progressEl) progressEl.style.width = percent + '%';
+    }
+
+    function updateMilestoneChart(exhibitedCounts, counts) {
+        const grossPercent = counts.gross_motor > 0 ? (exhibitedCounts.gross_motor / counts.gross_motor) * 100 : 0;
+        const finePercent = counts.fine_motor > 0 ? (exhibitedCounts.fine_motor / counts.fine_motor) * 100 : 0;
+        const sensoryPercent = counts.sensory > 0 ? (exhibitedCounts.sensory / counts.sensory) * 100 : 0;
+
+        console.log('Updating milestone chart - Gross:', grossPercent + '%', 'Fine:', finePercent + '%', 'Sensory:', sensoryPercent + '%');
+
+        // Try to find bars
+        let barGross = document.getElementById('bar-gross');
+        let barFine = document.getElementById('bar-fine');
+        let barSensory = document.getElementById('bar-sensory');
+
+        // Retry after a short delay if elements not found (DOM might not be ready)
+        if (!barGross || !barFine || !barSensory) {
+            console.log('Bars not found, retrying in 200ms...');
+            setTimeout(() => updateMilestoneChart(exhibitedCounts, counts), 200);
+            return;
+        }
+
+        barGross.style.height = Math.max(grossPercent, 5) + '%';
+        barFine.style.height = Math.max(finePercent, 5) + '%';
+        barSensory.style.height = Math.max(sensoryPercent, 5) + '%';
+
+        console.log('Bars updated - Gross:', barGross.style.height, 'Fine:', barFine.style.height, 'Sensory:', barSensory.style.height);
+    }
+
+    function updateTrends(exhibitedCounts, counts) {
+        const getLevel = (achieved, total) => {
+            if (total === 0) return '-';
+            const percent = (achieved / total) * 100;
+            if (percent >= 75) return 'Advanced';
+            if (percent >= 50) return 'On Track';
+            if (percent >= 25) return 'Developing';
+            return 'Early Stage';
+        };
+
+        const trendGross = document.getElementById('trend-gross');
+        const trendFine = document.getElementById('trend-fine');
+        const trendOverall = document.getElementById('trend-overall');
+
+        if (trendGross) trendGross.textContent = getLevel(exhibitedCounts.gross_motor, counts.gross_motor);
+        if (trendFine) trendFine.textContent = getLevel(exhibitedCounts.fine_motor, counts.fine_motor);
+        if (trendOverall) trendOverall.textContent = getLevel(exhibitedCounts.total, counts.total);
+    }
+
+    function updateAIInsights(data, exhibitedCounts, counts) {
+        const feedbackEl = document.getElementById('ai-feedback-text');
+        if (!feedbackEl) return;
+
+        const childName = data.child_name || 'Your child';
+        const ageMonths = data.age_months || 0;
+        const feedback = data.feedback || '';
+
+        // Generate insights based on checklist selections
+        const insights = [];
+        const recommendations = [];
+
+        // Gross Motor Insights
+        const grossPercent = counts.gross_motor > 0 ? (exhibitedCounts.gross_motor / counts.gross_motor) * 100 : 0;
+        if (grossPercent >= 75) {
+            insights.push(`${childName} is showing excellent gross motor development!`);
+            recommendations.push('Continue encouraging active play like running, jumping, and climbing.');
+        } else if (grossPercent >= 50) {
+            insights.push(`${childName} is making good progress in gross motor skills.`);
+            recommendations.push('Try more balance activities like walking on lines or hopping games.');
+        } else {
+            insights.push(`${childName} may benefit from more gross motor activities.`);
+            recommendations.push('Encourage crawling, cruising, or walking activities daily.');
+        }
+
+        // Fine Motor Insights
+        const finePercent = counts.fine_motor > 0 ? (exhibitedCounts.fine_motor / counts.fine_motor) * 100 : 0;
+        if (finePercent >= 75) {
+            insights.push(`Fine motor skills are well-developed!`);
+            recommendations.push('Introduce drawing, stacking blocks, and simple puzzles.');
+        } else if (finePercent >= 50) {
+            insights.push(`Fine motor skills are developing nicely.`);
+            recommendations.push('Practice grasping toys, stacking, and finger foods.');
+        } else {
+            insights.push(`Fine motor skills need more support.`);
+            recommendations.push('Offer textured toys, finger foods, and encourage reaching/grasping.');
+        }
+
+        // Sensory Insights
+        const sensoryPercent = counts.sensory > 0 ? (exhibitedCounts.sensory / counts.sensory) * 100 : 0;
+        if (sensoryPercent >= 75) {
+            insights.push(`Sensory processing is on track!`);
+            recommendations.push('Continue exposing to varied sounds, textures, and visual stimuli.');
+        } else if (sensoryPercent >= 50) {
+            insights.push(`Sensory development is progressing well.`);
+            recommendations.push('Play peek-a-boo, explore different textures, and name colors/shapes.');
+        } else {
+            insights.push(`Consider more sensory-rich activities.`);
+            recommendations.push('Introduce sensory play with water, sand, or play-dough.');
+        }
+
+        // Overall insight
+        const overallPercent = counts.total > 0 ? (exhibitedCounts.total / counts.total) * 100 : 0;
+        let overallMessage = '';
+        if (overallPercent >= 75) {
+            overallMessage = `Overall, ${childName} is meeting ${Math.round(overallPercent)}% of age-expected milestones - great work!`;
+        } else if (overallPercent >= 50) {
+            overallMessage = `${childName} is progressing through their developmental journey with ${Math.round(overallPercent)}% of milestones achieved.`;
+        } else {
+            overallMessage = `Every child develops at their own pace. ${childName} is working on their skills - keep supporting their journey!`;
+        }
+
+        // Build final message
+        let finalMessage = '';
+        if (feedback) {
+            finalMessage = feedback + ' ' + overallMessage;
+        } else {
+            finalMessage = insights.join(' ') + ' ' + overallMessage;
+        }
+
+        // Add recommendations section
+        if (recommendations.length > 0) {
+            finalMessage += '\n\n💡 Recommendations: ' + recommendations.join(' ');
+        }
+
+        feedbackEl.textContent = finalMessage;
+    }
+
+    window.openBehaviorChecklistModal = function (childId) {
+        if (!_behaviorChecklistData) {
+            // Load data first - ensure childId is passed correctly
+            loadBehaviorChecklist(childId).then(() => {
+                setTimeout(() => openBehaviorChecklistModal(childId), 300);
+            });
+            return;
+        }
+
+        const data = _behaviorChecklistData;
+        const childName = data.child_name || 'Your child';
+
+        const renderBehaviorItem = (behavior) => {
+            const isChecked = behavior.is_exhibited;
+            const frequency = behavior.frequency || 'sometimes';
+            const severity = behavior.severity || 'mild';
+            // typical_age is stored in indicator field from AI
+            const typicalAge = behavior.indicator || behavior.typical_age;
+
+            return `
+            <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;background:#fff;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">
+                <div style="display:flex;align-items:flex-start;gap:1rem;">
+                    <div style="padding-top:0.25rem;">
+                        <input type="checkbox" id="behav-${behavior.behavior_id}" ${isChecked ? 'checked' : ''}
+                            style="width:1.25rem;height:1.25rem;accent-color:#22c55e;cursor:pointer;border-radius:6px;"
+                            onchange="toggleBehaviorCheckbox(${behavior.behavior_id}, this.checked)">
+                    </div>
+                    <div style="flex:1;">
+                        <label for="behav-${behavior.behavior_id}" style="font-weight:600;color:#1e293b;cursor:pointer;font-size:0.95rem;">
+                            ${behavior.behavior_details}
+                        </label>
+                        ${typicalAge ? `<div style="font-size:0.75rem;color:#94a3b8;margin-top:0.25rem;">Typical age: ${typicalAge}</div>` : ''}
+
+                        ${isChecked ? `
+                        <div id="behav-controls-${behavior.behavior_id}" style="display:flex;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:0.5rem;">
+                                <span style="font-size:0.75rem;color:#64748b;font-weight:600;">Frequency:</span>
+                                <select id="behav-freq-${behavior.behavior_id}" onchange="updateBehaviorData(${behavior.behavior_id})"
+                                    style="padding:0.35rem 0.65rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.8rem;outline:none;cursor:pointer;">
+                                    <option value="rarely" ${frequency === 'rarely' ? 'selected' : ''}>Rarely</option>
+                                    <option value="sometimes" ${frequency === 'sometimes' ? 'selected' : ''}>Sometimes</option>
+                                    <option value="often" ${frequency === 'often' ? 'selected' : ''}>Often</option>
+                                    <option value="always" ${frequency === 'always' ? 'selected' : ''}>Always</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:0.5rem;">
+                                <span style="font-size:0.75rem;color:#64748b;font-weight:600;">Severity:</span>
+                                <select id="behav-sev-${behavior.behavior_id}" onchange="updateBehaviorData(${behavior.behavior_id})"
+                                    style="padding:0.35rem 0.65rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.8rem;outline:none;cursor:pointer;">
+                                    <option value="mild" ${severity === 'mild' ? 'selected' : ''}>Mild</option>
+                                    <option value="moderate" ${severity === 'moderate' ? 'selected' : ''}>Moderate</option>
+                                    <option value="severe" ${severity === 'severe' ? 'selected' : ''}>Severe</option>
+                                </select>
+                            </div>
+                        </div>
+                        ` : `<div id="behav-controls-${behavior.behavior_id}" style="display:none;"></div>`}
+                    </div>
+                </div>
+            </div>`;
+        };
+
+        const renderCategory = (category) => {
+            if (category.behaviors.length === 0) return '';
+
+            // 4-Pillar Development Colors & Icons (with backward compatibility)
+            const typeColors = {
+                // New 4-pillar types
+                'motor_skills': '#22c55e',
+                'attention': '#6366f1',
+                'communication': '#f59e0b',
+                'social_skills': '#ec4899',
+                // Legacy types for backward compatibility
+                'gross_motor': '#22c55e',
+                'fine_motor': '#3b82f6',
+                'sensory': '#8b5cf6',
+                'physical': '#22c55e',
+                'social-emotional': '#ec4899',
+                'cognitive': '#6366f1',
+                'adaptive': '#14b8a6'
+            };
+
+            const typeIcons = {
+                // New 4-pillar types
+                'motor_skills': '🦵',
+                'attention': '🧠',
+                'communication': '💬',
+                'social_skills': '🤝',
+                // Legacy types for backward compatibility
+                'gross_motor': '🦵',
+                'fine_motor': '✋',
+                'sensory': '👀',
+                'physical': '🦵',
+                'social-emotional': '❤️',
+                'cognitive': '🧠',
+                'adaptive': '🏠'
+            };
+
+            const color = typeColors[category.category_type.toLowerCase()] || '#64748b';
+            const icon = typeIcons[category.category_type.toLowerCase()] || '📋';
+            const exhibitedCount = category.behaviors.filter(b => b.is_exhibited).length;
+
+            return `
+            <div class="dashboard-card" style="margin-bottom:1.5rem;border-radius:16px;box-shadow:0 4px 6px rgba(0,0,0,0.02);overflow:hidden;border:1px solid #e2e8f0;">
+                <div class="card-header" style="background:#f8fafc;padding:1.25rem 1.5rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;">
+                    <h3 class="card-title" style="margin:0;font-weight:800;font-size:1.1rem;color:var(--slate-800);">${icon} ${category.category_name}</h3>
+                    <span class="badge" style="background:${color}20;color:${color};font-size:0.85rem;padding:0.35rem 0.75rem;">${exhibitedCount} / ${category.behaviors.length}</span>
+                </div>
+                <div>
+                    ${category.behaviors.map(renderBehaviorItem).join('')}
+                </div>
+            </div>`;
+        };
+
+        const modalHtml = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:750px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="background:linear-gradient(135deg, #22c55e, #16a34a);padding:1.75rem;color:#fff;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <h2 style="margin:0 0 0.25rem;font-size:1.4rem;font-weight:800;">📋 Behavior Checklist</h2>
+                            <p style="margin:0;opacity:0.9;font-size:0.95rem;">${childName}'s personalized assessment (${data.age_months} months)</p>
+                        </div>
+                        <button onclick="document.getElementById('behavior-checklist-modal').remove()" style="background:rgba(255,255,255,0.2);border:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.25rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">✕</button>
+                    </div>
+
+                    <div style="padding:1.5rem;overflow-y:auto;flex:1;">
+                        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:1rem;margin-bottom:1.5rem;">
+                            <div style="display:flex;gap:0.75rem;align-items:flex-start;">
+                                <span style="font-size:1.25rem;">💡</span>
+                                <div>
+                                    <h4 style="margin:0 0 0.25rem;font-weight:700;color:#166534;font-size:0.9rem;">How to use this checklist</h4>
+                                    <p style="margin:0;font-size:0.85rem;color:#166534;line-height:1.5;">Check behaviors you observe in ${childName}. For each checked behavior, select the frequency (how often) and severity (how pronounced). This helps track developmental progress!</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        ${data.categories.map(renderCategory).join('')}
+                    </div>
+
+                    <div style="padding:1.25rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;gap:0.75rem;justify-content:flex-end;">
+                        <button onclick="document.getElementById('behavior-checklist-modal').remove()" style="padding:0.75rem 1.5rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#fff;color:#64748b;font-size:0.9rem;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#cbd5e1';this.style.color='#475569'" onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#64748b'">Cancel</button>
+                        <button onclick="saveBehaviorChecklist(${childId})" style="padding:0.75rem 2rem;border:none;border-radius:12px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:0.9rem;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(34,197,94,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(34,197,94,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 4px 12px rgba(34,197,94,0.3)'">
+                            💾 Save Checklist
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        let existing = document.getElementById('behavior-checklist-modal');
+        if (existing) {
+            existing.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'behavior-checklist-modal';
+        modal.innerHTML = modalHtml;
+        document.body.appendChild(modal);
+    };
+
+    window.toggleBehaviorCheckbox = function (behaviorId, isChecked) {
+        if (!_behaviorChecklistData) return;
+
+        // Update the in-memory data
+        _behaviorChecklistData.categories.forEach(cat => {
+            cat.behaviors.forEach(b => {
+                if (b.behavior_id === behaviorId) {
+                    b.is_exhibited = isChecked;
+                    if (!isChecked) {
+                        b.frequency = null;
+                        b.severity = null;
+                    } else if (!b.frequency) {
+                        b.frequency = 'sometimes';
+                        b.severity = 'mild';
+                    }
+                }
+            });
+        });
+
+        // Update summary cards dynamically
+        updateBehaviorSummary(_behaviorChecklistData);
+
+        // FIX: Just toggle controls visibility inline - no full re-render (preserves scroll position)
+        const controls = document.getElementById(`behav-controls-${behaviorId}`);
+        if (controls) {
+            controls.style.display = isChecked ? 'flex' : 'none';
+        }
+
+        // Update checkbox label style for visual feedback
+        const label = document.querySelector(`label[for="behav-${behaviorId}"]`);
+        if (label) {
+            label.style.textDecoration = isChecked ? 'line-through' : 'none';
+            label.style.color = isChecked ? 'var(--slate-400)' : 'var(--slate-700)';
+        }
+    };
+
+    window.updateBehaviorData = function (behaviorId) {
+        if (!_behaviorChecklistData) return;
+
+        const freqEl = document.getElementById(`behav-freq-${behaviorId}`);
+        const sevEl = document.getElementById(`behav-sev-${behaviorId}`);
+
+        _behaviorChecklistData.categories.forEach(cat => {
+            cat.behaviors.forEach(b => {
+                if (b.behavior_id === behaviorId) {
+                    b.frequency = freqEl ? freqEl.value : 'sometimes';
+                    b.severity = sevEl ? sevEl.value : 'mild';
+                }
+            });
+        });
+    };
+
+    window.saveBehaviorChecklist = async function (childId) {
+        if (!_behaviorChecklistData) {
+            console.error('No behavior checklist data available');
+            return;
+        }
+
+        // Use the child_id from the data if not passed
+        const saveChildId = childId || _behaviorChecklistData.child_id;
+        console.log('Saving checklist for child_id:', saveChildId);
+
+        const btn = event?.target || document.querySelector('#behavior-checklist-modal button[onclick*="saveBehaviorChecklist"]');
+        if (!btn) {
+            console.error('Save button not found');
+            return;
+        }
+
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Saving...</span>';
+
+        try {
+            // Prepare behaviors data
+            const behaviors = [];
+            _behaviorChecklistData.categories.forEach(cat => {
+                cat.behaviors.forEach(b => {
+                    behaviors.push({
+                        behavior_id: b.behavior_id,
+                        is_exhibited: b.is_exhibited,
+                        frequency: b.frequency || 'sometimes',
+                        severity: b.severity || 'mild'
+                    });
+                });
+            });
+
+            console.log('Sending behaviors:', behaviors);
+            console.log('Child ID:', saveChildId);
+
+            const res = await fetch(`../../api_behavior_checklist.php?action=save&child_id=${saveChildId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // Include cookies for session
+                body: JSON.stringify({ behaviors })
+            });
+
+            const data = await res.json();
+            console.log('Save response:', data);
+
+            if (data.success) {
+                showBadgeToast('Checklist saved! ' + data.saved_count + ' behaviors recorded ✓');
+                document.getElementById('behavior-checklist-modal').remove();
+
+                // CRITICAL: Reload the checklist from server to get persisted state
+                // This ensures the UI reflects exactly what's in the database
+                await loadBehaviorChecklist(saveChildId);
+
+                // Also update the cached data to reflect saved state
+                _behaviorChecklistData = {
+                    ..._behaviorChecklistData,
+                    loadedAt: Date.now()
+                };
+
+                console.log('Checklist saved and reloaded successfully');
+            } else {
+                alert('Error saving: ' + (data.error || 'Unknown error'));
+            }
+        } catch (e) {
+            console.error('Save behavior checklist error:', e);
+            alert('Failed to save checklist. Please try again.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    };
+
+    // ── Privacy Disclaimer Modal for Motor Skills (First-time load) ────────────────────────────────────
+    // Ensure CSS animations are available
+    function ensureMotorAnimations() {
+        if (document.getElementById('motor-animations-style')) return;
+        const style = document.createElement('style');
+        style.id = 'motor-animations-style';
+        style.textContent = `
+            @keyframes slideUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
+            @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+            @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
+            @keyframes slideUpFade { from { opacity:0; transform:translateY(40px) scale(0.95); } to { opacity:1; transform:translateY(0) scale(1); } }
+            @keyframes fadeUpIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+            @keyframes spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+            @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.8; transform:scale(1.05); } }
+        `;
+        document.head.appendChild(style);
+    }
+
+    window.showMotorPrivacyModal = function() {
+        ensureMotorAnimations();
+        const modalHtml = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;animation:fadeIn 0.3s ease;" onclick="if(event.target===this && !this.dataset.locked)closePrivacyModal()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:550px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="background:linear-gradient(135deg,#10b981,#06b6d4);padding:1.5rem;color:#fff;">
+                        <h2 style="margin:0 0 0.25rem;font-size:1.4rem;font-weight:800;">🔒 Your Child's Privacy Matters</h2>
+                        <p style="margin:0;opacity:0.9;font-size:0.9rem;">We're committed to protecting your family's data</p>
+                    </div>
+                    <div style="padding:1.5rem;overflow-y:auto;flex:1;">
+                        <div style="background:rgba(16,185,129,0.1);border-left:4px solid #10b981;padding:1rem;margin-bottom:1.5rem;border-radius:8px;">
+                            <p style="margin:0;color:#065f46;font-size:0.9rem;"><strong>Safe & Secure:</strong> All developmental data is stored locally and never shared with third parties.</p>
+                        </div>
+
+                        <h3 style="margin:0 0 0.75rem 0;color:var(--text-color,#1e293b);font-size:1rem;">What We Collect:</h3>
+                        <ul style="color:var(--slate-600,#475569);font-size:0.9rem;line-height:1.8;margin:0 0 1.5rem 0;padding-left:1.25rem;">
+                            <li>Developmental milestone observations (checklist responses)</li>
+                            <li>Growth metrics you voluntarily provide (height, weight)</li>
+                            <li>Speech analysis scores from in-app recordings</li>
+                            <li>Activity completion history for progress tracking</li>
+                        </ul>
+
+                        <h3 style="margin:0 0 0.75rem 0;color:var(--text-color,#1e293b);font-size:1rem;">How We Use It:</h3>
+                        <ul style="color:var(--slate-600,#475569);font-size:0.9rem;line-height:1.8;margin:0 0 1.5rem 0;padding-left:1.25rem;">
+                            <li>Generate personalized activity recommendations</li>
+                            <li>Track progress patterns over time</li>
+                            <li>Provide insights for healthcare discussions</li>
+                            <li>Never for advertising or commercial purposes</li>
+                        </ul>
+
+                        <div style="background:rgba(245,158,11,0.1);border-left:4px solid #f59e0b;padding:1rem;border-radius:8px;">
+                            <p style="margin:0;color:#92400e;font-size:0.85rem;">
+                                <strong>Important:</strong> This tool provides developmental insights but does NOT replace professional medical advice.
+                                Always consult qualified healthcare providers for diagnoses or treatment decisions.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="padding:1.25rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+                        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;color:var(--slate-600,#475569);cursor:pointer;">
+                            <input type="checkbox" id="dont-show-again" style="width:18px;height:18px;accent-color:#10b981;">
+                            Don't show again
+                        </label>
+                        <button onclick="acceptPrivacyDisclaimer()" style="background:linear-gradient(135deg,#10b981,#06b6d4);color:white;border:none;padding:0.75rem 1.5rem;border-radius:12px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:transform 0.2s;box-shadow:0 4px 12px rgba(16,185,129,0.3);" onmouseover="this.style.transform='scale(1.02)';this.style.boxShadow='0 6px 16px rgba(16,185,129,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 4px 12px rgba(16,185,129,0.3)'">
+                            I Understand - Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const existing = document.getElementById('motor-privacy-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'motor-privacy-modal';
+        modal.innerHTML = modalHtml;
+        document.body.appendChild(modal);
+    };
+
+    window.closePrivacyModal = function() {
+        const modal = document.getElementById('motor-privacy-modal');
+        if (modal) {
+            modal.style.opacity = '0';
+            modal.style.animation = 'fadeOut 0.3s ease';
+            setTimeout(() => modal.remove(), 300);
+        }
+    };
+
+    window.acceptPrivacyDisclaimer = function() {
+        const dontShowAgain = document.getElementById('dont-show-again');
+        if (dontShowAgain && dontShowAgain.checked) {
+            localStorage.setItem('bs_motor_privacy_dismissed', '1');
+        }
+        closePrivacyModal();
     };
 
     function getActivitiesView() {
