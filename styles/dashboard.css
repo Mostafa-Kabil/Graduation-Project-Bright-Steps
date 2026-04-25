@@ -1008,6 +1008,7 @@
 
 .logout-dialog {
     position: relative;
+    z-index: 1;
     background: var(--bg-primary, #fff);
     border-radius: 1.25rem;
     padding: 2.5rem;

@@ -1,5 +1,6 @@
 // Navigation utility
 function navigateTo(page) {
+    console.log('navigateTo called with:', page);
     const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
 
     const pageMap = {
@@ -26,6 +27,7 @@ function navigateTo(page) {
     };
 
     const targetPage = pageMap[page] || page + '.php';
+    console.log('Navigating to:', baseUrl + targetPage);
     window.location.href = baseUrl + targetPage;
 }
 
@@ -78,7 +80,7 @@ function showSupportPopup() {
         z-index: 10000; opacity: 0; transition: opacity 0.3s ease;
     `;
     
-    overlay.innerHTML = \`
+    overlay.innerHTML = `
         <div class="support-modal glass-effect" style="
             background: var(--bg-card, #ffffff); width: 90%; max-width: 500px; 
             border-radius: 20px; padding: 2rem; box-shadow: 0 20px 40px rgba(0,0,0,0.15); 
@@ -147,7 +149,7 @@ function showSupportPopup() {
                    onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 12px rgba(79, 70, 229, 0.3)'">Submit Ticket</button>
             </form>
         </div>
-    \`;
+    `;
     
     document.body.appendChild(overlay);
     

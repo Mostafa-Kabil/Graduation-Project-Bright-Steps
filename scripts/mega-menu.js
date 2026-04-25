@@ -25,7 +25,12 @@ function toggleMegaMenu(menuId, event) {
 
 // Close when clicking outside
 document.addEventListener('click', (event) => {
-    if (!event.target.closest('.mega-menu') && !event.target.closest('.dropdown-trigger')) {
+    const target = event.target;
+    // Don't close if clicking on header-actions buttons (login, signup, language toggle)
+    if (target.closest('.header-actions')) {
+        return;
+    }
+    if (!target.closest('.mega-menu') && !target.closest('.dropdown-trigger')) {
         document.querySelectorAll('.mega-menu').forEach(menu => {
             menu.classList.remove('open');
         });
