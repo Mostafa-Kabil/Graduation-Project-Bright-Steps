@@ -118,6 +118,16 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                     </svg>
                     <span>System Health</span>
                 </button>
+                <button class="nav-item" data-view="logs">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    <span>Audit Logs</span>
+                </button>
                 <button class="nav-item" data-view="roles">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -149,15 +159,56 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
             </div>
         </aside>
 
-        <!-- Main Content -->
-        <main class="dashboard-main" id="admin-main-content">
-            <!-- Content loaded by JavaScript -->
-        </main>
+        <!-- Main Area -->
+        <div class="dashboard-main" style="display:flex; flex-direction:column;">
+            <!-- Admin Topbar -->
+            <div style="display:flex; justify-content:flex-end; padding:1.25rem 2.5rem 0 2.5rem; background:transparent; position:relative; z-index:100; width:100%;">
+                <div style="display:flex; align-items:center; gap:1.5rem;">
+                    <!-- Notification Bell -->
+                    <div id="admin-topbar-notification" onclick="toggleAdminNotifDropdown()" style="position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="2" width="22" height="22" onmouseover="this.style.stroke='var(--text-primary)'" onmouseout="this.style.stroke='var(--text-secondary)'">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                        </svg>
+                        <span id="admin-notif-badge" style="display:none; position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:var(--red-500); border-radius:50%; border:2px solid var(--bg-primary);"></span>
+                    </div>
+                    <!-- Dropdown -->
+                    <div id="admin-notif-dropdown" style="display:none; position:absolute; top:3.5rem; right:2.5rem; width:380px; background:var(--bg-card); border:1px solid var(--border); border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,0.15); overflow:hidden; z-index:1000;">
+                        <div style="padding:1.25rem 1.5rem; background:linear-gradient(135deg, #4f46e5, #6366f1); display:flex; justify-content:space-between; align-items:center;">
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                <h4 style="margin:0; font-size:1rem; font-weight:700; color:#fff;">Notifications</h4>
+                                <span id="admin-notif-count" style="display:none; background:rgba(255,255,255,0.25); color:#fff; font-size:0.7rem; font-weight:700; padding:2px 8px; border-radius:20px;"></span>
+                            </div>
+                            <div style="display:flex; gap:0.75rem;">
+                                <span style="font-size:0.75rem; color:rgba(255,255,255,0.8); cursor:pointer;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.8)'" onclick="loadAdminNotifications()">Refresh</span>
+                                <span style="font-size:0.75rem; color:rgba(255,255,255,0.8); font-weight:600; cursor:pointer;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.8)'" onclick="markAllAdminNotifRead()">Mark all read</span>
+                            </div>
+                        </div>
+                        <div id="admin-notif-content" style="max-height:420px; overflow-y:auto; padding:0;">
+                            <div style="padding:3rem 1.5rem; text-align:center;">
+                                <div style="width:48px; height:48px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem;">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                                </div>
+                                <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Loading notifications...</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- User Avatar -->
+                    <div id="admin-topbar-avatar" onclick="showAdminView('settings')" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #4f46e5, #6366f1); color:white; display:flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; font-size:0.9rem;" title="Admin Settings">
+                        A
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <main id="admin-main-content" style="flex:1; overflow-y:auto;">
+                <!-- Content loaded by JavaScript -->
+            </main>
+        </div>
     </div>
 
     <!-- Toggles removed and securely relocated to Settings view -->
 
-    <script src="scripts/theme-toggle.js?v=16"></script>
     <script src="scripts/theme-toggle.js?v=17"></script>
     <script src="scripts/language-toggle.js?v=17"></script>
     <script src="scripts/navigation.js?v=17"></script>
@@ -165,11 +216,12 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="scripts/admin-dashboard.js?v=19"></script>
-    <script src="scripts/admin-views-extended.js?v=19"></script>
-    <script src="scripts/admin-views-part2.js?v=19"></script>
-    <script src="scripts/admin-views-part3.js?v=19"></script>
-    <script src="scripts/admin-views-part4.js?v=19"></script>
+    <script src="scripts/admin-dashboard.js?v=21"></script>
+    <script src="scripts/admin-clinics-view.js?v=21"></script>
+    <script src="scripts/admin-views-extended.js?v=21"></script>
+    <script src="scripts/admin-views-part2.js?v=21"></script>
+    <script src="scripts/admin-views-part3.js?v=21"></script>
+    <script src="scripts/admin-views-part4.js?v=21"></script>
 </body>
 
 </html>

@@ -271,6 +271,22 @@ try {
             logClinicActivity($connect, 'clinic_reactivated', "Clinic reactivated: " . ($c['clinic_name'] ?? "#{$clinicId}"));
             echo json_encode(['success' => true, 'message' => 'Clinic reactivated']);
 
+        } elseif ($action === 'reject') {
+            $clinicId = (int) ($data['clinic_id'] ?? 0);
+            $reason = $data['reason'] ?? 'No reason provided';
+            if (!$clinicId) { echo json_encode(['success' => false, 'error' => 'Clinic ID required']); exit; }
+
+            $nameStmt = $connect->prepare("SELECT clinic_name FROM clinic WHERE clinic_id = :id");
+            $nameStmt->execute(['id' => $clinicId]);
+            $c = $nameStmt->fetch(PDO::FETCH_ASSOC);
+            $rejectedName = $c ? $c['clinic_name'] : "ID #{$clinicId}";
+
+            $stmt = $connect->prepare("UPDATE clinic SET status = 'rejected' WHERE clinic_id = :id");
+            $stmt->execute(['id' => $clinicId]);
+
+            logClinicActivity($connect, 'clinic_rejected', "Clinic rejected: {$rejectedName}. Reason: {$reason}");
+            echo json_encode(['success' => true, 'message' => 'Clinic signup rejected']);
+
         } elseif ($action === 'delete') {
             $clinicId = (int) ($data['clinic_id'] ?? 0);
             if (!$clinicId) { echo json_encode(['success' => false, 'error' => 'Clinic ID required']); exit; }

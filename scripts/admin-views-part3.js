@@ -130,6 +130,92 @@ async function viewLogDetail(id) {
     } catch(e){showAlert('Error','error');}
 }
 
+// ═══ AUDIT LOGS VIEW ═══
+window.loadLogsView = async function(main) {
+    try {
+        const data = await apiGet('logs.php?action=list');
+        const logs = data.logs || [];
+        const stats = data.stats || {};
+        
+        main.innerHTML = `<div class="dashboard-content">
+            <div class="dashboard-header-section">
+                <div><h1 class="dashboard-title">System Audit Logs</h1><p class="dashboard-subtitle">Monitor administrative actions and system events</p></div>
+                <div class="header-actions-inline">
+                    <button class="btn btn-outline" onclick="loadLogsView(document.getElementById('admin-main-content'))">⟳ Refresh</button>
+                </div>
+            </div>
+            
+            <div class="admin-stats-grid" style="grid-template-columns:repeat(4,1fr);">
+                <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.total_logs || 0)}</div><div class="admin-stat-label">Total Recorded Events</div></div></div>
+                <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.admin_actions || 0)}</div><div class="admin-stat-label">Admin Actions</div></div></div>
+                <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.system_actions || 0)}</div><div class="admin-stat-label">System Actions</div></div></div>
+                <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.today_actions || 0)}</div><div class="admin-stat-label">Events Today</div></div></div>
+            </div>
+
+            <div class="section-card">
+                <div class="section-card-header">
+                    <h2 class="section-heading">Activity Log</h2>
+                    <div style="display:flex;gap:1rem;">
+                        <select class="search-input" id="log-role-filter" style="width:auto;" onchange="filterAuditLogs()">
+                            <option value="all">All Roles</option>
+                            <option value="admin">Admins</option>
+                            <option value="system">System</option>
+                        </select>
+                        <input type="text" class="search-input" placeholder="Search logs..." id="log-search-input" onkeyup="filterAuditLogs()">
+                    </div>
+                </div>
+                <div class="clinic-table-wrap">
+                    <table class="clinic-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>User</th>
+                                <th>Role</th>
+                                <th>IP Address</th>
+                                <th>Date/Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-logs-tbody">
+                            ${logs.map(l => `
+                            <tr class="audit-log-row" data-role="${l.user_role || ''}">
+                                <td><span class="status-badge" style="background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border);">${l.activity_type}</span></td>
+                                <td class="log-desc" style="max-width:300px; white-space:normal; line-height:1.4;">${l.description}</td>
+                                <td class="log-user"><strong>${l.user_name || '—'}</strong></td>
+                                <td><span class="role-badge role-${l.user_role || 'default'}">${l.user_role || '—'}</span></td>
+                                <td><code style="font-size:0.8rem;color:var(--text-secondary);">${l.ip_address || '—'}</code></td>
+                                <td style="font-size:0.85rem;color:var(--text-secondary);">${fmtDate(l.created_at)} <span style="font-size:0.75rem;opacity:0.8">${new Date(l.created_at).toLocaleTimeString()}</span></td>
+                            </tr>
+                            `).join('')}
+                            ${logs.length === 0 ? '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary);">No logs found</td></tr>' : ''}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`;
+        
+        window.filterAuditLogs = function() {
+            const search = document.getElementById('log-search-input').value.toLowerCase();
+            const role = document.getElementById('log-role-filter').value;
+            const rows = document.querySelectorAll('.audit-log-row');
+            let visible = 0;
+            rows.forEach(r => {
+                const text = r.innerText.toLowerCase();
+                const rRole = r.dataset.role;
+                const matchSearch = text.includes(search);
+                const matchRole = role === 'all' || rRole === role;
+                if(matchSearch && matchRole) { r.style.display = ''; visible++; }
+                else r.style.display = 'none';
+            });
+            // could add a "no results" row but this is fine
+        };
+
+        if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
+    } catch (e) {
+        main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`;
+    }
+};
+
 async function filterLogs() { const lvl = document.getElementById('log-level-filter')?.value||''; showAdminView('system_health'); }
 
 async function downloadLogs(fmt) {
