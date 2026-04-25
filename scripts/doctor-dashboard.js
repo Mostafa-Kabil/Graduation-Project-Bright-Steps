@@ -14,13 +14,13 @@ function initDoctorNav() {
     navItems.forEach(item => {
         item.addEventListener('click', function () {
             const view = this.dataset.view;
-            if (view) { setActiveNav(this); showDoctorView(view); }
+            if (view) { setActiveNav(this); footerItems.forEach(f=>f.classList.remove('active')); showDoctorView(view); }
         });
     });
     footerItems.forEach(item => {
         item.addEventListener('click', function () {
             const view = this.dataset.view;
-            if (view) { navItems.forEach(n => n.classList.remove('active')); showDoctorView(view); }
+            if (view) { navItems.forEach(n => n.classList.remove('active')); footerItems.forEach(f=>f.classList.remove('active')); this.classList.add('active'); showDoctorView(view); }
         });
     });
 }
