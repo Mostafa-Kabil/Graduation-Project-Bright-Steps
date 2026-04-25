@@ -38,7 +38,8 @@ switch ($action) {
                 'appointment_reminders' => 1,
                 'daily_reminders' => 1,
                 'milestone_alerts' => 1,
-                'data_sharing' => 1
+                'data_sharing' => 1,
+                'system_alerts' => 1
             ];
         }
 
@@ -50,7 +51,8 @@ switch ($action) {
 
         $allowed = [
             'theme', 'language', 'push_notifications', 'email_notifications',
-            'appointment_reminders', 'daily_reminders', 'milestone_alerts', 'data_sharing'
+            'appointment_reminders', 'daily_reminders', 'milestone_alerts', 'data_sharing',
+            'system_alerts'
         ];
 
         // Ensure row exists

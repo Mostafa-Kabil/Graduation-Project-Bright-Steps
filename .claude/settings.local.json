@@ -11,7 +11,10 @@
       "Read(//c/Program Files/**)",
       "Bash(ls -la \"C:/ffmpeg\"*)",
       "Bash(curl:*)",
-      "Bash(start \"\" python -m uvicorn app:app --host 0.0.0.0 --port 8000)"
+      "Bash(start \"\" python -m uvicorn app:app --host 0.0.0.0 --port 8000)",
+      "Read(//c/xampp/mysql/bin/**)",
+      "Bash(mysql -u root -e \"USE bright_steps; ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS system_alerts tinyint\\(1\\) DEFAULT 1;\")"
+      "Bash(php -r 'try { $pdo = new PDO\\('\\\\''mysql:host=localhost;dbname=grad'\\\\'', '\\\\''root'\\\\'', '\\\\'''\\\\''\\); $stmt = $pdo->query\\('\\\\''SELECT COUNT\\(*\\) as count FROM behavior_category'\\\\''\\); echo '\\\\''Categories: '\\\\'' . $stmt->fetch\\(\\)['\\\\''count'\\\\''] . PHP_EOL; $stmt = $pdo->query\\('\\\\''SELECT COUNT\\(*\\) as count FROM behavior'\\\\''\\); echo '\\\\''Behaviors: '\\\\'' . $stmt->fetch\\(\\)['\\\\''count'\\\\''] . PHP_EOL; } catch\\(Exception $e\\) { echo '\\\\''Error: '\\\\'' . $e->getMessage\\(\\); }')"
     ]
   }
 }

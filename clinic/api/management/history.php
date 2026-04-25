@@ -120,10 +120,10 @@ try {
             INNER JOIN specialist s ON a.specialist_id = s.specialist_id
             INNER JOIN users u ON s.specialist_id = u.user_id
             INNER JOIN clinic c2 ON s.clinic_id = c2.clinic_id
-            WHERE a.parent_id = :parent_id AND (a.child_id = :child_id OR a.child_id IS NULL)
+            WHERE a.parent_id = :parent_id
             ORDER BY a.scheduled_at DESC
         ");
-        $stmt5->execute([':parent_id' => $child['parent_id'], ':child_id' => $childId]);
+        $stmt5->execute([':parent_id' => $child['parent_id']]);
         $appointments = $stmt5->fetchAll();
 
         json_success([
@@ -148,7 +148,7 @@ try {
         $db = get_db();
 
         $sql = "
-            SELECT a.appointment_id, a.child_id, a.status, a.type, a.scheduled_at, a.comment, a.report,
+            SELECT a.appointment_id, NULL as child_id, a.status, a.type, a.scheduled_at, a.comment, a.report,
                    pu.first_name AS parent_first_name, pu.last_name AS parent_last_name,
                    u.first_name AS doctor_first_name, u.last_name AS doctor_last_name,
                    s.specialization, c.clinic_name,
@@ -159,7 +159,7 @@ try {
             INNER JOIN clinic c ON s.clinic_id = c.clinic_id
             INNER JOIN parent p ON a.parent_id = p.parent_id
             INNER JOIN users pu ON p.parent_id = pu.user_id
-            LEFT JOIN child ch ON a.child_id = ch.child_id
+            LEFT JOIN child ch ON a.parent_id = ch.parent_id
             WHERE 1=1
         ";
         $params = [];

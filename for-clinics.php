@@ -5,7 +5,7 @@ include 'connection.php';
 
 // If already logged in as clinic, redirect
 if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 'clinic') {
-    header("Location: clinic-dashboard.php");
+    header("Location: dashboards/clinic/clinic-dashboard.php");
     exit;
 }
 ?>
