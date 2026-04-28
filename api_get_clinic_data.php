@@ -10,18 +10,31 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
 }
 
 try {
-    // The clinic login sets $_SESSION['id'] = clinic_id directly
-    $clinic_id = $_SESSION['id'];
+    $user_id = $_SESSION['id'];
+    $clinic_id = null;
 
-    // 1. Fetch the clinic record by clinic_id
+    // 1. Try to find clinic where clinic_id matches session ID
     $cStmt = $connect->prepare("SELECT * FROM clinic WHERE clinic_id = ? LIMIT 1");
-    $cStmt->execute([$clinic_id]);
+    $cStmt->execute([$user_id]);
     $clinic = $cStmt->fetch(PDO::FETCH_ASSOC);
 
+    if ($clinic) {
+        $clinic_id = $clinic['clinic_id'];
+    } else {
+        // 2. Try to find clinic where admin_id matches session ID
+        $cStmt = $connect->prepare("SELECT * FROM clinic WHERE admin_id = ? LIMIT 1");
+        $cStmt->execute([$user_id]);
+        $clinic = $cStmt->fetch(PDO::FETCH_ASSOC);
+        if ($clinic) {
+            $clinic_id = $clinic['clinic_id'];
+        }
+    }
+
     if (!$clinic) {
+        // Fallback for UI if no clinic found at all
         echo json_encode([
             "success" => true,
-            "clinic" => ["clinic_name" => $_SESSION['clinic_name'] ?? "My Clinic", "clinic_id" => $clinic_id],
+            "clinic" => ["clinic_name" => $_SESSION['clinic_name'] ?? "My Clinic", "clinic_id" => $user_id],
             "specialists" => [],
             "patients" => [],
             "stats" => [
