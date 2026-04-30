@@ -2,6 +2,14 @@
 session_start();
 require_once 'connection.php';
 
+// Check maintenance mode
+$mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
+$mStmt->execute();
+if ($mStmt->fetchColumn() === '1') {
+    header("Location: maintenance.php");
+    exit;
+}
+
 // ─── Auth: only authenticated doctors/specialists can access ─────────────
 $isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') || isset($_GET['ajax']);
 if (!$isAjax) {

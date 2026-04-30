@@ -4,6 +4,14 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
     header("Location: ../../login.php");
     exit;
 }
+
+require_once "../../connection.php";
+$mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
+$mStmt->execute();
+if ($mStmt->fetchColumn() === '1') {
+    header("Location: ../../maintenance.php");
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

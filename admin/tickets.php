@@ -61,24 +61,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'list':
             $status = $_GET['status'] ?? '';
             $where = $status ? "WHERE t.status='$status'" : '';
-            $stmt = $connect->query("SELECT t.*, u.first_name, u.last_name, u.email, a.first_name as assigned_first, a.last_name as assigned_last FROM support_tickets t JOIN users u ON t.user_id=u.user_id LEFT JOIN users a ON t.assigned_to=a.user_id $where ORDER BY FIELD(t.priority,'critical','high','medium','low'), t.updated_at DESC");
+            $stmt = $connect->query("SELECT t.*, COALESCE(u.first_name, SUBSTRING_INDEX(t.guest_name, ' ', 1)) as first_name, COALESCE(u.last_name, SUBSTRING_INDEX(t.guest_name, ' ', -1)) as last_name, COALESCE(u.email, t.guest_email) as email, a.first_name as assigned_first, a.last_name as assigned_last FROM support_tickets t LEFT JOIN users u ON t.user_id=u.user_id LEFT JOIN users a ON t.assigned_to=a.user_id $where ORDER BY FIELD(t.priority,'critical','high','medium','low'), t.updated_at DESC");
             echo json_encode(['success' => true, 'tickets' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
             break;
 
         case 'view':
             $id = $_GET['id'] ?? 0;
             // Ticket details
-            $stmt = $connect->prepare("SELECT t.*, u.first_name, u.last_name, u.email, u.role, u.created_at as user_joined FROM support_tickets t JOIN users u ON t.user_id=u.user_id WHERE t.id=?");
+            $stmt = $connect->prepare("SELECT t.*, COALESCE(u.first_name, SUBSTRING_INDEX(t.guest_name, ' ', 1)) as first_name, COALESCE(u.last_name, SUBSTRING_INDEX(t.guest_name, ' ', -1)) as last_name, COALESCE(u.email, t.guest_email) as email, COALESCE(u.role, 'guest') as role, u.created_at as user_joined FROM support_tickets t LEFT JOIN users u ON t.user_id=u.user_id WHERE t.id=?");
             $stmt->execute([$id]);
             $ticket = $stmt->fetch(PDO::FETCH_ASSOC);
             // Messages
-            $msgs = $connect->prepare("SELECT tm.*, u.first_name, u.last_name FROM ticket_messages tm JOIN users u ON tm.sender_id=u.user_id WHERE tm.ticket_id=? ORDER BY tm.created_at ASC");
+            $msgs = $connect->prepare("SELECT tm.*, COALESCE(u.first_name, SUBSTRING_INDEX(t.guest_name, ' ', 1)) as first_name, COALESCE(u.last_name, SUBSTRING_INDEX(t.guest_name, ' ', -1)) as last_name FROM ticket_messages tm LEFT JOIN users u ON tm.sender_id=u.user_id LEFT JOIN support_tickets t ON tm.ticket_id = t.id WHERE tm.ticket_id=? ORDER BY tm.created_at ASC");
             $msgs->execute([$id]);
             $messages = $msgs->fetchAll(PDO::FETCH_ASSOC);
             // Previous tickets by this user
-            $prev = $connect->prepare("SELECT id, subject, status, created_at FROM support_tickets WHERE user_id=? AND id!=? ORDER BY created_at DESC LIMIT 5");
-            $prev->execute([$ticket['user_id'], $id]);
-            $previousTickets = $prev->fetchAll(PDO::FETCH_ASSOC);
+            $previousTickets = [];
+            if (!empty($ticket['user_id'])) {
+                $prev = $connect->prepare("SELECT id, subject, status, created_at FROM support_tickets WHERE user_id=? AND id!=? ORDER BY created_at DESC LIMIT 5");
+                $prev->execute([$ticket['user_id'], $id]);
+                $previousTickets = $prev->fetchAll(PDO::FETCH_ASSOC);
+            } elseif (!empty($ticket['guest_email'])) {
+                $prev = $connect->prepare("SELECT id, subject, status, created_at FROM support_tickets WHERE guest_email=? AND id!=? ORDER BY created_at DESC LIMIT 5");
+                $prev->execute([$ticket['guest_email'], $id]);
+                $previousTickets = $prev->fetchAll(PDO::FETCH_ASSOC);
+            }
+            
             // Available admins for assignment
             $admins = $connect->query("SELECT u.user_id, u.first_name, u.last_name FROM users u WHERE u.role='admin' AND u.status='active'")->fetchAll(PDO::FETCH_ASSOC);
 

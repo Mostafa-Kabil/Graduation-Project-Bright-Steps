@@ -306,8 +306,14 @@ try {
             $c = $nameStmt->fetch(PDO::FETCH_ASSOC);
             $deletedName = $c ? $c['clinic_name'] : "ID #{$clinicId}";
 
-            $stmt = $connect->prepare("DELETE FROM clinic WHERE clinic_id = :id");
-            $stmt->execute(['id' => $clinicId]);
+            try {
+                $connect->prepare("DELETE FROM clinic_phone WHERE clinic_id = :id")->execute(['id' => $clinicId]);
+                $stmt = $connect->prepare("DELETE FROM clinic WHERE clinic_id = :id");
+                $stmt->execute(['id' => $clinicId]);
+            } catch (PDOException $e) {
+                echo json_encode(['success' => false, 'error' => 'Cannot delete clinic due to existing related data.']);
+                exit;
+            }
 
             logClinicActivity($connect, 'clinic_deleted', "Clinic deleted: {$deletedName}");
             echo json_encode(['success' => true, 'message' => 'Clinic deleted']);
