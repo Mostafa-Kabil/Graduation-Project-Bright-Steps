@@ -330,6 +330,7 @@ button {
     line-height: 1.5;
     transition: all 0.3s ease;
     text-decoration: none;
+    cursor: pointer;
 }
 
 .btn-ghost {
@@ -417,6 +418,8 @@ button {
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
+    pointer-events: auto;
+}
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
 

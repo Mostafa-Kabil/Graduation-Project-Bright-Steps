@@ -14,8 +14,8 @@ async function loadNotificationsView(main) {
             <div style="position:absolute;bottom:-30px;right:80px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
             <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">Notification Center</h1>
-                    <p style="opacity:.85;margin:0;font-size:.95rem;">Compose, schedule & track notifications — in-app and email</p>
+                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;color:white !important;">Notification Center</h1>
+                    <p style="opacity:.85;margin:0;font-size:.95rem;color:white !important;">Compose, schedule & track notifications — in-app and email</p>
                 </div>
                 <button class="btn" onclick="showComposeNotification()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.85rem;padding:.6rem 1.5rem;border-radius:12px;cursor:pointer;font-weight:600;">+ Compose</button>
             </div>

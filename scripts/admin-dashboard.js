@@ -35,9 +35,16 @@ function initAdminNav() {
     footerItems.forEach(item => { item.addEventListener('click', function () { const view = this.dataset.view; if (view) { navItems.forEach(n => n.classList.remove('active')); footerItems.forEach(n => n.classList.remove('active')); this.classList.add('active'); showAdminView(view); } }); });
 }
 
-function showAdminView(viewId) {
+async function showAdminView(viewId) {
     const main = document.getElementById('admin-main-content');
     if (!main) return;
+    
+    // Update active state in sidebar
+    const allNavItems = document.querySelectorAll('.sidebar-nav .nav-item, .sidebar-footer .nav-item[data-view]');
+    allNavItems.forEach(n => n.classList.remove('active'));
+    const targetNav = document.querySelector(`.nav-item[data-view="${viewId}"]`);
+    if (targetNav) targetNav.classList.add('active');
+
     // Permission check
     if (!hasPermission(viewId)) {
         main.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;text-align:center;">
@@ -51,8 +58,18 @@ function showAdminView(viewId) {
         return;
     }
     main.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:60vh;"><div class="admin-loading-spinner"></div></div>';
-    const loaders = { 'overview': loadOverviewView, 'users': loadUsersView, 'clinics': loadClinicsView, 'subscriptions': loadSubscriptionsView, 'points': loadPointsView, 'reports': loadReportsView, 'settings': loadSettingsView, 'notifications_mgmt': loadNotificationsView, 'moderation': loadModerationView, 'system_health': loadSystemHealthView, 'roles': loadRolesView, 'tickets': loadTicketsView, 'banners': loadBannersView };
-    const fn = loaders[viewId]; if (fn) fn(main);
+    try {
+        const loaders = { 'overview': window.loadOverviewView || loadOverviewView, 'users': window.loadUsersView || (typeof loadUsersView!=='undefined'?loadUsersView:null), 'clinics': window.loadClinicsView || (typeof loadClinicsView!=='undefined'?loadClinicsView:null), 'subscriptions': window.loadSubscriptionsView || (typeof loadSubscriptionsView!=='undefined'?loadSubscriptionsView:null), 'points': window.loadPointsView || (typeof loadPointsView!=='undefined'?loadPointsView:null), 'reports': window.loadReportsView || (typeof loadReportsView!=='undefined'?loadReportsView:null), 'settings': window.loadSettingsView || (typeof loadSettingsView!=='undefined'?loadSettingsView:null), 'notifications_mgmt': window.loadNotificationsView, 'moderation': window.loadModerationView || (typeof loadModerationView!=='undefined'?loadModerationView:null), 'system_health': window.loadSystemHealthView || (typeof loadSystemHealthView!=='undefined'?loadSystemHealthView:null), 'roles': window.loadRolesView || (typeof loadRolesView!=='undefined'?loadRolesView:null), 'tickets': window.loadTicketsView, 'banners': window.loadBannersView || (typeof loadBannersView!=='undefined'?loadBannersView:null), 'logs': window.loadLogsView };
+        const fn = loaders[viewId]; 
+        if (fn) {
+            await fn(main);
+        } else {
+            main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>View Not Found</h2><p>Could not load the requested view (${viewId}). Please refresh the page.</p></div>`;
+        }
+    } catch(e) {
+        console.error('Error rendering view:', e);
+        main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Render Error</h2><p>${e.message}</p></div>`;
+    }
 }
 
 // Helpers
@@ -69,6 +86,89 @@ function getActivityLabel(t) { return activityLabels[t] || t; }
 
 const avatarColors = { 'parent': 'background:linear-gradient(135deg,#6366f1,#818cf8);', 'specialist': 'background:linear-gradient(135deg,#0d9488,#0891b2);', 'admin': 'background:linear-gradient(135deg,#8b5cf6,#7c3aed);', 'clinic': 'background:linear-gradient(135deg,#d97706,#f59e0b);' };
 
+// ═══ TOPBAR NOTIFICATIONS ═══
+async function toggleAdminNotifDropdown() {
+    const dropdown = document.getElementById('admin-notif-dropdown');
+    if (!dropdown) return;
+    const isVisible = dropdown.style.display !== 'none';
+    if (!isVisible) {
+        await loadAdminNotifications();
+        dropdown.style.display = 'block';
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+document.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('admin-notif-dropdown');
+    const trigger = document.getElementById('admin-topbar-notification');
+    if (dropdown && trigger && !trigger.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+async function loadAdminNotifications() {
+    const contentDiv = document.getElementById('admin-notif-content');
+    if (!contentDiv) return;
+    try {
+        const res = await fetch(ADMIN_API + 'notifications.php?action=list');
+        const data = await res.json();
+        const notifications = data.notifications || [];
+        const unreadCount = data.unread || data.unread_count || 0;
+
+        const badge = document.getElementById('admin-notif-badge');
+        if (badge) badge.style.display = unreadCount > 0 ? 'block' : 'none';
+        const countBadge = document.getElementById('admin-notif-count');
+        if (countBadge) {
+            if (unreadCount > 0) { countBadge.textContent = unreadCount + ' new'; countBadge.style.display = 'inline-block'; }
+            else { countBadge.style.display = 'none'; }
+        }
+
+        if (notifications.length === 0) {
+            contentDiv.innerHTML = `<div style="padding:3rem 1.5rem; text-align:center;"><div style="width:48px; height:48px; background:var(--bg-secondary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div><p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">No new notifications</p></div>`;
+        } else {
+            contentDiv.innerHTML = notifications.map(n => `
+                <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; gap:0.875rem; align-items:flex-start; cursor:pointer; background:${n.is_read == 0 ? 'var(--bg-secondary)' : 'transparent'};" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'var(--bg-secondary)' : 'transparent'}'" onclick="markSingleAdminNotifRead(${n.notification_id}, this)">
+                    <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(139,92,246,0.1));display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    </div>
+                    <div style="flex:1; min-width:0; position:relative;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
+                            <span style="font-weight:600; font-size:0.9rem; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${n.title || 'Notification'}</span>
+                            <span style="font-size:0.7rem; color:var(--text-secondary); white-space:nowrap;">${timeAgo(n.created_at)}</span>
+                        </div>
+                        <p style="margin:0; font-size:0.82rem; color:var(--text-secondary); line-height:1.4;">${n.message || ''}</p>
+                        ${n.is_read == 0 ? '<div class="unread-dot" style="width:6px;height:6px;background:var(--red-500);border-radius:50%;position:absolute;right:0;top:50%;transform:translateY(-50%);"></div>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+    } catch (err) {
+        contentDiv.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--red-500);"><p>Error loading notifications</p></div>`;
+    }
+}
+
+async function markAllAdminNotifRead() {
+    try {
+        await fetch('api_notifications.php?action=read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+        await loadAdminNotifications();
+    } catch (e) { console.error(e); }
+}
+
+async function markSingleAdminNotifRead(id, el) {
+    try {
+        await fetch('api_notifications.php?action=read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notification_id: id }) });
+        const dot = el.querySelector('.unread-dot'); if (dot) dot.remove();
+        el.style.background = 'transparent';
+        const badge = document.getElementById('admin-notif-badge');
+        const countBadge = document.getElementById('admin-notif-count');
+        if (countBadge && countBadge.textContent) {
+            let cnt = parseInt(countBadge.textContent);
+            if (cnt > 1) { countBadge.textContent = (cnt - 1) + ' new'; }
+            else { countBadge.style.display = 'none'; if(badge) badge.style.display = 'none'; }
+        }
+    } catch (e) { console.error(e); }
+}
 // API
 async function apiGet(ep) { const r = await fetch(ADMIN_API + ep); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
 async function apiPost(ep, data) { const r = await fetch(ADMIN_API + ep, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }
@@ -100,71 +200,71 @@ async function loadOverviewView(main) {
 
         main.innerHTML = `<div class="dashboard-content">
         <!-- Welcome Banner -->
-        <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
-            <div style="position:absolute;top:-30px;right:-30px;width:150px;height:150px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
-            <div style="position:absolute;bottom:-40px;right:60px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
+        <div style="background:linear-gradient(135deg,#4f46e5,#6366f1,#7c3aed);border-radius:20px;padding:1.5rem 2rem;margin-bottom:1rem;position:relative;overflow:hidden;">
+            <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
+            <div style="position:absolute;bottom:-30px;right:60px;width:80px;height:80px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
             <div style="position:relative;z-index:1;">
-                <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">${greeting}, Admin 👋</h1>
-                <p style="opacity:.85;margin:0;font-size:.95rem;">${dateStr} — Here's your platform at a glance</p>
+                <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 .25rem;color:white !important;">${greeting}, Admin 👋</h1>
+                <p style="opacity:.9;margin:0;font-size:.9rem;color:white !important;">${dateStr} — Here's your platform at a glance</p>
             </div>
-            <div style="display:flex;gap:.75rem;margin-top:1.25rem;position:relative;z-index:1;">
-                <button class="btn" onclick="showAdminView('users')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">👥 Manage Users</button>
-                <button class="btn" onclick="showAdminView('reports')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">📊 View Reports</button>
-                <button class="btn" onclick="showAdminView('tickets')" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">🎫 Support</button>
+            <div style="display:flex;gap:.6rem;margin-top:1rem;position:relative;z-index:1;">
+                <button class="btn" onclick="showAdminView('users')" style="background:rgba(255,255,255,0.95);color:#4f46e5;border:none;font-size:.8rem;padding:.5rem 1.1rem;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.15);transition:transform .15s;" onmouseenter="this.style.transform='translateY(-1px)'" onmouseleave="this.style.transform=''">👥 Manage Users</button>
+                <button class="btn" onclick="showAdminView('reports')" style="background:rgba(255,255,255,0.95);color:#4f46e5;border:none;font-size:.8rem;padding:.5rem 1.1rem;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.15);transition:transform .15s;" onmouseenter="this.style.transform='translateY(-1px)'" onmouseleave="this.style.transform=''">📊 View Reports</button>
+                <button class="btn" onclick="showAdminView('tickets')" style="background:rgba(255,255,255,0.95);color:#4f46e5;border:none;font-size:.8rem;padding:.5rem 1.1rem;border-radius:10px;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.15);transition:transform .15s;" onmouseenter="this.style.transform='translateY(-1px)'" onmouseleave="this.style.transform=''">🎫 Support</button>
             </div>
         </div>
 
         <!-- Primary Stats -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem;">
-            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(99,102,241,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1rem;">👥</div><div style="font-size:.7rem;font-weight:600;color:${s.users_trend >= 0 ? 'var(--green-500)' : 'var(--red-500)'};background:${s.users_trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:5px;">${s.users_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.users_trend)}%</div></div>
-                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.total_users)}</div>
-                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Users</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.85rem;margin-bottom:.85rem;">
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:1rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(99,102,241,0.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;"><div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:.9rem;">👥</div><div style="font-size:.65rem;font-weight:600;color:${s.users_trend >= 0 ? 'var(--green-500)' : 'var(--red-500)'};background:${s.users_trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:5px;">${s.users_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.users_trend)}%</div></div>
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.total_users)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">Total Users</div>
             </div>
-            <div style="background:linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03));border:1px solid rgba(13,148,136,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(13,148,136,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:1rem;">🏥</div><div style="font-size:.7rem;font-weight:600;color:var(--green-500);background:rgba(16,185,129,0.1);padding:2px 6px;border-radius:5px;">+${s.new_clinics} new</div></div>
-                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.active_clinics)}</div>
-                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Active Clinics</div>
+            <div style="background:linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03));border:1px solid rgba(13,148,136,0.15);border-radius:14px;padding:1rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(13,148,136,0.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;"><div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#0d9488,#14b8a6);display:flex;align-items:center;justify-content:center;font-size:.9rem;">🏥</div><div style="font-size:.65rem;font-weight:600;color:var(--green-500);background:rgba(16,185,129,0.1);padding:2px 6px;border-radius:5px;">+${s.new_clinics} new</div></div>
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.active_clinics)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">Active Clinics</div>
             </div>
-            <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(16,185,129,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:1rem;">💰</div><div style="font-size:.7rem;font-weight:600;color:${s.revenue_trend >= 0 ? 'var(--green-500)' : 'var(--red-500)'};background:${s.revenue_trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:5px;">${s.revenue_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.revenue_trend)}%</div></div>
-                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtMoney(s.total_revenue)}</div>
-                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Revenue</div>
+            <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:14px;padding:1rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(16,185,129,0.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;"><div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:.9rem;">💰</div><div style="font-size:.65rem;font-weight:600;color:${s.revenue_trend >= 0 ? 'var(--green-500)' : 'var(--red-500)'};background:${s.revenue_trend >= 0 ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};padding:2px 6px;border-radius:5px;">${s.revenue_trend >= 0 ? '↑' : '↓'} ${Math.abs(s.revenue_trend)}%</div></div>
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtMoney(s.total_revenue)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">Total Revenue</div>
             </div>
-            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(245,158,11,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;font-size:1rem;">💳</div></div>
-                <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.active_subscriptions)}</div>
-                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Active Subscriptions</div>
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:1rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(245,158,11,0.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;"><div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;font-size:.9rem;">💳</div></div>
+                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(s.active_subscriptions)}</div>
+                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">Active Subscriptions</div>
             </div>
         </div>
 
         <!-- Secondary Stats (Valuable Info) -->
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
-            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
-                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_children)}</div>
-                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">👶 Children</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.6rem;margin-bottom:1.1rem;">
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:.7rem .5rem;text-align:center;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.25rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_children)}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">👶 Children</div>
             </div>
-            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
-                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_specialists)}</div>
-                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">🩺 Specialists</div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:.7rem .5rem;text-align:center;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.25rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_specialists)}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">🩺 Specialists</div>
             </div>
-            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
-                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_appointments)}</div>
-                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">📅 Appointments</div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:.7rem .5rem;text-align:center;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.25rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.total_appointments)}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">📅 Appointments</div>
             </div>
-            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
-                <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.growth_records)}</div>
-                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">📈 Growth Records</div>
+            <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:.7rem .5rem;text-align:center;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.25rem;font-weight:800;color:var(--text-primary);">${fmtNum(s.growth_records)}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">📈 Growth Records</div>
             </div>
-            <div style="background:var(--bg-card);border:1px solid ${s.open_tickets > 0 ? 'rgba(239,68,68,0.3)' : 'var(--border)'};border-radius:12px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
-                <div style="font-size:1.5rem;font-weight:800;color:${s.open_tickets > 0 ? 'var(--red-500)' : 'var(--text-primary)'};">${fmtNum(s.open_tickets)}</div>
-                <div style="font-size:.7rem;color:var(--text-secondary);margin-top:.15rem;">🎫 Open Tickets</div>
+            <div style="background:var(--bg-card);border:1px solid ${s.open_tickets > 0 ? 'rgba(239,68,68,0.3)' : 'var(--border)'};border-radius:10px;padding:.7rem .5rem;text-align:center;transition:transform .15s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.25rem;font-weight:800;color:${s.open_tickets > 0 ? 'var(--red-500)' : 'var(--text-primary)'}">${fmtNum(s.open_tickets)}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">🎫 Open Tickets</div>
             </div>
         </div>
 
         <!-- System Logs + User Distribution -->
         <div class="overview-grid">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">System Logs</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Live</span></div><div style="max-height:320px;overflow-y:auto;padding:.5rem 1rem;">
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">System Logs</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Live</span></div><div style="max-height:260px;overflow-y:auto;padding:.35rem .75rem;">
                 ${sysLogs.map(l => `<div style="display:flex;align-items:flex-start;gap:.75rem;padding:.6rem 0;border-bottom:1px solid var(--border);transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
                     <span style="font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px;background:${logLevelBg(l.level)};color:${logLevelColor(l.level)};text-transform:uppercase;flex-shrink:0;margin-top:2px;">${l.level||'info'}</span>
                     <div style="flex:1;min-width:0;">
@@ -189,7 +289,7 @@ async function loadOverviewView(main) {
         </div>
 
         <!-- Top Clinics + Recent Payments -->
-        <div class="overview-grid" style="margin-top:1rem;">
+        <div class="overview-grid" style="margin-top:.85rem;">
             <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Top Clinics</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">By Rating</span></div><div class="patients-list">
                 ${topClinics.map((c,i) => `<div class="patient-row" style="transition:background .15s;padding:.6rem;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
                     <div style="width:28px;text-align:center;font-size:${i < 3 ? '1.1rem' : '.8rem'};font-weight:700;">${['🥇','🥈','🥉'][i] || '#'+(i+1)}</div>
@@ -291,50 +391,10 @@ function showAddUserModal() {
     document.getElementById('au-save').onclick = async () => {
         const d = { action: 'add', first_name: document.getElementById('au-fn').value, last_name: document.getElementById('au-ln').value, email: document.getElementById('au-em').value, password: document.getElementById('au-pw').value, role: document.getElementById('au-rl').value };
         if (!d.first_name || !d.email || !d.password) { showAlert('Please fill all required fields.', 'warning'); return; }
-        try { const res = await apiPost('users.php', d); if (res.success) { showAlert('User created!', 'success'); setTimeout(() => { closeModal(); filterUsers(); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
-    };
+        try { const res = await apiPost('users.php', d); if (res.success) { showAlert('User created!', 'success'); setTimeout(() => { closeModal(); filterUsers(); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } };
 }
 
-// ═══ CLINICS ═══
-async function loadClinicsView(main) {
-    try { const [sd, ld] = await Promise.all([apiGet('clinics.php?action=stats'), apiGet('clinics.php?action=list')]); renderClinicsView(main, sd.stats, ld.clinics, ''); }
-    catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
-}
-function renderClinicsView(main, stats, clinics, currentSearch) {
-    main.innerHTML = `<div class="dashboard-content">
-        <div class="dashboard-header-section"><div><h1 class="dashboard-title">Clinic Management</h1><p class="dashboard-subtitle">Manage all registered clinics on the platform</p></div>
-            <div class="header-actions-inline"><button class="btn btn-gradient" onclick="showRegisterClinicModal()">+ Register Clinic</button></div></div>
-        <div class="admin-stats-grid" style="grid-template-columns:repeat(3,1fr);">
-            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.total_clinics)}</div><div class="admin-stat-label">Total Clinics</div></div></div>
-            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.total_specialists)}</div><div class="admin-stat-label">Total Specialists</div></div></div>
-            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.verified)}</div><div class="admin-stat-label">Verified</div></div></div>
-        </div>
-        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">All Clinics</h2><input type="text" class="search-input" placeholder="Search clinics..." id="admin-clinic-search" value="${currentSearch}"></div>
-            <div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Clinic</th><th>Location</th><th>Specialists</th><th>Patients</th><th>Rating</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-                ${clinics.map(c => `<tr>
-                    <td><div class="table-user"><div class="patient-avatar" style="background:linear-gradient(135deg,#0d9488,#0891b2);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div><div><div class="patient-name">${c.clinic_name}</div><div class="patient-details">${c.email || ''}</div></div></div></td>
-                    <td>${c.location || '—'}</td><td>${c.specialist_count || 0}</td><td>${c.patient_count || 0}</td>
-                    <td><span class="rating-badge">★ ${Number(c.rating).toFixed(1)}</span></td>
-                    <td><span class="status-badge ${c.status === 'verified' ? 'status-active' : (c.status === 'suspended' ? 'status-danger' : 'status-warning')}">${c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : 'Pending'}</span></td>
-                    <td><div class="action-btns">
-                        ${c.status === 'pending' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);" onclick="approveClinic(${c.clinic_id})">Approve</button>` : ''}
-                        ${c.status === 'verified' ? `<button class="btn btn-sm btn-outline" style="color:var(--yellow-600);" onclick="toggleClinicStatus(${c.clinic_id}, 'suspended')">Suspend</button>` : ''}
-                        ${c.status === 'suspended' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);" onclick="toggleClinicStatus(${c.clinic_id}, 'verified')">Verify</button>` : ''}
-                        <button class="btn btn-sm btn-outline" onclick="viewClinic(${c.clinic_id},'${(c.clinic_name||'').replace(/'/g,"\\\\'")}','${(c.email||'').replace(/'/g,"\\\\'")}','${(c.location||'').replace(/'/g,"\\\\'")}','${c.status}',${c.rating||0},${c.specialist_count||0},${c.patient_count||0})">View</button>
-                    </div></td>
-                </tr>`).join('')}
-                ${clinics.length === 0 ? '<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary);">No clinics found</td></tr>' : ''}
-            </tbody></table></div></div></div>`;
-    let st; document.getElementById('admin-clinic-search').addEventListener('input', function () { clearTimeout(st); st = setTimeout(async () => { try { const [s, l] = await Promise.all([apiGet('clinics.php?action=stats'), apiGet('clinics.php?action=list&search=' + encodeURIComponent(this.value))]); renderClinicsView(main, s.stats, l.clinics, this.value); } catch (e) { } }, 400); });
-    if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
-}
-function approveClinic(clinicId) { showConfirm('Are you sure you want to <strong>approve</strong> this clinic?', async () => { try { const res = await apiPost('clinics.php', { action: 'approve', clinic_id: clinicId }); if (res.success) { showAlert('Clinic approved!', 'success'); setTimeout(() => { closeModal(); showAdminView('clinics'); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } }); }
-function toggleClinicStatus(clinicId, newStatus) { showConfirm(`Are you sure you want to <strong>${newStatus === 'suspended' ? 'suspend' : 'verify'}</strong> this clinic?`, async () => { try { const actionUrl = newStatus === 'suspended' ? 'suspend' : 'reactivate'; const res = await apiPost('clinics.php', { action: actionUrl, clinic_id: clinicId }); if (res.success) { showAlert(`Clinic ${newStatus === 'suspended' ? 'suspended' : 'verified'}!`, 'success'); setTimeout(() => { closeModal(); showAdminView('clinics'); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } }); }
-function showRegisterClinicModal() {
-    showModal('Register New Clinic', `<div class="form-group"><label>Clinic Name</label><input type="text" id="rc-name" placeholder="Enter clinic name"></div><div class="form-group"><label>Email</label><input type="email" id="rc-email" placeholder="clinic@example.com"></div><div class="form-group"><label>Location</label><input type="text" id="rc-loc" placeholder="Enter address"></div>`,
-        `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="rc-save">Register Clinic</button>`);
-    document.getElementById('rc-save').onclick = async () => { const d = { action: 'register', clinic_name: document.getElementById('rc-name').value, email: document.getElementById('rc-email').value, location: document.getElementById('rc-loc').value }; if (!d.clinic_name || !d.email) { showAlert('Clinic name and email are required.', 'warning'); return; } try { const res = await apiPost('clinics.php', d); if (res.success) { showAlert('Clinic registered!', 'success'); setTimeout(() => { closeModal(); showAdminView('clinics'); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } };
-}
+// ═══ CLINIC MANAGEMENT — moved to admin-clinics-view.js ═══
 
 // ═══ SUBSCRIPTIONS (Full CRUD) ═══
 async function loadSubscriptionsView(main) {
@@ -456,12 +516,12 @@ async function loadPointsView(main) {
         const styleColors = {info:'#6366f1',warning:'#f59e0b',success:'#10b981',error:'#ef4444'};
         main.innerHTML = `<div class="dashboard-content">
         <!-- Hero Header -->
-        <div style="background:linear-gradient(135deg,#f59e0b,#d97706,#b45309);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#f59e0b,#d97706,#b45309);border-radius:20px;padding:1.5rem 2rem;margin-bottom:1rem;position:relative;overflow:hidden;">
             <div style="position:absolute;top:-20px;right:20px;font-size:80px;opacity:.15;">🏆</div>
             <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">Engagement & Rewards</h1>
-                    <p style="opacity:.85;margin:0;font-size:.95rem;">Points, badges & banners — gamify the platform experience</p>
+                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;color:white !important;">Engagement & Rewards</h1>
+                    <p style="opacity:.85;margin:0;font-size:.95rem;color:white !important;">Points, badges & banners — gamify the platform experience</p>
                 </div>
                 <div style="display:flex;gap:.5rem;">
                     <button class="btn" onclick="showAddRuleModal()" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(8px);font-size:.8rem;padding:.45rem 1rem;border-radius:10px;cursor:pointer;">+ Rule</button>

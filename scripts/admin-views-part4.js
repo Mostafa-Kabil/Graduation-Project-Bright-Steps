@@ -5,13 +5,13 @@ async function loadTicketsView(main) {
         const tickets = td.tickets||[], an = ad.analytics||{}, modStats = sd.stats||{}, modItems = md.items||[];
         const openPct = an.total > 0 ? Math.round((an.open / an.total) * 100) : 0;
         main.innerHTML = `<div class="dashboard-content">
-        <div style="background:linear-gradient(135deg,#6366f1,#4f46e5,#4338ca);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#6366f1,#4f46e5,#4338ca);border-radius:20px;padding:1.5rem 2rem;margin-bottom:1rem;position:relative;overflow:hidden;">
             <div style="position:absolute;top:-20px;right:20px;font-size:80px;opacity:.12;">🛡️</div>
             <div style="position:absolute;bottom:-30px;right:80px;width:100px;height:100px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
             <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;">Contact & Support</h1>
-                    <p style="opacity:.85;margin:0;font-size:.95rem;">Tickets, moderation & user support — keep the community safe</p>
+                    <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;color:white !important;">Contact & Support</h1>
+                    <p style="opacity:.85;margin:0;font-size:.95rem;color:white !important;">Tickets, moderation & user support — keep the community safe</p>
                 </div>
                 <div style="display:flex;gap:1.5rem;text-align:center;">
                     <div><div style="font-size:1.75rem;font-weight:800;">${an.total||0}</div><div style="font-size:.7rem;opacity:.8;">Tickets</div></div>

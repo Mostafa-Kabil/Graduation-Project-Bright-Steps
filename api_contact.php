@@ -33,14 +33,28 @@ if (!empty($errors)) {
     exit;
 }
 
-// Store in database
+// Store in database (Route to admin support tickets)
 try {
-    $stmt = $connect->prepare(
-        "INSERT INTO contact_messages (name, email, subject, message) VALUES (?, ?, ?, ?)"
-    );
-    $stmt->execute([$name, $email, $subject, $message]);
+    // Check if email matches an existing user
+    $stmt = $connect->prepare("SELECT user_id FROM users WHERE email = ? LIMIT 1");
+    $stmt->execute([$email]);
+    $userId = $stmt->fetchColumn();
+
+    if ($userId) {
+        $stmt = $connect->prepare("INSERT INTO support_tickets (user_id, subject, priority, status) VALUES (?, ?, 'medium', 'open')");
+        $stmt->execute([$userId, $subject]);
+    } else {
+        $stmt = $connect->prepare("INSERT INTO support_tickets (user_id, guest_name, guest_email, subject, priority, status) VALUES (NULL, ?, ?, ?, 'medium', 'open')");
+        $stmt->execute([$name, $email, $subject]);
+    }
+    
+    $ticketId = $connect->lastInsertId();
+
+    $stmt = $connect->prepare("INSERT INTO ticket_messages (ticket_id, sender_id, sender_type, message) VALUES (?, ?, 'user', ?)");
+    $stmt->execute([$ticketId, $userId ?: NULL, $message]);
 } catch (Exception $e) {
-    // Table might not exist, continue with email anyway
+    // If ticket creation fails, continue with email anyway
+    error_log("Failed to create support ticket: " . $e->getMessage());
 }
 
 // Send notification to admin

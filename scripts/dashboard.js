@@ -1319,6 +1319,7 @@
 
 // Handle logout – Premium modal
 function handleLogout() {
+    console.log('handleLogout called');
     // Remove existing modal if any
     const existing = document.getElementById('logout-modal');
     if (existing) existing.remove();
@@ -1326,7 +1327,7 @@ function handleLogout() {
     const modal = document.createElement('div');
     modal.id = 'logout-modal';
     modal.innerHTML = `
-        <div class="logout-overlay" onclick="closeLogoutModal()"></div>
+        <div class="logout-overlay"></div>
         <div class="logout-dialog">
                 <div class="logout-icon-wrap">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1336,26 +1337,52 @@ function handleLogout() {
                 <h3>Are you sure you want to log out?</h3>
                 <p>You will need to sign in again to access your dashboard.</p>
                 <div class="logout-actions">
-                    <button class="logout-btn-cancel" onclick="closeLogoutModal()">Cancel</button>
-                    <button class="logout-btn-confirm" onclick="confirmLogout()">Yes, Log Out</button>
+                    <button class="logout-btn-cancel">Cancel</button>
+                    <button class="logout-btn-confirm">Yes, Log Out</button>
                 </div>
             </div>
     `;
     document.body.appendChild(modal);
+    console.log('Modal appended, attaching event listeners');
+
+    // Attach event listeners
+    const overlay = modal.querySelector('.logout-overlay');
+    const cancelBtn = modal.querySelector('.logout-btn-cancel');
+    const confirmBtn = modal.querySelector('.logout-btn-confirm');
+
+    if (overlay) {
+        console.log('Overlay found, attaching click listener');
+        overlay.addEventListener('click', closeLogoutModal);
+    }
+    if (cancelBtn) {
+        console.log('Cancel button found, attaching click listener');
+        cancelBtn.addEventListener('click', closeLogoutModal);
+    }
+    if (confirmBtn) {
+        console.log('Confirm button found, attaching click listener');
+        confirmBtn.addEventListener('click', confirmLogout);
+    }
+
     // Trigger entrance animation
     requestAnimationFrame(() => modal.classList.add('show'));
 }
 
 function closeLogoutModal() {
+    console.log('closeLogoutModal called');
     const modal = document.getElementById('logout-modal');
     if (modal) {
         modal.classList.remove('show');
         modal.classList.add('hide');
-        setTimeout(() => modal.remove(), 300);
+        setTimeout(() => {
+            console.log('Removing modal from DOM');
+            modal.remove();
+        }, 300);
     }
 }
 
 function confirmLogout() {
+    console.log('confirmLogout called');
     clearAuth();
+    console.log('Navigating to logout.php');
     window.location.href = 'logout.php';
 }

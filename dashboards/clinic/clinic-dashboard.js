@@ -453,6 +453,7 @@ async function refreshClinicData(viewId) {
             }
 
             // Update ALL stat cards by ID (works across all views)
+            const reviewStats = data.review_stats || {};
             const statUpdates = {
                 'stat-active-specialists': clinicSpecialists.length,
                 'stat-total-appointments': s.total_appointments || 0,
@@ -465,9 +466,9 @@ async function refreshClinicData(viewId) {
                 'stat-growth-rate': s.total_appointments > 0 ? '+' + Math.min(Math.round((s.completed_appointments / Math.max(s.total_appointments, 1)) * 100), 100) + '%' : '0%',
                 'stat-active-patients': clinicPatients.length,
                 'stat-pending-payments': s.pending_appointments || 0,
-                'stat-overall-rating': (s.avg_rating || '0.0') + '/5',
-                'stat-positive-pct': s.avg_rating >= 4 ? '94%' : Math.round((s.avg_rating / 5) * 100) + '%',
-                'stat-total-reviews': s.total_appointments || 0
+                'stat-overall-rating': (reviewStats.avg_rating || '0.0') + '/5',
+                'stat-positive-pct': (reviewStats.positive_pct || 0) + '%',
+                'stat-total-reviews': reviewStats.count || 0
             };
             
             Object.entries(statUpdates).forEach(([id, val]) => {
@@ -589,13 +590,23 @@ function renderAppointmentsList(appointments) {
         const dt = new Date(apt.scheduled_at);
         const timeStr = dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         const dateStr = dt.toLocaleDateString();
-        
+
+        // Safely handle potentially null child names
+        const childFname = apt.child_fname || 'Unknown';
+        const childLname = apt.child_lname || '';
+        const childInitials = (childFname[0] || '?') + (childLname[0] || '');
+
+        // Safely handle specialist names
+        const specFname = apt.specialist_fname || '';
+        const specLname = apt.specialist_lname || '';
+
+        const statusLower = (apt.status || '').toLowerCase();
         let statusClass = "status-yellow";
         let statusIcon = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
-        if (apt.status === 'completed') {
+        if (statusLower === 'completed') {
             statusClass = "status-green";
             statusIcon = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>';
-        } else if (apt.status === 'cancelled') {
+        } else if (statusLower === 'cancelled') {
             statusClass = "status-danger";
             statusIcon = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
         }
@@ -607,15 +618,15 @@ function renderAppointmentsList(appointments) {
                     <div class="apt-date">${dateStr}</div>
                 </div>
                 <div class="patient-avatar" style="background: linear-gradient(135deg, #009688, #00bcd4);">
-                    ${apt.child_fname[0]}${apt.child_lname[0]}
+                    ${childInitials}
                 </div>
                 <div class="patient-info">
-                    <div class="patient-name">${apt.child_fname} ${apt.child_lname}</div>
-                    <div class="patient-details">with Dr. ${apt.specialist_fname} ${apt.specialist_lname} • ${apt.type}</div>
+                    <div class="patient-name">${childFname} ${childLname}</div>
+                    <div class="patient-details">with Dr. ${specFname} ${specLname} • ${apt.type || ''}</div>
                 </div>
                 <div class="patient-status ${statusClass}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${statusIcon}</svg>
-                    ${apt.status}
+                    ${apt.status || 'Scheduled'}
                 </div>
                 <button class="btn btn-sm btn-outline" onclick="viewAppointmentDetails(${apt.appointment_id})">Details</button>
             </div>
@@ -869,7 +880,14 @@ function viewSpecialistDetails(id) {
             <div class="clinic-modal-footer" style="padding: 1.25rem 2rem; border-top: 1px solid var(--border-color); background: white;">
                 <button class="btn btn-outline" onclick="closeViewModal()" style="min-width: 120px;">Close</button>
                 <div style="display: flex; gap: 0.75rem;">
-                    <button class="btn btn-outline" style="border-color: #0d9488; color: #0d9488;" onclick="showClinicAlert('Contact Specialist', 'Phone: +20 102 345 6789')">Call Now</button>
+                    <button class="btn btn-outline" style="border-color: #f59e0b; color: #f59e0b;" onclick="openEditSpecialistModal(${spec.specialist_id})">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Edit
+                    </button>
+                    <button class="btn btn-outline" style="border-color: #ef4444; color: #ef4444;" onclick="confirmDeleteSpecialist(${spec.specialist_id}, '${spec.first_name} ${spec.last_name}')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        Remove
+                    </button>
                     <button class="btn btn-gradient" style="min-width: 160px;" onclick="showClinicAlert('Specialist Email', 'Direct Email: ${spec.email || 'N/A'}')">Email Specialist</button>
                 </div>
             </div>
@@ -884,6 +902,295 @@ function closeViewModal() {
         modal.classList.remove('active');
         setTimeout(() => modal.remove(), 300);
     }
+}
+
+function confirmDeleteSpecialist(id, name) {
+    if (confirm(`Are you sure you want to remove Dr. ${name} from your clinic? This will cancel their upcoming appointments.`)) {
+        fetch('../../api_clinic_delete_specialist.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ specialist_id: id })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showClinicAlert('Success', `Dr. ${name} has been removed from your team.`);
+                closeViewModal();
+                refreshClinicData('specialists');
+            } else {
+                showClinicAlert('Error', data.error || 'Failed to remove specialist.');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showClinicAlert('Error', 'An unexpected error occurred.');
+        });
+    }
+}
+
+function openEditSpecialistModal(id) {
+    const spec = clinicSpecialists.find(s => s.specialist_id == id);
+    if (!spec) return;
+
+    closeViewModal(); // Close the detail view first
+
+    const existing = document.getElementById('edit-specialist-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'edit-specialist-modal';
+    modal.className = 'clinic-modal-overlay';
+    modal.innerHTML = `
+        <div class="clinic-modal-container glass-effect premium-modal">
+            <div class="clinic-modal-header">
+                <div class="header-icon-circle" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </div>
+                <div class="header-text">
+                    <h3>Edit Specialist Profile</h3>
+                    <p>Update Dr. ${spec.first_name}'s details</p>
+                </div>
+                <button class="clinic-modal-close-btn" onclick="closeEditSpecialistModal()">&times;</button>
+            </div>
+            <form id="edit-specialist-form" class="clinic-modal-body" onsubmit="submitEditSpecialist(event, ${spec.specialist_id})">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>First Name</label>
+                        <div class="input-with-icon">
+                            <input type="text" name="first_name" required value="${spec.first_name}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Last Name</label>
+                        <div class="input-with-icon">
+                            <input type="text" name="last_name" required value="${spec.last_name || ''}">
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Email Address</label>
+                        <div class="input-with-icon">
+                            <input type="email" name="email" required value="${spec.email || ''}">
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Password (Leave blank to keep current)</label>
+                        <div class="input-with-icon">
+                            <input type="password" name="password" placeholder="••••••••••••">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Specialization</label>
+                        <div class="input-with-icon">
+                            <select name="specialization" id="edit-spec-dropdown" required style="width:100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 0.75rem 1rem; color: var(--text-primary); font-size: 0.9rem; outline: none; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230d9488' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
+                                <option value="" disabled>Select a specialization…</option>
+                                <optgroup label="Core Pediatric Medicine">
+                                    <option value="Pediatrician">Pediatrician (General)</option>
+                                    <option value="Pediatric Neurologist">Pediatric Neurologist</option>
+                                    <option value="Developmental Pediatrician">Developmental Pediatrician</option>
+                                    <option value="Pediatric Psychiatrist">Pediatric Psychiatrist</option>
+                                    <option value="Pediatric Psychologist">Pediatric Psychologist</option>
+                                </optgroup>
+                                <optgroup label="Therapy & Rehabilitation">
+                                    <option value="Speech-Language Therapist">Speech-Language Therapist</option>
+                                    <option value="Occupational Therapist">Occupational Therapist</option>
+                                    <option value="Physical Therapist">Physical Therapist</option>
+                                    <option value="Behavioral Therapist">Behavioral Therapist</option>
+                                    <option value="Applied Behavior Analysis (ABA) Therapist">ABA Therapist</option>
+                                    <option value="Play Therapist">Play Therapist</option>
+                                    <option value="Music Therapist">Music Therapist</option>
+                                </optgroup>
+                                <optgroup label="Development & Learning">
+                                    <option value="Child Development Specialist">Child Development Specialist</option>
+                                    <option value="Special Education Specialist">Special Education Specialist</option>
+                                    <option value="Learning Disabilities Specialist">Learning Disabilities Specialist</option>
+                                    <option value="Autism Spectrum Specialist">Autism Spectrum Specialist</option>
+                                    <option value="ADHD Specialist">ADHD Specialist</option>
+                                </optgroup>
+                                <optgroup label="Other Pediatric Specialties">
+                                    <option value="Pediatric Audiologist">Pediatric Audiologist</option>
+                                    <option value="Pediatric Nutritionist">Pediatric Nutritionist</option>
+                                    <option value="Child & Family Counselor">Child & Family Counselor</option>
+                                    <option value="Pediatric Social Worker">Pediatric Social Worker</option>
+                                    <option value="Neonatologist">Neonatologist</option>
+                                </optgroup>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Experience (Years)</label>
+                        <div class="input-with-icon">
+                            <input type="number" name="experience" required min="1" value="${spec.experience_years || 1}">
+                        </div>
+                    </div>
+                </div>
+                <div class="clinic-modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeEditSpecialistModal()">Cancel</button>
+                    <button type="submit" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    
+    // Set current specialization if it matches
+    const dropdown = document.getElementById('edit-spec-dropdown');
+    let matched = false;
+    for(let i=0; i<dropdown.options.length; i++) {
+        if(dropdown.options[i].value === spec.specialization) {
+            dropdown.selectedIndex = i;
+            matched = true;
+            break;
+        }
+    }
+    if(!matched && spec.specialization) {
+        dropdown.value = "Other";
+    }
+
+    // Inject local styles for this modal if not present
+    if (!document.getElementById('modal-premium-styles')) {
+        const style = document.createElement('style');
+        style.id = 'modal-premium-styles';
+        style.innerHTML = `
+            .premium-modal {
+                max-width: 550px !important;
+                background: rgba(255, 255, 255, 0.08) !important;
+                backdrop-filter: blur(20px) !important;
+                border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                border-radius: 24px !important;
+                padding: 0 !important;
+                overflow: hidden;
+            }
+            .clinic-modal-header {
+                background: linear-gradient(135deg, rgba(0, 150, 136, 0.2), rgba(0, 188, 212, 0.1));
+                padding: 30px;
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                position: relative;
+            }
+            .header-icon-circle {
+                width: 50px;
+                height: 50px;
+                background: #009688;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+            }
+            .header-icon-circle svg { width: 28px; height: 28px; }
+            .header-text h3 { margin: 0; color: white; font-size: 20px; font-weight: 600; }
+            .header-text p { margin: 5px 0 0; color: rgba(255,255,255,0.6); font-size: 14px; }
+            .clinic-modal-close-btn {
+                position: absolute;
+                top: 20px;
+                right: 20px;
+                background: none;
+                border: none;
+                color: rgba(255,255,255,0.4);
+                font-size: 28px;
+                cursor: pointer;
+            }
+            .clinic-modal-body { padding: 30px; }
+            .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+            .full-width { grid-column: span 2; }
+            .form-group label { display: block; margin-bottom: 8px; color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 500; }
+            .input-with-icon input {
+                width: 100%;
+                background: rgba(255,255,255,0.05);
+                border: 1px solid rgba(255,255,255,0.1);
+                border-radius: 12px;
+                padding: 12px 16px;
+                color: white;
+                font-size: 14px;
+                transition: all 0.3s ease;
+            }
+            .input-with-icon input:focus {
+                background: rgba(255,255,255,0.1);
+                border-color: #009688;
+                box-shadow: 0 0 0 3px rgba(0, 150, 136, 0.1);
+                outline: none;
+            }
+            .clinic-modal-actions { margin-top: 35px; display: flex; gap: 15px; justify-content: flex-end; }
+            .btn-cancel {
+                padding: 12px 24px;
+                background: rgba(255,255,255,0.05);
+                border: none;
+                border-radius: 12px;
+                color: rgba(255,255,255,0.6);
+                cursor: pointer;
+                transition: 0.3s;
+            }
+            .btn-cancel:hover { background: rgba(255,255,255,0.1); color: white; }
+            .btn-submit {
+                padding: 12px 30px;
+                background: linear-gradient(135deg, #009688, #00bcd4);
+                border: none;
+                border-radius: 12px;
+                color: white;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-weight: 600;
+                box-shadow: 0 10px 20px rgba(0, 150, 136, 0.2);
+                transition: 0.3s;
+            }
+            .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 15px 25px rgba(0, 150, 136, 0.3); }
+        `;
+        document.head.appendChild(style);
+    }
+
+    requestAnimationFrame(() => modal.classList.add('active'));
+}
+
+function closeEditSpecialistModal() {
+    const modal = document.getElementById('edit-specialist-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+function submitEditSpecialist(event, id) {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    formData.append('specialist_id', id);
+
+    const btn = form.querySelector('.btn-submit');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="loading-spinner" style="width:20px;height:20px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;display:inline-block;"></span>';
+    btn.disabled = true;
+
+    fetch('../../api_clinic_edit_specialist.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showClinicToast('Specialist updated successfully', 'success');
+            closeEditSpecialistModal();
+            refreshClinicData('specialists');
+        } else {
+            showClinicToast(data.error || 'Update failed', 'error');
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    })
+    .catch(err => {
+        console.error('Error:', err);
+        showClinicToast('An unexpected error occurred', 'error');
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    });
 }
 
 function viewPatientRecords(childId, childName) {
@@ -1940,7 +2247,39 @@ function openAddSpecialistModal() {
                     <div class="form-group">
                         <label>Specialization</label>
                         <div class="input-with-icon">
-                            <input type="text" name="specialization" required placeholder="Pediatrician">
+                            <select name="specialization" required style="width:100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 0.75rem 1rem; color: var(--text-primary); font-size: 0.9rem; outline: none; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230d9488' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
+                                <option value="" disabled selected>Select a specialization…</option>
+                                <optgroup label="Core Pediatric Medicine">
+                                    <option value="Pediatrician">Pediatrician (General)</option>
+                                    <option value="Pediatric Neurologist">Pediatric Neurologist</option>
+                                    <option value="Developmental Pediatrician">Developmental Pediatrician</option>
+                                    <option value="Pediatric Psychiatrist">Pediatric Psychiatrist</option>
+                                    <option value="Pediatric Psychologist">Pediatric Psychologist</option>
+                                </optgroup>
+                                <optgroup label="Therapy & Rehabilitation">
+                                    <option value="Speech-Language Therapist">Speech-Language Therapist</option>
+                                    <option value="Occupational Therapist">Occupational Therapist</option>
+                                    <option value="Physical Therapist">Physical Therapist</option>
+                                    <option value="Behavioral Therapist">Behavioral Therapist</option>
+                                    <option value="Applied Behavior Analysis (ABA) Therapist">ABA Therapist</option>
+                                    <option value="Play Therapist">Play Therapist</option>
+                                    <option value="Music Therapist">Music Therapist</option>
+                                </optgroup>
+                                <optgroup label="Development & Learning">
+                                    <option value="Child Development Specialist">Child Development Specialist</option>
+                                    <option value="Special Education Specialist">Special Education Specialist</option>
+                                    <option value="Learning Disabilities Specialist">Learning Disabilities Specialist</option>
+                                    <option value="Autism Spectrum Specialist">Autism Spectrum Specialist</option>
+                                    <option value="ADHD Specialist">ADHD Specialist</option>
+                                </optgroup>
+                                <optgroup label="Other Pediatric Specialties">
+                                    <option value="Pediatric Audiologist">Pediatric Audiologist</option>
+                                    <option value="Pediatric Nutritionist">Pediatric Nutritionist</option>
+                                    <option value="Child & Family Counselor">Child & Family Counselor</option>
+                                    <option value="Pediatric Social Worker">Pediatric Social Worker</option>
+                                    <option value="Neonatologist">Neonatologist</option>
+                                </optgroup>
+                            </select>
                         </div>
                     </div>
                     <div class="form-group">
