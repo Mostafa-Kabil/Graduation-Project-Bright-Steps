@@ -132,15 +132,14 @@ elseif ($action === 'update_status' && $method === 'PUT') {
         }
 
         $stmt = $db->prepare("
-            INSERT INTO notifications (user_id, title, message, type, reference_id)
-            VALUES (:user_id, :title, :message, :type, :ref_id)
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES (:user_id, :title, :message, :type)
         ");
         $stmt->execute([
             ':user_id' => $appt['parent_id'],
             ':title'   => $notifTitle,
             ':message' => $notifMessage,
-            ':type'    => $notifType,
-            ':ref_id'  => $appointmentId
+            ':type'    => $notifType
         ]);
 
         $db->commit();
