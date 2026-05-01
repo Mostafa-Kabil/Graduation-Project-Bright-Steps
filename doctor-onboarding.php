@@ -446,27 +446,17 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
                             <input type="number" id="dr_experience" class="form-input" placeholder="e.g. 5" min="0" max="60" required>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Certifications</label>
-                            <input type="text" id="dr_certifications" class="form-input" placeholder="e.g. MD, FAAP">
-                        </div>
-                    </div>
-                    <div class="form-group" style="margin-top: 1rem;">
-                        <label class="form-label">Upload Certificate (Proof) <span style="color:#ef4444;">*</span></label>
-                        <div class="upload-zone" id="upload-zone">
-                            <input type="file" id="dr_certificate" accept=".jpg,.jpeg,.png,.pdf" onchange="handleFileSelect(this)">
-                            <div class="upload-icon">📄</div>
-                            <div class="upload-text">Click or drag & drop your certificate</div>
-                            <div class="upload-hint">JPG, PNG or PDF — Max 5MB</div>
-                        </div>
-                        <div class="file-preview" id="file-preview">
-                            <div class="file-preview-icon">📎</div>
-                            <div class="file-preview-info">
-                                <div class="file-preview-name" id="file-preview-name"></div>
-                                <div class="file-preview-size" id="file-preview-size"></div>
+                            <label class="form-label">Certifications <span style="color:#ef4444;">*</span></label>
+                            <div style="display:flex;gap:0.5rem;align-items:center;">
+                                <input type="text" id="dr_certifications" class="form-input" placeholder="e.g. MD, FAAP" style="flex:1;">
+                                <button type="button" onclick="document.getElementById('dr_certificate').click()" title="Upload certificate document" style="width:2.5rem;height:2.5rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:2px dashed #0ea5e9;border-radius:10px;background:rgba(14,165,233,0.05);color:#0ea5e9;cursor:pointer;transition:all .2s;">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.1rem;height:1.1rem;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                                </button>
+                                <input type="file" id="dr_certificate" accept=".jpg,.jpeg,.png,.pdf" onchange="handleFileSelect(this)" style="display:none">
                             </div>
-                            <button type="button" class="file-preview-remove" onclick="removeFile()" title="Remove file">✕</button>
+                            <div id="file-preview-name" style="margin-top:0.4rem;font-size:0.8rem;color:#0ea5e9;font-weight:500;"></div>
+                            <div class="upload-error" id="upload-error" style="color:#ef4444;font-size:0.78rem;margin-top:0.5rem;display:none;"></div>
                         </div>
-                        <div class="upload-error" id="upload-error"></div>
                     </div>
                     <div class="wizard-buttons">
                         <div></div>
@@ -644,28 +634,9 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
         });
 
         // ── Certificate Upload Handlers ──────────────────
-        const uploadZone = document.getElementById('upload-zone');
-
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
-        });
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('dragover');
-        });
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            if (e.dataTransfer.files.length) {
-                document.getElementById('dr_certificate').files = e.dataTransfer.files;
-                handleFileSelect(document.getElementById('dr_certificate'));
-            }
-        });
-
         function handleFileSelect(input) {
             const errEl = document.getElementById('upload-error');
-            const previewEl = document.getElementById('file-preview');
-            errEl.classList.remove('visible');
+            errEl.style.display = 'none';
             errEl.textContent = '';
 
             if (!input.files || !input.files[0]) {
@@ -679,7 +650,7 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
             // Validate type
             if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXTS.includes(ext)) {
                 errEl.textContent = 'Invalid file type. Only JPG, PNG, and PDF are allowed.';
-                errEl.classList.add('visible');
+                errEl.style.display = 'block';
                 input.value = '';
                 removeFile();
                 return;
@@ -688,7 +659,7 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
             // Validate size
             if (file.size > MAX_FILE_SIZE) {
                 errEl.textContent = 'File is too large. Maximum size is 5MB.';
-                errEl.classList.add('visible');
+                errEl.style.display = 'block';
                 input.value = '';
                 removeFile();
                 return;
@@ -696,23 +667,13 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
 
             // Show preview
             formData.certificateFile = file;
-            document.getElementById('file-preview-name').textContent = file.name;
-            document.getElementById('file-preview-size').textContent = formatFileSize(file.size);
-            previewEl.classList.add('visible');
-            uploadZone.classList.add('has-file');
+            document.getElementById('file-preview-name').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.9rem;height:0.9rem;vertical-align:-2px;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ' + file.name + ' <button type="button" onclick="removeFile()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-weight:700;">&times;</button>';
         }
 
         function removeFile() {
             formData.certificateFile = null;
             document.getElementById('dr_certificate').value = '';
-            document.getElementById('file-preview').classList.remove('visible');
-            document.getElementById('upload-zone').classList.remove('has-file');
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            document.getElementById('file-preview-name').innerHTML = '';
         }
 
         // ── Option & Day Toggles ──────────────────

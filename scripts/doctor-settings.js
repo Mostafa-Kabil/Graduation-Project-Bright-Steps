@@ -35,8 +35,6 @@ function getDsPreferencesHTML() {
             <label class="ds-chip"><input type="checkbox" value="infant" checked><span>Infant (1-12m)</span></label>
             <label class="ds-chip"><input type="checkbox" value="toddler" checked><span>Toddler (1-3y)</span></label>
             <label class="ds-chip"><input type="checkbox" value="preschool"><span>Preschool (3-5y)</span></label>
-            <label class="ds-chip"><input type="checkbox" value="school-age"><span>School Age (5-12y)</span></label>
-            <label class="ds-chip"><input type="checkbox" value="adolescent"><span>Adolescent (12-18y)</span></label>
         </div></div></div>
         <div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg><div><h3>Therapy Approaches</h3><p>Methods and techniques you practice</p></div></div>

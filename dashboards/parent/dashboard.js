@@ -4467,18 +4467,24 @@
         const children = d.children || [];
         const child = children[window._selectedChildIndex || 0] || children[0] || null;
         const childParam = child ? '&child_id=' + child.child_id : '';
+        const childId = child ? child.child_id : 0;
+
+        // Load shared reports history after render
+        setTimeout(function() { loadParentSharedReports(childId); }, 100);
 
         return `
         <div class="dashboard-content">
                 <div class="dashboard-header-section">
                      <div>
                         <h1 class="dashboard-title">Reports & Insights 📄</h1>
-                        <p class="dashboard-subtitle">Download summaries for your healthcare provider</p>
+                        <p class="dashboard-subtitle">Download summaries or share with your healthcare provider</p>
                     </div>
-                     <button class="btn btn-gradient" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">
-                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Generate Full Report
-                     </button>
+                     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                        <button class="btn btn-gradient" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">
+                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            Generate Full Report
+                        </button>
+                     </div>
                 </div>
 
                 <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem;">
@@ -4496,8 +4502,9 @@
                             <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Full Development Report</h3>
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
-                            <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download PDF</button>
+                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-outline btn-sm" style="color:#6C63FF;border-color:#6C63FF;" onclick="openShareReportModal('full-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
                     </div>
@@ -4513,8 +4520,9 @@
                             <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Growth Report</h3>
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
                              <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
-                            <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download PDF</button>
+                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-outline btn-sm" style="color:#22c55e;border-color:#22c55e;" onclick="openShareReportModal('growth-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
                     </div>
@@ -4531,8 +4539,9 @@
                             <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Child Profile</h3>
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Basic info, badges & points</p>
                              <span class="badge badge-blue" style="margin-bottom: 1rem;">Profile Data</span>
-                            <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download PDF</button>
+                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-outline btn-sm" style="color:#3b82f6;border-color:#3b82f6;" onclick="openShareReportModal('child-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
                     </div>
@@ -4546,15 +4555,258 @@
                             <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Speech Report</h3>
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Vocabulary, clarity & full transcripts</p>
                              <span class="badge" style="background:#f3e8ff;color:#9333ea;margin-bottom: 1rem;">Speech Data</span>
-                            <div style="margin-top: 1rem;">
-                                <button class="btn btn-gradient btn-sm btn-full" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download PDF</button>
+                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-outline btn-sm" style="color:#9333ea;border-color:#9333ea;" onclick="openShareReportModal('speech-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Upload PDF Card -->
+                    <div class="dashboard-card" style="display: flex; flex-direction: column;">
+                         <div style="height: 120px; background: linear-gradient(135deg, #f97316 20%, #fb923c20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <svg style="width: 3rem; height: 3rem; color: #f97316;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </div>
+                        <div class="card-content" style="flex: 1;">
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Upload & Share PDF</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Upload a custom PDF report to share with your doctor</p>
+                             <span class="badge" style="background:#fff7ed;color:#ea580c;margin-bottom: 1rem;">Custom Upload</span>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn btn-outline btn-sm btn-full" style="color:#f97316;border-color:#f97316;" onclick="openShareReportModal('uploaded-pdf', ${childId})">📎 Upload & Share</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shared Reports History -->
+                <div style="margin-top: 2rem;">
+                    <h2 style="font-weight: 700; font-size: 1.2rem; margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;color:var(--blue-500);">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+                        </svg>
+                        Shared Reports History
+                    </h2>
+                    <div id="parentSharedReportsList">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-500);">Loading shared reports...</div>
                     </div>
                 </div>
             </div>
         `;
     }
+
+    // ═══════════════════════════════════════════════════
+    // SHARE REPORT WITH DOCTOR — Modal + Submission
+    // ═══════════════════════════════════════════════════
+    window.openShareReportModal = function(reportType, childId) {
+        if (!childId) { alert('Please select a child first.'); return; }
+
+        let existing = document.getElementById('share-report-modal');
+        if (existing) existing.remove();
+
+        const isUpload = reportType === 'uploaded-pdf';
+        const typeLabels = {
+            'full-report': '📋 Full Development Report',
+            'growth-report': '📊 Growth Report',
+            'speech-report': '🗣️ Speech Report',
+            'child-report': '👤 Child Profile Report',
+            'uploaded-pdf': '📎 Upload Custom PDF'
+        };
+
+        const modal = document.createElement('div');
+        modal.id = 'share-report-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:520px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="padding:1.5rem 2rem;border-bottom:1px solid var(--slate-100);display:flex;justify-content:space-between;align-items:center;">
+                        <h2 style="font-size:1.35rem;font-weight:700;color:var(--slate-900);margin:0;display:flex;align-items:center;gap:0.5rem;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;color:var(--blue-500);"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                            Share Report with Doctor
+                        </h2>
+                        <button onclick="document.getElementById('share-report-modal').remove()" style="background:none;border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--slate-500);">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div style="padding:2rem;">
+                        <div style="background:var(--blue-50,#eff6ff);border-radius:12px;padding:1rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.75rem;">
+                            <span style="font-size:1.5rem;">${isUpload ? '📎' : '📄'}</span>
+                            <div>
+                                <div style="font-weight:600;color:var(--slate-800);font-size:0.95rem;">${typeLabels[reportType] || reportType}</div>
+                                <div style="font-size:0.8rem;color:var(--slate-500);">This report will be shared securely with the selected doctor</div>
+                            </div>
+                        </div>
+
+                        <form id="shareReportForm" onsubmit="window.submitShareReport(event)" enctype="multipart/form-data">
+                            <input type="hidden" name="action" value="share_report">
+                            <input type="hidden" name="report_type" value="${reportType}">
+                            <input type="hidden" name="child_id" value="${childId}">
+
+                            <div style="margin-bottom:1.5rem;">
+                                <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Appointment / Doctor <span style="color:#ef4444;">*</span></label>
+                                <select id="shareApptSelect" name="appointment_select" required style="width:100%;padding:0.75rem 1rem;border:1px solid var(--slate-200);border-radius:12px;font-size:0.9rem;outline:none;background:#fff;transition:border-color 0.2s;" onfocus="this.style.borderColor='var(--blue-500)'" onblur="this.style.borderColor='var(--slate-200)'">
+                                    <option value="">Loading appointments...</option>
+                                </select>
+                            </div>
+
+                            ${isUpload ? `
+                            <div style="margin-bottom:1.5rem;">
+                                <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Upload PDF File <span style="color:#ef4444;">*</span></label>
+                                <div id="shareFileDropzone" style="border:2px dashed var(--slate-300);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:border-color 0.2s,background 0.2s;" onclick="document.getElementById('shareFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)'" ondragleave="this.style.borderColor='var(--slate-300)';this.style.background=''" ondrop="event.preventDefault();this.style.borderColor='var(--slate-300)';this.style.background='';handleShareFileDrop(event)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:2rem;height:2rem;color:var(--slate-400);margin-bottom:0.5rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                    <div style="font-weight:600;color:var(--slate-600);margin-bottom:0.25rem;" id="shareFileName">Click or drag PDF here</div>
+                                    <div style="font-size:0.8rem;color:var(--slate-400);">Max 10MB • PDF only</div>
+                                </div>
+                                <input type="file" id="shareFileInput" name="report_file" accept=".pdf" style="display:none;" onchange="handleShareFileSelect(this)">
+                            </div>` : ''}
+
+                            <div style="display:flex;justify-content:flex-end;gap:1rem;margin-top:1rem;">
+                                <button type="button" onclick="document.getElementById('share-report-modal').remove()" class="btn btn-outline">Cancel</button>
+                                <button type="submit" class="btn btn-gradient" id="shareReportBtn">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                                    Share Report
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        // Load appointments for the dropdown
+        fetch('../../api_share_report.php?action=get_appointments_for_sharing')
+            .then(r => r.json()).then(result => {
+                const select = document.getElementById('shareApptSelect');
+                if (!select) return;
+                if (result.success && result.data && result.data.length > 0) {
+                    select.innerHTML = '<option value="">— Select appointment —</option>' +
+                        result.data.map(a => {
+                            const date = new Date(a.scheduled_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+                            const status = a.status ? ' (' + a.status + ')' : '';
+                            return '<option value="' + a.appointment_id + '" data-doctor-id="' + a.specialist_id + '">Dr. ' + a.doc_fname + ' ' + a.doc_lname + ' — ' + date + status + '</option>';
+                        }).join('');
+                } else {
+                    select.innerHTML = '<option value="">No appointments found. Book one first.</option>';
+                }
+            }).catch(() => {
+                const select = document.getElementById('shareApptSelect');
+                if (select) select.innerHTML = '<option value="">Error loading appointments</option>';
+            });
+    };
+
+    window.handleShareFileSelect = function(input) {
+        const file = input.files[0];
+        const label = document.getElementById('shareFileName');
+        if (file && label) {
+            label.textContent = file.name + ' (' + (file.size / 1024 / 1024).toFixed(1) + ' MB)';
+            label.style.color = 'var(--green-600)';
+        }
+    };
+
+    window.handleShareFileDrop = function(e) {
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            const input = document.getElementById('shareFileInput');
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            window.handleShareFileSelect(input);
+        }
+    };
+
+    window.submitShareReport = function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('shareReportBtn');
+        const select = document.getElementById('shareApptSelect');
+        const selectedOption = select?.options[select.selectedIndex];
+
+        if (!select?.value) { alert('Please select an appointment.'); return; }
+
+        const doctorId = selectedOption?.getAttribute('data-doctor-id');
+        if (!doctorId) { alert('Could not determine doctor. Please try again.'); return; }
+
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:1rem;height:1rem;margin-right:0.5rem;"></span> Sharing...'; }
+
+        const formData = new FormData(document.getElementById('shareReportForm'));
+        formData.set('doctor_id', doctorId);
+        formData.set('appointment_id', select.value);
+
+        fetch('../../api_share_report.php', {
+            method: 'POST',
+            body: formData
+        }).then(r => r.json()).then(result => {
+            if (result.success) {
+                document.getElementById('share-report-modal')?.remove();
+                if (typeof showBadgeToast === 'function') showBadgeToast('Report shared successfully with your doctor! 🎉');
+                else alert('Report shared successfully!');
+                // Refresh shared reports list
+                const d = window.dashboardData || {};
+                const children = d.children || [];
+                const child = children[window._selectedChildIndex || 0] || children[0] || null;
+                if (child) loadParentSharedReports(child.child_id);
+            } else {
+                alert('Error: ' + (result.error || 'Failed to share report'));
+                if (btn) { btn.disabled = false; btn.innerHTML = '📤 Share Report'; }
+            }
+        }).catch(err => {
+            console.error('Share report error:', err);
+            alert('Connection error. Please try again.');
+            if (btn) { btn.disabled = false; btn.innerHTML = '📤 Share Report'; }
+        });
+    };
+
+    window.loadParentSharedReports = function(childId) {
+        const container = document.getElementById('parentSharedReportsList');
+        if (!container) return;
+
+        const url = childId
+            ? '../../api_share_report.php?action=get_my_shared_reports&child_id=' + childId
+            : '../../api_share_report.php?action=get_my_shared_reports';
+
+        fetch(url).then(r => r.json()).then(result => {
+            if (result.success && result.data && result.data.length > 0) {
+                container.innerHTML = result.data.map(r => {
+                    const typeLabels = {
+                        'full-report': '📋 Full Report',
+                        'growth-report': '📊 Growth',
+                        'speech-report': '🗣️ Speech',
+                        'child-report': '👤 Profile',
+                        'uploaded-pdf': '📎 PDF Upload'
+                    };
+                    const hasReply = r.doctor_reply && r.doctor_reply.trim().length > 0;
+                    const statusBadge = hasReply
+                        ? '<span class="badge badge-green" style="font-size:0.75rem;">✅ Doctor Replied</span>'
+                        : '<span class="badge badge-yellow" style="font-size:0.75rem;">⏳ Awaiting Reply</span>';
+                    const replyHtml = hasReply
+                        ? '<div style="margin-top:0.75rem;padding:0.75rem;background:var(--green-50,#f0fdf4);border-radius:8px;border-left:3px solid var(--green-500,#22c55e);"><div style="font-size:0.8rem;font-weight:600;color:var(--green-700,#15803d);margin-bottom:0.25rem;">Doctor\'s Reply (' + new Date(r.doctor_reply_date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '):</div><div style="font-size:0.85rem;color:var(--slate-700);">' + r.doctor_reply + '</div></div>'
+                        : '';
+                    const sharedDate = new Date(r.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+
+                    return '<div class="dashboard-card" style="padding:1.25rem;margin-bottom:1rem;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">' +
+                            '<div>' +
+                                '<div style="font-weight:700;color:var(--slate-800);font-size:1rem;">Dr. ' + r.doc_fname + ' ' + r.doc_lname + '</div>' +
+                                '<div style="font-size:0.85rem;color:var(--slate-500);">' + (r.specialization || '') + ' • ' + (typeLabels[r.report_type] || r.report_type) + '</div>' +
+                            '</div>' +
+                            statusBadge +
+                        '</div>' +
+                        '<div style="font-size:0.85rem;color:var(--slate-500);margin-bottom:0.5rem;">Shared on ' + sharedDate + '</div>' +
+                        replyHtml +
+                    '</div>';
+                }).join('');
+            } else {
+                container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:3rem;height:3rem;margin:0 auto 1rem;color:var(--slate-300);display:block;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+                    '<p style="font-weight:600;">No shared reports yet</p>' +
+                    '<p style="font-size:0.85rem;">Use the Share button on any report card above to share it with your doctor.</p>' +
+                '</div>';
+            }
+        }).catch(() => {
+            container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-500);">Could not load shared reports.</div>';
+        });
+    };
 
     function getSettingsView() {
         const d = window.dashboardData || {};

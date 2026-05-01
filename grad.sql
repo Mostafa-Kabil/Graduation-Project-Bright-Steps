@@ -1764,6 +1764,33 @@ CREATE TABLE IF NOT EXISTS `appointment_slots` (
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- =====================================================
+-- Shared Reports (Parent → Doctor report sharing)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS `shared_reports` (
+  `report_id` int(11) NOT NULL AUTO_INCREMENT,
+  `file_path` varchar(500) DEFAULT NULL COMMENT 'Path to uploaded PDF file',
+  `report_type` varchar(50) DEFAULT 'full-report' COMMENT 'full-report, growth-report, speech-report, child-report, uploaded-pdf',
+  `child_id` int(11) NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `doctor_id` int(11) NOT NULL COMMENT 'specialist_id of the doctor',
+  `appointment_id` int(11) DEFAULT NULL,
+  `is_shared` tinyint(1) DEFAULT 1,
+  `doctor_reply` text DEFAULT NULL,
+  `doctor_reply_date` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`report_id`),
+  KEY `idx_sr_child` (`child_id`),
+  KEY `idx_sr_parent` (`parent_id`),
+  KEY `idx_sr_doctor` (`doctor_id`),
+  KEY `idx_sr_appointment` (`appointment_id`),
+  CONSTRAINT `sr_child_fk` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE,
+  CONSTRAINT `sr_parent_fk` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE,
+  CONSTRAINT `sr_doctor_fk` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
+  CONSTRAINT `sr_appointment_fk` FOREIGN KEY (`appointment_id`) REFERENCES `appointment` (`appointment_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
