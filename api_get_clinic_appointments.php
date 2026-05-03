@@ -12,8 +12,25 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
 $user_id = intval($_SESSION['id']);
 
 try {
-    // 1. Resolve clinic_id
-    $clinic_id = $user_id;
+    // 1. Resolve clinic_id — check if session ID is a clinic_id directly,
+    //    or if it's a user/admin ID linked to a clinic via admin_id
+    $clinic_id = null;
+
+    // Try clinic_id first
+    $cStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_id = ? LIMIT 1");
+    $cStmt->execute([$user_id]);
+    $row = $cStmt->fetch(PDO::FETCH_ASSOC);
+    if ($row) {
+        $clinic_id = $row['clinic_id'];
+    } else {
+        // Try admin_id lookup
+        $cStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE admin_id = ? LIMIT 1");
+        $cStmt->execute([$user_id]);
+        $row = $cStmt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $clinic_id = $row['clinic_id'];
+        }
+    }
 
     if (!$clinic_id) {
         die(json_encode(["error" => "Clinic profile not found"]));

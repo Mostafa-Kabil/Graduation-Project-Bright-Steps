@@ -14,13 +14,13 @@ function initDoctorNav() {
     navItems.forEach(item => {
         item.addEventListener('click', function () {
             const view = this.dataset.view;
-            if (view) { setActiveNav(this); showDoctorView(view); }
+            if (view) { setActiveNav(this); footerItems.forEach(f=>f.classList.remove('active')); showDoctorView(view); }
         });
     });
     footerItems.forEach(item => {
         item.addEventListener('click', function () {
             const view = this.dataset.view;
-            if (view) { navItems.forEach(n => n.classList.remove('active')); showDoctorView(view); }
+            if (view) { navItems.forEach(n => n.classList.remove('active')); footerItems.forEach(f=>f.classList.remove('active')); this.classList.add('active'); showDoctorView(view); }
         });
     });
 }
@@ -130,6 +130,7 @@ function renderPatientsList(patients) {
         const statusClass = status === 'completed' ? 'status-green' : (status === 'cancelled' ? 'status-red' : 'status-yellow');
         const statusLabel = status === 'completed' ? 'On Track' : (status === 'cancelled' ? 'Cancelled' : 'Needs Review');
         const lastDate = p.last_appointment_date ? formatRelativeDate(p.last_appointment_date) : 'No appointments';
+        const childFullName = `${p.child_first_name} ${p.child_last_name}`.replace(/'/g, "\\'").replace(/"/g, "&quot;");
         html += `<div class="patient-row">
             <div class="patient-avatar">${initials}</div>
             <div class="patient-info"><div class="patient-name">${p.child_first_name} ${p.child_last_name}</div>
@@ -137,9 +138,15 @@ function renderPatientsList(patients) {
             <div class="patient-status ${statusClass}">${statusLabel}</div>
             <div class="patient-last-update">${lastDate}</div>
             <div style="display:flex;gap:0.5rem;">
-                <button class="btn btn-sm btn-outline" onclick="viewPatientDetail(${p.child_id})">View</button>
-                <button class="btn btn-sm btn-outline" style="color:var(--purple-500);border-color:var(--purple-500);" onclick="viewPatientReports(${p.child_id},'${p.child_first_name} ${p.child_last_name}')">Reports</button>
-                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${p.parent_id})">Chat</button>
+                <button class="btn btn-sm btn-outline" onclick="viewPatientDetail(${p.child_id})" title="View child profile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View
+                </button>
+                <button class="btn btn-sm btn-outline" style="color:var(--purple-500);border-color:var(--purple-500);" onclick="openReportForChild(${p.child_id},'${childFullName}')" title="Write report for child">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Report
+                </button>
+                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${p.parent_id})" title="Chat with parent">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Chat
+                </button>
             </div></div>`;
     });
     container.innerHTML = html;
@@ -166,29 +173,48 @@ let searchTimeout = null;
 function searchPatients(query) {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
-        if (!query.trim()) { loadPatientsData(); return; }
-        fetch(`doctor-dashboard.php?ajax=1&section=patients&action=search_patients&specialist_id=${SPECIALIST_ID}&query=${encodeURIComponent(query)}`)
-            .then(r => r.json()).then(result => {
-                if (result.success && result.data) renderPatientsList(result.data);
-                else renderPatientsEmpty();
-            }).catch(() => renderPatientsEmpty());
+        applyPatientFilters();
     }, 300);
 }
 
 function filterPatientsByGender() {
-    const gender = document.getElementById('patientGenderFilter')?.value;
-    if (!gender) { renderPatientsList(allPatientsCache); return; }
-    renderPatientsList(allPatientsCache.filter(p => (p.gender || '').toLowerCase() === gender));
+    applyPatientFilters();
 }
 
-function viewPatientReports(childId, childName) {
+function applyPatientFilters() {
+    const query = (document.getElementById('patientSearchInput')?.value || '').trim().toLowerCase();
+    const gender = document.getElementById('patientGenderFilter')?.value;
+    
+    let filtered = allPatientsCache;
+    
+    if (gender) {
+        filtered = filtered.filter(p => {
+            const g = (p.gender || '').toLowerCase();
+            return g === gender || g === gender.charAt(0);
+        });
+    }
+    
+    if (query) {
+        filtered = filtered.filter(p => 
+            `${p.child_first_name} ${p.child_last_name}`.toLowerCase().includes(query) ||
+            `${p.parent_first_name} ${p.parent_last_name}`.toLowerCase().includes(query)
+        );
+    }
+    
+    renderPatientsList(filtered);
+}
+
+function openReportForChild(childId, childName) {
+    // Navigate to Reports tab and open the write-report modal for this child
     navigateToView('reports');
-    // After view loads, could filter — for now just navigate
+    setTimeout(() => {
+        openReportModal(childName, childId, '', 0, 0, '', '', '');
+    }, 300);
 }
 
 function chatWithParent(parentId) {
     navigateToView('messages');
-    setTimeout(() => { if (typeof selectConversationById === 'function') selectConversationById(parentId); }, 200);
+    setTimeout(() => { if (typeof selectConversationById === 'function') selectConversationById(parentId); }, 300);
 }
 
 function viewPatientDetail(childId) {
@@ -203,45 +229,95 @@ function showPatientDetailModal(data) {
     const c = data.profile?.basic;
     if (!c) return;
     const initials = (c.first_name?.charAt(0) || '') + (c.last_name?.charAt(0) || '');
-    
-    let growthHtml = data.profile?.latest_growth
-        ? `<p>Height: <strong>${data.profile.latest_growth.height || '--'} cm</strong> | Weight: <strong>${data.profile.latest_growth.weight || '--'} kg</strong> | Head: <strong>${data.profile.latest_growth.head_circumference || '--'} cm</strong></p><p style="font-size:0.85rem;color:var(--text-secondary);">Recorded: ${new Date(data.profile.latest_growth.recorded_at).toLocaleDateString()}</p>`
-        : '<p style="color:var(--text-secondary);">No growth records available.</p>';
-        
-    let speechHtml = data.profile?.speech_history?.length > 0
-        ? data.profile.speech_history.slice(0, 3).map(s => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);"><div style="font-size:0.85rem;color:var(--text-secondary);">${new Date(s.analyzed_at).toLocaleDateString()}</div><p style="margin:0.2rem 0;font-size:0.9rem;">"${s.transcript}"</p></div>`).join('')
-        : '<p style="color:var(--text-secondary);">No speech records available.</p>';
-        
-    let behaviorHtml = '<p style="color:var(--text-secondary);">No behavior records available.</p>';
-    if (data.profile?.behaviors && data.profile.behaviors.length > 0) {
-        behaviorHtml = data.profile.behaviors.map(b => `<div><strong>${b.category_name}</strong>: ${b.behavior_details || b.behavior_type} (${b.frequency || ''} ${b.severity || ''})</div>`).join('');
-    }
+    const childFullName = `${c.first_name} ${c.last_name}`;
+    const safeName = childFullName.replace(/'/g, "\\'").replace(/"/g, "&quot;");
 
-    let reportsHtml = data.profile?.notes?.length > 0
-        ? data.profile.notes.slice(0, 3).map(r => `<div style="padding:0.75rem 0;border-bottom:1px solid var(--border-color);"><div style="font-weight:600;">${new Date(r.report_date).toLocaleDateString()} <span style="font-size:0.75rem;padding:0.1rem 0.4rem;background:#f1f5f9;border-radius:4px;color:#64748b;">${r.visibility}</span></div><div style="font-size:0.9rem;margin-top:0.25rem;">${r.doctor_notes.substring(0, 120)}${r.doctor_notes.length > 120 ? '...' : ''}</div></div>`).join('')
-        : '<p style="color:var(--text-secondary);">No clinical notes available.</p>';
-        
+    // Growth section
+    let growthHtml = data.growth_records?.length > 0
+        ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:0.5rem;">
+            <div style="background:var(--bg-secondary);padding:0.75rem;border-radius:0.5rem;text-align:center;">
+                <div style="font-size:1.25rem;font-weight:700;color:var(--blue-500);">${data.growth_records[0].height || '--'}</div><div style="font-size:0.8rem;color:var(--text-secondary);">cm Height</div></div>
+            <div style="background:var(--bg-secondary);padding:0.75rem;border-radius:0.5rem;text-align:center;">
+                <div style="font-size:1.25rem;font-weight:700;color:var(--green-500);">${data.growth_records[0].weight || '--'}</div><div style="font-size:0.8rem;color:var(--text-secondary);">kg Weight</div></div>
+            <div style="background:var(--bg-secondary);padding:0.75rem;border-radius:0.5rem;text-align:center;">
+                <div style="font-size:1.25rem;font-weight:700;color:var(--purple-500);">${data.growth_records[0].head_circumference || '--'}</div><div style="font-size:0.8rem;color:var(--text-secondary);">cm Head</div></div>
+           </div>
+           <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.5rem;">Last recorded: ${new Date(data.growth_records[0].recorded_at).toLocaleDateString()}</p>`
+        : '<p style="color:var(--text-secondary);">No growth records available.</p>';
+
+    // Milestones section
+    let milestonesHtml = data.milestones?.length > 0
+        ? data.milestones.slice(0, 5).map(m => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>${m.title}</strong> <span style="color:var(--text-secondary);font-size:0.85rem;">(${m.category})</span></div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);">${m.achieved_at ? new Date(m.achieved_at).toLocaleDateString() : 'In progress'}</div>
+           </div>`).join('')
+        : '<p style="color:var(--text-secondary);">No milestones recorded yet.</p>';
+
+    // Reports section
+    let reportsHtml = data.doctor_reports?.length > 0
+        ? data.doctor_reports.slice(0, 3).map(r => `<div style="padding:0.75rem;margin-bottom:0.5rem;background:var(--bg-secondary);border-radius:0.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                <div style="font-weight:600;font-size:0.9rem;">${new Date(r.report_date).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
+            </div>
+            <div style="font-size:0.85rem;"><strong>Notes:</strong> ${(r.doctor_notes||'').substring(0, 150)}${(r.doctor_notes||'').length > 150 ? '...' : ''}</div>
+            ${r.recommendations ? `<div style="font-size:0.85rem;margin-top:0.25rem;"><strong>Recommendations:</strong> ${r.recommendations.substring(0, 100)}${r.recommendations.length > 100 ? '...' : ''}</div>` : ''}
+           </div>`).join('')
+        : '<p style="color:var(--text-secondary);">No reports written for this patient.</p>';
+
+    // Appointments section
+    let appointmentsHtml = data.appointments?.length > 0
+        ? data.appointments.slice(0, 5).map(a => {
+            const st = a.status || 'scheduled';
+            const stClass = st === 'completed' ? 'color:var(--green-500)' : (st === 'cancelled' ? 'color:var(--red-500)' : 'color:var(--yellow-500)');
+            const typeIcon = a.type === 'online' ? '🖥' : '🏥';
+            return `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+                <div>${typeIcon} ${a.scheduled_at ? new Date(a.scheduled_at).toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric'}) : 'No date'}</div>
+                <span style="font-size:0.85rem;font-weight:600;${stClass}">${st.charAt(0).toUpperCase() + st.slice(1)}</span>
+            </div>`;
+          }).join('')
+        : '<p style="color:var(--text-secondary);">No appointment history.</p>';
+
     const overlay = document.createElement('div');
     overlay.className = 'report-modal-overlay active';
     overlay.id = 'patientDetailModal';
-    overlay.innerHTML = `<div class="report-modal" style="max-width:800px;">
-        <div class="report-modal-header"><h3 style="display:flex;align-items:center;gap:0.75rem;"><div class="patient-avatar" style="width:2.5rem;height:2.5rem;font-size:0.9rem;">${initials}</div>${c.first_name} ${c.last_name}</h3>
+    overlay.innerHTML = `<div class="report-modal" style="max-width:720px;">
+        <div class="report-modal-header"><h3 style="display:flex;align-items:center;gap:0.75rem;"><div class="patient-avatar" style="width:2.5rem;height:2.5rem;font-size:0.9rem;">${initials}</div>${childFullName}</h3>
         <button class="report-modal-close" onclick="document.getElementById('patientDetailModal').remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         <div class="report-modal-body" style="max-height:70vh;overflow-y:auto;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-                <div><strong>Age:</strong> ${c.age_months || '--'} months</div><div><strong>Gender:</strong> ${c.gender || 'N/A'}</div>
-                <div><strong>Parent:</strong> ${c.parent_first_name} ${c.parent_last_name}</div><div><strong>Phone:</strong> ${c.parent_phone || 'N/A'}</div>
+            <!-- Child Info Grid -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem 1.5rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg-secondary);border-radius:0.75rem;">
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Age</span><div style="font-weight:600;">${age}</div></div>
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Gender</span><div style="font-weight:600;">${c.gender || 'N/A'}</div></div>
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Parent</span><div style="font-weight:600;">${c.parent_first_name} ${c.parent_last_name}</div></div>
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Total Appointments</span><div style="font-weight:600;">${data.appointments?.length || 0}</div></div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
-                <div>
-                    <h4 style="margin-bottom:0.5rem;color:var(--blue-500);">Latest Growth Record</h4>${growthHtml}
-                    <h4 style="margin:1.5rem 0 0.5rem;color:var(--green-500);">Speech History</h4>${speechHtml}
-                </div>
-                <div>
-                    <h4 style="margin-bottom:0.5rem;color:var(--yellow-500);">Behaviors</h4>
-                    <div style="font-size:0.85rem;">${behaviorHtml}</div>
-                    <h4 style="margin:1.5rem 0 0.5rem;color:var(--purple-500);">Clinical Notes</h4>${reportsHtml}
-                </div>
+
+            <h4 style="margin-bottom:0.5rem;color:var(--blue-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Latest Growth Record</h4>
+            ${growthHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--green-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Milestones</h4>
+            ${milestonesHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--purple-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Specialist Reports</h4>
+            ${reportsHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--yellow-600);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Appointment History</h4>
+            ${appointmentsHtml}
+
+            <!-- Action Buttons -->
+            <div style="display:flex;gap:0.75rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border-color);">
+                <button class="btn btn-gradient" style="flex:1;" onclick="document.getElementById('patientDetailModal').remove(); openReportForChild(${c.child_id}, '${safeName}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Write Report
+                </button>
+                <button class="btn btn-outline" style="flex:1;color:var(--green-500);border-color:var(--green-500);" onclick="document.getElementById('patientDetailModal').remove(); chatWithParent(${c.parent_id})">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    Chat with Parent
+                </button>
             </div>
         </div></div>`;
     document.body.appendChild(overlay);
@@ -275,18 +351,14 @@ function getReportsView() {
                 <div class="report-form-context" id="reportFormContext"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><span>Writing report for: <strong id="reportChildName">—</strong></span></div>
                 <form id="doctorReportForm" onsubmit="submitDoctorReport(event)">
                     <input type="hidden" id="reportChildId" value=""><input type="hidden" id="reportChildReport" value="">
-                    <div class="report-form-group"><label class="report-form-label" for="doctorNotes">Doctor Notes <span style="color:var(--red-500);">*</span></label><textarea id="doctorNotes" class="report-form-textarea" rows="5" placeholder="Enter your clinical observations..." required></textarea></div>
-                    <div class="report-form-group"><label class="report-form-label" for="recommendations">Recommendations / Prescription</label><textarea id="recommendations" class="report-form-textarea" rows="4" placeholder="Enter treatment recommendations..."></textarea></div>
-                    <div class="report-form-group" style="display:flex;gap:1rem;">
-                        <div style="flex:1;"><label class="report-form-label" for="reportDate">Report Date</label><input type="date" id="reportDate" class="report-form-input" value=""></div>
-                        <div style="flex:1;"><label class="report-form-label" for="reportVisibility">Visibility</label><select id="reportVisibility" class="report-form-input"><option value="private">Private (Only me)</option><option value="shared">Shared (Visible to parents)</option></select></div>
-                    </div>
+                    <div class="report-form-group"><label class="report-form-label" for="doctorNotes">Specialist Notes <span style="color:var(--red-500);">*</span></label><textarea id="doctorNotes" class="report-form-textarea" rows="5" placeholder="Enter your clinical observations..." required></textarea></div>
+                    <div class="report-form-group"><label class="report-form-label" for="recommendations">Recommendations</label><textarea id="recommendations" class="report-form-textarea" rows="4" placeholder="Enter treatment recommendations..."></textarea></div>
+                    <div class="report-form-group"><label class="report-form-label" for="reportDate">Report Date</label><input type="date" id="reportDate" class="report-form-input" value=""></div>
                     <div class="report-form-actions"><button type="button" class="btn btn-outline" onclick="closeReportModal()">Cancel</button><button type="submit" class="btn btn-gradient">Submit Report</button></div>
                 </form></div></div></div></div>`;
 }
 
 function loadReportsData() {
-    // Load stats
     fetch(`doctor-dashboard.php?ajax=1&section=reports&action=get_report_stats&specialist_id=${SPECIALIST_ID}`)
         .then(r => r.json()).then(result => {
             if (result.success && result.data) {
@@ -298,7 +370,6 @@ function loadReportsData() {
                 el('stat-this-month', d.this_month);
             }
         }).catch(() => {});
-    // Load shared reports
     fetch(`doctor-dashboard.php?ajax=1&section=reports&action=get_shared_reports&specialist_id=${SPECIALIST_ID}`)
         .then(r => r.json()).then(result => {
             const container = document.getElementById('sharedReportsList');
@@ -307,30 +378,85 @@ function loadReportsData() {
                 container.innerHTML = result.data.map(r => {
                     const initials = (r.child_first_name?.charAt(0) || '') + (r.child_last_name?.charAt(0) || '');
                     const age = calculateAge(r.birth_year, r.birth_month);
+                    const apptDate = r.appointment_date ? new Date(r.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No appointment';
+                    const apptStatus = r.appointment_status ? r.appointment_status.charAt(0).toUpperCase() + r.appointment_status.slice(1) : '';
+                    const isReplied = r.doctor_reply && r.doctor_reply.trim().length > 0;
+                    const statusBadge = isReplied
+                        ? '<span class="report-status report-status-completed">Replied</span>'
+                        : '<span class="report-status report-status-pending">Pending Review</span>';
+                    const replySection = isReplied
+                        ? `<div style="margin-top:0.75rem;padding:0.75rem;background:var(--green-50,#f0fdf4);border-radius:8px;border-left:3px solid var(--green-500,#22c55e);">
+                              <div style="font-size:0.8rem;font-weight:600;color:var(--green-700,#15803d);margin-bottom:0.25rem;">Your Reply (${new Date(r.doctor_reply_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}):</div>
+                              <div style="font-size:0.85rem;color:var(--text-primary);">${r.doctor_reply}</div>
+                           </div>`
+                        : '';
+                    const reportTypeLabel = {
+                        'full-report': '📋 Full Development Report',
+                        'growth-report': '📊 Growth Report',
+                        'speech-report': '🗣️ Speech Report',
+                        'child-report': '👤 Child Profile Report',
+                        'uploaded-pdf': '📎 Uploaded PDF'
+                    }[r.report_type] || ('📄 ' + r.report_type);
+                    const viewUrl = r.file_path ? r.file_path.replace(/'/g, "\\'") : '';
+                    const childNameSafe = (r.child_first_name || '') + ' ' + (r.child_last_name || '');
+                    const safeName = childNameSafe.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                    const reportContext = 'Shared Report: ' + r.report_type;
                     return `<div class="report-card"><div class="report-card-header">
                         <div class="report-child-avatar">${initials}</div>
-                        <div class="report-card-info"><div class="report-child-name">${r.child_first_name} ${r.child_last_name}</div><div class="report-meta">Shared by ${r.parent_first_name} ${r.parent_last_name} • ${age}</div></div>
-                        <span class="report-status report-status-pending">Pending Review</span></div>
-                        <div class="report-card-body"><div class="report-summary"><strong>Report:</strong> ${r.report}</div></div>
-                        <div class="report-card-footer"><span class="report-date">Child ID: ${r.child_id}</span>
-                        <button class="btn btn-sm btn-gradient" onclick="openReportModal('${r.child_first_name} ${r.child_last_name}', ${r.child_id}, '${(r.report || '').replace(/'/g, "\\'")}')">Write Report</button></div></div>`;
+                        <div class="report-card-info"><div class="report-child-name">${childNameSafe}</div><div class="report-meta">Shared by ${r.parent_first_name} ${r.parent_last_name} • ${age} • ${reportTypeLabel}</div></div>
+                        ${statusBadge}</div>
+                        <div class="report-card-body">
+                          <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+                            <div class="report-detail-row"><span class="report-detail-label">📅 Appointment:</span><span>${apptDate} ${apptStatus ? '(' + apptStatus + ')' : ''}</span></div>
+                            <div class="report-detail-row"><span class="report-detail-label">👶 Gender:</span><span>${r.gender || 'N/A'}</span></div>
+                            <div class="report-detail-row"><span class="report-detail-label">📂 Type:</span><span>${r.report_type}</span></div>
+                          </div>
+                          ${replySection}
+                        </div>
+                        <div class="report-card-footer">
+                          <span class="report-date">Shared ${new Date(r.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</span>
+                          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                            <button class="btn btn-sm btn-outline" style="color:var(--blue-500);border-color:var(--blue-500);" onclick="viewSharedReport('${viewUrl}', '${r.report_type}')">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View
+                            </button>
+                            <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="downloadSharedReport('${viewUrl}', '${r.report_type}')">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download
+                            </button>
+                            <button class="btn btn-sm btn-gradient" onclick="openReportModal('${safeName}', ${r.child_id}, '${reportContext.replace(/'/g, "\\'")}', ${r.report_id})">
+                              ${isReplied ? '✏️ Edit Report' : '💬 Write Report'}
+                            </button>
+                          </div>
+                        </div></div>`;
                 }).join('');
             } else {
-                container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No shared reports found.</div>';
+                container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No shared reports found. Reports will appear here when parents share them with you.</div>';
             }
         }).catch(() => {});
-    // Load my reports
     fetch(`doctor-dashboard.php?ajax=1&section=reports&action=get_doctor_reports&specialist_id=${SPECIALIST_ID}`)
         .then(r => r.json()).then(result => {
             const container = document.getElementById('myReportsList');
             if (!container) return;
             if (result.success && result.data && result.data.length > 0) {
-                container.innerHTML = result.data.map(r => `<div class="report-card"><div class="report-card-header">
+                container.innerHTML = result.data.map(r => {
+                    const childNameSafe = (r.child_first_name || '') + ' ' + (r.child_last_name || '');
+                    const safeName = childNameSafe.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                    const safeNotes = (r.doctor_notes || '').replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, '\\n').replace(/\r/g, '');
+                    const safeRecs = (r.recommendations || '').replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, '\\n').replace(/\r/g, '');
+                    const safeChildReport = (r.child_report || '').replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, '\\n').replace(/\r/g, '');
+                    const rDate = r.report_date || '';
+
+                    return `<div class="report-card"><div class="report-card-header">
                     <div class="report-card-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
-                    <div class="report-card-info"><div class="report-child-name">Report for ${r.child_first_name} ${r.child_last_name}</div><div class="report-meta">Written on ${new Date(r.report_date || r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>
+                    <div class="report-card-info"><div class="report-child-name">Report for ${childNameSafe}</div><div class="report-meta">Written on ${new Date(r.report_date || r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>
                     <span class="report-status report-status-completed">Completed</span></div>
-                    <div class="report-card-body"><div class="report-detail-row"><span class="report-detail-label">Doctor Notes:</span><span>${r.doctor_notes}</span></div>
-                    ${r.recommendations ? `<div class="report-detail-row"><span class="report-detail-label">Recommendations:</span><span>${r.recommendations}</span></div>` : ''}</div></div>`).join('');
+                    <div class="report-card-body"><div class="report-detail-row"><span class="report-detail-label">Specialist Notes:</span><span>${r.doctor_notes}</span></div>
+                    ${r.recommendations ? `<div class="report-detail-row"><span class="report-detail-label">Recommendations:</span><span>${r.recommendations}</span></div>` : ''}</div>
+                    <div class="report-card-footer" style="border-top:1px solid var(--border-color);padding-top:1rem;margin-top:1rem;display:flex;justify-content:flex-end;">
+                        <button class="btn btn-sm btn-outline" style="color:var(--blue-500);border-color:var(--blue-500);" onclick="openReportModal('${safeName}', ${r.child_id}, '${safeChildReport}', 0, ${r.report_id}, '${safeNotes}', '${safeRecs}', '${rDate}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit Report
+                        </button>
+                    </div></div>`;
+                }).join('');
             } else {
                 container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No reports written yet.</div>';
             }
@@ -349,13 +475,39 @@ function switchReportsTab(tab) {
     document.getElementById(`tab-${tab}`)?.classList.add('active');
 }
 
-function openReportModal(childName, childId, childReport) {
+function openReportModal(childName, childId, childReport, sharedReportId = 0, existingReportId = 0, notes = '', recs = '', rDate = '') {
     const modal = document.getElementById('reportModal');
     if (modal) {
         modal.classList.add('active');
         document.getElementById('reportChildName').textContent = childName || '—';
         document.getElementById('reportChildId').value = childId || '';
         document.getElementById('reportChildReport').value = childReport || '';
+        document.getElementById('doctorNotes').value = notes || '';
+        document.getElementById('recommendations').value = recs || '';
+        if (rDate) {
+            document.getElementById('reportDate').value = rDate;
+        } else {
+            const d = document.getElementById('reportDate');
+            if (d) d.value = new Date().toISOString().split('T')[0];
+        }
+        
+        let hiddenSharedId = document.getElementById('sharedReportId');
+        if (!hiddenSharedId) {
+            hiddenSharedId = document.createElement('input');
+            hiddenSharedId.type = 'hidden';
+            hiddenSharedId.id = 'sharedReportId';
+            document.getElementById('doctorReportForm').appendChild(hiddenSharedId);
+        }
+        hiddenSharedId.value = sharedReportId;
+
+        let hiddenReportId = document.getElementById('existingReportId');
+        if (!hiddenReportId) {
+            hiddenReportId = document.createElement('input');
+            hiddenReportId.type = 'hidden';
+            hiddenReportId.id = 'existingReportId';
+            document.getElementById('doctorReportForm').appendChild(hiddenReportId);
+        }
+        hiddenReportId.value = existingReportId;
     }
 }
 
@@ -366,19 +518,49 @@ function closeReportModal() {
 
 function submitDoctorReport(e) {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append('child_id', document.getElementById('reportChildId').value);
-    fd.append('doctor_notes', document.getElementById('doctorNotes').value);
-    fd.append('recommendations', document.getElementById('recommendations').value);
-    fd.append('visibility', document.getElementById('reportVisibility')?.value || 'private');
-    
-    fetch('api_add_doctor_note.php', {
-        method: 'POST', body: fd
+    const sharedReportIdEl = document.getElementById('sharedReportId');
+    const existingReportIdEl = document.getElementById('existingReportId');
+    const data = {
+        action: 'submit_report', specialist_id: SPECIALIST_ID,
+        doctor_report_id: existingReportIdEl ? existingReportIdEl.value : 0,
+        child_id: document.getElementById('reportChildId').value,
+        child_report: document.getElementById('reportChildReport').value,
+        doctor_notes: document.getElementById('doctorNotes').value,
+        recommendations: document.getElementById('recommendations').value,
+        report_date: document.getElementById('reportDate').value,
+        shared_report_id: sharedReportIdEl ? sharedReportIdEl.value : 0
+    };
+    fetch('doctor-dashboard.php?ajax=1&section=reports', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
     }).then(r => r.json()).then(result => {
-        if (result.success) { closeReportModal(); showToast('Report submitted successfully!', 'success'); loadReportsData(); }
-        else showToast('Error: ' + (result.error || 'Failed to submit'), 'error');
-    }).catch(() => { showToast('Connection error', 'error'); closeReportModal(); });
+        if (result.success) { closeReportModal(); showToast('Report saved successfully!', 'success'); loadReportsData(); }
+        else showToast('Error: ' + (result.error || 'Failed to save'), 'error');
+    }).catch(err => { 
+        console.error(err);
+        showToast('Server connection error. Please try again.', 'error'); 
+    });
 }
+
+// ═══════════════════════════════════════════════════
+// SHARED REPORT ACTIONS — View / Download / Reply
+// ═══════════════════════════════════════════════════
+function viewSharedReport(filePath, reportType) {
+    if (!filePath) { showToast('No report file available', 'error'); return; }
+    window.open(filePath, '_blank');
+}
+
+function downloadSharedReport(filePath, reportType) {
+    if (!filePath) { showToast('No report file available', 'error'); return; }
+    const a = document.createElement('a');
+    a.href = filePath;
+    a.download = 'report_' + reportType + '_' + Date.now() + '.pdf';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+
 
 // ═══════════════════════════════════════════════════
 // APPOINTMENTS PAGE
@@ -686,7 +868,20 @@ function switchSettingsTab(tab, btn) {
 }
 
 function saveAccountSettings() {
-    showToast('Account settings saved successfully!', 'success');
+    const fullName = (document.getElementById('settings-name')?.value || '').trim();
+    const email = (document.getElementById('settings-email')?.value || '').trim();
+    const spec = (document.getElementById('settings-specialization')?.value || '').trim();
+    if (!fullName || !email) { showToast('Name and email are required', 'error'); return; }
+    const parts = fullName.replace(/^Dr\.?\s*/i, '').split(' ');
+    const first_name = parts[0] || '';
+    const last_name = parts.slice(1).join(' ') || '';
+    fetch('doctor-dashboard.php?ajax=1&section=settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save_profile', first_name, last_name, email, specialization: spec, experience_years: 0, certificate_of_experience: '' })
+    }).then(r => r.json()).then(res => {
+        if (res.success) showToast('Account settings saved successfully!', 'success');
+        else showToast(res.error || 'Failed to save', 'error');
+    }).catch(() => showToast('Connection error', 'error'));
 }
 
 function changePassword() {
@@ -695,8 +890,18 @@ function changePassword() {
     const conf = document.getElementById('settings-confirm-pw')?.value;
     if (!cur || !nw || !conf) { showToast('Please fill all password fields', 'error'); return; }
     if (nw !== conf) { showToast('New passwords do not match', 'error'); return; }
-    if (nw.length < 8) { showToast('Password must be at least 8 characters', 'error'); return; }
-    showToast('Password updated successfully!', 'success');
+    if (nw.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+    fetch('doctor-dashboard.php?ajax=1&section=settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_password', current_password: cur, new_password: nw })
+    }).then(r => r.json()).then(res => {
+        if (res.success) {
+            showToast('Password updated successfully!', 'success');
+            document.getElementById('settings-current-pw').value = '';
+            document.getElementById('settings-new-pw').value = '';
+            document.getElementById('settings-confirm-pw').value = '';
+        } else showToast(res.error || 'Password change failed', 'error');
+    }).catch(() => showToast('Connection error', 'error'));
 }
 
 // ── My Profile (embedded in Settings) ──────────────────
@@ -1079,9 +1284,14 @@ function loadChatMessages(partnerId, silent) {
                         <div class="message-content">${contentHtml}</div>
                         <div class="message-time">${time}</div></div>`;
                 });
-                const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+                
+                // Only update if content changed or not silent, to prevent flicker
+                const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 20;
                 container.innerHTML = html;
-                if (!silent || isNearBottom) container.scrollTop = container.scrollHeight;
+                
+                if (!silent || isAtBottom) {
+                    container.scrollTop = container.scrollHeight;
+                }
             } else if (!silent) {
                 container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);"><p>No messages yet. Start the conversation!</p></div>';
             }

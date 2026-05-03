@@ -2,6 +2,16 @@
 session_start();
 require_once 'connection.php';
 
+// Check maintenance mode
+try {
+    $mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
+    $mStmt->execute();
+    if ($mStmt->fetchColumn() === '1') {
+        header("Location: maintenance.php");
+        exit;
+    }
+} catch (Exception $e) { /* system_config table may not exist yet */ }
+
 // ─── Auth: only authenticated doctors/specialists can access ─────────────
 $isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') || isset($_GET['ajax']);
 if (!$isAjax) {
@@ -77,8 +87,41 @@ if ($isAjax) {
     $method = $_SERVER['REQUEST_METHOD'];
     $section = $_GET['section'] ?? '';
 
+    // Ensure notifications table exists
+    try {
+        $connect->exec("CREATE TABLE IF NOT EXISTS `notifications` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `user_id` INT NOT NULL,
+            `type` VARCHAR(50) DEFAULT 'system',
+            `title` VARCHAR(255),
+            `message` TEXT,
+            `is_read` TINYINT(1) DEFAULT 0,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY `idx_notif_user` (`user_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+    } catch (Exception $e) { /* table may already exist */ }
+
     // ─── REPORTS SECTION ────────────────────────────────
     if ($section === 'reports') {
+
+        // Ensure shared_reports table exists
+        try {
+            $connect->exec("CREATE TABLE IF NOT EXISTS `shared_reports` (
+                `report_id` int(11) NOT NULL AUTO_INCREMENT,
+                `file_path` varchar(500) DEFAULT NULL,
+                `report_type` varchar(50) DEFAULT 'full-report',
+                `child_id` int(11) NOT NULL,
+                `parent_id` int(11) NOT NULL,
+                `doctor_id` int(11) NOT NULL,
+                `appointment_id` int(11) DEFAULT NULL,
+                `is_shared` tinyint(1) DEFAULT 1,
+                `doctor_reply` text DEFAULT NULL,
+                `doctor_reply_date` datetime DEFAULT NULL,
+                `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+                PRIMARY KEY (`report_id`),
+                KEY `idx_sr_doctor` (`doctor_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        } catch (Exception $e) { /* table exists */ }
 
         if ($method === 'GET') {
             $action = $_GET['action'] ?? '';
@@ -89,20 +132,23 @@ if ($isAjax) {
                     echo json_encode(['success' => false, 'error' => 'specialist_id required']);
                     exit;
                 }
+                // Only show reports explicitly shared with this doctor AND linked to an appointment
                 $stmt = $connect->prepare("
                     SELECT 
-                        csr.child_id, csr.report,
+                        sr.report_id, sr.file_path, sr.report_type, sr.child_id, sr.parent_id,
+                        sr.doctor_id, sr.appointment_id, sr.is_shared,
+                        sr.doctor_reply, sr.doctor_reply_date, sr.created_at,
                         c.first_name AS child_first_name, c.last_name AS child_last_name,
-                        c.gender, c.birth_year, c.birth_month,
-                        p.parent_id,
-                        u.first_name AS parent_first_name, u.last_name AS parent_last_name
-                    FROM child_generated_system_report csr
-                    JOIN child c ON csr.child_id = c.child_id
-                    JOIN parent p ON c.parent_id = p.parent_id
-                    JOIN users u ON p.parent_id = u.user_id
-                    JOIN appointment a ON a.parent_id = p.parent_id AND a.specialist_id = :sid
-                    GROUP BY csr.child_id, csr.report
-                    ORDER BY csr.child_id DESC
+                        c.gender, c.birth_year, c.birth_month, c.birth_day,
+                        u.first_name AS parent_first_name, u.last_name AS parent_last_name,
+                        a.scheduled_at AS appointment_date, a.status AS appointment_status, a.type AS appointment_type
+                    FROM shared_reports sr
+                    JOIN child c ON sr.child_id = c.child_id
+                    JOIN users u ON sr.parent_id = u.user_id
+                    LEFT JOIN appointment a ON sr.appointment_id = a.appointment_id
+                    WHERE sr.doctor_id = :sid
+                      AND sr.is_shared = 1
+                    ORDER BY sr.created_at DESC
                 ");
                 $stmt->execute([':sid' => $specialist_id]);
                 echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
@@ -131,7 +177,7 @@ if ($isAjax) {
                     echo json_encode(['success' => false, 'error' => 'specialist_id required']);
                     exit;
                 }
-                // Count doctor reports
+                // Count doctor-written reports
                 $stmt = $connect->prepare("
                     SELECT
                         COUNT(*) AS total_reports,
@@ -141,12 +187,13 @@ if ($isAjax) {
                 $stmt->execute([':sid' => $specialist_id]);
                 $dr_stats = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                // Count shared child reports (pending = no doctor_report reply)
+                // Count shared reports from parents
                 $stmt2 = $connect->prepare("
-                    SELECT COUNT(*) AS shared_total FROM child_generated_system_report csr
-                    JOIN child c ON csr.child_id = c.child_id
-                    JOIN parent p ON c.parent_id = p.parent_id
-                    JOIN appointment a ON a.parent_id = p.parent_id AND a.specialist_id = :sid
+                    SELECT 
+                        COUNT(*) AS shared_total,
+                        SUM(CASE WHEN doctor_reply IS NULL THEN 1 ELSE 0 END) AS pending_review
+                    FROM shared_reports 
+                    WHERE doctor_id = :sid AND is_shared = 1
                 ");
                 $stmt2->execute([':sid' => $specialist_id]);
                 $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
@@ -157,9 +204,27 @@ if ($isAjax) {
                         'total_reports' => intval($dr_stats['total_reports'] ?? 0),
                         'this_month' => intval($dr_stats['this_month'] ?? 0),
                         'shared_total' => intval($shared_stats['shared_total'] ?? 0),
-                        'pending_review' => max(0, intval($shared_stats['shared_total'] ?? 0) - intval($dr_stats['total_reports'] ?? 0))
+                        'pending_review' => intval($shared_stats['pending_review'] ?? 0)
                     ]
                 ]);
+                exit;
+
+            } elseif ($action === 'download_report') {
+                // Serve the PDF file for download
+                $report_id = intval($_GET['report_id'] ?? 0);
+                $specialist_id = intval($_GET['specialist_id'] ?? 0);
+                if (!$report_id || !$specialist_id) {
+                    echo json_encode(['success' => false, 'error' => 'report_id and specialist_id required']);
+                    exit;
+                }
+                $stmt = $connect->prepare("SELECT file_path, report_type FROM shared_reports WHERE report_id = ? AND doctor_id = ? AND is_shared = 1");
+                $stmt->execute([$report_id, $specialist_id]);
+                $report = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$report) {
+                    echo json_encode(['success' => false, 'error' => 'Report not found']);
+                    exit;
+                }
+                echo json_encode(['success' => true, 'data' => $report]);
                 exit;
             }
 
@@ -174,25 +239,85 @@ if ($isAjax) {
                 $doctor_notes = trim($input['doctor_notes'] ?? '');
                 $recommendations = trim($input['recommendations'] ?? '');
                 $report_date = trim($input['report_date'] ?? date('Y-m-d'));
+                $shared_report_id = intval($input['shared_report_id'] ?? 0);
+
+                $doctor_report_id = intval($input['doctor_report_id'] ?? 0);
 
                 if (!$specialist_id || !$child_id || !$doctor_notes) {
                     echo json_encode(['success' => false, 'error' => 'specialist_id, child_id, and doctor_notes are required']);
                     exit;
                 }
-                $stmt = $connect->prepare("
-                    INSERT INTO doctor_report (specialist_id, child_id, child_report, doctor_notes, recommendations, report_date)
-                    VALUES (:sid, :cid, :cr, :notes, :rec, :rdate)
-                ");
-                $stmt->execute([
-                    ':sid' => $specialist_id,
-                    ':cid' => $child_id,
-                    ':cr' => $child_report,
-                    ':notes' => $doctor_notes,
-                    ':rec' => $recommendations,
-                    ':rdate' => $report_date
-                ]);
-                echo json_encode(['success' => true, 'doctor_report_id' => $connect->lastInsertId()]);
-                exit;
+
+                try {
+                    $report_date = trim($input['report_date'] ?? '');
+                    if (empty($report_date)) {
+                        $report_date = @date('Y-m-d');
+                    }
+
+                    if ($doctor_report_id > 0) {
+                        // Update existing report
+                        $stmt = $connect->prepare("
+                            UPDATE doctor_report 
+                            SET doctor_notes = :notes, recommendations = :rec, report_date = :rdate 
+                            WHERE report_id = :rid AND specialist_id = :sid
+                        ");
+                        $stmt->execute([
+                            ':notes' => $doctor_notes,
+                            ':rec' => $recommendations,
+                            ':rdate' => $report_date,
+                            ':rid' => $doctor_report_id,
+                            ':sid' => $specialist_id
+                        ]);
+                    } else {
+                        // Insert new report
+                        $stmt = $connect->prepare("
+                            INSERT INTO doctor_report (specialist_id, child_id, child_report, doctor_notes, recommendations, report_date)
+                            VALUES (:sid, :cid, :cr, :notes, :rec, :rdate)
+                        ");
+                        $stmt->execute([
+                            ':sid' => $specialist_id,
+                            ':cid' => $child_id,
+                            ':cr' => $child_report,
+                            ':notes' => $doctor_notes,
+                            ':rec' => $recommendations,
+                            ':rdate' => $report_date
+                        ]);
+                        $doctor_report_id = $connect->lastInsertId();
+                    }
+                    
+                    // If this is a reply to a shared report, update the shared report status
+                    if ($shared_report_id) {
+                        $stmtUpdate = $connect->prepare("
+                            UPDATE shared_reports 
+                            SET doctor_reply = :reply, doctor_reply_date = :rdate 
+                            WHERE report_id = :rid AND doctor_id = :sid
+                        ");
+                        $stmtUpdate->execute([
+                            ':reply' => "Report written on {$report_date}. See 'My Reports' tab.", 
+                            ':rdate' => $report_date,
+                            ':rid' => $shared_report_id, 
+                            ':sid' => $specialist_id
+                        ]);
+
+                        // Notify parent
+                        $pStmt = $connect->prepare("SELECT parent_id FROM shared_reports WHERE report_id = ?");
+                        $pStmt->execute([$shared_report_id]);
+                        $sr = $pStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($sr) {
+                            $docName = $sessionDoctorName ?? 'Your doctor';
+                            $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)")
+                                ->execute([$sr['parent_id'], 'Doctor Report Added', "{$docName} has written a report based on your shared documents."]);
+                        }
+                    }
+
+                    ob_clean();
+                    echo json_encode(['success' => true, 'doctor_report_id' => $doctor_report_id]);
+                    exit;
+                } catch (Exception $e) {
+                    ob_clean();
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+                    exit;
+                }
             }
         }
     }
@@ -380,17 +505,16 @@ if ($isAjax) {
 
                 // Milestones
                 $stmt3 = $connect->prepare("
-                    SELECT cm.achieved_at, cm.notes, m.title, m.category, m.description
-                    FROM child_milestones cm
-                    JOIN milestones m ON m.milestone_id = cm.milestone_id
-                    WHERE cm.child_id = :cid ORDER BY cm.achieved_at DESC
+                    SELECT milestone_id, title, category, achieved_at, created_at
+                    FROM child_milestones
+                    WHERE child_id = :cid ORDER BY achieved_at DESC
                 ");
                 $stmt3->execute([':cid' => $child_id]);
                 $milestones = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 
                 // Doctor reports for this child
                 $stmt4 = $connect->prepare("
-                    SELECT doctor_report_id, doctor_notes, recommendations, report_date, created_at
+                    SELECT report_id, doctor_notes, recommendations, report_date, created_at
                     FROM doctor_report WHERE specialist_id = :sid AND child_id = :cid ORDER BY created_at DESC
                 ");
                 $stmt4->execute([':sid' => $specialist_id, ':cid' => $child_id]);
@@ -538,6 +662,17 @@ if ($isAjax) {
                 $stmt = $connect->prepare($sql);
                 $stmt->execute($params);
 
+                try {
+                    if (isset($input['status'])) {
+                        $pst = $connect->prepare("SELECT a.parent_id FROM appointment a WHERE a.appointment_id = ?");
+                        $pst->execute([$appointment_id]);
+                        $uid = $pst->fetchColumn();
+                        if ($uid) {
+                            $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                            $nst->execute([$uid, 'Appointment Update', "Your appointment status was updated to: " . $input['status']]);
+                        }
+                    }
+                } catch (Exception $e) { /* non-critical notification */ }
                 if (isset($input['status'])) {
                     $pst = $connect->prepare("SELECT p.parent_id AS user_id, a.type, a.specialist_id, a.child_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
                     $pst->execute([$appointment_id]);
@@ -578,15 +713,173 @@ if ($isAjax) {
                 $stmt = $connect->prepare("UPDATE appointment SET status = 'cancelled' WHERE appointment_id = :aid");
                 $stmt->execute([':aid' => $appointment_id]);
 
-                $pst = $connect->prepare("SELECT p.parent_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
-                $pst->execute([$appointment_id]);
-                $uid = $pst->fetchColumn();
-                if ($uid) {
-                    $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
-                    $nst->execute([$uid, 'Appointment Cancelled', "Your appointment has been cancelled by the doctor."]);
-                }
+                try {
+                    $pst = $connect->prepare("SELECT a.parent_id FROM appointment a WHERE a.appointment_id = ?");
+                    $pst->execute([$appointment_id]);
+                    $uid = $pst->fetchColumn();
+                    if ($uid) {
+                        $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                        $nst->execute([$uid, 'Appointment Cancelled', "Your appointment has been cancelled by the doctor."]);
+                    }
+                } catch (Exception $e) { /* non-critical notification */ }
 
                 echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
+                exit;
+            }
+        }
+    }
+
+    // ─── SETTINGS SECTION ──────────────────────────────────
+    if ($section === 'settings') {
+
+        if ($method === 'GET') {
+            $action = $_GET['action'] ?? '';
+
+            if ($action === 'get_profile') {
+                try {
+                    $stmt = $connect->prepare("
+                        SELECT u.user_id, u.first_name, u.last_name, u.email,
+                               s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
+                               COALESCE(c.clinic_name, '') AS clinic_name,
+                               COALESCE(c.location, '') AS clinic_location
+                        FROM users u
+                        LEFT JOIN specialist s ON u.user_id = s.specialist_id
+                        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+                        WHERE u.user_id = :uid
+                    ");
+                    $stmt->execute([':uid' => intval($_SESSION['id'])]);
+                    $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    if (!$profile) {
+                        // Fallback: build from session
+                        $profile = [
+                            'user_id' => intval($_SESSION['id']),
+                            'first_name' => $_SESSION['fname'] ?? '',
+                            'last_name' => $_SESSION['lname'] ?? '',
+                            'email' => $_SESSION['email'] ?? '',
+                            'specialization' => $_SESSION['specialization'] ?? '',
+                            'experience_years' => 0,
+                            'certificate_of_experience' => '',
+                            'clinic_name' => '',
+                            'clinic_location' => ''
+                        ];
+                    }
+
+                    $slots = [];
+                    try {
+                        $stmt2 = $connect->prepare("
+                            SELECT slot_id, day_of_week, start_time, end_time, slot_duration, is_active
+                            FROM appointment_slots
+                            WHERE doctor_id = :did AND is_active = 1
+                            ORDER BY day_of_week ASC, start_time ASC
+                        ");
+                        $stmt2->execute([':did' => intval($_SESSION['id'])]);
+                        $slots = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (Exception $e) { /* table may not exist */ }
+
+                    $profile['slots'] = $slots;
+                    unset($profile['password']);
+
+                    echo json_encode(['success' => true, 'data' => $profile]);
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+                }
+                exit;
+            }
+        } elseif ($method === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+
+            if ($action === 'save_profile') {
+                $doctor_id = intval($_SESSION['id']);
+                $first_name = trim($input['first_name'] ?? '');
+                $last_name  = trim($input['last_name'] ?? '');
+                $email      = trim($input['email'] ?? '');
+                $spec       = trim($input['specialization'] ?? '');
+                $exp        = intval($input['experience_years'] ?? 0);
+                $cert       = trim($input['certificate_of_experience'] ?? '');
+
+                if (!$first_name || !$last_name || !$email) {
+                    echo json_encode(['success' => false, 'error' => 'Name and email are required']);
+                    exit;
+                }
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    echo json_encode(['success' => false, 'error' => 'Invalid email address']);
+                    exit;
+                }
+                $check = $connect->prepare("SELECT user_id FROM users WHERE email = :email AND user_id != :uid");
+                $check->execute([':email' => $email, ':uid' => $doctor_id]);
+                if ($check->fetch()) {
+                    echo json_encode(['success' => false, 'error' => 'Email already in use']);
+                    exit;
+                }
+                $connect->beginTransaction();
+                try {
+                    $connect->prepare("UPDATE users SET first_name = :fn, last_name = :ln, email = :email WHERE user_id = :uid")
+                            ->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
+                    $connect->prepare("UPDATE specialist SET first_name = :fn, last_name = :ln, specialization = :spec, experience_years = :exp, certificate_of_experience = :cert WHERE specialist_id = :sid")
+                            ->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+                    $connect->commit();
+                    $_SESSION['fname'] = $first_name;
+                    $_SESSION['lname'] = $last_name;
+                    $_SESSION['email'] = $email;
+                    $_SESSION['specialization'] = $spec;
+                    echo json_encode(['success' => true, 'message' => 'Profile saved successfully']);
+                } catch (Exception $e) {
+                    $connect->rollBack();
+                    echo json_encode(['success' => false, 'error' => 'Failed to save profile']);
+                }
+                exit;
+            }
+
+            if ($action === 'change_password') {
+                $doctor_id = intval($_SESSION['id']);
+                $current = trim($input['current_password'] ?? '');
+                $new     = trim($input['new_password'] ?? '');
+                if (!$current || !$new) {
+                    echo json_encode(['success' => false, 'error' => 'Both passwords required']);
+                    exit;
+                }
+                if (strlen($new) < 6) {
+                    echo json_encode(['success' => false, 'error' => 'New password must be at least 6 characters']);
+                    exit;
+                }
+                $stmt = $connect->prepare("SELECT password FROM users WHERE user_id = :uid");
+                $stmt->execute([':uid' => $doctor_id]);
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$row || !password_verify($current, $row['password'])) {
+                    echo json_encode(['success' => false, 'error' => 'Current password is incorrect']);
+                    exit;
+                }
+                $connect->prepare("UPDATE users SET password = :pw WHERE user_id = :uid")
+                        ->execute([':pw' => password_hash($new, PASSWORD_DEFAULT), ':uid' => $doctor_id]);
+                echo json_encode(['success' => true, 'message' => 'Password changed successfully']);
+                exit;
+            }
+
+            if ($action === 'save_slots') {
+                $doctor_id = intval($_SESSION['id']);
+                $clinic_id = intval($_SESSION['clinic_id'] ?? 1);
+                $days     = $input['days'] ?? [];
+                $start    = trim($input['start_time'] ?? '09:00');
+                $end      = trim($input['end_time'] ?? '17:00');
+                $duration = intval($input['slot_duration'] ?? 30);
+
+                $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
+                        ->execute([':did' => $doctor_id]);
+                if (!empty($days)) {
+                    $stmt = $connect->prepare("
+                        INSERT INTO appointment_slots (doctor_id, clinic_id, day_of_week, start_time, end_time, slot_duration, is_active)
+                        VALUES (:did, :cid, :dow, :start, :end, :dur, 1)
+                        ON DUPLICATE KEY UPDATE start_time = :start2, end_time = :end2, slot_duration = :dur2, is_active = 1
+                    ");
+                    foreach ($days as $dow) {
+                        $dow = intval($dow);
+                        if ($dow < 0 || $dow > 6) continue;
+                        $stmt->execute([':did'=>$doctor_id,':cid'=>$clinic_id,':dow'=>$dow,':start'=>$start,':end'=>$end,':dur'=>$duration,':start2'=>$start,':end2'=>$end,':dur2'=>$duration]);
+                    }
+                }
+                echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
                 exit;
             }
         }
@@ -710,7 +1003,7 @@ if ($isAjax) {
     <link rel="stylesheet" href="styles/doctor.css?v=8">
     <link rel="stylesheet" href="styles/settings.css?v=8">
     <link rel="stylesheet" href="styles/profile.css?v=8">
-    <link rel="stylesheet" href="styles/dr-settings.css?v=8">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=9">
 </head>
 
 <body>
@@ -782,13 +1075,19 @@ if ($isAjax) {
             </nav>
 
             <div class="sidebar-footer">
-                <button class="nav-item" onclick="window.location.href='dr-settings.php'">
+                <button class="nav-item" data-view="settings">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3" />
                         <path
                             d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
                     </svg>
                     <span>Settings</span>
+                </button>
+                <button class="nav-item" onclick="showSupportPopup()">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>Contact Support</span>
                 </button>
                 <button class="nav-item nav-item-logout" onclick="handleLogout()">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -916,7 +1215,8 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=11"></script>
+    <script src="scripts/doctor-dashboard.js?v=13"></script>
+    <script src="scripts/doctor-settings.js?v=4"></script>
 
 </body>
 

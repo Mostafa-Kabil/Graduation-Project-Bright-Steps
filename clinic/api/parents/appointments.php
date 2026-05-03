@@ -80,22 +80,20 @@ if ($action === 'book' && $method === 'POST') {
 
         // Create notification for parent
         $stmt = $db->prepare("
-            INSERT INTO notifications (user_id, title, message, type, reference_id)
-            VALUES (:user_id, :title, :message, 'appointment_confirmed', :ref_id)
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES (:user_id, :title, :message, 'appointment_confirmed')
         ");
         $stmt->execute([
             ':user_id' => $authUser['user_id'],
             ':title'   => 'Appointment Booked',
-            ':message' => 'Your appointment has been scheduled for ' . $input['scheduled_at'],
-            ':ref_id'  => $appointmentId
+            ':message' => 'Your appointment has been scheduled for ' . $input['scheduled_at']
         ]);
 
         // Create notification for doctor
         $stmt->execute([
             ':user_id' => intval($input['specialist_id']),
             ':title'   => 'New Appointment',
-            ':message' => 'A new appointment has been booked for ' . $input['scheduled_at'],
-            ':ref_id'  => $appointmentId
+            ':message' => 'A new appointment has been booked for ' . $input['scheduled_at']
         ]);
 
         $db->commit();
@@ -195,12 +193,11 @@ elseif ($action === 'cancel' && $method === 'PUT') {
 
         // Notify doctor about cancellation
         $stmt = $db->prepare("
-            INSERT INTO notifications (user_id, title, message, type, reference_id)
-            VALUES (:user_id, 'Appointment Cancelled', 'An appointment has been cancelled by the parent.', 'appointment_cancelled', :ref_id)
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES (:user_id, 'Appointment Cancelled', 'An appointment has been cancelled by the parent.', 'appointment_cancelled')
         ");
         $stmt->execute([
-            ':user_id' => $appt['specialist_id'],
-            ':ref_id'  => $appointmentId
+            ':user_id' => $appt['specialist_id']
         ]);
 
         $db->commit();

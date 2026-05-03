@@ -59,12 +59,11 @@ if ($action === 'create' && $method === 'POST') {
 
         // Notify parent
         $stmt = $db->prepare("
-            INSERT INTO notifications (user_id, title, message, type, reference_id)
-            VALUES (:user_id, 'New Medical Record', 'A new medical record has been added for your child.', 'medical_record', :ref_id)
+            INSERT INTO notifications (user_id, title, message, type)
+            VALUES (:user_id, 'New Medical Record', 'A new medical record has been added for your child.', 'medical_record')
         ");
         $stmt->execute([
-            ':user_id' => $child['parent_id'],
-            ':ref_id'  => $recordId
+            ':user_id' => $child['parent_id']
         ]);
 
         $db->commit();

@@ -463,6 +463,7 @@
 /* 2-Column Split Layout */
 .auth-split-layout {
     display: flex;
+    align-items: stretch;
     min-height: 100vh;
     padding: 0 !important;
     background: var(--bg-primary, #ffffff);
@@ -566,8 +567,8 @@
 
 .auth-top-nav {
     position: absolute;
-    top: 3.5rem;
-    right: 3.5rem;
+    top: 1.5rem;
+    right: 1.5rem;
     display: flex;
     gap: 1rem;
     align-items: center;

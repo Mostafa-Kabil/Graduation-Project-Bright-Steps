@@ -13,38 +13,57 @@ if (!isset($_SESSION['id'])) {
     exit();
 }
 
-$parentId = $_SESSION['id'];
+$userId = $_SESSION['id'];
+$userRole = $_SESSION['role'] ?? 'parent';
 $type = $_GET['type'] ?? 'full-report';
 $childId = $_GET['child_id'] ?? null;
 
 // ── Fetch child data ──
 if (!$childId) {
-    $stmt = $connect->prepare("SELECT child_id FROM child WHERE parent_id = ? ORDER BY child_id ASC LIMIT 1");
-    $stmt->execute([$parentId]);
-    $childId = $stmt->fetchColumn();
+    if ($userRole === 'parent') {
+        $stmt = $connect->prepare("SELECT child_id FROM child WHERE parent_id = ? ORDER BY child_id ASC LIMIT 1");
+        $stmt->execute([$userId]);
+        $childId = $stmt->fetchColumn();
+    }
 }
 
 if (!$childId) {
     http_response_code(404);
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'No child found. Add a child profile first.']);
+    echo json_encode(['error' => 'No child found.']);
     exit();
 }
 
-// Child info
-$stmt = $connect->prepare("SELECT * FROM child WHERE child_id = ? AND parent_id = ?");
-$stmt->execute([$childId, $parentId]);
+// Child info & Authorization
+if ($userRole === 'parent') {
+    $stmt = $connect->prepare("SELECT * FROM child WHERE child_id = ? AND parent_id = ?");
+    $stmt->execute([$childId, $userId]);
+} else {
+    // Doctor/Specialist: check if shared
+    $stmt = $connect->prepare("
+        SELECT c.* 
+        FROM child c
+        JOIN shared_reports sr ON c.child_id = sr.child_id
+        WHERE c.child_id = ? AND sr.doctor_id = ? AND sr.is_shared = 1
+        LIMIT 1
+    ");
+    $stmt->execute([$childId, $userId]);
+}
+
 $child = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$child) {
     http_response_code(404);
     header('Content-Type: application/json');
-    echo json_encode(['error' => 'Child not found.']);
+    echo json_encode(['error' => 'Child not found or you do not have permission to view this report.']);
     exit();
 }
 
 // Parent info
-$parentName = ($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['lname'] ?? '');
+$stmt = $connect->prepare("SELECT first_name, last_name FROM users WHERE user_id = ?");
+$stmt->execute([$child['parent_id']]);
+$parentData = $stmt->fetch(PDO::FETCH_ASSOC);
+$parentName = $parentData ? ($parentData['first_name'] . ' ' . $parentData['last_name']) : 'Unknown';
 
 // Age
 $bd = mktime(0, 0, 0, $child['birth_month'], $child['birth_day'], $child['birth_year']);
@@ -65,7 +84,7 @@ $stmt = $connect->prepare(
      INNER JOIN clinic c ON s.clinic_id = c.clinic_id
      WHERE a.parent_id = ? ORDER BY a.scheduled_at DESC LIMIT 10"
 );
-$stmt->execute([$parentId]);
+$stmt->execute([$child['parent_id']]);
 $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Speech Analysis

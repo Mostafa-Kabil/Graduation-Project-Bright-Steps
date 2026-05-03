@@ -32,10 +32,18 @@ if (empty($first_name) || empty($last_name) || empty($email) || empty($password)
 try {
     $connect->beginTransaction();
 
-    // 1. Resolve clinic_id for this admin
+    // 1. Resolve clinic_id for this session
+    // Try admin_id first (original behavior)
     $cStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE admin_id = ? LIMIT 1");
     $cStmt->execute([$user_id]);
     $clinic = $cStmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$clinic) {
+        // Try clinic_id next (if session ID is clinic_id)
+        $cStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_id = ? LIMIT 1");
+        $cStmt->execute([$user_id]);
+        $clinic = $cStmt->fetch(PDO::FETCH_ASSOC);
+    }
     
     if (!$clinic) {
         // SELF-HEALING: Create default clinic profile if missing

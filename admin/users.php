@@ -202,12 +202,47 @@ try {
             $deletedName = $u ? $u['first_name'] . ' ' . $u['last_name'] : 'Unknown';
             $deletedRole = $u ? $u['role'] : 'unknown';
 
-            $stmt = $connect->prepare("DELETE FROM users WHERE user_id = :id");
-            $stmt->execute(['id' => $userId]);
+            // Handle role-specific data and constraints
+            try {
+                if ($deletedRole === 'parent') {
+                    $stmtCheck = $connect->prepare("SELECT COUNT(*) FROM child WHERE parent_id = :id");
+                    $stmtCheck->execute(['id' => $userId]);
+                    if ($stmtCheck->fetchColumn() > 0) {
+                        echo json_encode(['success' => false, 'error' => 'Cannot delete parent with registered children. Suspend the account instead.']);
+                        exit;
+                    }
+                    $connect->prepare("DELETE FROM parent_subscription WHERE parent_id = :id")->execute(['id' => $userId]);
+                    $connect->prepare("DELETE FROM parent WHERE parent_id = :id")->execute(['id' => $userId]);
+                } elseif ($deletedRole === 'admin') {
+                    // Check if admin has created clinics
+                    $stmtCheck = $connect->prepare("SELECT COUNT(*) FROM clinic WHERE admin_id = :id");
+                    $stmtCheck->execute(['id' => $userId]);
+                    if ($stmtCheck->fetchColumn() > 0) {
+                        echo json_encode(['success' => false, 'error' => 'Cannot delete admin who has created clinics. Suspend the account instead.']);
+                        exit;
+                    }
+                    $connect->prepare("DELETE FROM admin WHERE admin_id = :id")->execute(['id' => $userId]);
+                } elseif ($deletedRole === 'specialist') {
+                    $stmtCheck = $connect->prepare("SELECT COUNT(*) FROM appointment WHERE specialist_id = :id");
+                    $stmtCheck->execute(['id' => $userId]);
+                    if ($stmtCheck->fetchColumn() > 0) {
+                        echo json_encode(['success' => false, 'error' => 'Cannot delete specialist with appointments. Suspend the account instead.']);
+                        exit;
+                    }
+                    $connect->prepare("DELETE FROM specialist WHERE specialist_id = :id")->execute(['id' => $userId]);
+                }
+                
+                // Finally delete the user
+                $stmt = $connect->prepare("DELETE FROM users WHERE user_id = :id");
+                $stmt->execute(['id' => $userId]);
 
-            logActivity($connect, 'user_deleted', "User deleted: {$deletedName} ({$deletedRole})", $userId);
+                logActivity($connect, 'user_deleted', "User deleted: {$deletedName} ({$deletedRole})", $userId);
 
-            echo json_encode(['success' => true, 'message' => 'User deleted']);
+                echo json_encode(['success' => true, 'message' => 'User deleted']);
+            } catch (PDOException $e) {
+                echo json_encode(['success' => false, 'error' => 'Cannot delete user due to existing related data. Please suspend them instead.']);
+                exit;
+            }
 
         } else {
             echo json_encode(['success' => false, 'error' => 'Unknown action']);
