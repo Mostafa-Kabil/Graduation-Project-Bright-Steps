@@ -467,8 +467,9 @@ if ($isAjax) {
                     SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
                            u.first_name AS parent_first_name, u.last_name AS parent_last_name,
                            p.parent_id,
-                           (SELECT GROUP_CONCAT(CONCAT(c2.first_name, ' ', c2.last_name) SEPARATOR ', ')
-                            FROM child c2 WHERE c2.parent_id = p.parent_id) AS children_names
+                           (SELECT CONCAT(c2.first_name, ' ', c2.last_name)
+                            FROM child c2 WHERE c2.child_id = a.child_id) AS children_names,
+                           (SELECT meeting_link FROM message WHERE appointment_id = a.appointment_id AND meeting_link IS NOT NULL LIMIT 1) AS meeting_link
                     FROM appointment a
                     JOIN parent p ON p.parent_id = a.parent_id
                     JOIN users u ON u.user_id = p.parent_id
@@ -538,12 +539,30 @@ if ($isAjax) {
                 $stmt->execute($params);
 
                 if (isset($input['status'])) {
-                    $pst = $connect->prepare("SELECT p.user_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                    $pst = $connect->prepare("SELECT p.parent_id AS user_id, a.type, a.specialist_id, a.child_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
                     $pst->execute([$appointment_id]);
-                    $uid = $pst->fetchColumn();
-                    if ($uid) {
+                    $apptInfo = $pst->fetch(PDO::FETCH_ASSOC);
+                    if ($apptInfo && $apptInfo['user_id']) {
+                        $uid = $apptInfo['user_id'];
                         $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
                         $nst->execute([$uid, 'Appointment Update', "Your appointment status was updated to: " . $input['status']]);
+                        
+                        if ($input['status'] === 'confirmed' && $apptInfo['type'] === 'online') {
+                            $meetingLink = "https://meet.google.com/" . substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 3) . "-" . substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 4) . "-" . substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 3);
+                            $msgContent = "Your telehealth appointment has been confirmed. Please join using this link at the scheduled time.";
+                            $mst = $connect->prepare("
+                                INSERT INTO message (sender_id, receiver_id, child_id, appointment_id, content, meeting_link, is_read, sent_at) 
+                                VALUES (?, ?, ?, ?, ?, ?, 0, NOW())
+                            ");
+                            $mst->execute([
+                                $apptInfo['specialist_id'], 
+                                $uid, 
+                                $apptInfo['child_id'],
+                                $appointment_id, 
+                                $msgContent, 
+                                $meetingLink
+                            ]);
+                        }
                     }
                 }
 
@@ -559,7 +578,7 @@ if ($isAjax) {
                 $stmt = $connect->prepare("UPDATE appointment SET status = 'cancelled' WHERE appointment_id = :aid");
                 $stmt->execute([':aid' => $appointment_id]);
 
-                $pst = $connect->prepare("SELECT p.user_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                $pst = $connect->prepare("SELECT p.parent_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
                 $pst->execute([$appointment_id]);
                 $uid = $pst->fetchColumn();
                 if ($uid) {

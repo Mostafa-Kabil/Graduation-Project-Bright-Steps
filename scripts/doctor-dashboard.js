@@ -192,41 +192,57 @@ function chatWithParent(parentId) {
 }
 
 function viewPatientDetail(childId) {
-    fetch(`doctor-dashboard.php?ajax=1&section=patients&action=get_patient_detail&specialist_id=${SPECIALIST_ID}&child_id=${childId}`)
+    fetch(`api_get_child_full_profile.php?child_id=${childId}`)
         .then(r => r.json()).then(result => {
-            if (result.success && result.data) showPatientDetailModal(result.data);
+            if (result.success && result.profile) showPatientDetailModal(result);
             else showToast('Failed to load patient details', 'error');
         }).catch(() => showToast('Connection error', 'error'));
 }
 
 function showPatientDetailModal(data) {
-    const c = data.child;
+    const c = data.profile?.basic;
     if (!c) return;
-    const age = calculateAge(c.birth_year, c.birth_month, c.birth_day);
     const initials = (c.first_name?.charAt(0) || '') + (c.last_name?.charAt(0) || '');
-    let milestonesHtml = data.milestones?.length > 0
-        ? data.milestones.slice(0, 5).map(m => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);"><strong>${m.title}</strong> <span style="color:var(--text-secondary);font-size:0.85rem;">(${m.category})</span><div style="font-size:0.85rem;color:var(--text-secondary);">${m.achieved_at || 'In progress'}</div></div>`).join('')
-        : '<p style="color:var(--text-secondary);">No milestones recorded yet.</p>';
-    let growthHtml = data.growth_records?.length > 0
-        ? `<p>Height: <strong>${data.growth_records[0].height || '--'} cm</strong> | Weight: <strong>${data.growth_records[0].weight || '--'} kg</strong> | Head: <strong>${data.growth_records[0].head_circumference || '--'} cm</strong></p><p style="font-size:0.85rem;color:var(--text-secondary);">Recorded: ${new Date(data.growth_records[0].recorded_at).toLocaleDateString()}</p>`
+    
+    let growthHtml = data.profile?.latest_growth
+        ? `<p>Height: <strong>${data.profile.latest_growth.height || '--'} cm</strong> | Weight: <strong>${data.profile.latest_growth.weight || '--'} kg</strong> | Head: <strong>${data.profile.latest_growth.head_circumference || '--'} cm</strong></p><p style="font-size:0.85rem;color:var(--text-secondary);">Recorded: ${new Date(data.profile.latest_growth.recorded_at).toLocaleDateString()}</p>`
         : '<p style="color:var(--text-secondary);">No growth records available.</p>';
-    let reportsHtml = data.doctor_reports?.length > 0
-        ? data.doctor_reports.slice(0, 3).map(r => `<div style="padding:0.75rem 0;border-bottom:1px solid var(--border-color);"><div style="font-weight:600;">${new Date(r.report_date).toLocaleDateString()}</div><div style="font-size:0.9rem;margin-top:0.25rem;">${r.doctor_notes.substring(0, 120)}${r.doctor_notes.length > 120 ? '...' : ''}</div></div>`).join('')
-        : '<p style="color:var(--text-secondary);">No reports written for this patient.</p>';
+        
+    let speechHtml = data.profile?.speech_history?.length > 0
+        ? data.profile.speech_history.slice(0, 3).map(s => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);"><div style="font-size:0.85rem;color:var(--text-secondary);">${new Date(s.analyzed_at).toLocaleDateString()}</div><p style="margin:0.2rem 0;font-size:0.9rem;">"${s.transcript}"</p></div>`).join('')
+        : '<p style="color:var(--text-secondary);">No speech records available.</p>';
+        
+    let behaviorHtml = '<p style="color:var(--text-secondary);">No behavior records available.</p>';
+    if (data.profile?.behaviors && data.profile.behaviors.length > 0) {
+        behaviorHtml = data.profile.behaviors.map(b => `<div><strong>${b.category_name}</strong>: ${b.behavior_details || b.behavior_type} (${b.frequency || ''} ${b.severity || ''})</div>`).join('');
+    }
+
+    let reportsHtml = data.profile?.notes?.length > 0
+        ? data.profile.notes.slice(0, 3).map(r => `<div style="padding:0.75rem 0;border-bottom:1px solid var(--border-color);"><div style="font-weight:600;">${new Date(r.report_date).toLocaleDateString()} <span style="font-size:0.75rem;padding:0.1rem 0.4rem;background:#f1f5f9;border-radius:4px;color:#64748b;">${r.visibility}</span></div><div style="font-size:0.9rem;margin-top:0.25rem;">${r.doctor_notes.substring(0, 120)}${r.doctor_notes.length > 120 ? '...' : ''}</div></div>`).join('')
+        : '<p style="color:var(--text-secondary);">No clinical notes available.</p>';
+        
     const overlay = document.createElement('div');
     overlay.className = 'report-modal-overlay active';
     overlay.id = 'patientDetailModal';
-    overlay.innerHTML = `<div class="report-modal" style="max-width:700px;">
+    overlay.innerHTML = `<div class="report-modal" style="max-width:800px;">
         <div class="report-modal-header"><h3 style="display:flex;align-items:center;gap:0.75rem;"><div class="patient-avatar" style="width:2.5rem;height:2.5rem;font-size:0.9rem;">${initials}</div>${c.first_name} ${c.last_name}</h3>
         <button class="report-modal-close" onclick="document.getElementById('patientDetailModal').remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         <div class="report-modal-body" style="max-height:70vh;overflow-y:auto;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-                <div><strong>Age:</strong> ${age}</div><div><strong>Gender:</strong> ${c.gender || 'N/A'}</div>
-                <div><strong>Parent:</strong> ${c.parent_first_name} ${c.parent_last_name}</div><div><strong>Appointments:</strong> ${data.appointments?.length || 0}</div>
+                <div><strong>Age:</strong> ${c.age_months || '--'} months</div><div><strong>Gender:</strong> ${c.gender || 'N/A'}</div>
+                <div><strong>Parent:</strong> ${c.parent_first_name} ${c.parent_last_name}</div><div><strong>Phone:</strong> ${c.parent_phone || 'N/A'}</div>
             </div>
-            <h4 style="margin-bottom:0.5rem;color:var(--blue-500);">Latest Growth Record</h4>${growthHtml}
-            <h4 style="margin:1.5rem 0 0.5rem;color:var(--green-500);">Milestones Achieved</h4>${milestonesHtml}
-            <h4 style="margin:1.5rem 0 0.5rem;color:var(--purple-500);">Doctor Reports</h4>${reportsHtml}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;">
+                <div>
+                    <h4 style="margin-bottom:0.5rem;color:var(--blue-500);">Latest Growth Record</h4>${growthHtml}
+                    <h4 style="margin:1.5rem 0 0.5rem;color:var(--green-500);">Speech History</h4>${speechHtml}
+                </div>
+                <div>
+                    <h4 style="margin-bottom:0.5rem;color:var(--yellow-500);">Behaviors</h4>
+                    <div style="font-size:0.85rem;">${behaviorHtml}</div>
+                    <h4 style="margin:1.5rem 0 0.5rem;color:var(--purple-500);">Clinical Notes</h4>${reportsHtml}
+                </div>
+            </div>
         </div></div>`;
     document.body.appendChild(overlay);
 }
@@ -261,7 +277,10 @@ function getReportsView() {
                     <input type="hidden" id="reportChildId" value=""><input type="hidden" id="reportChildReport" value="">
                     <div class="report-form-group"><label class="report-form-label" for="doctorNotes">Doctor Notes <span style="color:var(--red-500);">*</span></label><textarea id="doctorNotes" class="report-form-textarea" rows="5" placeholder="Enter your clinical observations..." required></textarea></div>
                     <div class="report-form-group"><label class="report-form-label" for="recommendations">Recommendations / Prescription</label><textarea id="recommendations" class="report-form-textarea" rows="4" placeholder="Enter treatment recommendations..."></textarea></div>
-                    <div class="report-form-group"><label class="report-form-label" for="reportDate">Report Date</label><input type="date" id="reportDate" class="report-form-input" value=""></div>
+                    <div class="report-form-group" style="display:flex;gap:1rem;">
+                        <div style="flex:1;"><label class="report-form-label" for="reportDate">Report Date</label><input type="date" id="reportDate" class="report-form-input" value=""></div>
+                        <div style="flex:1;"><label class="report-form-label" for="reportVisibility">Visibility</label><select id="reportVisibility" class="report-form-input"><option value="private">Private (Only me)</option><option value="shared">Shared (Visible to parents)</option></select></div>
+                    </div>
                     <div class="report-form-actions"><button type="button" class="btn btn-outline" onclick="closeReportModal()">Cancel</button><button type="submit" class="btn btn-gradient">Submit Report</button></div>
                 </form></div></div></div></div>`;
 }
@@ -347,20 +366,18 @@ function closeReportModal() {
 
 function submitDoctorReport(e) {
     e.preventDefault();
-    const data = {
-        action: 'submit_report', specialist_id: SPECIALIST_ID,
-        child_id: document.getElementById('reportChildId').value,
-        child_report: document.getElementById('reportChildReport').value,
-        doctor_notes: document.getElementById('doctorNotes').value,
-        recommendations: document.getElementById('recommendations').value,
-        report_date: document.getElementById('reportDate').value
-    };
-    fetch('doctor-dashboard.php?ajax=1&section=reports', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    const fd = new FormData();
+    fd.append('child_id', document.getElementById('reportChildId').value);
+    fd.append('doctor_notes', document.getElementById('doctorNotes').value);
+    fd.append('recommendations', document.getElementById('recommendations').value);
+    fd.append('visibility', document.getElementById('reportVisibility')?.value || 'private');
+    
+    fetch('api_add_doctor_note.php', {
+        method: 'POST', body: fd
     }).then(r => r.json()).then(result => {
         if (result.success) { closeReportModal(); showToast('Report submitted successfully!', 'success'); loadReportsData(); }
         else showToast('Error: ' + (result.error || 'Failed to submit'), 'error');
-    }).catch(() => { showToast('Report saved successfully!', 'success'); closeReportModal(); });
+    }).catch(() => { showToast('Connection error', 'error'); closeReportModal(); });
 }
 
 // ═══════════════════════════════════════════════════
@@ -423,10 +440,11 @@ function renderAppointmentsList(appointments) {
             <div class="patient-status ${statusClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
             <div class="patient-last-update">${dateStr}${timeStr ? ' at ' + timeStr : ''}</div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                ${a.type === 'online' && isActive ? `<button class="btn btn-sm btn-join-meeting" onclick="joinMeeting(${a.appointment_id})">Join Meeting</button>` : ''}
-                ${isActive ? `<button class="btn btn-sm btn-gradient" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
+                ${a.type === 'online' && a.meeting_link && isActive ? `<button class="btn btn-sm btn-join-meeting" onclick="joinMeeting('${a.meeting_link}')">Join Meeting</button>` : ''}
+                ${status === 'scheduled' ? `<button class="btn btn-sm btn-gradient" onclick="updateAppointmentStatus(${a.appointment_id},'confirmed')">Confirm</button>` : ''}
+                ${isActive ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
                 ${isActive ? `<button class="btn btn-sm btn-outline" style="color:var(--red-500);border-color:var(--red-500);" onclick="cancelAppointment(${a.appointment_id})">Cancel</button>` : ''}
-                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${a.parent_id})">Chat</button>
+                <button class="btn btn-sm btn-outline" style="color:var(--blue-500);border-color:var(--blue-500);" onclick="chatWithParent(${a.parent_id})">Chat</button>
             </div></div>`;
     });
     container.innerHTML = html;
@@ -458,9 +476,13 @@ function searchAppointmentsLocal(query) {
     ));
 }
 
-function joinMeeting(appointmentId) {
-    window.open('https://meet.google.com/new', '_blank');
-    showToast('Opening meeting room...', 'success');
+function joinMeeting(link) {
+    if (link) {
+        window.open(link, '_blank');
+        showToast('Opening meeting room...', 'success');
+    } else {
+        showToast('Meeting link not available.', 'error');
+    }
 }
 
 function updateAppointmentStatus(appointmentId, newStatus) {
@@ -947,6 +969,10 @@ function getMessagesView() {
                 <div class="chat-input-bar">
                     <div class="chat-input-wrapper">
                         <textarea class="chat-input" id="chatInput" placeholder="Type your message..." rows="1" onkeydown="handleChatKeydown(event)"></textarea>
+                        <button onclick="document.getElementById('drChatFile').click()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </button>
+                        <input type="file" id="drChatFile" style="display:none" onchange="handleDrChatFile(event)">
                         <button class="chat-send-btn" onclick="sendMessage()" title="Send message">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
@@ -959,14 +985,14 @@ function getMessagesView() {
 let allConversationsCache = [];
 
 function loadConversations() {
-    fetch(`doctor-dashboard.php?ajax=1&section=messages&action=get_conversations&user_id=${SPECIALIST_ID}`)
+    fetch(`api_get_messages.php?action=get_conversations`)
         .then(r => r.json()).then(result => {
             const container = document.getElementById('conversationItems');
             if (!container) return;
-            if (result.success && result.data && result.data.length > 0) {
-                allConversationsCache = result.data;
-                renderConversationList(result.data);
-                selectConversationById(result.data[0].partner_id);
+            if (result.success && result.conversations && result.conversations.length > 0) {
+                allConversationsCache = result.conversations;
+                renderConversationList(result.conversations);
+                if (!currentPartnerId) selectConversationById(result.conversations[0].partner_id);
             } else {
                 container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);font-size:0.875rem;">No conversations yet.</div>';
             }
@@ -1031,31 +1057,51 @@ function selectConversationById(partnerId) {
 }
 
 function loadChatMessages(partnerId, silent) {
-    fetch(`doctor-dashboard.php?ajax=1&section=messages&action=get_messages&user_id=${SPECIALIST_ID}&partner_id=${partnerId}`)
+    fetch(`api_get_messages.php?other_user_id=${partnerId}`)
         .then(r => r.json()).then(result => {
             const container = document.getElementById('chatMessages');
             if (!container) return;
-            if (result.success && result.data && result.data.length > 0) {
+            if (result.success && result.messages && result.messages.length > 0) {
                 let html = '<div class="chat-date-divider"><span>Conversation</span></div>';
-                result.data.forEach(m => {
+                result.messages.forEach(m => {
                     const isSent = m.sender_id == SPECIALIST_ID;
                     const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                    
+                    let contentHtml = `<div>${m.content || ''}</div>`;
+                    if (m.meeting_link) {
+                        contentHtml += `<div style="margin-top:0.5rem;"><a href="${m.meeting_link}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isSent ? '#fff' : 'var(--blue-600)'};border:${isSent ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Join Meeting</a></div>`;
+                    }
+                    if (m.file_path) {
+                        contentHtml += `<div style="margin-top:0.5rem;"><a href="${m.file_path}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isSent ? '#fff' : 'var(--blue-600)'};border:${isSent ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;">📎 View Attachment</a></div>`;
+                    }
+                    
                     html += `<div class="message-bubble ${isSent ? 'message-sent' : 'message-received'}">
-                        <div class="message-content">${m.content}</div>
+                        <div class="message-content">${contentHtml}</div>
                         <div class="message-time">${time}</div></div>`;
                 });
+                const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
                 container.innerHTML = html;
-                if (!silent) container.scrollTop = container.scrollHeight;
+                if (!silent || isNearBottom) container.scrollTop = container.scrollHeight;
             } else if (!silent) {
                 container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);"><p>No messages yet. Start the conversation!</p></div>';
             }
         }).catch(() => {});
 }
 
+function handleDrChatFile(event) {
+    const file = event.target.files[0];
+    if (file) {
+        sendRealMessage(null, file);
+        event.target.value = '';
+    }
+}
+
 function sendMessage() {
     const input = document.getElementById('chatInput');
     const text = input?.value.trim();
     if (!text || !currentPartnerId) return;
+    
+    // Optimistic UI update
     const container = document.getElementById('chatMessages');
     if (container) {
         const bubble = document.createElement('div');
@@ -1071,13 +1117,25 @@ function sendMessage() {
         const timeEl = activeItem.querySelector('.conversation-time');
         if (timeEl) timeEl.textContent = 'Just now';
     }
+    
+    sendRealMessage(text, null);
     input.value = '';
     input.style.height = 'auto';
-    fetch('doctor-dashboard.php?ajax=1&section=messages', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send_message', sender_id: SPECIALIST_ID, receiver_id: currentPartnerId, content: text })
+}
+
+function sendRealMessage(text, file) {
+    if ((!text && !file) || !currentPartnerId) return;
+    
+    const fd = new FormData();
+    fd.append('receiver_id', currentPartnerId);
+    if (text) fd.append('content', text);
+    if (file) fd.append('attachment', file);
+    
+    fetch('api_send_message.php', {
+        method: 'POST', body: fd
     }).then(r => r.json()).then(result => {
-        if (!result.success) showToast('Failed to send message', 'error');
+        if (result.success) loadChatMessages(currentPartnerId, false);
+        else showToast('Failed to send message', 'error');
     }).catch(() => {});
 }
 

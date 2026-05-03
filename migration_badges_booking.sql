@@ -22,8 +22,8 @@ INSERT IGNORE INTO `badge` (`name`, `description`, `icon`) VALUES
 ('Voice Hero', 'Upload 5 voice samples', 'voice_hero');
 
 -- 2. Add parent_id column to streaks table for parent-level streaks
-ALTER TABLE `streaks` ADD COLUMN `parent_id` INT(11) DEFAULT NULL AFTER `child_id`;
-ALTER TABLE `streaks` ADD INDEX `idx_parent_streak` (`parent_id`, `streak_type`);
+ALTER TABLE `streaks` ADD COLUMN IF NOT EXISTS `parent_id` INT(11) DEFAULT NULL AFTER `child_id`;
+ALTER TABLE `streaks` ADD INDEX IF NOT EXISTS `idx_parent_streak` (`parent_id`, `streak_type`);
 
 -- 3. Create specialist_availability table
 CREATE TABLE IF NOT EXISTS `specialist_availability` (
@@ -48,7 +48,7 @@ CROSS JOIN (
 ) d;
 
 -- 5. Add consultation_fee to specialist table
-ALTER TABLE `specialist` ADD COLUMN `consultation_fee` DECIMAL(10,2) DEFAULT 50.00;
-ALTER TABLE `specialist` ADD COLUMN `bio` TEXT DEFAULT NULL;
-ALTER TABLE `specialist` ADD COLUMN `phone` VARCHAR(20) DEFAULT NULL;
+ALTER TABLE `specialist` ADD COLUMN IF NOT EXISTS `consultation_fee` DECIMAL(10,2) DEFAULT 50.00;
+ALTER TABLE `specialist` ADD COLUMN IF NOT EXISTS `bio` TEXT DEFAULT NULL;
+ALTER TABLE `specialist` ADD COLUMN IF NOT EXISTS `phone` VARCHAR(20) DEFAULT NULL;
 

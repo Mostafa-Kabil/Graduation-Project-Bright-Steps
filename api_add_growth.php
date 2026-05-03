@@ -82,52 +82,98 @@ try {
             'hc' => $headCirc
         ]);
 
-        $pointsToAward = 25; // Points for adding growth measurements
+        $pointsToAward = 25; // Points for adding growth measurements (log_growth rule)
 
-        // 2. Ensure Points Wallet Exists
-        $stmt = $connect->prepare("SELECT wallet_id, total_points FROM points_wallet WHERE child_id = ?");
-        $stmt->execute([$childId]);
+        // 2. Ensure Parent Points Wallet Exists
+        $stmt = $connect->prepare("SELECT wallet_id, total_points FROM parent_points_wallet WHERE parent_id = ?");
+        $stmt->execute([$parentId]);
         $wallet = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$wallet) {
-            $stmt = $connect->prepare("INSERT INTO points_wallet (child_id, total_points) VALUES (?, ?)");
-            $stmt->execute([$childId, $pointsToAward]);
+            $stmt = $connect->prepare("INSERT INTO parent_points_wallet (parent_id, total_points, last_earned_at) VALUES (?, 0, NOW())");
+            $stmt->execute([$parentId]);
             $walletId = $connect->lastInsertId();
         } else {
             $walletId = $wallet['wallet_id'];
-            $stmt = $connect->prepare("UPDATE points_wallet SET total_points = total_points + ? WHERE wallet_id = ?");
-            $stmt->execute([$pointsToAward, $walletId]);
+        }
+
+        // 3. Check daily cap (25 points/day for log_growth)
+        $today = date('Y-m-d');
+        $dailyCapStmt = $connect->prepare("
+            SELECT COALESCE(SUM(points_earned), 0) as daily_total
+            FROM parent_points_tracking
+            WHERE parent_id = ? AND action_key = 'log_growth' AND earned_date = ?
+        ");
+        $dailyCapStmt->execute([$parentId, $today]);
+        $dailyTotal = $dailyCapStmt->fetchColumn();
+
+        // Check weekly cap (100 points/week for log_growth)
+        $weekStart = date('Y-m-d', strtotime('monday this week'));
+        $weeklyCapStmt = $connect->prepare("
+            SELECT COALESCE(SUM(points_earned), 0) as weekly_total
+            FROM parent_points_tracking
+            WHERE parent_id = ? AND action_key = 'log_growth' AND earned_date >= ?
+        ");
+        $weeklyCapStmt->execute([$parentId, $weekStart]);
+        $weeklyTotal = $weeklyCapStmt->fetchColumn();
+
+        // Get rule caps
+        $ruleStmt = $connect->prepare("SELECT daily_cap, weekly_cap, points_value FROM points_earning_rules WHERE action_key = 'log_growth'");
+        $ruleStmt->execute();
+        $rule = $ruleStmt->fetch(PDO::FETCH_ASSOC);
+
+        $dailyCap = (int) $rule['daily_cap'];
+        $weeklyCap = (int) $rule['weekly_cap'];
+        $pointsValue = (int) $rule['points_value'];
+        $pointsToAward = 0;
+        $pointsMessage = "";
+
+        // Check if already earned points for this action today (once per day limit)
+        $alreadyEarnedStmt = $connect->prepare("
+            SELECT points_earned FROM parent_points_tracking
+            WHERE parent_id = ? AND action_key = 'log_growth' AND earned_date = ?
+        ");
+        $alreadyEarnedStmt->execute([$parentId, $today]);
+        $alreadyEarned = $alreadyEarnedStmt->fetchColumn();
+
+        // Check if within caps and not already earned today
+        if ($alreadyEarned == null && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
+            $pointsToAward = $pointsValue;
+            // Update wallet balance and lifetime earned
+            $stmt = $connect->prepare("UPDATE parent_points_wallet SET total_points = total_points + ?, lifetime_earned = lifetime_earned + ?, last_earned_at = NOW() WHERE wallet_id = ?");
+            $stmt->execute([$pointsToAward, $pointsToAward, $walletId]);
+
+            // Track the transaction (single entry per day)
+            $trackStmt = $connect->prepare("
+                INSERT INTO parent_points_tracking (parent_id, action_key, points_earned, earned_date, week_start_date)
+                VALUES (?, 'log_growth', ?, ?, ?)
+            ");
+            $trackStmt->execute([$parentId, $pointsToAward, $today, $weekStart]);
+
+            // Create notification
+            $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+            $nstmt->execute([$parentId, 'Points Earned!',
+                             "You earned {$pointsToAward} points for logging growth measurements."]);
+            $pointsMessage = " You earned {$pointsToAward} points!";
+        } elseif ($alreadyEarned > 0) {
+            $pointsMessage = " You already earned points for growth tracking today. Come back tomorrow!";
+        } elseif ($dailyTotal >= $dailyCap) {
+            $pointsMessage = " Daily points cap reached. Come back tomorrow for more points!";
+        } elseif ($weeklyTotal >= $weeklyCap) {
+            $pointsMessage = " Weekly points cap reached. Come back next week!";
         }
     }
 
-    if ($pointsToAward > 0) {
-        // 3. Log Points Transaction (Try to gracefully insert if a valid admin exists)
-        $stmt = $connect->prepare("SELECT admin_id FROM admin LIMIT 1");
-        $stmt->execute();
-        $adminId = $stmt->fetchColumn();
-
-        if ($adminId) {
-            // Ensure reference exists for Growth Update
-            $stmt = $connect->prepare("SELECT refrence_id FROM points_refrence WHERE action_name = 'Growth Update' LIMIT 1");
-            $stmt->execute();
-            $refId = $stmt->fetchColumn();
-
-            if (!$refId) {
-                $stmt = $connect->prepare("INSERT INTO points_refrence (admin_id, action_name, points_value, adjust_sign) VALUES (?, 'Growth Update', ?, '+')");
-                $stmt->execute([$adminId, $pointsToAward]);
-                $refId = $connect->lastInsertId();
-            }
-
-            // Insert Transaction
-            $stmt = $connect->prepare("INSERT INTO points_transaction (refrence_id, wallet_id, points_change, transaction_type) VALUES (?, ?, ?, 'deposit')");
-            $stmt->execute([$refId, $walletId, $pointsToAward]);
-        }
+    // Build message
+    $baseMessage = $recordId ? "Growth record updated successfully!" : "Growth recorded successfully!";
+    if ($pointsMessage && !$recordId) {
+        $baseMessage .= $pointsMessage;
     }
 
     $connect->commit();
     echo json_encode([
         'success' => true,
-        'message' => $recordId ? "Growth record updated successfully!" : "Growth recorded successfully! Your child earned $pointsToAward points.",
+        'message' => $baseMessage,
         'points_awarded' => $pointsToAward
     ]);
 
