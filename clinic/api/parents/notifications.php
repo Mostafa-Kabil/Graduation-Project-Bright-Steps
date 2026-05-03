@@ -24,7 +24,7 @@ if ($action === 'list' && $method === 'GET') {
     $limit = get_int('limit', 50);
 
     $sql = "
-        SELECT notification_id, title, message, type, reference_id, is_read, created_at
+        SELECT notification_id, title, message, type, is_read, created_at
         FROM notifications
         WHERE user_id = :user_id
     ";

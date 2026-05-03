@@ -66,7 +66,7 @@ try {
                u.first_name as parent_fname, u.last_name as parent_lname
         FROM child c
         JOIN users u ON c.parent_id = u.user_id
-        JOIN appointment a ON a.parent_id = c.parent_id
+        JOIN appointment a ON a.child_id = c.child_id
         JOIN specialist s ON a.specialist_id = s.specialist_id
         WHERE s.clinic_id = ?
         LIMIT 100

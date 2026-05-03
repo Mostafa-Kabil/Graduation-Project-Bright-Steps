@@ -70,13 +70,12 @@ if ($action === 'create' && $method === 'POST') {
         // Notify parent
         if ($child) {
             $stmt = $db->prepare("
-                INSERT INTO notifications (user_id, title, message, type, reference_id)
-                VALUES (:user_id, 'New Prescription', :message, 'prescription_added', :ref_id)
+                INSERT INTO notifications (user_id, title, message, type)
+                VALUES (:user_id, 'New Prescription', :message, 'prescription_added')
             ");
             $stmt->execute([
                 ':user_id' => $child['parent_id'],
-                ':message' => 'A new prescription for ' . $input['medication_name'] . ' has been added for your child.',
-                ':ref_id'  => $prescriptionId
+                ':message' => 'A new prescription for ' . $input['medication_name'] . ' has been added for your child.'
             ]);
         }
 
