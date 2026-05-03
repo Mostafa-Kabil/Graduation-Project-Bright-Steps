@@ -3,12 +3,14 @@ session_start();
 require_once 'connection.php';
 
 // Check maintenance mode
-$mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
-$mStmt->execute();
-if ($mStmt->fetchColumn() === '1') {
-    header("Location: maintenance.php");
-    exit;
-}
+try {
+    $mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
+    $mStmt->execute();
+    if ($mStmt->fetchColumn() === '1') {
+        header("Location: maintenance.php");
+        exit;
+    }
+} catch (Exception $e) { /* system_config table may not exist yet */ }
 
 // ─── Auth: only authenticated doctors/specialists can access ─────────────
 $isAjax = (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest') || isset($_GET['ajax']);
@@ -84,6 +86,20 @@ if ($isAjax) {
 
     $method = $_SERVER['REQUEST_METHOD'];
     $section = $_GET['section'] ?? '';
+
+    // Ensure notifications table exists
+    try {
+        $connect->exec("CREATE TABLE IF NOT EXISTS `notifications` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `user_id` INT NOT NULL,
+            `type` VARCHAR(50) DEFAULT 'system',
+            `title` VARCHAR(255),
+            `message` TEXT,
+            `is_read` TINYINT(1) DEFAULT 0,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            KEY `idx_notif_user` (`user_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+    } catch (Exception $e) { /* table may already exist */ }
 
     // ─── REPORTS SECTION ────────────────────────────────
     if ($section === 'reports') {
@@ -489,17 +505,16 @@ if ($isAjax) {
 
                 // Milestones
                 $stmt3 = $connect->prepare("
-                    SELECT cm.achieved_at, cm.notes, m.title, m.category, m.description
-                    FROM child_milestones cm
-                    JOIN milestones m ON m.milestone_id = cm.milestone_id
-                    WHERE cm.child_id = :cid ORDER BY cm.achieved_at DESC
+                    SELECT milestone_id, title, category, achieved_at, created_at
+                    FROM child_milestones
+                    WHERE child_id = :cid ORDER BY achieved_at DESC
                 ");
                 $stmt3->execute([':cid' => $child_id]);
                 $milestones = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 
                 // Doctor reports for this child
                 $stmt4 = $connect->prepare("
-                    SELECT doctor_report_id, doctor_notes, recommendations, report_date, created_at
+                    SELECT report_id, doctor_notes, recommendations, report_date, created_at
                     FROM doctor_report WHERE specialist_id = :sid AND child_id = :cid ORDER BY created_at DESC
                 ");
                 $stmt4->execute([':sid' => $specialist_id, ':cid' => $child_id]);

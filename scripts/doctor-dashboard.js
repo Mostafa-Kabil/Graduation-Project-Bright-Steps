@@ -130,6 +130,7 @@ function renderPatientsList(patients) {
         const statusClass = status === 'completed' ? 'status-green' : (status === 'cancelled' ? 'status-red' : 'status-yellow');
         const statusLabel = status === 'completed' ? 'On Track' : (status === 'cancelled' ? 'Cancelled' : 'Needs Review');
         const lastDate = p.last_appointment_date ? formatRelativeDate(p.last_appointment_date) : 'No appointments';
+        const childFullName = `${p.child_first_name} ${p.child_last_name}`.replace(/'/g, "\\'").replace(/"/g, "&quot;");
         html += `<div class="patient-row">
             <div class="patient-avatar">${initials}</div>
             <div class="patient-info"><div class="patient-name">${p.child_first_name} ${p.child_last_name}</div>
@@ -137,9 +138,15 @@ function renderPatientsList(patients) {
             <div class="patient-status ${statusClass}">${statusLabel}</div>
             <div class="patient-last-update">${lastDate}</div>
             <div style="display:flex;gap:0.5rem;">
-                <button class="btn btn-sm btn-outline" onclick="viewPatientDetail(${p.child_id})">View</button>
-                <button class="btn btn-sm btn-outline" style="color:var(--purple-500);border-color:var(--purple-500);" onclick="viewPatientReports(${p.child_id},'${p.child_first_name} ${p.child_last_name}')">Reports</button>
-                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${p.parent_id})">Chat</button>
+                <button class="btn btn-sm btn-outline" onclick="viewPatientDetail(${p.child_id})" title="View child profile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View
+                </button>
+                <button class="btn btn-sm btn-outline" style="color:var(--purple-500);border-color:var(--purple-500);" onclick="openReportForChild(${p.child_id},'${childFullName}')" title="Write report for child">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Report
+                </button>
+                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${p.parent_id})" title="Chat with parent">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Chat
+                </button>
             </div></div>`;
     });
     container.innerHTML = html;
@@ -197,14 +204,17 @@ function applyPatientFilters() {
     renderPatientsList(filtered);
 }
 
-function viewPatientReports(childId, childName) {
+function openReportForChild(childId, childName) {
+    // Navigate to Reports tab and open the write-report modal for this child
     navigateToView('reports');
-    // After view loads, could filter — for now just navigate
+    setTimeout(() => {
+        openReportModal(childName, childId, '', 0, 0, '', '', '');
+    }, 300);
 }
 
 function chatWithParent(parentId) {
     navigateToView('messages');
-    setTimeout(() => { if (typeof selectConversationById === 'function') selectConversationById(parentId); }, 200);
+    setTimeout(() => { if (typeof selectConversationById === 'function') selectConversationById(parentId); }, 300);
 }
 
 function viewPatientDetail(childId) {
@@ -220,29 +230,96 @@ function showPatientDetailModal(data) {
     if (!c) return;
     const age = calculateAge(c.birth_year, c.birth_month, c.birth_day);
     const initials = (c.first_name?.charAt(0) || '') + (c.last_name?.charAt(0) || '');
-    let milestonesHtml = data.milestones?.length > 0
-        ? data.milestones.slice(0, 5).map(m => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);"><strong>${m.title}</strong> <span style="color:var(--text-secondary);font-size:0.85rem;">(${m.category})</span><div style="font-size:0.85rem;color:var(--text-secondary);">${m.achieved_at || 'In progress'}</div></div>`).join('')
-        : '<p style="color:var(--text-secondary);">No milestones recorded yet.</p>';
+    const childFullName = `${c.first_name} ${c.last_name}`;
+    const safeName = childFullName.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+
+    // Growth section
     let growthHtml = data.growth_records?.length > 0
-        ? `<p>Height: <strong>${data.growth_records[0].height || '--'} cm</strong> | Weight: <strong>${data.growth_records[0].weight || '--'} kg</strong> | Head: <strong>${data.growth_records[0].head_circumference || '--'} cm</strong></p><p style="font-size:0.85rem;color:var(--text-secondary);">Recorded: ${new Date(data.growth_records[0].recorded_at).toLocaleDateString()}</p>`
+        ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:0.5rem;">
+            <div style="background:var(--bg-secondary);padding:0.75rem;border-radius:0.5rem;text-align:center;">
+                <div style="font-size:1.25rem;font-weight:700;color:var(--blue-500);">${data.growth_records[0].height || '--'}</div><div style="font-size:0.8rem;color:var(--text-secondary);">cm Height</div></div>
+            <div style="background:var(--bg-secondary);padding:0.75rem;border-radius:0.5rem;text-align:center;">
+                <div style="font-size:1.25rem;font-weight:700;color:var(--green-500);">${data.growth_records[0].weight || '--'}</div><div style="font-size:0.8rem;color:var(--text-secondary);">kg Weight</div></div>
+            <div style="background:var(--bg-secondary);padding:0.75rem;border-radius:0.5rem;text-align:center;">
+                <div style="font-size:1.25rem;font-weight:700;color:var(--purple-500);">${data.growth_records[0].head_circumference || '--'}</div><div style="font-size:0.8rem;color:var(--text-secondary);">cm Head</div></div>
+           </div>
+           <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.5rem;">Last recorded: ${new Date(data.growth_records[0].recorded_at).toLocaleDateString()}</p>`
         : '<p style="color:var(--text-secondary);">No growth records available.</p>';
+
+    // Milestones section
+    let milestonesHtml = data.milestones?.length > 0
+        ? data.milestones.slice(0, 5).map(m => `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+            <div><strong>${m.title}</strong> <span style="color:var(--text-secondary);font-size:0.85rem;">(${m.category})</span></div>
+            <div style="font-size:0.8rem;color:var(--text-secondary);">${m.achieved_at ? new Date(m.achieved_at).toLocaleDateString() : 'In progress'}</div>
+           </div>`).join('')
+        : '<p style="color:var(--text-secondary);">No milestones recorded yet.</p>';
+
+    // Reports section
     let reportsHtml = data.doctor_reports?.length > 0
-        ? data.doctor_reports.slice(0, 3).map(r => `<div style="padding:0.75rem 0;border-bottom:1px solid var(--border-color);"><div style="font-weight:600;">${new Date(r.report_date).toLocaleDateString()}</div><div style="font-size:0.9rem;margin-top:0.25rem;">${r.doctor_notes.substring(0, 120)}${r.doctor_notes.length > 120 ? '...' : ''}</div></div>`).join('')
+        ? data.doctor_reports.slice(0, 3).map(r => `<div style="padding:0.75rem;margin-bottom:0.5rem;background:var(--bg-secondary);border-radius:0.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+                <div style="font-weight:600;font-size:0.9rem;">${new Date(r.report_date).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
+            </div>
+            <div style="font-size:0.85rem;"><strong>Notes:</strong> ${(r.doctor_notes||'').substring(0, 150)}${(r.doctor_notes||'').length > 150 ? '...' : ''}</div>
+            ${r.recommendations ? `<div style="font-size:0.85rem;margin-top:0.25rem;"><strong>Recommendations:</strong> ${r.recommendations.substring(0, 100)}${r.recommendations.length > 100 ? '...' : ''}</div>` : ''}
+           </div>`).join('')
         : '<p style="color:var(--text-secondary);">No reports written for this patient.</p>';
+
+    // Appointments section
+    let appointmentsHtml = data.appointments?.length > 0
+        ? data.appointments.slice(0, 5).map(a => {
+            const st = a.status || 'scheduled';
+            const stClass = st === 'completed' ? 'color:var(--green-500)' : (st === 'cancelled' ? 'color:var(--red-500)' : 'color:var(--yellow-500)');
+            const typeIcon = a.type === 'online' ? '🖥' : '🏥';
+            return `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
+                <div>${typeIcon} ${a.scheduled_at ? new Date(a.scheduled_at).toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric'}) : 'No date'}</div>
+                <span style="font-size:0.85rem;font-weight:600;${stClass}">${st.charAt(0).toUpperCase() + st.slice(1)}</span>
+            </div>`;
+          }).join('')
+        : '<p style="color:var(--text-secondary);">No appointment history.</p>';
+
     const overlay = document.createElement('div');
     overlay.className = 'report-modal-overlay active';
     overlay.id = 'patientDetailModal';
-    overlay.innerHTML = `<div class="report-modal" style="max-width:700px;">
-        <div class="report-modal-header"><h3 style="display:flex;align-items:center;gap:0.75rem;"><div class="patient-avatar" style="width:2.5rem;height:2.5rem;font-size:0.9rem;">${initials}</div>${c.first_name} ${c.last_name}</h3>
+    overlay.innerHTML = `<div class="report-modal" style="max-width:720px;">
+        <div class="report-modal-header"><h3 style="display:flex;align-items:center;gap:0.75rem;"><div class="patient-avatar" style="width:2.5rem;height:2.5rem;font-size:0.9rem;">${initials}</div>${childFullName}</h3>
         <button class="report-modal-close" onclick="document.getElementById('patientDetailModal').remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         <div class="report-modal-body" style="max-height:70vh;overflow-y:auto;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-                <div><strong>Age:</strong> ${age}</div><div><strong>Gender:</strong> ${c.gender || 'N/A'}</div>
-                <div><strong>Parent:</strong> ${c.parent_first_name} ${c.parent_last_name}</div><div><strong>Appointments:</strong> ${data.appointments?.length || 0}</div>
+            <!-- Child Info Grid -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem 1.5rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg-secondary);border-radius:0.75rem;">
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Age</span><div style="font-weight:600;">${age}</div></div>
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Gender</span><div style="font-weight:600;">${c.gender || 'N/A'}</div></div>
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Parent</span><div style="font-weight:600;">${c.parent_first_name} ${c.parent_last_name}</div></div>
+                <div><span style="color:var(--text-secondary);font-size:0.85rem;">Total Appointments</span><div style="font-weight:600;">${data.appointments?.length || 0}</div></div>
             </div>
-            <h4 style="margin-bottom:0.5rem;color:var(--blue-500);">Latest Growth Record</h4>${growthHtml}
-            <h4 style="margin:1.5rem 0 0.5rem;color:var(--green-500);">Milestones Achieved</h4>${milestonesHtml}
-            <h4 style="margin:1.5rem 0 0.5rem;color:var(--purple-500);">Doctor Reports</h4>${reportsHtml}
+
+            <h4 style="margin-bottom:0.5rem;color:var(--blue-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Latest Growth Record</h4>
+            ${growthHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--green-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Milestones</h4>
+            ${milestonesHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--purple-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Specialist Reports</h4>
+            ${reportsHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--yellow-600);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Appointment History</h4>
+            ${appointmentsHtml}
+
+            <!-- Action Buttons -->
+            <div style="display:flex;gap:0.75rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border-color);">
+                <button class="btn btn-gradient" style="flex:1;" onclick="document.getElementById('patientDetailModal').remove(); openReportForChild(${c.child_id}, '${safeName}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Write Report
+                </button>
+                <button class="btn btn-outline" style="flex:1;color:var(--green-500);border-color:var(--green-500);" onclick="document.getElementById('patientDetailModal').remove(); chatWithParent(${c.parent_id})">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    Chat with Parent
+                </button>
+            </div>
         </div></div>`;
     document.body.appendChild(overlay);
 }
