@@ -2,13 +2,6 @@
 session_start();
 include "../../connection.php";
 
-// Check maintenance mode
-$mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
-$mStmt->execute();
-if ($mStmt->fetchColumn() === '1') {
-    header("Location: ../../maintenance.php");
-    exit();
-}
 
 if (!isset($_SESSION['email'])) {
     header("Location: ../../login.php");
