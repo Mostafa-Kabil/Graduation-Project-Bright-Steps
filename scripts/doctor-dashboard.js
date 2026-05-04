@@ -542,6 +542,7 @@ function showPatientDetailModal(data) {
     const initials = (c.first_name?.charAt(0) || '') + (c.last_name?.charAt(0) || '');
     const childFullName = `${c.first_name} ${c.last_name}`;
     const safeName = childFullName.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    const age = calculateAge(c.birth_year, c.birth_month, c.birth_day);
 
     // Growth section
     let growthHtml = data.growth_records?.length > 0
@@ -1548,6 +1549,8 @@ function loadConversations() {
                     selectConversationById(window.pendingChatPartnerId);
                     window.pendingChatPartnerId = null;
                     window.pendingChatPartnerName = null;
+                } else if (currentPartnerId && allConversationsCache.find(c => c.partner_id == currentPartnerId)) {
+                    selectConversationById(currentPartnerId);
                 } else {
                     selectConversationById(allConversationsCache[0].partner_id);
                 }
