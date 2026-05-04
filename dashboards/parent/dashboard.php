@@ -623,9 +623,9 @@ if ($parentId) {
             }
             // dashboard.js bootstrap didn't run - call hoisted functions directly
             try {
-                if (typeof initNav === 'function') {
-                    initNav();
-                    switchView('home');
+                if (typeof window._dashboardInitNav === 'function') {
+                    window._dashboardInitNav();
+                    window._dashboardSwitchView('home');
                 } else {
                     el.innerHTML = '<div style="padding:2rem;color:red;font-size:1.2rem;">ERROR: initNav function not found.</div>';
                 }

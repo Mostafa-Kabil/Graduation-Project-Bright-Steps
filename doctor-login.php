@@ -28,7 +28,13 @@ if (isset($_POST['login'])) {
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
-                if ($user['role'] === 'doctor' || $user['role'] === 'specialist') {
+                if ($user['status'] == 'suspended') {
+                    header("Location: account-suspended.php");
+                    exit;
+                } elseif ($user['status'] == 'pending') {
+                    header("Location: account-pending.php?portal=doctor");
+                    exit;
+                } elseif ($user['role'] === 'doctor' || $user['role'] === 'specialist') {
                     $_SESSION['id'] = $user['user_id'];
                     $_SESSION['fname'] = $user['first_name'];
                     $_SESSION['lname'] = $user['last_name'];

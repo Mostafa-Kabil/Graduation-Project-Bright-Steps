@@ -75,6 +75,12 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
                     </svg>
                     <span>Clinics</span>
                 </button>
+                <button class="nav-item" data-view="specialists">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                    <span>Specialists</span>
+                </button>
                 <button class="nav-item" data-view="subscriptions">
                     <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
@@ -216,12 +222,13 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="scripts/admin-dashboard.js?v=21"></script>
-    <script src="scripts/admin-clinics-view.js?v=21"></script>
-    <script src="scripts/admin-views-extended.js?v=21"></script>
-    <script src="scripts/admin-views-part2.js?v=21"></script>
-    <script src="scripts/admin-views-part3.js?v=21"></script>
-    <script src="scripts/admin-views-part4.js?v=21"></script>
+    <script src="scripts/admin-dashboard.js?v=22"></script>
+    <script src="scripts/admin-clinics-view.js?v=22"></script>
+    <script src="scripts/admin-specialists-view.js?v=22"></script>
+    <script src="scripts/admin-views-extended.js?v=22"></script>
+    <script src="scripts/admin-views-part2.js?v=22"></script>
+    <script src="scripts/admin-views-part3.js?v=22"></script>
+    <script src="scripts/admin-views-part4.js?v=22"></script>
 </body>
 
 </html>

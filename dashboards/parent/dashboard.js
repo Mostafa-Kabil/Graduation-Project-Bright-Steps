@@ -6402,29 +6402,6 @@
         const totalPoints = child.total_points || 0;
         const childId = child.child_id;
 
-        const vouchers = [
-            { name: 'Activity Pack', points: 200, icon: '🎁', desc: 'Unlock exclusive activity materials', color: '#8b5cf6' },
-            { name: 'Free Consultation', points: 500, icon: '🩺', desc: 'Book a free specialist session', color: '#3b82f6' },
-            { name: '1 Month Premium', points: 1000, icon: '💎', desc: 'Upgrade to Premium plan for a month', color: '#8b5cf6' },
-            { name: 'Growth Report PDF', points: 150, icon: '📊', desc: 'Download detailed growth analysis', color: '#22c55e' },
-            { name: 'Certificate Badge', points: 300, icon: '🏅', desc: 'Earn a printable achievement certificate', color: '#ec4899' },
-        ];
-
-        const voucherHtml = vouchers.map(v => {
-            const canRedeem = totalPoints >= v.points;
-            return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? v.color + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\'translateX(4px)\'" onmouseout="this.style.transform=\'\'"' : ''}>
-            <div style="width:3rem;height:3rem;background:${v.color}15;color:${v.color};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">${v.icon}</div>
-            <div style="flex:1;">
-                <h4 style="font-weight:700;margin:0 0 0.25rem;font-size:0.95rem;">${v.name}</h4>
-                <p style="margin:0;font-size:0.8rem;color:var(--slate-500);">${v.desc}</p>
-            </div>
-            <div style="text-align:right;flex-shrink:0;">
-                <div style="font-weight:800;color:${canRedeem ? v.color : '#94a3b8'};font-size:0.95rem;">${v.points} pts</div>
-                <button onclick="redeemPointsOffer('${v.name.replace(/'/g, "\\'")}', ${v.points})" style="margin-top:0.25rem;padding:0.4rem 1rem;border-radius:12px;font-size:0.8rem;font-weight:700;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? v.color : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (v.points - totalPoints) + ' more'}</button>
-            </div>
-        </div>`;
-        }).join('');
-
         const modal = document.createElement('div');
         modal.id = 'wallet-modal';
         modal.innerHTML = `
@@ -6450,10 +6427,12 @@
 
                 <div id="wallet-rewards">
                     <h3 style="font-weight:800;font-size:1.15rem;margin:0 0 1rem;color:var(--slate-900);">🎁 Redeem Rewards</h3>
-                    <div style="display:flex;flex-direction:column;gap:0.75rem;">
-                        ${voucherHtml}
+                    <div id="wallet-rewards-content" style="display:flex;flex-direction:column;gap:0.75rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-500);">Loading offers...</div>
                     </div>
                 </div>
+
+
 
                 <div id="wallet-history" style="display:none;">
                     <h3 style="font-weight:800;font-size:1.15rem;margin:0 0 1rem;color:var(--slate-900);">📜 Transaction History</h3>
@@ -6466,6 +6445,37 @@
         </div>
     </div>`;
         document.body.appendChild(modal);
+
+        // Fetch offers
+        fetch('../../api_points_engine.php?action=get_offers')
+            .then(res => res.json())
+            .then(data => {
+                const rc = document.getElementById('wallet-rewards-content');
+                if (!rc) return;
+                const colors = ['#8b5cf6', '#3b82f6', '#22c55e', '#ec4899', '#f59e0b'];
+                if (data.success && data.offers && data.offers.length) {
+                    rc.innerHTML = data.offers.map((o, idx) => {
+                        const canRedeem = totalPoints >= o.points_required;
+                        const c = colors[idx % colors.length];
+                        return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? c + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\\\'translateX(4px)\\\'" onmouseout="this.style.transform=\\\'\\\'"' : ''}>
+                        <div style="width:3rem;height:3rem;background:${c}15;color:${c};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">${o.icon || '🎁'}</div>
+                        <div style="flex:1;">
+                            <h4 style="font-weight:700;margin:0 0 0.25rem;font-size:0.95rem;">${o.title}</h4>
+                            <p style="margin:0;font-size:0.8rem;color:var(--slate-500);">${o.description || ''}</p>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-weight:800;color:${canRedeem ? c : '#94a3b8'};font-size:0.95rem;">${o.points_required} pts</div>
+                            <button onclick="redeemPointsOffer('${o.title.replace(/'/g, "\\'")}', ${o.points_required})" style="margin-top:0.25rem;padding:0.4rem 1rem;border-radius:12px;font-size:0.8rem;font-weight:700;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? c : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (o.points_required - totalPoints) + ' more'}</button>
+                        </div>
+                    </div>`;
+                    }).join('');
+                } else {
+                    rc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-500);">No reward offers available yet.</div>';
+                }
+            }).catch(() => {
+                const rc = document.getElementById('wallet-rewards-content');
+                if (rc) rc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--red-500);">Failed to load offers.</div>';
+            });
         
         // Fetch history
         if (childId) {
