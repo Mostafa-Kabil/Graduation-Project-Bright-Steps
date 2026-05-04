@@ -54,15 +54,36 @@ try {
         exit();
     }
 
-    // 2. Latest Growth Record
+    // 2. Growth Records
     $growthStmt = $connect->prepare("
         SELECT height, weight, head_circumference, recorded_at 
         FROM growth_record 
         WHERE child_id = :child_id 
-        ORDER BY recorded_at DESC LIMIT 1
+        ORDER BY recorded_at DESC LIMIT 5
     ");
     $growthStmt->execute([':child_id' => $childId]);
-    $growth = $growthStmt->fetch(PDO::FETCH_ASSOC);
+    $growth_records = $growthStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Milestones
+    $milestoneStmt = $connect->prepare("
+        SELECT m.title, m.category, cm.achieved_at 
+        FROM child_milestones cm 
+        JOIN milestones m ON cm.milestone_id = m.milestone_id 
+        WHERE cm.child_id = :child_id 
+        ORDER BY cm.achieved_at DESC LIMIT 10
+    ");
+    $milestoneStmt->execute([':child_id' => $childId]);
+    $milestones = $milestoneStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Appointments
+    $aptStmt = $connect->prepare("
+        SELECT status, type, scheduled_at 
+        FROM appointment 
+        WHERE child_id = :child_id 
+        ORDER BY scheduled_at DESC LIMIT 5
+    ");
+    $aptStmt->execute([':child_id' => $childId]);
+    $appointments = $aptStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 3. Speech Analysis (latest)
     $speechStmt = $connect->prepare("
@@ -111,11 +132,13 @@ try {
         'success' => true,
         'profile' => [
             'basic' => $child,
-            'latest_growth' => $growth,
             'speech_history' => $speech,
-            'behaviors' => $behaviors,
-            'notes' => $notes
-        ]
+            'behaviors' => $behaviors
+        ],
+        'growth_records' => $growth_records,
+        'milestones' => $milestones,
+        'doctor_reports' => $notes,
+        'appointments' => $appointments
     ]);
 } catch (PDOException $e) {
     echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
