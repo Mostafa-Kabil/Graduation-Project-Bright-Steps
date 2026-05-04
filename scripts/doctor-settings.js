@@ -173,8 +173,9 @@ function renderDsProfile(d) {
         <div class="ds-card-body"><div class="ds-field-row">
             <div class="ds-field"><label>Full Name <span class="required">*</span></label><input type="text" class="ds-input" id="ds-fullname" value="${fullName}" required></div>
             <div class="ds-field"><label>Email <span class="required">*</span></label><input type="email" class="ds-input" id="ds-email" value="${d.email||''}" required></div>
-        </div><div class="ds-field-row">
             <div class="ds-field"><label>Phone</label><input type="tel" class="ds-input" id="ds-phone" value="${d.phone||''}"></div>
+        </div><div class="ds-field-row">
+            <div class="ds-field" style="width:100%"><label>Bio</label><textarea class="ds-input" id="ds-bio" rows="3" placeholder="Write a short bio about your practice...">${d.bio||''}</textarea></div>
         </div></div></div>
         <div class="ds-card"><div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg><div><h3>Professional Information</h3><p>Your specialty & credentials</p></div></div>
         <div class="ds-card-body"><div class="ds-field-row">
@@ -219,6 +220,26 @@ function renderDsProfile(d) {
     });
     // Populate preference days from profile data
     populatePrefDays(d);
+    
+    // Populate focus areas and consultation types
+    try {
+        if (d.focus_areas) {
+            const focus = JSON.parse(d.focus_areas);
+            document.querySelectorAll('#ds-focus-areas input[type="checkbox"]').forEach(cb => {
+                cb.checked = focus.includes(cb.value);
+            });
+        }
+        if (d.consultation_types) {
+            const types = JSON.parse(d.consultation_types);
+            const modeSelect = document.getElementById('ds-consult-mode');
+            if (modeSelect) {
+                if (types.includes('online') && types.includes('onsite')) modeSelect.value = 'both';
+                else if (types.includes('online')) modeSelect.value = 'online';
+                else if (types.includes('onsite')) modeSelect.value = 'onsite';
+            }
+        }
+    } catch(e) {}
+
     // Form submit
     document.getElementById('ds-profile-form')?.addEventListener('submit', dsSubmitProfile);
     dsSpcChange();
@@ -240,13 +261,14 @@ function dsSubmitProfile(e) {
     const spec = (sel?.value==='other' ? oth?.value : sel?.value)||'';
     const exp = parseInt(document.getElementById('ds-exp')?.value||0);
     const cert = (document.getElementById('ds-cert')?.value||'').trim();
+    const bio = (document.getElementById('ds-bio')?.value||'').trim();
 
     if (!fn || !email) { showToast('Name & email required','error'); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Invalid email','error'); return; }
 
     fetch('doctor-dashboard.php?ajax=1&section=settings', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({action:'save_profile', first_name:fn, last_name:ln, email, specialization:spec, experience_years:exp, certificate_of_experience:cert})
+        body: JSON.stringify({action:'save_profile', first_name:fn, last_name:ln, email, phone:(document.getElementById('ds-phone')?.value||''), specialization:spec, experience_years:exp, certificate_of_experience:cert, bio})
     }).then(r=>r.json()).then(res => {
         if (res.success) showToast('Profile saved!','success');
         else showToast(res.error||'Save failed','error');
@@ -281,10 +303,21 @@ function dsSavePreferences() {
     for (let i=0;i<=6;i++) { if (document.getElementById(`ds-day-${i}`)?.checked) days.push(i); }
     const st = document.getElementById('ds-pref-st')?.value;
     const et = document.getElementById('ds-pref-et')?.value;
+    
+    // Save focus areas
+    const focusAreas = [];
+    document.querySelectorAll('#ds-focus-areas input[type="checkbox"]:checked').forEach(cb => focusAreas.push(cb.value));
+
+    // Save consultation type
+    const mode = document.getElementById('ds-consult-mode')?.value || 'both';
+    const consultTypes = [];
+    if (mode === 'both' || mode === 'online') consultTypes.push('online');
+    if (mode === 'both' || mode === 'onsite') consultTypes.push('onsite');
+
     if (days.length > 0 && st && et) {
         fetch('doctor-dashboard.php?ajax=1&section=settings', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({action:'save_slots', days, start_time:st, end_time:et, slot_duration:30})
+            body: JSON.stringify({action:'save_slots', days, start_time:st, end_time:et, slot_duration:30, focus_areas: focusAreas, consultation_types: consultTypes})
         }).then(r=>r.json()).then(res => {
             if (res.success) showToast('Preferences saved!','success');
             else showToast(res.error||'Save failed','error');

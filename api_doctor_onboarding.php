@@ -158,11 +158,15 @@ switch ($action) {
 
             // 3. Update the specialist table with the new info (optional)
             try {
-                $updateStmt = $connect->prepare("UPDATE specialist SET 
-                    specialization = ?, 
-                    experience_years = ?, 
-                    certificate_of_experience = ? 
-                    WHERE specialist_id = ?");
+                $updateStmt = $connect->prepare("
+                    INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience)
+                    SELECT user_id, 0, first_name, last_name, ?, ?, ?
+                    FROM users WHERE user_id = ?
+                    ON DUPLICATE KEY UPDATE 
+                    specialization = VALUES(specialization),
+                    experience_years = VALUES(experience_years),
+                    certificate_of_experience = VALUES(certificate_of_experience)
+                ");
                 $updateStmt->execute([
                     $specialization,
                     $experienceYears,
@@ -182,7 +186,7 @@ switch ($action) {
                 $clinicRow = $clinicStmt->fetch(PDO::FETCH_ASSOC);
                 $clinicId = $clinicRow ? intval($clinicRow['clinic_id']) : 0;
 
-                if ($clinicId && !empty($daysArray)) {
+                if (!empty($daysArray)) {
                     $delStmt = $connect->prepare("DELETE FROM appointment_slots WHERE doctor_id = ?");
                     $delStmt->execute([$specialistId]);
 

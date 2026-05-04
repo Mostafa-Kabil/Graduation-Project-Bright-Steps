@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ══════════════════════════════════════════════════════
 // Doctor Settings — PHP Backend
 // ══════════════════════════════════════════════════════
@@ -18,12 +18,14 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
     // ── GET: Load profile ──────────────────────────────
     if ($method === 'GET' && $action === 'get_profile') {
         $stmt = $connect->prepare("
-            SELECT u.user_id, u.first_name, u.last_name, u.email, u.status,
+            SELECT u.user_id, u.first_name, u.last_name, u.email,
                    s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
-                   c.clinic_name, c.location AS clinic_location
+                   c.clinic_name, c.location AS clinic_location,
+                   o.goals AS bio, o.consultation_types
             FROM users u
-            INNER JOIN specialist s ON u.user_id = s.specialist_id
-            INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+            LEFT JOIN specialist s ON u.user_id = s.specialist_id
+            LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+            LEFT JOIN doctor_onboarding o ON u.user_id = o.doctor_id
             WHERE u.user_id = :uid
         ");
         $stmt->execute([':uid' => $doctor_id]);
@@ -61,6 +63,7 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         $spec         = trim($input['specialization'] ?? '');
         $exp          = intval($input['experience_years'] ?? 0);
         $cert         = trim($input['certificate_of_experience'] ?? '');
+        $bio          = trim($input['bio'] ?? '');
 
         if (!$first_name || !$last_name || !$email) {
             echo json_encode(['success' => false, 'error' => 'Name and email are required']);
@@ -87,13 +90,26 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
             ")->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
 
             $connect->prepare("
-                UPDATE specialist SET
-                    first_name = :fn, last_name = :ln,
-                    specialization = :spec,
-                    experience_years = :exp,
-                    certificate_of_experience = :cert
-                WHERE specialist_id = :sid
+                INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience)
+                VALUES (:sid, 0, :fn, :ln, :spec, :exp, :cert)
+                ON DUPLICATE KEY UPDATE
+                    first_name = VALUES(first_name),
+                    last_name = VALUES(last_name),
+                    specialization = VALUES(specialization),
+                    experience_years = VALUES(experience_years),
+                    certificate_of_experience = VALUES(certificate_of_experience)
             ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+
+            $stmt_bio = $connect->prepare("UPDATE doctor_onboarding SET goals = :bio WHERE doctor_id = :uid");
+            $stmt_bio->execute([':bio' => $bio, ':uid' => $doctor_id]);
+            if ($stmt_bio->rowCount() === 0) {
+                $check = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = :uid");
+                $check->execute([':uid' => $doctor_id]);
+                if (!$check->fetch()) {
+                    $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, goals) VALUES (:uid, :bio)")
+                            ->execute([':uid' => $doctor_id, ':bio' => $bio]);
+                }
+            }
 
             $connect->commit();
 
@@ -150,6 +166,10 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         $start  = trim($input['start_time'] ?? '09:00');
         $end    = trim($input['end_time'] ?? '17:00');
         $duration = intval($input['slot_duration'] ?? 30);
+        $consultation_types = isset($input['consultation_types']) ? json_encode($input['consultation_types']) : '[]';
+
+        $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
+                ->execute([':ct' => $consultation_types, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
 
         // Deactivate all existing slots
         $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
@@ -192,10 +212,12 @@ try {
     $stmt = $connect->prepare("
         SELECT u.first_name, u.last_name, u.email,
                s.specialization, s.experience_years, s.certificate_of_experience,
-               c.clinic_name, c.location AS clinic_location
+               c.clinic_name, c.location AS clinic_location,
+               o.goals AS bio, o.consultation_types
         FROM users u
-        INNER JOIN specialist s ON u.user_id = s.specialist_id
-        INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+        LEFT JOIN specialist s ON u.user_id = s.specialist_id
+        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+        LEFT JOIN doctor_onboarding o ON u.user_id = o.doctor_id
         WHERE u.user_id = :uid
     ");
     $stmt->execute([':uid' => $doctor_id]);
@@ -571,7 +593,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                 <div class="dr-form-group full-width">
                                     <label class="dr-form-label" for="dr-bio">Bio </label>
                                     <textarea id="dr-bio" class="dr-form-input dr-form-textarea"
-                                        placeholder="Write a short bio about your practice and expertise..."></textarea>
+                                        placeholder="Write a short bio about your practice and expertise..."><?php echo $doctor ? htmlspecialchars($doctor['bio'] ?? '') : ''; ?></textarea>
                                 </div>
                             </div>
                         </div>
