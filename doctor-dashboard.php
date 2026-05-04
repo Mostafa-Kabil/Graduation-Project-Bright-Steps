@@ -505,16 +505,17 @@ if ($isAjax) {
 
                 // Milestones
                 $stmt3 = $connect->prepare("
-                    SELECT milestone_id, title, category, achieved_at, created_at
-                    FROM child_milestones
-                    WHERE child_id = :cid ORDER BY achieved_at DESC
+                    SELECT cm.milestone_id, m.title, m.category, cm.achieved_at, cm.recorded_at as created_at
+                    FROM child_milestones cm
+                    JOIN milestones m ON cm.milestone_id = m.milestone_id
+                    WHERE cm.child_id = :cid ORDER BY cm.achieved_at DESC
                 ");
                 $stmt3->execute([':cid' => $child_id]);
                 $milestones = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 
                 // Doctor reports for this child
                 $stmt4 = $connect->prepare("
-                    SELECT report_id, doctor_notes, recommendations, report_date, created_at
+                    SELECT doctor_report_id as report_id, doctor_notes, recommendations, report_date, created_at
                     FROM doctor_report WHERE specialist_id = :sid AND child_id = :cid ORDER BY created_at DESC
                 ");
                 $stmt4->execute([':sid' => $specialist_id, ':cid' => $child_id]);
@@ -591,8 +592,9 @@ if ($isAjax) {
                     SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
                            u.first_name AS parent_first_name, u.last_name AS parent_last_name,
                            p.parent_id,
-                           (SELECT GROUP_CONCAT(CONCAT(c2.first_name, ' ', c2.last_name) SEPARATOR ', ')
-                            FROM child c2 WHERE c2.parent_id = p.parent_id) AS children_names
+                           (SELECT CONCAT(c2.first_name, ' ', c2.last_name)
+                            FROM child c2 WHERE c2.child_id = a.child_id) AS children_names,
+                           (SELECT meeting_link FROM message WHERE appointment_id = a.appointment_id AND meeting_link IS NOT NULL LIMIT 1) AS meeting_link
                     FROM appointment a
                     JOIN parent p ON p.parent_id = a.parent_id
                     JOIN users u ON u.user_id = p.parent_id
@@ -672,6 +674,33 @@ if ($isAjax) {
                         }
                     }
                 } catch (Exception $e) { /* non-critical notification */ }
+                if (isset($input['status'])) {
+                    $pst = $connect->prepare("SELECT p.parent_id AS user_id, a.type, a.specialist_id, a.child_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                    $pst->execute([$appointment_id]);
+                    $apptInfo = $pst->fetch(PDO::FETCH_ASSOC);
+                    if ($apptInfo && $apptInfo['user_id']) {
+                        $uid = $apptInfo['user_id'];
+                        $nst = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                        $nst->execute([$uid, 'Appointment Update', "Your appointment status was updated to: " . $input['status']]);
+                        
+                        if ($input['status'] === 'confirmed' && $apptInfo['type'] === 'online') {
+                            $meetingLink = "https://meet.google.com/" . substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 3) . "-" . substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 4) . "-" . substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 3);
+                            $msgContent = "Your telehealth appointment has been confirmed. Please join using this link at the scheduled time.";
+                            $mst = $connect->prepare("
+                                INSERT INTO message (sender_id, receiver_id, child_id, appointment_id, content, meeting_link, is_read, sent_at) 
+                                VALUES (?, ?, ?, ?, ?, ?, 0, NOW())
+                            ");
+                            $mst->execute([
+                                $apptInfo['specialist_id'], 
+                                $uid, 
+                                $apptInfo['child_id'],
+                                $appointment_id, 
+                                $msgContent, 
+                                $meetingLink
+                            ]);
+                        }
+                    }
+                }
 
                 echo json_encode(['success' => true, 'updated' => $stmt->rowCount()]);
                 exit;
@@ -1180,17 +1209,6 @@ if ($isAjax) {
         </main>
     </div>
 
-    <!-- Floating Theme Toggle -->
-    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
-        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="5" />
-            <path
-                d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
-    </button>
 
     <script src="scripts/theme-toggle.js?v=8"></script>
 
@@ -1214,8 +1232,8 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=13"></script>
-    <script src="scripts/doctor-settings.js?v=4"></script>
+    <script src="scripts/doctor-dashboard.js?v=19"></script>
+    <script src="scripts/doctor-settings.js?v=5"></script>
 
 </body>
 

@@ -25,11 +25,15 @@ try {
             $stmt = $connect->query("SELECT * FROM announcement_banners ORDER BY created_at DESC");
             $banners = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+            $stmt = $connect->query("SELECT * FROM reward_offers ORDER BY created_at DESC");
+            $offers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
             echo json_encode([
                 'success' => true,
                 'rules' => $rules,
                 'badges' => $badges,
-                'banners' => $banners
+                'banners' => $banners,
+                'offers' => $offers
             ]);
         }
     } elseif ($method === 'POST') {
@@ -105,6 +109,29 @@ try {
         } elseif ($action === 'delete_banner') {
             $id = (int)$data['id'];
             $stmt = $connect->prepare("DELETE FROM announcement_banners WHERE id = :id");
+            $stmt->execute(['id'=>$id]);
+            echo json_encode(['success' => true]);
+        } elseif ($action === 'save_offer') {
+            $id = (int)($data['offer_id'] ?? 0);
+            $title = $data['title'] ?? '';
+            $desc = $data['description'] ?? '';
+            $pts = (int)($data['points_required'] ?? 0);
+            $icon = $data['icon'] ?? '🎁';
+            
+            if (!$title || $pts <= 0) { echo json_encode(['error' => 'Title and positive points are required']); exit; }
+
+            if ($id > 0) {
+                $stmt = $connect->prepare("UPDATE reward_offers SET title=:t, description=:d, points_required=:p, icon=:i WHERE offer_id=:id");
+                $stmt->execute(['t'=>$title, 'd'=>$desc, 'p'=>$pts, 'i'=>$icon, 'id'=>$id]);
+            } else {
+                $stmt = $connect->prepare("INSERT INTO reward_offers (admin_id, title, description, points_required, icon) VALUES (:aid, :t, :d, :p, :i)");
+                $stmt->execute(['aid'=>$_SESSION['id'], 't'=>$title, 'd'=>$desc, 'p'=>$pts, 'i'=>$icon]);
+            }
+            echo json_encode(['success' => true]);
+
+        } elseif ($action === 'delete_offer') {
+            $id = (int)$data['offer_id'];
+            $stmt = $connect->prepare("DELETE FROM reward_offers WHERE offer_id = :id");
             $stmt->execute(['id'=>$id]);
             echo json_encode(['success' => true]);
         }

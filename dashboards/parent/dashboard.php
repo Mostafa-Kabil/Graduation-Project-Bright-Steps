@@ -2,13 +2,6 @@
 session_start();
 include "../../connection.php";
 
-// Check maintenance mode
-$mStmt = $connect->prepare("SELECT setting_value FROM system_config WHERE setting_key = 'maintenance_mode'");
-$mStmt->execute();
-if ($mStmt->fetchColumn() === '1') {
-    header("Location: ../../maintenance.php");
-    exit();
-}
 
 if (!isset($_SESSION['email'])) {
     header("Location: ../../login.php");
@@ -77,12 +70,14 @@ if ($parentId) {
                 $ch['growth_history'] = $s3->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) { $ch['growth_history'] = []; }
 
-            // Badge count
+            // Badge count and badge objects
             try {
-                $s4 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = :cid");
+                $s4 = $connect->prepare("SELECT b.name, b.icon, b.description, cb.redeemed_at FROM child_badge cb JOIN badge b ON cb.badge_id = b.badge_id WHERE cb.child_id = :cid");
                 $s4->execute(['cid' => $ch['child_id']]);
-                $ch['badge_count'] = (int) $s4->fetchColumn();
-            } catch (Exception $e) { $ch['badge_count'] = 0; }
+                $badgeRows = $s4->fetchAll(PDO::FETCH_ASSOC);
+                $ch['badges'] = $badgeRows;
+                $ch['badge_count'] = count($badgeRows);
+            } catch (Exception $e) { $ch['badges'] = []; $ch['badge_count'] = 0; }
 
             // Points
             try {
@@ -621,9 +616,9 @@ if ($parentId) {
             }
             // dashboard.js bootstrap didn't run - call hoisted functions directly
             try {
-                if (typeof initNav === 'function') {
-                    initNav();
-                    switchView('home');
+                if (typeof window._dashboardInitNav === 'function') {
+                    window._dashboardInitNav();
+                    window._dashboardSwitchView('home');
                 } else {
                     el.innerHTML = '<div style="padding:2rem;color:red;font-size:1.2rem;">ERROR: initNav function not found.</div>';
                 }

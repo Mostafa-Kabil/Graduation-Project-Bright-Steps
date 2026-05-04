@@ -93,24 +93,22 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $role = "doctor";
 
         // Insert into users table
-        $stmt = $connect->prepare("INSERT INTO users (first_name, last_name, email, phone, password, role) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt = $connect->prepare("INSERT INTO users (first_name, last_name, email, phone, password, role, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')");
         $stmt->execute([$fname, $lname, $email, $phone, $hashedPassword, $role]);
         $newUserId = $connect->lastInsertId();
 
         // Try to find or match clinic by name
         $clinicId = null;
-        $stmtClinic = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_name = ? LIMIT 1");
-        $stmtClinic->execute([$clinic]);
+        $stmtClinic = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_name LIKE ? LIMIT 1");
+        $stmtClinic->execute(["%$clinic%"]);
         $clinicRow = $stmtClinic->fetch(PDO::FETCH_ASSOC);
         if ($clinicRow) {
             $clinicId = $clinicRow['clinic_id'];
         }
 
-        // Insert into specialist table if clinic exists
-        if ($clinicId) {
-            $stmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, certificate_of_experience) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->execute([$newUserId, $clinicId, $fname, $lname, $specialty, $license]);
-        }
+        // Always insert into specialist table so admin can see and verify
+        $stmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, certificate_of_experience) VALUES (?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$newUserId, $clinicId, $fname, $lname, $specialty, $license]);
 
         $_SESSION['signup_success'] = true;
         header("Location: doctor-signup.php");

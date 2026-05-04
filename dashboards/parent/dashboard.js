@@ -11,6 +11,7 @@
         { id: 'motor', label: 'Motor Skills', icon: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>' },
         { id: 'activities', label: 'Activities', icon: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>' },
         { id: 'clinic', label: 'Book Appointments', icon: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M10 14h4"/><path d="M12 12v4"/>' },
+
         { id: 'reports', label: 'Reports', icon: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16l4-8 4 4 4-6"/>' },
         { id: 'messages', label: 'Messages', icon: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>' }
     ];
@@ -38,6 +39,40 @@
         // Streak check-in
         streakCheckIn();
 
+        // Startup: trigger retrospective badge check for current child
+        const startChild = (window.dashboardData || {}).children || [];
+        const sc = startChild[0];
+        if (sc && sc.child_id) {
+            fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + sc.child_id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        return fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + sc.child_id);
+                    }
+                })
+                .then(r => r && r.json())
+                .then(bData => {
+                    if (bData && bData.success) {
+                        sc.badges = bData.badges || [];
+                        sc.badge_count = sc.badges.length;
+                        const bc = document.getElementById('topbar-badge-count');
+                        if (bc) bc.textContent = sc.badge_count;
+                    }
+                })
+                .catch(() => {});
+
+            fetch('../../api_points_engine.php?action=get_balance&child_id=' + sc.child_id)
+                .then(r => r.json())
+                .then(pData => {
+                    if (pData.success) {
+                        sc.total_points = pData.balance || 0;
+                        const ptsEl = document.getElementById('topbar-points-count');
+                        if (ptsEl) ptsEl.textContent = sc.total_points;
+                    }
+                })
+                .catch(() => {});
+        }
+
         // Add click handlers
         navContainer.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', function () {
@@ -54,11 +89,10 @@
 
         const d = window.dashboardData || {};
         const p = d.parent || {};
-        const child = (d.children || [])[0] || {};
+        const child = (d.children || [])[window._selectedChildIndex || 0] || {};
         const streaks = d.streaks || {};
-        const badges = child.badges || [];
         const dailyStreak = streaks.daily_login ? streaks.daily_login.current_count : 0;
-        const badgeCount = badges.length;
+        const badgeCount = child.badge_count || (child.badges ? child.badges.length : 0);
         const totalPoints = child.total_points || 0;
         const initials = ((p.fname || 'U')[0] + (p.lname || 'S')[0]).toUpperCase();
 
@@ -169,7 +203,7 @@
 
     async function streakCheckIn() {
         const d = window.dashboardData || {};
-        const child = (d.children || [])[0] || null;
+        const child = (d.children || [])[window._selectedChildIndex || 0] || null;
         if (!child) return;
         try {
             const res = await fetch('../../api_streaks.php?action=check-in', {
@@ -183,8 +217,15 @@
                 // Show new badge notifications
                 if (data.new_badges && data.new_badges.length > 0) {
                     data.new_badges.forEach(b => showBadgeToast(b));
+                    if (!child.badges) child.badges = [];
+                    data.new_badges.forEach(bName => {
+                        if (!child.badges.find(b => b.name === bName)) {
+                            child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
+                        }
+                    });
+                    child.badge_count = child.badges.length;
                     const bc = document.getElementById('topbar-badge-count');
-                    if (bc) bc.textContent = parseInt(bc.textContent || 0) + data.new_badges.length;
+                    if (bc) bc.textContent = child.badge_count;
                 }
             }
         } catch (e) { /* silent */ }
@@ -212,13 +253,39 @@
         setTimeout(() => { toast.style.transform = 'translateX(-50%) translateY(20px)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 5000);
     }
 
-    window.openBadgesPopup = function () {
+    window.openBadgesPopup = async function () {
         let existing = document.getElementById('badges-modal');
         if (existing) existing.remove();
 
         const d = window.dashboardData || {};
         const child = (d.children || [])[window._selectedChildIndex || 0] || {};
-        const earnedBadges = child.badges || [];
+        const childId = child.child_id;
+        
+        let progressMap = {};
+        let earnedBadges = [];
+        if (childId) {
+            try {
+                // Fetch badge progress (this also auto-awards missing badges)
+                const res = await fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + childId);
+                const data = await res.json();
+                if (data.success) {
+                    progressMap = data.progress;
+                }
+            } catch (e) { /* silent */ }
+            try {
+                // Fetch the actual earned badges from the server (fresh)
+                const res2 = await fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + childId);
+                const bData = await res2.json();
+                if (bData.success) {
+                    earnedBadges = bData.badges || [];
+                    // Update local cache
+                    child.badges = earnedBadges;
+                    child.badge_count = earnedBadges.length;
+                    const bc = document.getElementById('topbar-badge-count');
+                    if (bc) bc.textContent = child.badge_count;
+                }
+            } catch (e) { earnedBadges = child.badges || []; }
+        }
         const earnedNames = earnedBadges.map(b => b.name);
 
         const allBadges = [
@@ -247,9 +314,29 @@
 
             const earnedObj = earnedBadges.find(eb => eb.name === b.name);
             const earnedDate = earnedObj && earnedObj.redeemed_at ? new Date(earnedObj.redeemed_at).toLocaleDateString() : '';
+            
+            let progressHtml = '';
+            const pData = progressMap[b.name];
+            if (!isEarned && pData && pData.needed) {
+                const percent = Math.min(100, Math.round((pData.current / pData.needed) * 100));
+                const left = pData.needed - pData.current;
+                progressHtml = `
+                <div style="margin-top:1rem;width:100%;text-align:left;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--slate-500);margin-bottom:0.3rem;font-weight:600;">
+                        <span>${pData.current} / ${pData.needed}</span>
+                        <span>${left > 0 ? left + ' ' + pData.label + ' left' : 'Almost there!'}</span>
+                    </div>
+                    <div style="width:100%;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);">
+                        <div style="width:${percent}%;height:100%;background:linear-gradient(90deg, var(--blue-400), var(--blue-600));border-radius:4px;transition:width 1s ease;"></div>
+                    </div>
+                </div>`;
+            } else if (!isEarned) {
+                progressHtml = `<div style="font-size:0.75rem;color:var(--slate-400);margin-top:1rem;font-weight:600;">Keep going!</div>`;
+            }
+
             const statusHtml = isEarned
-                ? `<div style="font-size:0.7rem;color:#15803d;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> EARNED ${earnedDate}</div>`
-                : `<div style="font-size:0.7rem;color:var(--slate-400);font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> LOCKED</div>`;
+                ? `<div style="font-size:0.75rem;color:#15803d;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.35rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> EARNED ${earnedDate}</div>`
+                : `<div style="font-size:0.75rem;color:var(--slate-500);font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.35rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> IN PROGRESS</div>`;
 
             return `
             <div class="${bgClass}" style="position:relative;background:rgba(255,255,255,0.7);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5);border-radius:20px;padding:1.5rem;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.03);opacity:${opacity};filter:${filter};transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);animation: fadeUpIn 0.5s ease forwards ${i * 0.05}s;opacity:0;transform:translateY(20px);">
@@ -258,9 +345,10 @@
                 </div>
                 <h4 style="font-size:1.1rem;font-weight:800;color:var(--slate-900);margin-bottom:0.25rem;font-family:'Inter',sans-serif;">${b.name}</h4>
                 <p style="font-size:0.8rem;color:var(--slate-500);margin-bottom:1rem;line-height:1.4;">${b.desc}</p>
-                <div style="background:${isEarned ? '#dcfce7' : '#f1f5f9'};padding:0.35rem 0.75rem;border-radius:999px;display:inline-block;border:1px solid ${isEarned ? '#bbf7d0' : '#e2e8f0'};">
+                <div style="background:${isEarned ? '#dcfce7' : '#f8fafc'};padding:0.4rem 0.85rem;border-radius:999px;display:inline-block;border:1px solid ${isEarned ? '#bbf7d0' : '#e2e8f0'};">
                     ${statusHtml}
                 </div>
+                ${progressHtml}
             </div>`;
         }).join('');
 
@@ -272,7 +360,7 @@
             @keyframes fadeUpIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
             .unearned-badge:hover { filter:grayscale(0%)!important; opacity:0.8!important; transform:translateY(-5px)!important; }
         </style>
-        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('badges-modal').remove()">
             <div style="background:linear-gradient(145deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));border:1px solid rgba(255,255,255,0.8);border-radius:32px;width:100%;max-width:900px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.8);overflow:hidden;animation:slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1);">
                 <div style="padding:2.5rem 3rem 1.5rem;display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:2;">
                     <div>
@@ -282,8 +370,8 @@
                         </div>
                         <p style="color:var(--slate-500);margin:0;font-size:1rem;">Complete tasks, read articles, and maintain streaks to unlock more badges.</p>
                     </div>
-                    <button onclick="document.getElementById('badges-modal').remove()" style="background:#ffffff;border:1px solid var(--slate-200);color:var(--slate-500);cursor:pointer;padding:0.75rem;border-radius:50%;transition:all 0.2s;display:flex;box-shadow:0 2px 5px rgba(0,0,0,0.05);" onmouseover="this.style.background='#f1f5f9';this.style.color='#0f172a'" onmouseout="this.style.background='var(--white)';this.style.color='var(--slate-500)'">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    <button onclick="event.stopPropagation();document.getElementById('badges-modal').remove()" style="background:#ffffff;border:1px solid var(--slate-200);color:var(--slate-500);cursor:pointer;padding:0.75rem;border-radius:50%;transition:all 0.2s;display:flex;box-shadow:0 2px 5px rgba(0,0,0,0.05);z-index:10;" onmouseover="this.style.background='#f1f5f9';this.style.color='#0f172a'" onmouseout="this.style.background='#ffffff';this.style.color='#64748b'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
                     </button>
                 </div>
                 <div style="padding:1.5rem 3rem 3rem;overflow-y:auto;flex:1;">
@@ -330,6 +418,7 @@
             'motor': getMotorView,
             'activities': getActivitiesView,
             'clinic': getClinicView,
+
             'notifications': getNotificationsView,
             'reports': getReportsView,
             'messages': function () { return (window.getMessagesView || function () { return '<div class="dashboard-content"><p>Messages view loading...</p></div>'; })(); },
@@ -343,6 +432,8 @@
         if (viewId === 'home' || !viewId) {
             loadHomeActivities();
         }
+
+
 
         // Re-apply translations to newly injected content if in Arabic mode
         if (typeof retranslateCurrentPage === 'function') {
@@ -404,6 +495,19 @@
                 const articlesContainer = document.getElementById('home-articles-list');
                 if (articlesContainer && recs.articles) {
                     const articles = recs.articles || [];
+                    
+                    if (!window._readArticlesLoaded) {
+                        try {
+                            const raRes = await fetch('../../api_activities.php?action=get-read-articles');
+                            const raData = await raRes.json();
+                            if (raData.success) {
+                                window._readArticles = raData.read_titles || [];
+                                window._readArticlesLoaded = true;
+                            }
+                        } catch(e) {}
+                    }
+                    window._readArticles = window._readArticles || [];
+                    
                     if (articles.length === 0) {
                         articlesContainer.innerHTML = '<p style="color:var(--slate-500);padding:1rem;text-align:center;">No articles available right now.</p>';
                     } else {
@@ -420,7 +524,11 @@
                             const images = ['https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&q=80', 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=400&q=80', 'https://images.unsplash.com/photo-1472162072942-cd5147eb3959?w=400&q=80', 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&q=80', 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=400&q=80'];
                             const imgUrl = images[i % images.length];
 
-                            return `<div style="flex:0 0 220px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.04)'" onclick="openArticleModal(${child.child_id}, ${i}, '${esTitle}', '${esDesc}')">
+                            const isRead = window._readArticles.includes(art.title);
+                            const readBadgeHtml = isRead ? '<span style="font-size:0.6rem;background:#dcfce7;color:#166534;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;margin-left:0.5rem;position:absolute;top:0.75rem;right:0.75rem;z-index:2;">Read</span>' : '';
+
+                            return `<div style="flex:0 0 220px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;position:relative;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.04)'" onclick="openArticleModal(${child.child_id}, ${i}, '${esTitle}', '${esDesc}')">
+                                ${readBadgeHtml}
                                 <div style="height:100px;background:#e2e8f0;background-image:url(${imgUrl});background-size:cover;background-position:center;"></div>
                                 <div style="padding:0.75rem;flex:1;display:flex;flex-direction:column;">
                                     <span class="badge" style="background:#dbeafe;color:#1e40af;font-size:0.6rem;font-weight:700;margin-bottom:0.35rem;align-self:flex-start;">${art.category || 'Article'}</span>
@@ -658,7 +766,7 @@
             const ci = (c.first_name || '?')[0].toUpperCase();
             const al = c.age_months >= 24 ? Math.floor(c.age_months / 12) + ' yo' : c.age_months + ' mo';
             const act = i === idx;
-            selectorHtml += `<div onclick="window._selectedChildIndex=${i};switchView('profile')" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all 0.3s;${act ? '' : 'opacity:0.5;filter:grayscale(50%);'}">
+            selectorHtml += `<div onclick="switchChild(${i})" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all 0.3s;${act ? '' : 'opacity:0.5;filter:grayscale(50%);'}">
                 <div style="width:4.5rem;height:4.5rem;background:${act ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#e2e8f0'};color:${act ? 'white' : '#64748b'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;border:3px solid ${act ? '#c7d2fe' : 'transparent'};box-shadow:${act ? '0 4px 15px rgba(99,102,241,0.3)' : 'none'};">${ci}</div>
                 <span style="margin-top:0.5rem;font-weight:600;font-size:0.9rem;">${c.first_name}</span>
                 <span style="font-size:0.7rem;color:#94a3b8;">${al}</span></div>`;
@@ -966,7 +1074,19 @@
         else if (ageMonths < 36) expectedVocab = 450;
         else expectedVocab = 900;
 
-        setTimeout(() => loadSpeechHistory(childId), 100);
+        // Pre-populate insight cards from _speech data (already loaded from PHP)
+        const speechData = child ? child._speech : null;
+        setTimeout(() => {
+            if (speechData) {
+                const insightText = document.getElementById('insight-text');
+                const insightWords = document.getElementById('insight-words');
+                const insightStatus = document.getElementById('insight-status');
+                if (insightText && speechData.transcript) insightText.textContent = speechData.transcript;
+                if (insightWords && speechData.vocabulary_score != null) insightWords.textContent = Math.round(speechData.vocabulary_score);
+                if (insightStatus && speechData.feedback) insightStatus.textContent = speechData.feedback;
+            }
+            loadSpeechHistory(childId);
+        }, 100);
         return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
@@ -1110,7 +1230,39 @@
             // Render speech charts
             renderSpeechCharts(entries);
         } catch (err) {
-            container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#64748b;"><div style="font-size:2rem;margin-bottom:0.5rem;">🗣️</div><p>Could not load speech history. Make sure you have speech recordings.</p></div>';
+            console.error('loadSpeechHistory error:', err);
+            
+            // Try to show at least the _speech data from dashboard.php
+            const d = window.dashboardData || {};
+            const child = (d.children || [])[window._selectedChildIndex || 0] || {};
+            const speechData = child._speech || null;
+            
+            if (speechData && speechData.vocabulary_score != null) {
+                container.innerHTML = `<div class="dashboard-card" style="padding:2rem;">
+                    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+                        <div style="width:3rem;height:3rem;background:linear-gradient(135deg,#ede9fe,#c4b5fd);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🎤</div>
+                        <div>
+                            <h4 style="margin:0;font-weight:700;">Latest Speech Analysis</h4>
+                            <span style="font-size:0.8rem;color:#64748b;">${speechData.sent_at ? new Date(speechData.sent_at).toLocaleDateString() : 'Recent'}</span>
+                        </div>
+                    </div>
+                    <p style="color:var(--slate-600);font-style:italic;margin-bottom:0.75rem;">"${speechData.transcript || 'No transcript'}"</p>
+                    <div style="display:flex;gap:1rem;font-size:0.85rem;">
+                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">📖 <strong>${Math.round(speechData.vocabulary_score)}</strong> words</span>
+                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">🔊 <strong>${Math.round(speechData.clarify_score * 100)}%</strong> clarity</span>
+                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">📊 ${speechData.feedback || '–'}</span>
+                    </div>
+                </div>`;
+                
+                // Try to render a single-point chart
+                renderSpeechCharts([{
+                    vocabulary_score: speechData.vocabulary_score,
+                    clarify_score: speechData.clarify_score,
+                    sent_at: speechData.sent_at
+                }]);
+            } else {
+                container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#64748b;"><div style="font-size:2rem;margin-bottom:0.5rem;">🗣️</div><p>Could not load speech history. Make sure you have speech recordings.</p></div>';
+            }
         }
     }
 
@@ -1695,89 +1847,110 @@
                     </button>
                 </div>
 
-                <!-- 4-Pillar Summary Cards with Traffic Light Alerts -->
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.25rem;margin-bottom:1.5rem;">
+                <!-- 5-Pillar Summary Cards with Traffic Light Alerts -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem;">
                     <!-- Attention Pillar Card -->
-                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <div style="background:var(--surface-light,#fff);border-radius:16px;padding:1rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 12px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+                            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#ef4444);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                             </div>
                             <div>
-                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">🧠 Attention</h3>
-                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
+                                <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🧠 Attention</h3>
+                                <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
                             </div>
-                            <span id="alert-attention" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                            <span id="alert-attention" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
                         </div>
-                        <div style="background:rgba(245,158,11,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
-                            <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:10px;transition:width 0.5s ease;"></div>
+                        <div style="background:rgba(245,158,11,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
+                            <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:8px;transition:width 0.5s ease;"></div>
                         </div>
-                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
                             <span style="color:var(--slate-500,#64748b);"><span id="attention-count">0</span>/<span id="attention-total">0</span></span>
-                            <span id="attention-percent" style="color:#f59e0b;font-weight:600;">0%</span>
+                            <span id="attention-percent" style="color:#f59e0b;font-weight:700;">0%</span>
                         </div>
                     </div>
 
                     <!-- Communication Pillar Card -->
-                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <div style="background:var(--surface-light,#fff);border-radius:16px;padding:1rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 12px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+                            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                             </div>
                             <div>
-                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">💬 Communication</h3>
-                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Speech & expression</p>
+                                <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">💬 Communication</h3>
+                                <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Speech & expression</p>
                             </div>
-                            <span id="alert-communication" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                            <span id="alert-communication" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
                         </div>
-                        <div style="background:rgba(59,130,246,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
-                            <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:10px;transition:width 0.5s ease;"></div>
+                        <div style="background:rgba(59,130,246,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
+                            <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:8px;transition:width 0.5s ease;"></div>
                         </div>
-                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
                             <span style="color:var(--slate-500,#64748b);"><span id="communication-count">0</span>/<span id="communication-total">0</span></span>
-                            <span id="communication-percent" style="color:#3b82f6;font-weight:600;">0%</span>
+                            <span id="communication-percent" style="color:#3b82f6;font-weight:700;">0%</span>
                         </div>
                     </div>
 
                     <!-- Social Skills Pillar Card -->
-                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#10b981,#06b6d4);display:flex;align-items:center;justify-content:center;">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.77"/></svg>
+                    <div style="background:var(--surface-light,#fff);border-radius:16px;padding:1rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 12px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+                            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#06b6d4);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.77"/></svg>
                             </div>
                             <div>
-                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">🤝 Social Skills</h3>
-                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Interaction & play</p>
+                                <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🤝 Social Skills</h3>
+                                <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Interaction & play</p>
                             </div>
-                            <span id="alert-social" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                            <span id="alert-social" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
                         </div>
-                        <div style="background:rgba(16,185,129,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
-                            <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:10px;transition:width 0.5s ease;"></div>
+                        <div style="background:rgba(16,185,129,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
+                            <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:8px;transition:width 0.5s ease;"></div>
                         </div>
-                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
                             <span style="color:var(--slate-500,#64748b);"><span id="social-count">0</span>/<span id="social-total">0</span></span>
-                            <span id="social-percent" style="color:#10b981;font-weight:600;">0%</span>
+                            <span id="social-percent" style="color:#10b981;font-weight:700;">0%</span>
                         </div>
                     </div>
 
-                    <!-- Motor Skills Pillar Card -->
-                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.25rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 15px rgba(0,0,0,0.05);position:relative;">
-                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-                            <div style="width:45px;height:45px;border-radius:12px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    <!-- Gross Motor Skills Pillar Card -->
+                    <div style="background:var(--surface-light,#fff);border-radius:16px;padding:1rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 12px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+                            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
                             </div>
                             <div>
-                                <h3 style="margin:0;font-size:0.95rem;color:var(--text-color,#1e293b);">🦵 Motor Skills</h3>
-                                <p style="margin:0;font-size:0.7rem;color:var(--slate-500,#64748b);">Physical development</p>
+                                <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🦵 Gross Motor</h3>
+                                <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Large movements</p>
                             </div>
-                            <span id="alert-motor" style="margin-left:auto;font-size:1.25rem;" title="Status">⚪</span>
+                            <span id="alert-motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
                         </div>
-                        <div style="background:rgba(102,126,234,0.2);border-radius:10px;height:7px;margin-bottom:0.4rem;overflow:hidden;">
-                            <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:10px;transition:width 0.5s ease;"></div>
+                        <div style="background:rgba(102,126,234,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
+                            <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:8px;transition:width 0.5s ease;"></div>
                         </div>
-                        <div style="display:flex;justify-content:space-between;font-size:0.8rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
                             <span style="color:var(--slate-500,#64748b);"><span id="motor-count">0</span>/<span id="motor-total">0</span></span>
-                            <span id="motor-percent" style="color:#667eea;font-weight:600;">0%</span>
+                            <span id="motor-percent" style="color:#667eea;font-weight:700;">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Fine Motor Skills Pillar Card -->
+                    <div style="background:var(--surface-light,#fff);border-radius:16px;padding:1rem;border:1px solid var(--surface-border,#e2e8f0);box-shadow:0 4px 12px rgba(0,0,0,0.05);position:relative;">
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;">
+                            <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#f43f5e);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                            </div>
+                            <div>
+                                <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">✋ Fine Motor</h3>
+                                <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Hand precision</p>
+                            </div>
+                            <span id="alert-fine_motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="background:rgba(236,72,153,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
+                            <div id="fine_motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ec4899,#f43f5e);border-radius:8px;transition:width 0.5s ease;"></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:0.75rem;">
+                            <span style="color:var(--slate-500,#64748b);"><span id="fine_motor-count">0</span>/<span id="fine_motor-total">0</span></span>
+                            <span id="fine_motor-percent" style="color:#ec4899;font-weight:700;">0%</span>
                         </div>
                     </div>
                 </div>
@@ -1801,22 +1974,26 @@
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#667eea" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                             📊 Milestone Progress
                         </h3>
-                        <div style="display:flex;align-items:flex-end;gap:1rem;height:180px;padding:1rem 0;">
+                        <div style="display:flex;align-items:flex-end;gap:0.75rem;height:200px;padding:1rem 0;">
                             <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-                                <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
-                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Attention</span>
+                                <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
+                                <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Attention</span>
                             </div>
                             <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-                                <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
-                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Communication</span>
+                                <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
+                                <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Communication</span>
                             </div>
                             <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-                                <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
-                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Social</span>
+                                <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
+                                <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Social</span>
                             </div>
                             <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
-                                <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;"></div>
-                                <span style="font-size:0.7rem;color:var(--slate-500,#64748b);text-align:center;">Motor</span>
+                                <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
+                                <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Motor</span>
+                            </div>
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                                <div id="bar-fine_motor" style="width:100%;background:linear-gradient(180deg,#ec4899,#f43f5e);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
+                                <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Fine Motor</span>
                             </div>
                         </div>
                     </div>
@@ -1893,8 +2070,8 @@
                     <div style="display:flex;gap:1rem;align-items:flex-start;">
                         <div style="font-size:2.5rem;flex-shrink:0;">🤖</div>
                         <div style="flex:1;color:#fff;">
-                            <h4 style="font-weight:800;font-size:1.1rem;margin:0 0 0.5rem;letter-spacing:0.5px;">AI Developmental Insights</h4>
-                            <p id="ai-feedback-text" style="font-size:0.95rem;line-height:1.6;margin:0;opacity:0.95;">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</p>
+                            <h4 style="font-weight:800;font-size:1.1rem;margin:0 0 0.5rem;letter-spacing:0.5px;text-shadow:0 2px 4px rgba(0,0,0,0.2);">AI Developmental Insights</h4>
+                            <p id="ai-feedback-text" style="font-size:1rem;line-height:1.7;margin:0;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.15);">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</p>
                         </div>
                     </div>
                 </div>
@@ -1919,26 +2096,36 @@
                             Open Full Checklist
                         </button>
                     </div>
-                    <div id="behavior-checklist-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">
-                        <div style="padding:1.25rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:2rem;margin-bottom:0.25rem;">🦵</div>
-                            <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Gross Motor</div>
-                            <div id="summary-gross-motor" style="font-size:1.25rem;font-weight:700;color:#22c55e;">Loading...</div>
+                    <div id="behavior-checklist-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;">
+                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">🦵</div>
+                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Gross Motor</div>
+                            <div id="summary-gross-motor" style="font-size:1.1rem;font-weight:700;color:#22c55e;">Loading...</div>
                         </div>
-                        <div style="padding:1.25rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:2rem;margin-bottom:0.25rem;">✋</div>
-                            <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Fine Motor</div>
-                            <div id="summary-fine-motor" style="font-size:1.25rem;font-weight:700;color:#3b82f6;">Loading...</div>
+                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">✋</div>
+                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Fine Motor</div>
+                            <div id="summary-fine-motor" style="font-size:1.1rem;font-weight:700;color:#3b82f6;">Loading...</div>
                         </div>
-                        <div style="padding:1.25rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:2rem;margin-bottom:0.25rem;">👀</div>
-                            <div style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Sensory</div>
-                            <div id="summary-sensory" style="font-size:1.25rem;font-weight:700;color:#8b5cf6;">Loading...</div>
+                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">🧠</div>
+                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Attention</div>
+                            <div id="summary-attention" style="font-size:1.1rem;font-weight:700;color:#f59e0b;">Loading...</div>
                         </div>
-                        <div style="padding:1.25rem;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:12px;text-align:center;color:#fff;">
-                            <div style="font-size:2rem;margin-bottom:0.25rem;">✅</div>
-                            <div style="font-size:0.85rem;opacity:0.9;margin-bottom:0.5rem;">Total Behaviors</div>
-                            <div id="summary-total" style="font-size:1.25rem;font-weight:800;">Loading...</div>
+                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
+                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Communication</div>
+                            <div id="summary-communication" style="font-size:1.1rem;font-weight:700;color:#8b5cf6;">Loading...</div>
+                        </div>
+                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
+                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
+                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Social Skills</div>
+                            <div id="summary-social" style="font-size:1.1rem;font-weight:700;color:#ec4899;">Loading...</div>
+                        </div>
+                        <div style="padding:1rem;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:12px;text-align:center;color:#fff;">
+                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">✅</div>
+                            <div style="font-size:0.75rem;opacity:0.9;margin-bottom:0.35rem;">Total Behaviors</div>
+                            <div id="summary-total" style="font-size:1.1rem;font-weight:800;">Loading...</div>
                         </div>
                     </div>
                 </div>
@@ -2352,9 +2539,9 @@
         return { icon: '🔴', color: '#ef4444', level: 'Needs Attention', label: 'Needs Attention' };
     }
 
-    // Update traffic light alerts for each pillar (with text labels)
+    // Update traffic light alerts for each pillar (with text labels) - 5 pillars now
     function updateTrafficLightAlerts(stats) {
-        const pillars = ['attention', 'communication', 'social', 'motor'];
+        const pillars = ['attention', 'communication', 'social', 'motor', 'fine_motor'];
         pillars.forEach(pillar => {
             const s = stats[pillar];
             // Use expected (age-appropriate) as denominator, not total checklist items
@@ -2368,10 +2555,10 @@
         });
     }
 
-    // Update Radar Chart (supports both old and new stats structure)
+    // Update Radar Chart (supports 5 pillars: Attention, Communication, Social, Motor, Fine Motor)
     function updateRadarChart(stats, useAgeExpectations = false) {
         // Support new stats structure with 'expected' field for age-based calculation
-        let attentionPercent, communicationPercent, socialPercent, motorPercent;
+        let attentionPercent, communicationPercent, socialPercent, motorPercent, fineMotorPercent;
 
         if (useAgeExpectations) {
             // New structure: calculate based on age-expected milestones
@@ -2379,16 +2566,18 @@
             communicationPercent = stats.communication.expected > 0 ? Math.min((stats.communication.achieved / stats.communication.expected) * 100, 100) : 0;
             socialPercent = stats.social.expected > 0 ? Math.min((stats.social.achieved / stats.social.expected) * 100, 100) : 0;
             motorPercent = stats.motor.expected > 0 ? Math.min((stats.motor.achieved / stats.motor.expected) * 100, 100) : 0;
+            fineMotorPercent = stats.fine_motor.expected > 0 ? Math.min((stats.fine_motor.achieved / stats.fine_motor.expected) * 100, 100) : 0;
         } else {
             // Fallback to old structure
             attentionPercent = stats.attention.total > 0 ? (stats.attention.achieved / stats.attention.total) * 100 : 0;
             communicationPercent = stats.communication.total > 0 ? (stats.communication.achieved / stats.communication.total) * 100 : 0;
             socialPercent = stats.social.total > 0 ? (stats.social.achieved / stats.social.total) * 100 : 0;
             motorPercent = stats.motor.total > 0 ? (stats.motor.achieved / stats.motor.total) * 100 : 0;
+            fineMotorPercent = stats.fine_motor.total > 0 ? (stats.fine_motor.achieved / stats.fine_motor.total) * 100 : 0;
         }
 
         if (_pillarRadarChart) {
-            _pillarRadarChart.data.datasets[0].data = [attentionPercent, communicationPercent, socialPercent, motorPercent];
+            _pillarRadarChart.data.datasets[0].data = [attentionPercent, communicationPercent, socialPercent, motorPercent, fineMotorPercent];
             _pillarRadarChart.update();
         } else {
             // Initialize chart
@@ -2397,10 +2586,10 @@
                 _pillarRadarChart = new Chart(ctx, {
                     type: 'radar',
                     data: {
-                        labels: ['Attention', 'Communication', 'Social', 'Motor'],
+                        labels: ['Attention', 'Communication', 'Social', 'Motor', 'Fine Motor'],
                         datasets: [{
                             label: 'Development Progress',
-                            data: [attentionPercent, communicationPercent, socialPercent, motorPercent],
+                            data: [attentionPercent, communicationPercent, socialPercent, motorPercent, fineMotorPercent],
                             backgroundColor: 'rgba(102, 126, 234, 0.2)',
                             borderColor: '#667eea',
                             pointBackgroundColor: '#667eea',
@@ -2416,7 +2605,7 @@
                             r: {
                                 angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
                                 grid: { color: 'rgba(0, 0, 0, 0.1)' },
-                                pointLabels: { font: { size: 12 } },
+                                pointLabels: { font: { size: 11 } },
                                 suggestedMin: 0,
                                 suggestedMax: 100
                             }
@@ -2430,19 +2619,20 @@
         }
     }
 
-    // Update Milestone Journey badges
+    // Update Milestone Journey badges (5 pillars now)
     function updateMilestoneJourney(stats) {
-        const totalAchieved = stats.attention.achieved + stats.communication.achieved + stats.social.achieved + stats.motor.achieved;
+        const totalAchieved = stats.attention.achieved + stats.communication.achieved + stats.social.achieved + stats.motor.achieved + stats.fine_motor.achieved;
         const badgesContainer = document.getElementById('badges-container');
 
         if (!badgesContainer) return;
 
-        // Calculate pillar-specific achievements
+        // Calculate pillar-specific achievements (5 pillars)
         const pillarAchievements = {
             attention: stats.attention.achieved,
             communication: stats.communication.achieved,
             social: stats.social.achieved,
-            motor: stats.motor.achieved
+            motor: stats.motor.achieved,
+            fine_motor: stats.fine_motor.achieved
         };
 
         let earnedBadges = [];
@@ -2479,7 +2669,7 @@
         }
     }
 
-    // Generate Weekly Activities based on lowest scoring pillar (with shuffle)
+    // Generate Weekly Activities based on lowest scoring pillar (with shuffle) - 5 pillars
     window.generateWeeklyActivities = function(forceRandom = false) {
         if (!_behaviorChecklistData) {
             document.getElementById('weekly-plan-container').innerHTML = `
@@ -2494,16 +2684,18 @@
             attention: { total: 0, achieved: 0 },
             communication: { total: 0, achieved: 0 },
             social: { total: 0, achieved: 0 },
-            motor: { total: 0, achieved: 0 }
+            motor: { total: 0, achieved: 0 },
+            fine_motor: { total: 0, achieved: 0 }
         };
 
-        // Calculate stats from checklist data
+        // Calculate stats from checklist data (5 pillars)
         _behaviorChecklistData.categories.forEach(cat => {
             const type = cat.category_type?.toLowerCase();
             let pillar = 'motor';
             if (type === 'attention' || type === 'cognitive') pillar = 'attention';
             else if (type === 'communication' || type === 'language') pillar = 'communication';
             else if (type === 'social' || type === 'social-emotional') pillar = 'social';
+            else if (type === 'fine_motor') pillar = 'fine_motor';
 
             stats[pillar].total += cat.behaviors.length;
             cat.behaviors.forEach(b => {
@@ -2511,8 +2703,8 @@
             });
         });
 
-        // Find weakest pillar (or random if shuffle requested)
-        const pillars = ['attention', 'communication', 'social', 'motor'];
+        // Find weakest pillar (or random if shuffle requested) - 5 pillars
+        const pillars = ['attention', 'communication', 'social', 'motor', 'fine_motor'];
         let weakestPillar = 'motor';
 
         if (forceRandom) {
@@ -2528,7 +2720,7 @@
             });
         }
 
-        // Get activities for weakest pillar (or random if shuffle)
+        // Get activities for weakest pillar (or random if shuffle) - fine_motor uses motor activities
         const activities = activityDatabase[weakestPillar] || activityDatabase.motor;
         const shuffled = activities.sort(() => Math.random() - 0.5).slice(0, 3);
 
@@ -2588,19 +2780,21 @@
         const feedback = _behaviorChecklistData.feedback || '';
         const reportDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-        // Calculate stats with detailed breakdown
+        // Calculate stats with detailed breakdown (5 pillars)
         const stats = {
             attention: { total: 0, achieved: 0, behaviors: [] },
             communication: { total: 0, achieved: 0, behaviors: [] },
             social: { total: 0, achieved: 0, behaviors: [] },
-            motor: { total: 0, achieved: 0, behaviors: [] }
+            motor: { total: 0, achieved: 0, behaviors: [] },
+            fine_motor: { total: 0, achieved: 0, behaviors: [] }
         };
 
         const pillarMap = {
             'attention': 'attention', 'cognitive': 'attention',
             'communication': 'communication', 'language': 'communication',
             'social': 'social', 'social-emotional': 'social', 'emotional': 'social',
-            'motor': 'motor', 'gross_motor': 'motor', 'fine_motor': 'motor',
+            'motor': 'motor', 'gross_motor': 'motor',
+            'fine_motor': 'fine_motor',
             'sensory': 'motor', 'physical': 'motor'
         };
 
@@ -2846,8 +3040,10 @@
 
         // ── Map category types → 4 developmental pillars (new + legacy support) ──────────────
         const pillarMap = {
-            // New 4-pillar API types
+            // New 4-pillar API types (expanded to 5 pillars with Fine Motor separate)
             'motor_skills': 'motor',
+            'gross_motor': 'motor',
+            'fine_motor': 'fine_motor',
             'attention': 'attention',
             'communication': 'communication',
             'social_skills': 'social',
@@ -2855,8 +3051,8 @@
             'cognitive': 'attention',
             'language': 'communication',
             'social': 'social', 'social-emotional': 'social', 'emotional': 'social',
-            'motor': 'motor', 'gross_motor': 'motor', 'fine_motor': 'motor',
-            'sensory': 'motor', 'physical': 'motor'
+            'motor': 'motor', 'physical': 'motor',
+            'sensory': 'motor' // Keep for backward compat but don't display
         };
 
         // Age-based expected milestones (WHO standards - minimum expected for age)
@@ -2883,11 +3079,12 @@
             attention:     { total: 0, achieved: 0, expected: expectations.attention },
             communication: { total: 0, achieved: 0, expected: expectations.communication },
             social:        { total: 0, achieved: 0, expected: expectations.social },
-            motor:         { total: 0, achieved: 0, expected: expectations.motor }
+            motor:         { total: 0, achieved: 0, expected: expectations.motor },
+            fine_motor:    { total: 0, achieved: 0, expected: Math.floor(expectations.motor * 0.4) } // Fine motor is ~40% of motor milestones
         };
-        // Legacy counts kept for backward-compat DOM elements
-        const counts = { gross_motor: 0, fine_motor: 0, sensory: 0, total: 0 };
-        const exhibitedCounts = { gross_motor: 0, fine_motor: 0, sensory: 0, total: 0 };
+        // Legacy counts kept for backward-compat DOM elements (sensory removed)
+        const counts = { gross_motor: 0, fine_motor: 0, total: 0 };
+        const exhibitedCounts = { gross_motor: 0, fine_motor: 0, total: 0 };
 
         data.categories.forEach(cat => {
             const type = cat.category_type.toLowerCase();
@@ -2898,17 +3095,20 @@
                 if (b.is_exhibited) stats[pillar].achieved++;
             });
 
-            // legacy
-            if (counts.hasOwnProperty(type)) {
-                counts[type] += cat.behaviors.length;
-                cat.behaviors.forEach(b => { if (b.is_exhibited) exhibitedCounts[type]++; });
+            // legacy counts for gross_motor and fine_motor (sensory removed)
+            if (type === 'gross_motor') {
+                counts.gross_motor += cat.behaviors.length;
+                cat.behaviors.forEach(b => { if (b.is_exhibited) exhibitedCounts.gross_motor++; });
+            } else if (type === 'fine_motor') {
+                counts.fine_motor += cat.behaviors.length;
+                cat.behaviors.forEach(b => { if (b.is_exhibited) exhibitedCounts.fine_motor++; });
             }
             counts.total += cat.behaviors.length;
             cat.behaviors.forEach(b => { if (b.is_exhibited) exhibitedCounts.total++; });
         });
 
-        // ── 1. Update 4-Pillar Summary Cards (showing achieved vs expected for age) ──────────────────────────
-        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+        // ── 1. Update 5-Pillar Summary Cards (showing achieved vs expected for age) ──────────────────────────
+        ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
             // Progress is based on age-appropriate expectation, not just total behaviors in checklist
             const percent = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
@@ -2925,9 +3125,9 @@
         // ── 2. Traffic Light Alerts ────────────────────────────────────
         updateTrafficLightAlerts(stats);
 
-        // ── 3. Bar Chart (4-pillar bars showing age-appropriate progress) ───────────────────────────────
+        // ── 3. Bar Chart (5-pillar bars showing age-appropriate progress) ───────────────────────────────
         setTimeout(() => {
-            ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+            ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
                 const bar = document.getElementById(`bar-${pillar}`);
                 if (bar) {
                     const s = stats[pillar];
@@ -2958,15 +3158,19 @@
         // ── 7. Empathetic micro-copy for AI Feedback ──────────────────
         updateEmpathyFeedback(data, stats);
 
-        // ── 8. Legacy summary DOM (backward compat) ───────────────────
+        // ── 8. Summary DOM updates (5 pillars + total) ───────────────────
         const grossEl   = document.getElementById('summary-gross-motor');
         const fineEl    = document.getElementById('summary-fine-motor');
-        const sensoryEl = document.getElementById('summary-sensory');
-        const legTotalEl= document.getElementById('summary-total');
+        const attentionEl = document.getElementById('summary-attention');
+        const communicationEl = document.getElementById('summary-communication');
+        const socialEl = document.getElementById('summary-social');
+        const totalEl = document.getElementById('summary-total');
         if (grossEl)    grossEl.textContent   = `${exhibitedCounts.gross_motor}/${counts.gross_motor}`;
         if (fineEl)     fineEl.textContent    = `${exhibitedCounts.fine_motor}/${counts.fine_motor}`;
-        if (sensoryEl)  sensoryEl.textContent = `${exhibitedCounts.sensory}/${counts.sensory}`;
-        if (legTotalEl) legTotalEl.textContent= `${exhibitedCounts.total}/${counts.total}`;
+        if (attentionEl) attentionEl.textContent = `${stats.attention.achieved}/${stats.attention.expected}`;
+        if (communicationEl) communicationEl.textContent = `${stats.communication.achieved}/${stats.communication.expected}`;
+        if (socialEl)   socialEl.textContent  = `${stats.social.achieved}/${stats.social.expected}`;
+        if (totalEl)    totalEl.textContent   = `${exhibitedCounts.total}/${counts.total}`;
     }
 
     // ── AI-Specific Developmental Insights (Age-Appropriate Analysis) ──────────────────────────────────────────
@@ -3159,30 +3363,37 @@
         if (progressEl) progressEl.style.width = percent + '%';
     }
 
-    function updateMilestoneChart(exhibitedCounts, counts) {
-        const grossPercent = counts.gross_motor > 0 ? (exhibitedCounts.gross_motor / counts.gross_motor) * 100 : 0;
-        const finePercent = counts.fine_motor > 0 ? (exhibitedCounts.fine_motor / counts.fine_motor) * 100 : 0;
-        const sensoryPercent = counts.sensory > 0 ? (exhibitedCounts.sensory / counts.sensory) * 100 : 0;
+    function updateMilestoneChart(stats) {
+        // Calculate percentages based on age expectations
+        const attentionPercent = stats.attention.expected > 0 ? Math.min(Math.round((stats.attention.achieved / stats.attention.expected) * 100), 100) : 0;
+        const communicationPercent = stats.communication.expected > 0 ? Math.min(Math.round((stats.communication.achieved / stats.communication.expected) * 100), 100) : 0;
+        const socialPercent = stats.social.expected > 0 ? Math.min(Math.round((stats.social.achieved / stats.social.expected) * 100), 100) : 0;
+        const motorPercent = stats.motor.expected > 0 ? Math.min(Math.round((stats.motor.achieved / stats.motor.expected) * 100), 100) : 0;
+        const fineMotorPercent = stats.fine_motor.expected > 0 ? Math.min(Math.round((stats.fine_motor.achieved / stats.fine_motor.expected) * 100), 100) : 0;
 
-        console.log('Updating milestone chart - Gross:', grossPercent + '%', 'Fine:', finePercent + '%', 'Sensory:', sensoryPercent + '%');
+        console.log('Updating milestone chart - Attention:', attentionPercent + '%', 'Communication:', communicationPercent + '%', 'Social:', socialPercent + '%', 'Motor:', motorPercent + '%', 'Fine Motor:', fineMotorPercent + '%');
 
         // Try to find bars
-        let barGross = document.getElementById('bar-gross');
-        let barFine = document.getElementById('bar-fine');
-        let barSensory = document.getElementById('bar-sensory');
+        let barAttention = document.getElementById('bar-attention');
+        let barCommunication = document.getElementById('bar-communication');
+        let barSocial = document.getElementById('bar-social');
+        let barMotor = document.getElementById('bar-motor');
+        let barFineMotor = document.getElementById('bar-fine_motor');
 
         // Retry after a short delay if elements not found (DOM might not be ready)
-        if (!barGross || !barFine || !barSensory) {
+        if (!barAttention || !barCommunication || !barSocial || !barMotor || !barFineMotor) {
             console.log('Bars not found, retrying in 200ms...');
-            setTimeout(() => updateMilestoneChart(exhibitedCounts, counts), 200);
+            setTimeout(() => updateMilestoneChart(stats), 200);
             return;
         }
 
-        barGross.style.height = Math.max(grossPercent, 5) + '%';
-        barFine.style.height = Math.max(finePercent, 5) + '%';
-        barSensory.style.height = Math.max(sensoryPercent, 5) + '%';
+        barAttention.style.height = Math.max(attentionPercent, 5) + '%';
+        barCommunication.style.height = Math.max(communicationPercent, 5) + '%';
+        barSocial.style.height = Math.max(socialPercent, 5) + '%';
+        barMotor.style.height = Math.max(motorPercent, 5) + '%';
+        barFineMotor.style.height = Math.max(fineMotorPercent, 5) + '%';
 
-        console.log('Bars updated - Gross:', barGross.style.height, 'Fine:', barFine.style.height, 'Sensory:', barSensory.style.height);
+        console.log('Bars updated - Attention:', barAttention.style.height, 'Communication:', barCommunication.style.height, 'Social:', barSocial.style.height, 'Motor:', barMotor.style.height, 'Fine Motor:', barFineMotor.style.height);
     }
 
     function updateTrends(exhibitedCounts, counts) {
@@ -3204,7 +3415,7 @@
         if (trendOverall) trendOverall.textContent = getLevel(exhibitedCounts.total, counts.total);
     }
 
-    function updateAIInsights(data, exhibitedCounts, counts) {
+    function updateAIInsights(data, stats) {
         const feedbackEl = document.getElementById('ai-feedback-text');
         if (!feedbackEl) return;
 
@@ -3217,7 +3428,7 @@
         const recommendations = [];
 
         // Gross Motor Insights
-        const grossPercent = counts.gross_motor > 0 ? (exhibitedCounts.gross_motor / counts.gross_motor) * 100 : 0;
+        const grossPercent = stats.motor.expected > 0 ? Math.round((stats.motor.achieved / stats.motor.expected) * 100) : 0;
         if (grossPercent >= 75) {
             insights.push(`${childName} is showing excellent gross motor development!`);
             recommendations.push('Continue encouraging active play like running, jumping, and climbing.');
@@ -3230,7 +3441,7 @@
         }
 
         // Fine Motor Insights
-        const finePercent = counts.fine_motor > 0 ? (exhibitedCounts.fine_motor / counts.fine_motor) * 100 : 0;
+        const finePercent = stats.fine_motor.expected > 0 ? Math.round((stats.fine_motor.achieved / stats.fine_motor.expected) * 100) : 0;
         if (finePercent >= 75) {
             insights.push(`Fine motor skills are well-developed!`);
             recommendations.push('Introduce drawing, stacking blocks, and simple puzzles.');
@@ -3242,26 +3453,54 @@
             recommendations.push('Offer textured toys, finger foods, and encourage reaching/grasping.');
         }
 
-        // Sensory Insights
-        const sensoryPercent = counts.sensory > 0 ? (exhibitedCounts.sensory / counts.sensory) * 100 : 0;
-        if (sensoryPercent >= 75) {
-            insights.push(`Sensory processing is on track!`);
-            recommendations.push('Continue exposing to varied sounds, textures, and visual stimuli.');
-        } else if (sensoryPercent >= 50) {
-            insights.push(`Sensory development is progressing well.`);
-            recommendations.push('Play peek-a-boo, explore different textures, and name colors/shapes.');
+        // Attention Insights
+        const attentionPercent = stats.attention.expected > 0 ? Math.round((stats.attention.achieved / stats.attention.expected) * 100) : 0;
+        if (attentionPercent >= 75) {
+            insights.push(`${childName} demonstrates excellent attention and focus!`);
+            recommendations.push('Continue with puzzle activities and memory games.');
+        } else if (attentionPercent >= 50) {
+            insights.push(`${childName} is developing attention skills.`);
+            recommendations.push('Try short focus activities (3-5 min) and gradually increase duration.');
         } else {
-            insights.push(`Consider more sensory-rich activities.`);
-            recommendations.push('Introduce sensory play with water, sand, or play-dough.');
+            insights.push(`${childName} may benefit from more attention-building activities.`);
+            recommendations.push('Start with brief eye contact games and object tracking.');
+        }
+
+        // Communication Insights
+        const communicationPercent = stats.communication.expected > 0 ? Math.round((stats.communication.achieved / stats.communication.expected) * 100) : 0;
+        if (communicationPercent >= 75) {
+            insights.push(`${childName}'s communication skills are thriving!`);
+            recommendations.push('Keep reading together and encouraging conversations.');
+        } else if (communicationPercent >= 50) {
+            insights.push(`${childName} is making progress in communication.`);
+            recommendations.push('Narrate daily activities and respond to vocalizations.');
+        } else {
+            insights.push(`${childName} may benefit from more language-rich interactions.`);
+            recommendations.push('Use simple, clear words and give time to respond.');
+        }
+
+        // Social Skills Insights
+        const socialPercent = stats.social.expected > 0 ? Math.round((stats.social.achieved / stats.social.expected) * 100) : 0;
+        if (socialPercent >= 75) {
+            insights.push(`${childName} shows strong social engagement!`);
+            recommendations.push('Arrange playdates and group activities.');
+        } else if (socialPercent >= 50) {
+            insights.push(`${childName} is developing social skills well.`);
+            recommendations.push('Encourage turn-taking and parallel play opportunities.');
+        } else {
+            insights.push(`${childName} may benefit from more social interaction.`);
+            recommendations.push('Practice joint attention and imitative games.');
         }
 
         // Overall insight
-        const overallPercent = counts.total > 0 ? (exhibitedCounts.total / counts.total) * 100 : 0;
+        const totalAchieved = stats.attention.achieved + stats.communication.achieved + stats.social.achieved + stats.motor.achieved + stats.fine_motor.achieved;
+        const totalExpected = stats.attention.expected + stats.communication.expected + stats.social.expected + stats.motor.expected + stats.fine_motor.expected;
+        const overallPercent = totalExpected > 0 ? Math.round((totalAchieved / totalExpected) * 100) : 0;
         let overallMessage = '';
         if (overallPercent >= 75) {
-            overallMessage = `Overall, ${childName} is meeting ${Math.round(overallPercent)}% of age-expected milestones - great work!`;
+            overallMessage = `Overall, ${childName} is meeting ${overallPercent}% of age-expected milestones - great work!`;
         } else if (overallPercent >= 50) {
-            overallMessage = `${childName} is progressing through their developmental journey with ${Math.round(overallPercent)}% of milestones achieved.`;
+            overallMessage = `${childName} is progressing through their developmental journey with ${overallPercent}% of milestones achieved.`;
         } else {
             overallMessage = `Every child develops at their own pace. ${childName} is working on their skills - keep supporting their journey!`;
         }
@@ -3663,7 +3902,7 @@
 
     function getActivitiesView() {
         const d = window.dashboardData || {};
-        const child = (d.children || [])[0] || null;
+        const child = (d.children || [])[window._selectedChildIndex || 0] || null;
         const childParam = child ? child.child_id : '';
 
         // Load AI recommendations after rendering
@@ -3674,9 +3913,31 @@
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
-                        <p class="dashboard-subtitle">Age-based personalized recommendations for ${child ? child.first_name : 'your child'}</p>
+                        <p class="dashboard-subtitle">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
                 </div>
+
+                <!-- Featured Game Banner -->
+                <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:24px;padding:2.5rem;color:#fff;margin-bottom:2.5rem;display:flex;align-items:center;justify-content:space-between;box-shadow:0 20px 40px rgba(99,102,241,0.25);position:relative;overflow:hidden;flex-wrap:wrap;gap:2rem;">
+                    <div style="position:absolute;top:-50px;right:-50px;width:200px;height:200px;background:rgba(255,255,255,0.1);border-radius:50%;filter:blur(20px);"></div>
+                    <div style="position:relative;z-index:1;flex:1;min-width:300px;">
+                        <div style="display:inline-block;padding:0.4rem 1rem;background:rgba(255,255,255,0.2);border-radius:99px;font-size:0.75rem;font-weight:800;letter-spacing:1px;margin-bottom:1rem;text-transform:uppercase;">FEATURED GAME</div>
+                        <h2 style="font-size:2.5rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.03em;">Memory Match Explorer</h2>
+                        <p style="font-size:1.1rem;opacity:0.9;margin:0 0 1.5rem;line-height:1.5;">Boost ${child ? child.first_name + "'s" : "your child's"} cognitive skills and working memory with this fun, interactive matching game!</p>
+                        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                            <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">⏱ 5 mins</span>
+                            <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">🧠 Cognitive</span>
+                            <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">💎 +15 pts</span>
+                        </div>
+                    </div>
+                    <div style="position:relative;z-index:1;">
+                        <button id="memory-match-btn" onclick="openGameModal(${childParam}, -1, 'Memory Match Explorer')" style="background:#fff;color:#6366f1;border:none;padding:1.25rem 2.5rem;border-radius:16px;font-size:1.1rem;font-weight:800;cursor:pointer;box-shadow:0 10px 25px rgba(0,0,0,0.1);display:flex;align-items:center;gap:0.75rem;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 15px 35px rgba(0,0,0,0.2)'" onmouseout="this.style.transform='none';this.style.boxShadow='0 10px 25px rgba(0,0,0,0.1)'">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Play Now
+                        </button>
+                    </div>
+                </div>
+
 
                 <!-- AI Recommendations Container -->
                 <div id="ai-recommendations">
@@ -3692,21 +3953,6 @@
                     </div>
                 </div>
 
-                <!-- Activity History -->
-                <div style="margin-top:2rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
-                        <h3 class="section-heading" style="margin:0;">Completed Activities</h3>
-                        <div style="display:flex;gap:0.5rem;" class="activity-tabs">
-                            <button class="btn btn-sm btn-gradient active" onclick="loadActivityHistory('${childParam}', 'all', this)">All Time</button>
-                            <button class="btn btn-sm btn-outline" onclick="loadActivityHistory('${childParam}', 'daily', this)">Daily</button>
-                            <button class="btn btn-sm btn-outline" onclick="loadActivityHistory('${childParam}', 'weekly', this)">Weekly</button>
-                            <button class="btn btn-sm btn-outline" onclick="loadActivityHistory('${childParam}', 'monthly', this)">Monthly</button>
-                        </div>
-                    </div>
-                    <div id="activity-history-list">
-                        <div class="dashboard-card" style="padding:1.5rem;text-align:center;color:var(--slate-500);">Loading history...</div>
-                    </div>
-                </div>
             </div>
         `;
     }
@@ -3749,6 +3995,18 @@
             const rec = data.recommendations;
             let html = '';
 
+            // Fetch read articles if not already loaded
+            if (!window._readArticlesLoaded) {
+                try {
+                    const raRes = await fetch('../../api_activities.php?action=get-read-articles');
+                    const raData = await raRes.json();
+                    if (raData.success) {
+                        window._readArticles = raData.read_titles || [];
+                        window._readArticlesLoaded = true;
+                    }
+                } catch(e) {}
+            }
+
             // Articles Section
             if (rec.articles && rec.articles.length) {
                 html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;">📚 Recommended Articles</h3>
@@ -3758,8 +4016,11 @@
                     const color = catColors[art.category] || '#6366f1';
                     const esTitle = art.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
                     const esDesc = (art.summary || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                    const isRead = window._readArticles && window._readArticles.includes(art.title);
+                    const readBadgeHtml = isRead ? '<span style="font-size:0.6rem;background:#dcfce7;color:#166534;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;position:absolute;top:0.75rem;right:0.75rem;">Read</span>' : '';
 
-                    html += `<div class="ai-card ai-card-article" style="--accent:${color}">
+                    html += `<div class="ai-card ai-card-article" style="--accent:${color};position:relative;">
+                        ${readBadgeHtml}
                         <div class="ai-card-badge" style="background:${color}15;color:${color}">${art.category || 'article'}</div>
                         <h4 class="ai-card-title">${art.title}</h4>
                         <p class="ai-card-desc">${art.summary}</p>
@@ -3801,31 +4062,6 @@
                 });
                 html += '</div>';
             }
-
-            // Website Games Section
-            if (rec.website_games && rec.website_games.length) {
-                html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;margin-top:2rem;">🎮 Website Games & Interactive Activities</h3>
-                <div class="ai-cards-grid">`;
-                rec.website_games.forEach((game, i) => {
-                    const typeIcons = { interactive: '🕹️', quiz: '❓', creative: '🎨' };
-                    const icon = typeIcons[game.type] || '🎮';
-                    const esTitle = game.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                    html += `<div class="ai-card ai-card-game">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-                            <span style="font-size:1.75rem;">${icon}</span>
-                            <span class="ai-card-badge" style="background:#8b5cf615;color:#8b5cf6">${game.type || 'interactive'}</span>
-                        </div>
-                        <h4 class="ai-card-title">${game.title}</h4>
-                        <p class="ai-card-desc">${game.description}</p>
-                        <div class="ai-card-footer">
-                            <span class="ai-card-meta">🎯 ${game.skill_focus || 'Development'} • ${game.duration || '10 min'}</span>
-                            <button class="btn btn-outline btn-sm" onclick="openGameModal(${childId}, ${i}, '${esTitle}')">Play ▶</button>
-                        </div>
-                    </div>`;
-                });
-                html += '</div>';
-            }
-
             container.innerHTML = html;
 
             // Load activity history
@@ -3840,7 +4076,7 @@
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     };
 
-    window.completeActivity = async function (childId, category, index) {
+    window.completeActivity = async function (childId, category, index, title = '') {
         try {
             const res = await fetch('../../api_activities.php?action=history&child_id=' + childId);
             const data = await res.json();
@@ -3855,18 +4091,61 @@
                 }
             }
 
-            if (!activityId) {
-                if (activities.length > 0) activityId = activities[0].activity_id;
-            }
-
-            if (activityId) {
+            // We only call if we have an activityId OR if we know the category/title to insert
+            if (activityId || category) {
                 const res2 = await fetch('../../api_activities.php?action=complete', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ activity_id: activityId, child_id: childId })
+                    body: JSON.stringify({ activity_id: activityId, child_id: childId, category: category, title: title })
                 });
                 const result = await res2.json();
                 if (result.success) {
                     showBadgeToast('Activity completed! +15 points 🎉');
+
+                    // Update points in topbar immediately
+                    const d = window.dashboardData || {};
+                    const child = (d.children || [])[window._selectedChildIndex || 0];
+                    if (child) {
+                        child.total_points = (child.total_points || 0) + 15;
+                        const ptsEl = document.getElementById('topbar-points-count');
+                        if (ptsEl) ptsEl.textContent = child.total_points;
+                    }
+
+                    if (result.new_badges && result.new_badges.length > 0) {
+                        if (child) {
+                            if (!child.badges) child.badges = [];
+                            result.new_badges.forEach(bName => {
+                                if (!child.badges.find(b => b.name === bName)) {
+                                    child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
+                                    showBadgeToast('🏆 Badge Earned: ' + bName);
+                                }
+                            });
+                            child.badge_count = child.badges.length;
+                            const bc = document.getElementById('topbar-badge-count');
+                            if (bc) bc.textContent = child.badge_count;
+                        }
+                    }
+
+                    // Background: trigger retrospective badge check
+                    if (child && child.child_id) {
+                        fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + child.child_id)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.success) {
+                                    return fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + child.child_id);
+                                }
+                            })
+                            .then(r => r && r.json())
+                            .then(bData => {
+                                if (bData && bData.success) {
+                                    child.badges = bData.badges || [];
+                                    child.badge_count = child.badges.length;
+                                    const bc = document.getElementById('topbar-badge-count');
+                                    if (bc) bc.textContent = child.badge_count;
+                                }
+                            })
+                            .catch(() => {});
+                    }
+
                     streakCheckIn();
                     loadNotifCount();
                     // reload History
@@ -4035,9 +4314,15 @@
                         window.memoryState.opened = [];
                         window.memoryState.matched += 2;
                         if (window.memoryState.matched === emojis.length) {
-                            document.getElementById('game-finish-btn').disabled = false;
-                            document.getElementById('game-finish-btn').innerHTML = 'Claim Points 🎉';
-                            document.getElementById('game-finish-btn').classList.add('btn-gradient');
+                            const btn = document.getElementById('game-finish-btn');
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.innerHTML = 'Claim Points 🎉';
+                                btn.classList.add('btn-gradient');
+                                btn.style.background = '';
+                                btn.style.color = '';
+                                btn.style.cursor = 'pointer';
+                            }
                         }
                     } else {
                         setTimeout(() => {
@@ -4069,7 +4354,7 @@
                     ${gameHtml}
 
                     <button id="game-finish-btn" disabled onclick="
-                        completeActivity(${childId}, 'website_game', ${index});
+                        completeActivity(${childId}, 'website_game', ${index}, '${title.replace(/'/g, "\\'")}');
                         document.getElementById('act-modal').remove();
                     " class="btn" style="width:100%;padding:1rem;font-size:1.1rem;background:#e2e8f0;color:#94a3b8;cursor:not-allowed;margin-top:1.5rem;">Complete Game First!</button>
                 </div>
@@ -4093,6 +4378,18 @@
             const res = await fetch(`../../api_activities.php?action=history&child_id=${childId}&period=${period}`);
             const data = await res.json();
             const completed = (data.activities || []).filter(a => a.is_completed == 1);
+            
+            window._playedGames = completed.filter(a => a.category === 'website_game').map(a => a.title);
+            if (window._playedGames.includes('Memory Match Explorer')) {
+                const mmBtn = document.getElementById('memory-match-btn');
+                if (mmBtn) {
+                    mmBtn.innerHTML = '✅ Completed!';
+                    mmBtn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+                    mmBtn.style.color = '#fff';
+                    mmBtn.onclick = null;
+                }
+            }
+
             if (completed.length === 0) {
                 container.innerHTML = '<div class="dashboard-card" style="padding:1.5rem;text-align:center;color:var(--slate-500);">No completed activities yet. Start by completing a recommendation above!</div>';
                 return;
@@ -4808,6 +5105,658 @@
         });
     };
 
+    // Points & Rewards View
+    function getPointsView() {
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[0] || null;
+        const totalPoints = child ? (child.total_points || 0) : 0;
+
+        return `
+        <div class="dashboard-content">
+            <div class="dashboard-header-section">
+                <div>
+                    <h1 class="dashboard-title">Points & Rewards 💎</h1>
+                    <p class="dashboard-subtitle">Earn points for engaging with your child's development</p>
+                </div>
+            </div>
+
+            <!-- Points Summary Cards -->
+            <div class="points-summary-grid">
+                <div class="points-card points-card-primary">
+                    <div class="points-card-icon">💎</div>
+                    <div class="points-card-info">
+                        <div class="points-card-label">Available Points</div>
+                        <div class="points-card-value" id="points-balance">${totalPoints}</div>
+                    </div>
+                </div>
+                <div class="points-card">
+                    <div class="points-card-icon">📅</div>
+                    <div class="points-card-info">
+                        <div class="points-card-label">Earned Today</div>
+                        <div class="points-card-value" id="points-today">0</div>
+                    </div>
+                </div>
+                <div class="points-card">
+                    <div class="points-card-icon">📊</div>
+                    <div class="points-card-info">
+                        <div class="points-card-label">Earned This Week</div>
+                        <div class="points-card-value" id="points-weekly">0</div>
+                    </div>
+                </div>
+                <div class="points-card">
+                    <div class="points-card-icon">🎫</div>
+                    <div class="points-card-info">
+                        <div class="points-card-label">Available Tokens</div>
+                        <div class="points-card-value" id="tokens-count">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Grid -->
+            <div class="points-main-grid">
+                <!-- Left Column: Earning Actions -->
+                <div class="points-column">
+                    <div class="points-section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                                </svg>
+                                Earn Points
+                            </h3>
+                        </div>
+                        <div class="earning-actions-grid" id="earning-actions">
+                            <div class="empty-state">Loading...</div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="points-section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+                                </svg>
+                                Recent Activity
+                            </h3>
+                            <button class="btn-text" onclick="pointsView.showAllHistory()">View All</button>
+                        </div>
+                        <div class="activity-list" id="recent-activity">
+                            <div class="empty-state">No recent activity</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Redemption & Tokens -->
+                <div class="points-column">
+                    <!-- Redemption Catalog -->
+                    <div class="points-section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M16 11V7a4 4 0 1 0-8 0v4M5 9h14l1 12H4L5 9z"/>
+                                </svg>
+                                Redemption Catalog
+                            </h3>
+                        </div>
+                        <div class="catalog-filters">
+                            <button class="catalog-filter-btn active" data-filter="all">All</button>
+                            <button class="catalog-filter-btn" data-filter="appointment">Appointments</button>
+                            <button class="catalog-filter-btn" data-filter="service">Services</button>
+                            <button class="catalog-filter-btn" data-filter="custom">Other</button>
+                        </div>
+                        <div class="catalog-grid" id="redemption-catalog">
+                            <div class="empty-state">Loading...</div>
+                        </div>
+                    </div>
+
+                    <!-- My Tokens -->
+                    <div class="points-section-card">
+                        <div class="section-header">
+                            <h3 class="section-title">
+                                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/>
+                                </svg>
+                                My Appointment Tokens
+                            </h3>
+                        </div>
+                        <div class="tokens-list" id="my-tokens">
+                            <div class="empty-state">No tokens available</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Milestones Section -->
+            <div class="points-section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+                        </svg>
+                        Milestones & Achievements
+                    </h3>
+                </div>
+                <div class="milestones-progress">
+                    <div class="milestone-progress-item">
+                        <div class="milestone-info">
+                            <span class="milestone-name">Next Milestone</span>
+                            <span class="milestone-target" id="next-milestone-target">100 points</span>
+                        </div>
+                        <div class="milestone-bar-container">
+                            <div class="milestone-bar" id="milestone-progress-bar"></div>
+                        </div>
+                        <div class="milestone-stats">
+                            <span id="milestone-current">0</span> / <span id="milestone-goal">100</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="milestones-grid" id="milestones-achieved">
+                    <div class="empty-state">Start earning points to unlock milestones!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Redemption Modal -->
+        <div class="modal" id="redemption-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="redemption-modal-title">Redeem Item</h3>
+                    <button class="modal-close" onclick="pointsView.closeRedemptionModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="redemption-item-preview" id="redemption-preview"></div>
+                    <div class="redemption-confirmation">
+                        <p class="points-cost-display">Cost: <span id="redeem-points-cost">0</span> points</p>
+                        <p class="your-balance-display">Your balance: <span id="redeem-balance">0</span> points</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="pointsView.closeRedemptionModal()">Cancel</button>
+                    <button class="btn btn-primary" id="confirm-redeem-btn">Confirm Redemption</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Modal -->
+        <div class="modal" id="history-modal">
+            <div class="modal-content modal-content-large">
+                <div class="modal-header">
+                    <h3>Points History</h3>
+                    <button class="modal-close" onclick="pointsView.closeHistoryModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="history-filters">
+                        <select class="form-select" id="history-filter-type" onchange="pointsView.filterHistory()">
+                            <option value="all">All Transactions</option>
+                            <option value="deposit">Earnings</option>
+                            <option value="withdrawal">Redemptions</option>
+                        </select>
+                    </div>
+                    <div class="history-list" id="history-list"></div>
+                </div>
+            </div>
+        </div>
+        `;
+    }
+
+    // Empty state component
+    function emptyState(message) {
+        return `<div class="empty-state">${message}</div>`;
+    }
+
+    // Points View Controller
+    window.pointsView = (function() {
+        let currentBalance = 0;
+        let selectedItemId = null;
+        let currentFilter = 'all';
+
+        function init() {
+            // First, sync with dashboardData if available
+            syncWithDashboardData();
+            // Then load fresh data from API
+            loadPointsSummary();
+            loadEarningActions();
+            loadRedemptionCatalog();
+            loadMyTokens();
+            loadMilestones();
+            setupFilterListeners();
+        }
+
+        // Sync points with dashboardData (same source as top bar)
+        function syncWithDashboardData() {
+            const d = window.dashboardData || {};
+            const child = (d.children || [])[0] || null;
+            if (child && child.total_points !== undefined) {
+                currentBalance = child.total_points;
+                const balanceEl = document.getElementById('points-balance');
+                if (balanceEl) {
+                    balanceEl.textContent = currentBalance.toLocaleString();
+                }
+                // Also update top bar if points view updated the balance
+                const topBarPoints = document.getElementById('topbar-points-count');
+                if (topBarPoints) {
+                    topBarPoints.textContent = currentBalance.toLocaleString();
+                }
+            }
+        }
+
+        async function loadPointsSummary() {
+            try {
+                const response = await fetch('../../api_parent_points.php?action=summary');
+                const data = await response.json();
+
+                if (data.success) {
+                    const summary = data.summary;
+                    currentBalance = summary.wallet.total_points || 0;
+
+                    document.getElementById('points-balance').textContent = currentBalance.toLocaleString();
+                    document.getElementById('points-today').textContent = '+' + summary.today_earned.toLocaleString();
+                    document.getElementById('points-weekly').textContent = '+' + summary.weekly_earned.toLocaleString();
+                    document.getElementById('tokens-count').textContent = summary.available_tokens.toLocaleString();
+
+                    // Update top bar points count to stay in sync
+                    const topBarPoints = document.getElementById('topbar-points-count');
+                    if (topBarPoints) {
+                        topBarPoints.textContent = currentBalance.toLocaleString();
+                    }
+
+                    updateMilestoneProgress(currentBalance, summary.wallet.lifetime_earned || 0);
+                }
+            } catch (error) {
+                console.error('Failed to load points summary:', error);
+            }
+        }
+
+        async function loadEarningActions() {
+            try {
+                const response = await fetch('../../api_parent_points.php?action=rules');
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('earning-actions');
+                    const icons = {
+                        'daily_login': '📅',
+                        'log_growth': '📊',
+                        'record_speech': '🎤',
+                        'log_milestone': '⭐',
+                        'complete_motor_activity': '🏃',
+                        'weekly_goal': '🎯',
+                        'attend_appointment': '🏥',
+                        'submit_feedback': '💬',
+                        'complete_profile': '👤',
+                        'read_article': '📖',
+                        'complete_activity': '✅'
+                    };
+
+                    if (data.rules.length === 0) {
+                        container.innerHTML = emptyState('No earning actions available');
+                        return;
+                    }
+
+                    // Display earning actions as informational cards (not clickable for earning)
+                    container.innerHTML = data.rules.map(rule => {
+                        const icon = icons[rule.action_key] || '💎';
+                        const capInfo = rule.daily_cap ? `(max ${rule.daily_cap}/day)` :
+                                       rule.weekly_cap ? `(max ${rule.weekly_cap}/week)` : '';
+                        const autoText = rule.action_key === 'daily_login' ?
+                            'Automatic' :
+                            'Automatic when you complete this action';
+
+                        return `
+                            <div class="earning-action-btn" id="action-${rule.action_key}">
+                                <span class="action-icon">${icon}</span>
+                                <div class="earning-action-info">
+                                    <div class="earning-action-name">${rule.action_name}</div>
+                                    <div class="earning-action-points">+${rule.points_value} points ${capInfo}</div>
+                                    <div class="earning-action-desc">${rule.description || ''}</div>
+                                    <div class="earning-action-auto">
+                                        <svg class="auto-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m11.31 11.31l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m11.31-11.31l2.83-2.83"/>
+                                        </svg>
+                                        ${autoText}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load earning actions:', error);
+                document.getElementById('earning-actions').innerHTML = emptyState('Failed to load actions');
+            }
+        }
+
+        // Points are earned automatically by the system when actions are completed
+        // This function is kept for potential future use but not exposed
+
+        async function loadRedemptionCatalog(filter) {
+            filter = filter || currentFilter;
+            try {
+                const url = filter === 'all' ?
+                    '../../api_redemption_catalog.php?action=list' :
+                    `../../api_redemption_catalog.php?action=list&category=${filter}`;
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('redemption-catalog');
+
+                    if (data.items.length === 0) {
+                        container.innerHTML = emptyState('No items available in this category');
+                        return;
+                    }
+
+                    const colorMap = {
+                        green:  { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', glow: 'rgba(34,197,94,0.25)', light: '#dcfce7', text: '#166534' },
+                        blue:   { bg: 'linear-gradient(135deg, #3b82f6, #2563eb)', glow: 'rgba(59,130,246,0.25)', light: '#dbeafe', text: '#1e40af' },
+                        purple: { bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', glow: 'rgba(139,92,246,0.25)', light: '#ede9fe', text: '#5b21b6' },
+                        orange: { bg: 'linear-gradient(135deg, #f97316, #ea580c)', glow: 'rgba(249,115,22,0.25)', light: '#ffedd5', text: '#9a3412' },
+                        yellow: { bg: 'linear-gradient(135deg, #eab308, #ca8a04)', glow: 'rgba(234,179,8,0.25)',  light: '#fef9c3', text: '#854d0e' },
+                        red:    { bg: 'linear-gradient(135deg, #ef4444, #dc2626)', glow: 'rgba(239,68,68,0.25)',  light: '#fee2e2', text: '#991b1b' },
+                        gold:   { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', glow: 'rgba(245,158,11,0.25)', light: '#fef3c7', text: '#92400e' }
+                    };
+                    const defaultColor = colorMap.blue;
+
+                    container.innerHTML = data.items.map(item => {
+                        const c = colorMap[item.badge_color] || defaultColor;
+                        const icon = item.icon || '🎁';
+                        const typeLabels = { appointment: '🎫 Appointment', service: '⚙️ Service', badge: '🏅 Badge', custom: '🎁 Gift' };
+                        const typeLabel = typeLabels[item.item_type] || item.item_type;
+
+                        return `
+                        <div class="catalog-item" onclick="pointsView.openRedemptionModal(${item.item_id})" style="--card-glow:${c.glow};--card-accent-bg:${c.bg};">
+                            <div class="catalog-item-icon-wrap" style="background:${c.bg};box-shadow:0 8px 20px ${c.glow};">
+                                <span class="catalog-item-icon">${icon}</span>
+                            </div>
+                            <div class="catalog-item-body">
+                                <div class="catalog-item-header">
+                                    <span class="catalog-item-name">${item.item_name}</span>
+                                    <span class="catalog-item-type" style="background:${c.light};color:${c.text};">${typeLabel}</span>
+                                </div>
+                                <div class="catalog-item-description">${item.description || 'No description'}</div>
+                                <div class="catalog-item-footer">
+                                    <div class="catalog-item-pricing">
+                                        <span class="catalog-item-cost">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                            ${item.points_cost.toLocaleString()} pts
+                                        </span>
+                                        ${item.original_price ? `<span class="catalog-item-original">$${parseFloat(item.original_price).toFixed(2)} value</span>` : ''}
+                                    </div>
+                                    <button class="catalog-redeem-btn" style="background:${c.bg};box-shadow:0 4px 12px ${c.glow};">Redeem</button>
+                                </div>
+                            </div>
+                        </div>`;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load catalog:', error);
+                document.getElementById('redemption-catalog').innerHTML = emptyState('Failed to load catalog');
+            }
+        }
+
+        async function openRedemptionModal(itemId) {
+            try {
+                const response = await fetch(`../../api_redemption_catalog.php?action=item&item_id=${itemId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const item = data.item;
+                    selectedItemId = itemId;
+
+                    document.getElementById('redemption-preview').innerHTML = `
+                        <div class="icon">${item.icon || '🎁'}</div>
+                        <div class="name">${item.item_name}</div>
+                        <div class="description">${item.description || ''}</div>
+                    `;
+                    document.getElementById('redeem-points-cost').textContent = item.points_cost.toLocaleString();
+                    document.getElementById('redeem-balance').textContent = currentBalance.toLocaleString();
+                    document.getElementById('redemption-modal-title').textContent = 'Redeem Item';
+
+                    document.getElementById('confirm-redeem-btn').onclick = () => confirmRedemption(itemId, item.points_cost);
+
+                    document.getElementById('redemption-modal').classList.add('active');
+                }
+            } catch (error) {
+                console.error('Failed to load item details:', error);
+            }
+        }
+
+        async function confirmRedemption(itemId, pointsCost) {
+            if (currentBalance < pointsCost) {
+                alert('Insufficient points balance');
+                return;
+            }
+
+            try {
+                const response = await fetch('../../api_parent_points.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'redeem', item_id: itemId })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('redemption-modal').classList.remove('active');
+                    alert(`🎁 ${data.item_name} redeemed successfully!\n${data.token_created ? 'Token added to your account!' : ''}`);
+                    loadPointsSummary();
+                    loadMyTokens();
+                } else {
+                    alert(data.error || 'Redemption failed');
+                }
+            } catch (error) {
+                console.error('Failed to redeem:', error);
+                alert('An error occurred during redemption');
+            }
+        }
+
+        function closeRedemptionModal() {
+            document.getElementById('redemption-modal').classList.remove('active');
+            selectedItemId = null;
+        }
+
+        async function loadMyTokens() {
+            try {
+                const response = await fetch('../../api_redemption_catalog.php?action=tokens');
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('my-tokens');
+
+                    if (data.tokens.length === 0) {
+                        container.innerHTML = emptyState('No tokens available. Redeem points to get appointment tokens!');
+                        return;
+                    }
+
+                    container.innerHTML = data.tokens.map(token => {
+                        const discountText = token.discount_amount > 0 ?
+                            `Save $${parseFloat(token.discount_amount).toFixed(2)}` :
+                            'Special benefit';
+
+                        return `
+                            <div class="token-item">
+                                <span class="token-icon">${token.icon || '🎫'}</span>
+                                <div class="token-info">
+                                    <div class="token-name">${token.item_name || token.token_type}</div>
+                                    <div class="token-discount">${discountText}</div>
+                                    <div class="token-expires">Expires: ${new Date(token.expires_at).toLocaleDateString()}</div>
+                                </div>
+                                <span class="token-status available">Available</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load tokens:', error);
+                document.getElementById('my-tokens').innerHTML = emptyState('Failed to load tokens');
+            }
+        }
+
+        async function loadMilestones() {
+            try {
+                const response = await fetch('../../api_points_notifications.php?action=milestones');
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.next_milestone) {
+                        document.getElementById('next-milestone-target').textContent =
+                            `${data.next_milestone.milestone_value} points`;
+                        document.getElementById('milestone-current').textContent = data.total_lifetime_earned.toLocaleString();
+                        document.getElementById('milestone-goal').textContent = data.next_milestone.milestone_value.toLocaleString();
+
+                        const percentage = Math.min(100, (data.total_lifetime_earned / data.next_milestone.milestone_value) * 100);
+                        document.getElementById('milestone-progress-bar').style.width = percentage + '%';
+                    }
+
+                    const container = document.getElementById('milestones-achieved');
+
+                    if (data.milestones.length === 0) {
+                        container.innerHTML = emptyState('Start earning points to unlock milestones!');
+                        return;
+                    }
+
+                    container.innerHTML = data.milestones.map(m => `
+                        <div class="milestone-badge">
+                            <div class="milestone-badge-icon">${m.badge_icon || '🏆'}</div>
+                            <div class="milestone-badge-name">${m.milestone_name}</div>
+                            <div class="milestone-badge-value">${m.milestone_value.toLocaleString()} pts</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load milestones:', error);
+            }
+        }
+
+        function updateMilestoneProgress(current, lifetime) {
+            const thresholds = [100, 500, 1000, 5000, 10000];
+            let nextThreshold = thresholds.find(t => lifetime < t) || 10000;
+
+            document.getElementById('milestone-current').textContent = lifetime.toLocaleString();
+            document.getElementById('milestone-goal').textContent = nextThreshold.toLocaleString();
+            document.getElementById('next-milestone-target').textContent = `${nextThreshold} points`;
+
+            const percentage = Math.min(100, (lifetime / nextThreshold) * 100);
+            document.getElementById('milestone-progress-bar').style.width = percentage + '%';
+        }
+
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('../../api_parent_points.php?action=history&limit=5');
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('recent-activity');
+
+                    if (data.transactions.length === 0) {
+                        container.innerHTML = emptyState('No activity yet. Start earning points!');
+                        return;
+                    }
+
+                    container.innerHTML = data.transactions.map(tx => {
+                        const isPositive = tx.points_change > 0;
+                        const icon = isPositive ? '💎' : '🎁';
+                        const className = isPositive ? 'positive' : 'negative';
+                        const sign = isPositive ? '+' : '';
+
+                        return `
+                            <div class="activity-item">
+                                <div class="activity-icon ${className}">${icon}</div>
+                                <div class="activity-details">
+                                    <div class="activity-title">${tx.action_name || (isPositive ? 'Points earned' : 'Redemption')}</div>
+                                    <div class="activity-date">${new Date(tx.created_at).toLocaleDateString()}</div>
+                                </div>
+                                <div class="activity-points ${className}">${sign}${tx.points_change}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load activity:', error);
+            }
+        }
+
+        function showAllHistory() {
+            document.getElementById('history-modal').classList.add('active');
+            loadHistoryList();
+        }
+
+        async function loadHistoryList(filter) {
+            filter = filter || 'all';
+            try {
+                const response = await fetch('../../api_parent_points.php?action=history&limit=100');
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('history-list');
+                    let transactions = data.transactions;
+
+                    if (filter !== 'all') {
+                        transactions = transactions.filter(tx =>
+                            (filter === 'deposit' && tx.points_change > 0) ||
+                            (filter === 'withdrawal' && tx.points_change < 0)
+                        );
+                    }
+
+                    if (transactions.length === 0) {
+                        container.innerHTML = emptyState('No transactions found');
+                        return;
+                    }
+
+                    container.innerHTML = transactions.map(tx => {
+                        const isPositive = tx.points_change > 0;
+                        const sign = isPositive ? '+' : '';
+
+                        return `
+                            <div class="history-item">
+                                <div class="history-item-left">
+                                    <div class="history-item-title">${tx.action_name || (isPositive ? 'Points earned' : 'Redemption')}</div>
+                                    <div class="history-item-date">${new Date(tx.created_at).toLocaleString()}</div>
+                                </div>
+                                <div class="history-item-points ${isPositive ? 'positive' : 'negative'}">${sign}${tx.points_change}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load history:', error);
+            }
+        }
+
+        function filterHistory() {
+            const filter = document.getElementById('history-filter-type').value;
+            loadHistoryList(filter);
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('history-modal').classList.remove('active');
+        }
+
+        function setupFilterListeners() {
+            document.querySelectorAll('.catalog-filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.catalog-filter-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentFilter = this.dataset.filter;
+                    loadRedemptionCatalog(currentFilter);
+                });
+            });
+        }
+
+        return {
+            init: init,
+            openRedemptionModal: openRedemptionModal,
+            closeRedemptionModal: closeRedemptionModal,
+            showAllHistory: showAllHistory,
+            closeHistoryModal: closeHistoryModal,
+            filterHistory: filterHistory,
+            refresh: init,
+            // Points are earned automatically - no manual earn function
+        };
+    })();
+
     function getSettingsView() {
         const d = window.dashboardData || {};
         const p = d.parent || {};
@@ -4971,7 +5920,7 @@
                                     <h4 class="settings-row-title">Current Plan: <span style="color:var(--blue-600);font-weight:700;">${sub.plan_name || 'Free'}</span></h4>
                                     <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? '$' + sub.price + '/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
                                 </div>
-                                <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../payment.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
+                                <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../pricing.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
                             </div>
                         </div>
                     </div>
@@ -5820,7 +6769,7 @@
                                 <select id="acm-gender" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);transition:border-color 0.2s;outline:none;box-sizing:border-box;cursor:pointer;" onfocus="this.style.borderColor='#6C63FF'" onblur="this.style.borderColor=''">
                                     <option value="male" ${childData?.gender === 'male' ? 'selected' : ''}>Male</option>
                                     <option value="female" ${childData?.gender === 'female' ? 'selected' : ''}>Female</option>
-                                    <option value="other" ${childData?.gender === 'other' ? 'selected' : ''}>Other</option>
+
                                 </select>
                             </div>
                         </div>
@@ -6083,30 +7032,42 @@
 
             <div id="bk-step-2" style="padding:2rem;display:none;">
                 <button onclick="window.goToBookingStep1()" style="background:none;border:none;color:var(--slate-500);cursor:pointer;font-size:0.85rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.25rem;padding:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back</button>
-                
+
+                <!-- Token Selection -->
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Apply Points Token (Optional)</label>
+                    <select id="bk-token" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;" onchange="window.updateTokenDiscount()">
+                        <option value="">No token - Pay full price</option>
+                    </select>
+                    <div id="bk-token-info" style="margin-top:0.5rem;font-size:0.8rem;color:var(--slate-500);"></div>
+                </div>
+
                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Consultation Fee</span><span style="font-weight:600;">$50.00</span></div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Discount</span><span style="font-weight:600;">$0.00</span></div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Consultation Fee</span><span style="font-weight:600;" id="bk-fee">$50.00</span></div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Discount</span><span style="font-weight:600;color:var(--green-600);" id="bk-discount">$0.00</span></div>
                     <div style="height:1px;background:#e2e8f0;margin:0.75rem 0;"></div>
-                    <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--slate-800);">Total to Pay</span><span style="font-weight:800;color:var(--slate-900);font-size:1.1rem;">$50.00</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--slate-800);">Total to Pay</span><span style="font-weight:800;color:var(--slate-900);font-size:1.1rem;" id="bk-total">$50.00</span></div>
                 </div>
 
                 <div style="margin-bottom:2rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Payment Method</label>
-                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';">
+                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;">
                         <input type="radio" name="bk-payment" value="Credit Card" checked style="margin-right:1rem;accent-color:var(--blue-600);">
                         <div>
                             <div style="font-weight:600;color:var(--blue-900);">Credit Card</div>
                             <div style="font-size:0.75rem;color:var(--blue-600);">Pay securely online</div>
                         </div>
                     </label>
-                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';">
-                        <input type="radio" name="bk-payment" value="Cash" style="margin-right:1rem;accent-color:var(--blue-600);">
+                    <label id="bk-cash-label" style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;opacity:1;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';}">
+                        <input type="radio" name="bk-payment" value="Cash" id="bk-cash-input" style="margin-right:1rem;accent-color:var(--blue-600);">
                         <div>
                             <div style="font-weight:600;color:var(--slate-800);">Cash at Clinic</div>
                             <div style="font-size:0.75rem;color:var(--slate-500);">Pay during your visit</div>
                         </div>
                     </label>
+                    <div id="bk-cash-warning" style="display:none;margin-top:0.5rem;padding:0.75rem 1rem;background:var(--orange-50);border:1px solid var(--orange-200);border-radius:8px;font-size:0.8rem;color:var(--orange-800);">
+                        ⚠️ Cash payment is not available for online appointments. Please select Credit Card.
+                    </div>
                 </div>
 
                 <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;">Confirm & Pay $50.00</button>
@@ -6139,6 +7100,73 @@
             document.getElementById('bk-step-1').style.display = 'none';
             document.getElementById('bk-step-2').style.display = 'block';
             document.getElementById('bk-step-3').style.display = 'none';
+
+            // Load available tokens
+            window.loadAvailableTokens();
+
+            // Handle online appointment payment restriction
+            const type = document.getElementById('bk-type').value;
+            const cashLabel = document.getElementById('bk-cash-label');
+            const cashInput = document.getElementById('bk-cash-input');
+            const cashWarning = document.getElementById('bk-cash-warning');
+
+            if (type === 'online') {
+                cashLabel.classList.add('disabled');
+                cashLabel.style.opacity = '0.5';
+                cashLabel.style.cursor = 'not-allowed';
+                cashInput.disabled = true;
+                cashWarning.style.display = 'block';
+                // Force credit card selection
+                cashLabel.previousElementSibling.checked = true;
+                cashLabel.previousElementSibling.style.borderColor = 'var(--blue-500)';
+                cashLabel.previousElementSibling.style.background = 'var(--blue-50)';
+                cashLabel.style.borderColor = 'var(--slate-200)';
+                cashLabel.style.background = '#fff';
+            } else {
+                cashLabel.classList.remove('disabled');
+                cashLabel.style.opacity = '1';
+                cashLabel.style.cursor = 'pointer';
+                cashInput.disabled = false;
+                cashWarning.style.display = 'none';
+            }
+        };
+
+        window.loadAvailableTokens = async function () {
+            const tokenSelect = document.getElementById('bk-token');
+            const tokenInfo = document.getElementById('bk-token-info');
+            if (!tokenSelect) return;
+
+            try {
+                const res = await fetch('../../api_appointment_points.php?action=available_tokens');
+                const data = await res.json();
+                const tokens = data.tokens || [];
+
+                tokenSelect.innerHTML = '<option value="">No token - Pay full price</option>';
+
+                if (tokens.length > 0) {
+                    tokens.forEach(token => {
+                        const discountPct = token.discount_amount === 25 ? '25%' : token.discount_amount === 50 ? '50%' : '100%';
+                        tokenSelect.innerHTML += `<option value="${token.token_id}" data-discount="${token.discount_amount}">${discountPct} Off - ${token.token_type} (${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'No expiry'})</option>`;
+                    });
+                    tokenInfo.textContent = `You have ${tokens.length} available token(s). Select one to apply discount.`;
+                } else {
+                    tokenInfo.textContent = 'No tokens available. Redeem points in the Points & Rewards section.';
+                }
+            } catch (e) {
+                tokenInfo.textContent = 'Unable to load tokens.';
+            }
+        };
+
+        window.updateTokenDiscount = function () {
+            const tokenSelect = document.getElementById('bk-token');
+            const selectedOption = tokenSelect.options[tokenSelect.selectedIndex];
+            const discount = parseFloat(selectedOption.getAttribute('data-discount')) || 0;
+            const fee = 50.00;
+            const total = fee - discount;
+
+            document.getElementById('bk-discount').textContent = '-$' + discount.toFixed(2);
+            document.getElementById('bk-total').textContent = '$' + total.toFixed(2);
+            document.getElementById('bk-submit-btn').textContent = 'Confirm & Pay $' + total.toFixed(2);
         };
 
         window.submitBooking = async function (sid) {
@@ -6152,6 +7180,8 @@
             const time = document.getElementById('bk-time').value;
             const comment = document.getElementById('bk-comment').value;
             const method = document.querySelector('input[name="bk-payment"]:checked').value;
+            const tokenSelect = document.getElementById('bk-token');
+            const tokenId = tokenSelect.value || null;
 
             const schedAt = date + ' ' + time + ':00';
 
@@ -6162,6 +7192,13 @@
                 fd.append('scheduled_at', schedAt);
                 fd.append('payment_method', method);
                 fd.append('comment', comment);
+                if (tokenId) fd.append('token_id', tokenId);
+
+                const children = (window.dashboardData || {}).children || [];
+                const child = children[window._selectedChildIndex || 0];
+                if (child && child.child_id) {
+                    fd.append('child_id', child.child_id);
+                }
 
                 const res = await fetch('../../api_book_appointment.php', { method: 'POST', body: fd });
                 const data = await res.json();
@@ -6194,56 +7231,191 @@
         const d = window.dashboardData || {};
         const child = (d.children || [])[window._selectedChildIndex || 0] || {};
         const totalPoints = child.total_points || 0;
-
-        const vouchers = [
-            { name: 'Free Consultation', points: 500, icon: '🩺', desc: 'Book a free specialist session', color: '#3b82f6' },
-            { name: '1 Month Premium', points: 1000, icon: '💎', desc: 'Upgrade to Premium plan for a month', color: '#8b5cf6' },
-            { name: 'Activity Pack', points: 200, icon: '🎨', desc: 'Unlock exclusive activity materials', color: '#f59e0b' },
-            { name: 'Growth Report PDF', points: 150, icon: '📊', desc: 'Download detailed growth analysis', color: '#22c55e' },
-            { name: 'Certificate Badge', points: 300, icon: '🏅', desc: 'Earn a printable achievement certificate', color: '#ec4899' },
-        ];
-
-        const voucherHtml = vouchers.map(v => {
-            const canRedeem = totalPoints >= v.points;
-            return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? v.color + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\'translateX(4px)\'" onmouseout="this.style.transform=\'\'"' : ''}>
-            <div style="width:3rem;height:3rem;background:${v.color}15;color:${v.color};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">${v.icon}</div>
-            <div style="flex:1;">
-                <h4 style="font-weight:700;margin:0 0 0.25rem;font-size:0.95rem;">${v.name}</h4>
-                <p style="margin:0;font-size:0.8rem;color:var(--slate-500);">${v.desc}</p>
-            </div>
-            <div style="text-align:right;flex-shrink:0;">
-                <div style="font-weight:800;color:${canRedeem ? v.color : '#94a3b8'};font-size:0.95rem;">${v.points} pts</div>
-                <button style="margin-top:0.25rem;padding:0.3rem 0.75rem;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? v.color : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (v.points - totalPoints) + ' more'}</button>
-            </div>
-        </div>`;
-        }).join('');
+        const childId = child.child_id;
 
         const modal = document.createElement('div');
         modal.id = 'wallet-modal';
         modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('wallet-modal').remove()">
         <div style="background:#ffffff;border-radius:28px;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,0.2);overflow:hidden;animation:slideUp 0.4s ease-out;">
-            <div style="background:linear-gradient(135deg,#6C63FF,#a78bfa);padding:2rem;text-align:center;position:relative;">
+            <div style="background:linear-gradient(135deg,#7c3aed,#a78bfa);padding:2.5rem 2rem;text-align:center;position:relative;">
                 <button onclick="document.getElementById('wallet-modal').remove()" style="position:absolute;right:1rem;top:1rem;background:rgba(255,255,255,0.2);border:none;color:#fff;width:2rem;height:2rem;border-radius:50%;cursor:pointer;font-size:1.2rem;">&times;</button>
-                <div style="font-size:3rem;margin-bottom:0.5rem;">💎</div>
-                <h2 style="color:#fff;font-size:1.75rem;font-weight:800;margin:0 0 0.25rem;">Points Wallet</h2>
-                <div style="background:rgba(255,255,255,0.2);display:inline-block;padding:0.5rem 1.5rem;border-radius:99px;margin-top:0.5rem;">
-                    <span style="font-size:2rem;font-weight:800;color:#fff;">${totalPoints}</span>
-                    <span style="color:rgba(255,255,255,0.8);margin-left:0.25rem;">points</span>
+                <div style="width:4.5rem;height:4.5rem;margin:0 auto 1rem;display:flex;justify-content:center;align-items:center;">
+                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2338bdf8' stroke='%230f172a' stroke-width='2.5' stroke-linejoin='round'><polygon points='12 2 2 7 12 22 22 7 12 2'/><polyline points='2 7 12 12 22 7'/><polyline points='12 22 12 12'/></svg>" style="width:100%;height:100%;" alt="Diamond">
+                </div>
+                <h2 style="color:#fff;font-size:1.85rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.5px;">Points Wallet</h2>
+                <div style="background:rgba(255,255,255,0.15);display:inline-block;padding:0.75rem 2rem;border-radius:99px;">
+                    <span style="font-size:2.25rem;font-weight:800;color:#fff;line-height:1;">${totalPoints}</span>
+                    <span style="color:rgba(255,255,255,0.9);margin-left:0.5rem;font-weight:600;">points</span>
                 </div>
             </div>
-            <div style="padding:1.5rem;overflow-y:auto;flex:1;">
-                <h3 style="font-weight:700;font-size:1.1rem;margin:0 0 1rem;color:var(--slate-800);">🎁 Redeem Rewards</h3>
-                <div style="display:flex;flex-direction:column;gap:0.75rem;">
-                    ${voucherHtml}
+            <div style="padding:1.5rem;overflow-y:auto;flex:1;background:#fff;">
+                
+                <div style="display:flex;gap:1rem;margin-bottom:1.5rem;background:#f1f5f9;border-radius:16px;padding:0.5rem;">
+                    <button onclick="document.getElementById('wallet-rewards').style.display='block';document.getElementById('wallet-history').style.display='none';this.style.background='#6366f1';this.style.color='#fff';this.nextElementSibling.style.background='transparent';this.nextElementSibling.style.color='var(--slate-600)';" style="flex:1;padding:0.75rem;border-radius:12px;border:none;background:#6366f1;color:#fff;font-weight:700;cursor:pointer;transition:all 0.2s;">🎁 Rewards</button>
+                    <button onclick="document.getElementById('wallet-history').style.display='block';document.getElementById('wallet-rewards').style.display='none';this.style.background='#6366f1';this.style.color='#fff';this.previousElementSibling.style.background='transparent';this.previousElementSibling.style.color='var(--slate-600)';" style="flex:1;padding:0.75rem;border-radius:12px;border:none;background:transparent;color:var(--slate-600);font-weight:700;cursor:pointer;transition:all 0.2s;">📜 History</button>
                 </div>
-                <div style="margin-top:1.5rem;padding:1rem;background:#eff6ff;border-radius:12px;border:1px solid #bfdbfe;">
-                    <p style="margin:0;font-size:0.85rem;color:#1e40af;line-height:1.5;"><strong>💡 How to earn points:</strong> Log growth (+25), complete activities (+10-50), read articles (+5), maintain streaks (bonus points!)</p>
+
+                <div id="wallet-rewards">
+                    <h3 style="font-weight:800;font-size:1.15rem;margin:0 0 1rem;color:var(--slate-900);">🎁 Redeem Rewards</h3>
+                    <div id="wallet-rewards-content" style="display:flex;flex-direction:column;gap:0.75rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-500);">Loading offers...</div>
+                    </div>
                 </div>
+
+
+
+                <div id="wallet-history" style="display:none;">
+                    <h3 style="font-weight:800;font-size:1.15rem;margin:0 0 1rem;color:var(--slate-900);">📜 Transaction History</h3>
+                    <div id="wallet-history-content" style="display:flex;flex-direction:column;gap:0.75rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-500);">Loading history...</div>
+                    </div>
+                </div>
+                
             </div>
         </div>
     </div>`;
         document.body.appendChild(modal);
+
+        // Fetch offers
+        fetch('../../api_points_engine.php?action=get_offers')
+            .then(res => res.json())
+            .then(data => {
+                const rc = document.getElementById('wallet-rewards-content');
+                if (!rc) return;
+                const colors = ['#8b5cf6', '#3b82f6', '#22c55e', '#ec4899', '#f59e0b'];
+                // Fallback icon map for when DB emoji encoding is broken
+                const iconFallbacks = {
+                    'activity': '🎮', 'growth': '📊', 'report': '📊', 'priority': '⭐',
+                    'consultation': '🩺', 'free': '🎁', 'premium': '🎯', 'activities': '🎯',
+                    'meal': '🥗', 'nutrition': '🥗', 'appointment': '📅', 'session': '⏱️',
+                    'badge': '🏆', 'discount': '💰', 'gift': '🎁', 'card': '💳',
+                    'home': '🏠', 'visit': '🏠', 'extended': '⏱️', 'booking': '⭐'
+                };
+                function getOfferIcon(offer) {
+                    // Check if icon exists and is a valid emoji (not garbled)
+                    if (offer.icon && offer.icon.length <= 4 && !/^[\?]+$/.test(offer.icon) && !/^[\x00-\x7F]+$/.test(offer.icon)) {
+                        return offer.icon;
+                    }
+                    // Fallback: match keywords from the title
+                    const titleLower = (offer.title || '').toLowerCase();
+                    for (const [keyword, emoji] of Object.entries(iconFallbacks)) {
+                        if (titleLower.includes(keyword)) return emoji;
+                    }
+                    return '🎁';
+                }
+                if (data.success && data.offers && data.offers.length) {
+                    rc.innerHTML = data.offers.map((o, idx) => {
+                        const canRedeem = totalPoints >= o.points_required;
+                        const c = colors[idx % colors.length];
+                        const offerIcon = getOfferIcon(o);
+                        return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? c + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\\\'translateX(4px)\\\'" onmouseout="this.style.transform=\\\'\\\'"' : ''}>
+                        <div style="width:3rem;height:3rem;background:${c}15;color:${c};border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;box-shadow:0 4px 12px ${c}20;">${offerIcon}</div>
+                        <div style="flex:1;">
+                            <h4 style="font-weight:700;margin:0 0 0.25rem;font-size:0.95rem;">${o.title}</h4>
+                            <p style="margin:0;font-size:0.8rem;color:var(--slate-500);">${o.description || ''}</p>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-weight:800;color:${canRedeem ? c : '#94a3b8'};font-size:0.95rem;">${o.points_required} pts</div>
+                            <button onclick="redeemPointsOffer('${o.title.replace(/'/g, "\\'")}', ${o.points_required})" style="margin-top:0.25rem;padding:0.4rem 1rem;border-radius:12px;font-size:0.8rem;font-weight:700;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? c : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (o.points_required - totalPoints) + ' more'}</button>
+                        </div>
+                    </div>`;
+                    }).join('');
+                } else {
+                    rc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-500);">No reward offers available yet.</div>';
+                }
+            }).catch(() => {
+                const rc = document.getElementById('wallet-rewards-content');
+                if (rc) rc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--red-500);">Failed to load offers.</div>';
+            });
+        
+        // Fetch history
+        if (childId) {
+            fetch('../../api_points_engine.php?action=get_history&child_id=' + childId)
+                .then(res => res.json())
+                .then(data => {
+                    const hc = document.getElementById('wallet-history-content');
+                    if (!hc) return;
+                    if (data.success && data.history && data.history.length) {
+                        hc.innerHTML = data.history.map(h => {
+                            const isPos = h.points > 0;
+                            const color = isPos ? '#16a34a' : '#ef4444';
+                            const sign = isPos ? '+' : '';
+                            const date = new Date(h.created_at).toLocaleDateString();
+                            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                                <div>
+                                    <div style="font-weight:700;color:var(--slate-800);margin-bottom:0.25rem;">${h.reason || h.action}</div>
+                                    <div style="font-size:0.75rem;color:var(--slate-500);">${date}</div>
+                                </div>
+                                <div style="font-weight:800;font-size:1.1rem;color:${color};">${sign}${h.points}</div>
+                            </div>`;
+                        }).join('');
+                    } else {
+                        hc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-500);">No transactions found.</div>';
+                    }
+                }).catch(() => {
+                    const hc = document.getElementById('wallet-history-content');
+                    if (hc) hc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--red-500);">Failed to load history.</div>';
+                });
+        }
+    };
+
+    window.redeemPointsOffer = function(offerName, pointsRequired) {
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[window._selectedChildIndex || 0] || {};
+        const childId = child.child_id;
+        
+        if (!childId) return;
+
+        const cModal = document.createElement('div');
+        cModal.id = 'redeem-confirm-modal';
+        cModal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;">
+            <div style="background:#fff;border-radius:20px;padding:2rem;text-align:center;max-width:400px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+                <h3 style="font-size:1.25rem;font-weight:800;margin-bottom:1rem;">Confirm Redemption</h3>
+                <p style="color:#64748b;margin-bottom:1.5rem;">Are you sure you want to spend <strong>${pointsRequired} pts</strong> on <strong>${offerName}</strong>?</p>
+                <div style="display:flex;gap:1rem;justify-content:center;">
+                    <button onclick="document.getElementById('redeem-confirm-modal').remove()" style="padding:0.75rem 1.5rem;border-radius:12px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-weight:600;color:#64748b;">Cancel</button>
+                    <button id="confirm-redeem-btn" style="padding:0.75rem 1.5rem;border-radius:12px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer;font-weight:600;">Confirm</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(cModal);
+
+        document.getElementById('confirm-redeem-btn').onclick = async function() {
+            this.disabled = true;
+            this.innerHTML = 'Processing...';
+            try {
+                const res = await fetch('../../api_points_engine.php?action=redeem', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        child_id: childId,
+                        offer_name: offerName,
+                        points_cost: pointsRequired
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    cModal.remove();
+                    showBadgeToast('✅ Redeemed ' + offerName + '!');
+                    
+                    // Update points locally
+                    child.total_points -= pointsRequired;
+                    const ptsEl = document.getElementById('topbar-points-count');
+                    if (ptsEl) ptsEl.textContent = child.total_points;
+                    
+                    // Re-render wallet popup
+                    window.openPointsWalletPopup();
+                } else {
+                    alert(data.error || 'Failed to redeem reward.');
+                    cModal.remove();
+                }
+            } catch (e) {
+                alert('Network error. Please try again.');
+                cModal.remove();
+            }
+        };
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -6266,12 +7438,55 @@
             setTimeout(() => loadHomeActivities(), 50);
         }
 
-        // Update topbar data
+        // Update topbar data from in-memory data first
         if (child) {
             const ptsEl = document.getElementById('topbar-points-count');
             if (ptsEl) ptsEl.textContent = child.total_points || 0;
             const badgeEl = document.getElementById('topbar-badge-count');
             if (badgeEl) badgeEl.textContent = child.badge_count || 0;
+
+            // Update streak counter for the selected child
+            const allStreaks = (window.dashboardData || {}).all_streaks || {};
+            const childStreaks = allStreaks[child.child_id] || {};
+            const dailyLogin = childStreaks['daily_login'] || {};
+            const streakEl = document.getElementById('topbar-streak-count');
+            if (streakEl) streakEl.textContent = dailyLogin.current_count || 0;
+        }
+
+        // Re-run streak check-in for the newly selected child
+        streakCheckIn();
+
+        // Then fetch fresh data from the server to ensure accuracy
+        if (child && child.child_id) {
+            fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + child.child_id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        // Refetch earned badges for this child
+                        return fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + child.child_id);
+                    }
+                })
+                .then(r => r && r.json())
+                .then(bData => {
+                    if (bData && bData.success) {
+                        child.badges = bData.badges || [];
+                        child.badge_count = child.badges.length;
+                        const bc = document.getElementById('topbar-badge-count');
+                        if (bc) bc.textContent = child.badge_count;
+                    }
+                })
+                .catch(() => {});
+
+            fetch('../../api_points_engine.php?action=get_balance&child_id=' + child.child_id)
+                .then(r => r.json())
+                .then(pData => {
+                    if (pData.success) {
+                        child.total_points = pData.balance || 0;
+                        const ptsEl = document.getElementById('topbar-points-count');
+                        if (ptsEl) ptsEl.textContent = child.total_points;
+                    }
+                })
+                .catch(() => {});
         }
 
         // Refresh chatbot greeting with new child context
@@ -6290,16 +7505,36 @@
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Marking...';
         try {
             // Mark as read
-            await fetch('../../api_activities.php?action=mark-read', {
+            const res = await fetch('../../api_activities.php?action=mark-read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: title })
+                body: JSON.stringify({ title: title, child_id: childId })
             });
-            // Complete activity
-            await completeActivity(childId, 'article', index);
-            // Show success
-            btn.innerHTML = '✅ Completed!';
-            btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-            showBadgeToast('Article read! +15 points 📖');
+            const readData = await res.json();
+            
+            if (readData.already_read) {
+                // Already read — don't award points again
+                btn.innerHTML = '✅ Already Read';
+                btn.style.background = 'linear-gradient(135deg,#9ca3af,#6b7280)';
+                window._readArticles = window._readArticles || [];
+                if (!window._readArticles.includes(title)) {
+                    window._readArticles.push(title);
+                }
+            } else {
+                // Complete activity and get points
+                await completeActivity(childId, 'article', index, title);
+                btn.innerHTML = '✅ Completed!';
+                btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+                showBadgeToast('Article read! +15 points 📖');
+                
+                window._readArticles = window._readArticles || [];
+                if (!window._readArticles.includes(title)) {
+                    window._readArticles.push(title);
+                }
+            }
+
+            // Also reload articles to show the "Read" badge visually
+            if (typeof renderArticles === 'function') renderArticles();
+            
             setTimeout(() => {
                 const modal = document.getElementById('act-modal');
                 if (modal) modal.remove();
@@ -6314,6 +7549,32 @@
     // ── Messages View (Specialist + Community) ──────────────────
     // ══════════════════════════════════════════════════════════════
     window.getMessagesView = function () {
+        // Check if parent has any approved appointments
+        const d = window.dashboardData || {};
+        let hasApprovedAppt = false;
+        if (d.parent && d.parent.appointments) {
+            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed');
+        }
+
+        if (!hasApprovedAppt) {
+            return `<div class="dashboard-content">
+                <div class="dashboard-header-section">
+                    <div>
+                        <h1 class="dashboard-title">Messages</h1>
+                        <p class="dashboard-subtitle">Communicate with your specialists</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border-radius:20px;padding:4rem 2rem;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.03);border:1px solid #e2e8f0;margin-top:2rem;">
+                    <div style="width:100px;height:100px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;box-shadow:0 10px 25px rgba(0,0,0,0.05);">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <h2 style="font-size:1.5rem;font-weight:700;color:#1e293b;margin-bottom:0.75rem;">Messages Locked</h2>
+                    <p style="color:#64748b;font-size:1rem;line-height:1.6;max-width:400px;margin:0 auto 2rem;">You need at least one approved clinic appointment to start messaging specialists directly. Book an appointment to unlock this feature.</p>
+                    <button onclick="switchView('clinic')" class="btn btn-gradient" style="padding:0.75rem 2rem;font-size:1rem;border-radius:12px;box-shadow:0 10px 25px rgba(99,102,241,0.3);">Book Appointment</button>
+                </div>
+            </div>`;
+        }
+
         setTimeout(() => initParentMessages(), 100);
         return `<div class="dashboard-content">
         <div class="dashboard-header-section"><div>
@@ -6336,6 +7597,10 @@
                 </div>
                 <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:0.75rem;background:#f8fafc;"></div>
                 <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;">
+                    <button onclick="document.getElementById('parentChatFile').click()" style="width:40px;height:40px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color=\'#6366f1\'" onmouseout="this.style.color=\'#94a3b8\'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    </button>
+                    <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
                     <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
                     <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -6346,97 +7611,145 @@
     </div>`;
     };
 
-    window._parentChatData = {
-        sarah: {
-            name: 'Dr. Sarah Ahmed', initials: 'SA', detail: 'Pediatric Specialist', gradient: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-            messages: [
-                { from: 'them', text: "Hello! I've reviewed your child's latest growth data. Everything looks great!", time: '10:30 AM' },
-                { from: 'me', text: "Thank you Dr. Sarah! Should we continue with the same feeding plan?", time: '10:45 AM' },
-                { from: 'them', text: "Yes, the current plan is working well. I'd suggest adding more iron-rich foods as your child grows.", time: '11:00 AM' },
-                { from: 'me', text: "Got it! I'll make those changes. When should we schedule the next check-up?", time: '11:15 AM' },
-                { from: 'them', text: "Let's do a follow-up in 3 months. You can book through the clinic section.", time: '11:20 AM' }
-            ]
-        },
-        mohamed: {
-            name: 'Dr. Mohamed Ali', initials: 'MA', detail: 'Speech Therapist', gradient: 'linear-gradient(135deg,#8b5cf6,#ec4899)',
-            messages: [
-                { from: 'them', text: "I've prepared new speech exercises for your child based on our last session.", time: 'Yesterday' },
-                { from: 'me', text: "Thanks! How often should we practice these exercises?", time: 'Yesterday' },
-                { from: 'them', text: "Twice daily for 10-15 minutes each session. Consistency is key at this age.", time: 'Yesterday' }
-            ]
-        },
-        hana: {
-            name: 'Dr. Hana Ibrahim', initials: 'HI', detail: 'Child Psychologist', gradient: 'linear-gradient(135deg,#14b8a6,#06b6d4)',
-            messages: [
-                { from: 'them', text: "Great progress in social interactions! The play-date activities are really helping.", time: 'Mar 30' },
-                { from: 'me', text: "That is so good to hear! She seems much more confident now.", time: 'Mar 30' }
-            ]
-        }
-    };
-    window._parentCurrentChat = 'sarah';
+    window._parentCurrentChat = null;
+    let _parentMessagesPoll = null;
 
     window.initParentMessages = function () {
         renderParentConvoList();
-        selectParentConvo('sarah');
         var input = document.getElementById('parent-chat-input');
         if (input) input.addEventListener('input', function () { this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 100) + 'px'; });
     };
 
-    window.renderParentConvoList = function () {
+    window.renderParentConvoList = async function () {
         var list = document.getElementById('parent-convo-list');
         if (!list) return;
-        var html = '';
-        for (var key in window._parentChatData) {
-            var c = window._parentChatData[key];
-            var lastMsg = c.messages[c.messages.length - 1];
-            var preview = lastMsg.text.length > 35 ? lastMsg.text.substring(0, 35) + '...' : lastMsg.text;
-            var isActive = key === window._parentCurrentChat;
-            html += '<div data-convo="' + key + '" onclick="selectParentConvo(\'' + key + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
-                + '<div style="width:2.5rem;height:2.5rem;background:' + c.gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + c.initials + '</div>'
-                + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + lastMsg.time + '</span></div>'
-                + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
-        }
-        list.innerHTML = html;
-    };
 
-    window.selectParentConvo = function (key) {
-        window._parentCurrentChat = key;
-        var data = window._parentChatData[key];
-        if (!data) return;
-        // Update header
-        var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = data.initials; avatar.style.background = data.gradient; }
-        var name = document.getElementById('pch-name'); if (name) name.textContent = data.name;
-        var detail = document.getElementById('pch-detail'); if (detail) detail.textContent = data.detail;
-        // Render messages
-        var container = document.getElementById('parent-chat-messages');
-        if (container) {
-            var html = '<div style="text-align:center;margin:0.5rem 0;"><span style="background:#e2e8f0;padding:0.2rem 0.75rem;border-radius:20px;font-size:0.7rem;color:#64748b;font-weight:600;">Today</span></div>';
-            data.messages.forEach(function (msg) {
-                var isMine = msg.from === 'me';
-                html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
-                    + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
-                    + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
-                    + '<div>' + msg.text + '</div>'
-                    + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + msg.time + '</div>'
-                    + '</div></div>';
+        try {
+            const res = await fetch('../../api_get_messages.php?action=get_conversations');
+            const data = await res.json();
+            
+            if (!data.success || !data.conversations || data.conversations.length === 0) {
+                list.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#94a3b8;font-size:0.85rem;">No conversations yet.</div>';
+                return;
+            }
+
+            var html = '';
+            data.conversations.forEach(c => {
+                var lastMsg = c.last_message || '';
+                var preview = lastMsg.length > 35 ? lastMsg.substring(0, 35) + '...' : lastMsg;
+                var isActive = c.partner_id == window._parentCurrentChat;
+                var initials = (c.partner_first_name.charAt(0) + c.partner_last_name.charAt(0)).toUpperCase();
+                var gradient = 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+                
+                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ', \'' + c.partner_first_name + ' ' + c.partner_last_name + '\', \'' + (c.specialization || 'Specialist') + '\', \'' + initials + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
+                    + '<div style="width:2.5rem;height:2.5rem;background:' + gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initials + '</div>'
+                    + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.partner_first_name + ' ' + c.partner_last_name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + (c.last_message_time ? formatRelativeDate(c.last_message_time) : '') + '</span></div>'
+                    + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
             });
-            container.innerHTML = html;
-            container.scrollTop = container.scrollHeight;
-        }
-        renderParentConvoList();
+            list.innerHTML = html;
+        } catch(e) {}
     };
 
-    window.sendParentMsg = function () {
+    window.selectParentConvo = async function (partnerId, name, detail, initials) {
+        window._parentCurrentChat = partnerId;
+        
+        var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
+        var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = name;
+        var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = detail;
+        
+        renderParentConvoList(); // Update active state
+        loadParentChatMessages();
+        
+        if (_parentMessagesPoll) clearInterval(_parentMessagesPoll);
+        _parentMessagesPoll = setInterval(loadParentChatMessages, 5000);
+    };
+
+    window.loadParentChatMessages = async function() {
+        if (!window._parentCurrentChat) return;
+        
+        try {
+            let url = '../../api_get_messages.php?other_user_id=' + window._parentCurrentChat;
+            
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            var container = document.getElementById('parent-chat-messages');
+            if (container && data.success) {
+                var html = '';
+                
+                if (data.messages.length === 0) {
+                    html = '<div style="text-align:center;color:#94a3b8;font-size:0.85rem;margin-top:2rem;">Start the conversation.</div>';
+                } else {
+                    data.messages.forEach(function (msg) {
+                        var isMine = msg.sender_id != window._parentCurrentChat; // If not from partner, it's mine
+                        var timeStr = new Date(msg.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        
+                        let contentHtml = '<div>' + (msg.content || '') + '</div>';
+                        
+                        if (msg.meeting_link) {
+                            contentHtml += `<div style="margin-top:0.5rem;"><a href="${msg.meeting_link}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Join Meeting</a></div>`;
+                        }
+                        
+                        if (msg.file_path) {
+                            contentHtml += `<div style="margin-top:0.5rem;"><a href="../../${msg.file_path}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);">📎 View Attachment</a></div>`;
+                        }
+
+                        html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
+                            + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
+                            + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
+                            + contentHtml
+                            + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + timeStr + '</div>'
+                            + '</div></div>';
+                    });
+                }
+                
+                // Only scroll to bottom if we are already near bottom, to not disrupt user reading history
+                const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+                container.innerHTML = html;
+                if (isNearBottom) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+        } catch(e) {}
+    };
+
+    window.handleParentChatFileSelect = async function(event) {
+        if (!window._parentCurrentChat) return;
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        await sendParentMsg(null, file);
+        event.target.value = ''; // Reset
+    };
+
+    window.sendParentMsg = async function (e, file = null) {
+        if (!window._parentCurrentChat) {
+            alert('Please select a conversation first.');
+            return;
+        }
+        
         var input = document.getElementById('parent-chat-input');
         var text = input ? input.value.trim() : '';
-        if (!text) return;
-        var data = window._parentChatData[window._parentCurrentChat];
-        if (data) {
-            var now = new Date();
-            data.messages.push({ from: 'me', text: text, time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) });
+        
+        if (!text && !file) return;
+        
+        const fd = new FormData();
+        fd.append('receiver_id', window._parentCurrentChat);
+        if (text) fd.append('content', text);
+        if (file) fd.append('attachment', file);
+        
+        if (input) {
+            input.value = ''; 
+            input.style.height = 'auto';
         }
-        input.value = ''; input.style.height = 'auto';
-        selectParentConvo(window._parentCurrentChat);
+        
+        try {
+            await fetch('../../api_send_message.php', { method: 'POST', body: fd });
+            loadParentChatMessages();
+            renderParentConvoList();
+        } catch(e) {
+            alert('Failed to send message.');
+        }
     };
 
     window.filterParentConvos = function (q) {

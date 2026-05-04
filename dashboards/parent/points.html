@@ -1,0 +1,1334 @@
+<!-- Bright Steps - Parent Points Dashboard View -->
+<div class="points-dashboard-content">
+    <div class="dashboard-header-section">
+        <div>
+            <h1 class="dashboard-title">Points & Rewards 💎</h1>
+            <p class="dashboard-subtitle">Earn points for engaging with your child's development</p>
+        </div>
+    </div>
+
+    <!-- Points Summary Cards -->
+    <div class="points-summary-grid">
+        <div class="points-card points-card-primary">
+            <div class="points-card-icon">💎</div>
+            <div class="points-card-info">
+                <div class="points-card-label">Available Points</div>
+                <div class="points-card-value" id="points-balance">0</div>
+            </div>
+        </div>
+        <div class="points-card">
+            <div class="points-card-icon">📅</div>
+            <div class="points-card-info">
+                <div class="points-card-label">Earned Today</div>
+                <div class="points-card-value" id="points-today">0</div>
+            </div>
+        </div>
+        <div class="points-card">
+            <div class="points-card-icon">📊</div>
+            <div class="points-card-info">
+                <div class="points-card-label">Earned This Week</div>
+                <div class="points-card-value" id="points-weekly">0</div>
+            </div>
+        </div>
+        <div class="points-card">
+            <div class="points-card-icon">🎫</div>
+            <div class="points-card-info">
+                <div class="points-card-label">Available Tokens</div>
+                <div class="points-card-value" id="tokens-count">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="points-main-grid">
+        <!-- Left Column: Earning Actions -->
+        <div class="points-column">
+            <div class="points-section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                        </svg>
+                        Earn Points
+                    </h3>
+                </div>
+                <div class="earning-actions-grid" id="earning-actions">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="points-section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                        </svg>
+                        Recent Activity
+                    </h3>
+                    <button class="btn-text" onclick="pointsView.showAllHistory()">View All</button>
+                </div>
+                <div class="activity-list" id="recent-activity">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Redemption & Tokens -->
+        <div class="points-column">
+            <!-- Redemption Catalog -->
+            <div class="points-section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 11V7a4 4 0 1 0-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                        Redemption Catalog
+                    </h3>
+                </div>
+                <div class="catalog-filters">
+                    <button class="catalog-filter-btn active" data-filter="all">All</button>
+                    <button class="catalog-filter-btn" data-filter="appointment">Appointments</button>
+                    <button class="catalog-filter-btn" data-filter="service">Services</button>
+                    <button class="catalog-filter-btn" data-filter="badge">Badges</button>
+                    <button class="catalog-filter-btn" data-filter="custom">Other</button>
+                </div>
+                <div class="catalog-grid" id="redemption-catalog">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- My Tokens -->
+            <div class="points-section-card">
+                <div class="section-header">
+                    <h3 class="section-title">
+                        <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                        </svg>
+                        My Appointment Tokens
+                    </h3>
+                </div>
+                <div class="tokens-list" id="my-tokens">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Milestones Section -->
+    <div class="points-section-card">
+        <div class="section-header">
+            <h3 class="section-title">
+                <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                </svg>
+                Milestones & Achievements
+            </h3>
+        </div>
+        <div class="milestones-progress">
+            <div class="milestone-progress-item">
+                <div class="milestone-info">
+                    <span class="milestone-name">Next Milestone</span>
+                    <span class="milestone-target" id="next-milestone-target">100 points</span>
+                </div>
+                <div class="milestone-bar-container">
+                    <div class="milestone-bar" id="milestone-progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="milestone-stats">
+                    <span id="milestone-current">0</span> / <span id="milestone-goal">100</span>
+                </div>
+            </div>
+        </div>
+        <div class="milestones-grid" id="milestones-achieved">
+            <!-- Loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Redemption Modal -->
+<div class="modal" id="redemption-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="redemption-modal-title">Redeem Item</h3>
+            <button class="modal-close" onclick="pointsView.closeRedemptionModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="redemption-item-preview" id="redemption-preview">
+                <!-- Item details -->
+            </div>
+            <div class="redemption-confirmation">
+                <p class="points-cost-display">Cost: <span id="redeem-points-cost">0</span> points</p>
+                <p class="your-balance-display">Your balance: <span id="redeem-balance">0</span> points</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="pointsView.closeRedemptionModal()">Cancel</button>
+            <button class="btn btn-primary" id="confirm-redeem-btn">Confirm Redemption</button>
+        </div>
+    </div>
+</div>
+
+<!-- History Modal -->
+<div class="modal" id="history-modal">
+    <div class="modal-content modal-content-large">
+        <div class="modal-header">
+            <h3>Points History</h3>
+            <button class="modal-close" onclick="pointsView.closeHistoryModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="history-filters">
+                <select class="form-select" id="history-filter-type" onchange="pointsView.filterHistory()">
+                    <option value="all">All Transactions</option>
+                    <option value="deposit">Earnings</option>
+                    <option value="withdrawal">Redemptions</option>
+                </select>
+            </div>
+            <div class="history-list" id="history-list">
+                <!-- Loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Points Dashboard Styles */
+.points-dashboard-content {
+    padding: 1.5rem;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.points-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.points-card {
+    background: var(--card-bg, #fff);
+    border-radius: 12px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.points-card-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.points-card-primary .points-card-label {
+    color: rgba(255,255,255,0.9);
+}
+
+.points-card-primary .points-card-value {
+    color: white;
+}
+
+.points-card-icon {
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.points-card-info {
+    flex: 1;
+}
+
+.points-card-label {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.points-card-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.points-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (max-width: 1024px) {
+    .points-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.points-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.points-section-card {
+    background: var(--card-bg, #fff);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.section-icon {
+    width: 20px;
+    height: 20px;
+    color: #667eea;
+}
+
+/* Earning Actions */
+.earning-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.earning-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    text-align: left;
+}
+
+.earning-action-btn:hover {
+    background: #f1f5f9;
+    border-color: #667eea;
+    transform: translateY(-2px);
+}
+
+.earning-action-btn.earned {
+    background: #dcfce7;
+    border-color: #22c55e;
+    cursor: default;
+}
+
+.earning-action-btn .action-icon {
+    font-size: 1.5rem;
+}
+
+.earning-action-info {
+    flex: 1;
+}
+
+.earning-action-name {
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+}
+
+.earning-action-points {
+    font-size: 0.875rem;
+    color: #667eea;
+    font-weight: 600;
+}
+
+.earning-action-desc {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+}
+
+/* Activity List */
+.activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.activity-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.activity-icon.positive {
+    background: #dcfce7;
+}
+
+.activity-icon.negative {
+    background: #fee2e2;
+}
+
+.activity-details {
+    flex: 1;
+}
+
+.activity-title {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.activity-date {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.activity-points {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.activity-points.positive {
+    color: #22c55e;
+}
+
+.activity-points.negative {
+    color: #ef4444;
+}
+
+/* Catalog */
+.catalog-filters {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.catalog-filter-btn {
+    padding: 0.5rem 1rem;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.catalog-filter-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+.catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.catalog-item {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.catalog-item:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+}
+
+.catalog-item-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.catalog-item-icon {
+    font-size: 1.5rem;
+}
+
+.catalog-item-name {
+    font-weight: 600;
+    color: #1e293b;
+    flex: 1;
+}
+
+.catalog-item-type {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    background: #e2e8f0;
+    color: #64748b;
+}
+
+.catalog-item-description {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 0.5rem;
+}
+
+.catalog-item-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.catalog-item-cost {
+    font-weight: 700;
+    color: #667eea;
+}
+
+.catalog-item-original {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-decoration: line-through;
+}
+
+/* Tokens */
+.tokens-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.token-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.token-icon {
+    font-size: 1.5rem;
+}
+
+.token-info {
+    flex: 1;
+}
+
+.token-name {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.token-discount {
+    font-size: 0.875rem;
+    color: #22c55e;
+    font-weight: 600;
+}
+
+.token-expires {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.token-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.token-status.available {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.token-status.applied {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* Milestones */
+.milestones-progress {
+    margin-bottom: 1.5rem;
+}
+
+.milestone-progress-item {
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.milestone-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.milestone-name {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.milestone-target {
+    font-weight: 600;
+    color: #667eea;
+}
+
+.milestone-bar-container {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.milestone-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    border-radius: 4px;
+    transition: width 0.3s;
+}
+
+.milestone-stats {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.milestones-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+}
+
+.milestone-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.milestone-badge-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.milestone-badge-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.milestone-badge-value {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    max-width: 450px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-content-large {
+    max-width: 600px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #1e293b;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748b;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.btn {
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: #667eea;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #5a67d8;
+}
+
+.btn-secondary {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.btn-secondary:hover {
+    background: #cbd5e1;
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: #667eea;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.form-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.875rem;
+}
+
+.redemption-item-preview {
+    text-align: center;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.redemption-item-preview .icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.redemption-item-preview .name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+}
+
+.redemption-item-preview .description {
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.points-cost-display, .your-balance-display {
+    text-align: center;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+}
+
+.points-cost-display {
+    background: #f8fafc;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+#redeem-points-cost {
+    color: #667eea;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8fafc;
+    border-radius: 6px;
+}
+
+.history-item-left {
+    flex: 1;
+}
+
+.history-item-title {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.history-item-date {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.history-item-points {
+    font-weight: 700;
+}
+
+.history-item-points.positive {
+    color: #22c55e;
+}
+
+.history-item-points.negative {
+    color: #ef4444;
+}
+</style>
+
+<script>
+/**
+ * Points Dashboard View Controller
+ */
+const pointsView = (function() {
+    let currentBalance = 0;
+    let selectedItemId = null;
+    let currentFilter = 'all';
+
+    // Initialize
+    function init() {
+        loadPointsSummary();
+        loadEarningActions();
+        loadRedemptionCatalog();
+        loadMyTokens();
+        loadMilestones();
+        setupFilterListeners();
+    }
+
+    // Load points summary
+    async function loadPointsSummary() {
+        try {
+            const response = await fetch('../../api_parent_points.php?action=summary');
+            const data = await response.json();
+
+            if (data.success) {
+                const summary = data.summary;
+                currentBalance = summary.wallet.total_points || 0;
+
+                document.getElementById('points-balance').textContent = currentBalance.toLocaleString();
+                document.getElementById('points-today').textContent = '+' + summary.today_earned.toLocaleString();
+                document.getElementById('points-weekly').textContent = '+' + summary.weekly_earned.toLocaleString();
+                document.getElementById('tokens-count').textContent = summary.available_tokens.toLocaleString();
+
+                // Update milestone progress
+                updateMilestoneProgress(currentBalance, summary.wallet.lifetime_earned || 0);
+            }
+        } catch (error) {
+            console.error('Failed to load points summary:', error);
+        }
+    }
+
+    // Load earning actions
+    async function loadEarningActions() {
+        try {
+            const response = await fetch('../../api_parent_points.php?action=rules');
+            const data = await response.json();
+
+            if (data.success) {
+                const container = document.getElementById('earning-actions');
+                const icons = {
+                    'daily_login': '📅',
+                    'log_growth': '📊',
+                    'record_speech': '🎤',
+                    'log_milestone': '⭐',
+                    'complete_motor_activity': '🏃',
+                    'weekly_goal': '🎯',
+                    'attend_appointment': '🏥',
+                    'submit_feedback': '💬',
+                    'complete_profile': '👤',
+                    'read_article': '📖',
+                    'complete_activity': '✅'
+                };
+
+                container.innerHTML = data.rules.map(rule => {
+                    const icon = icons[rule.action_key] || '💎';
+                    const capInfo = rule.daily_cap ? `(${rule.points_value} pts, max ${rule.daily_cap}/day)` :
+                                   rule.weekly_cap ? `(${rule.points_value} pts, max ${rule.weekly_cap}/week)` :
+                                   `(${rule.points_value} pts)`;
+
+                    return `
+                        <button class="earning-action-btn" onclick="pointsView.earnPoints('${rule.action_key}')" id="action-${rule.action_key}">
+                            <span class="action-icon">${icon}</span>
+                            <div class="earning-action-info">
+                                <div class="earning-action-name">${rule.action_name}</div>
+                                <div class="earning-action-points">${capInfo}</div>
+                                <div class="earning-action-desc">${rule.description || ''}</div>
+                            </div>
+                        </button>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load earning actions:', error);
+        }
+    }
+
+    // Earn points
+    async function earnPoints(actionKey) {
+        // Check eligibility first
+        try {
+            const eligibilityResponse = await fetch(`../../api_parent_points.php?action=eligibility&action_key=${actionKey}`);
+            const eligibilityData = await eligibilityResponse.json();
+
+            if (!eligibilityData.success) {
+                alert(eligibilityData.error || 'Not eligible for points');
+                return;
+            }
+
+            const eligibility = eligibilityData.eligibility;
+
+            if (!eligibility.eligible) {
+                let message = eligibility.reason;
+                if (eligibility.cooldown_remaining_minutes > 0) {
+                    message += ` (Available in ${eligibility.cooldown_remaining_minutes} minutes)`;
+                }
+                if (eligibility.daily_remaining !== null) {
+                    message += ` (${eligibility.daily_remaining} points remaining today)`;
+                }
+                alert(message);
+                return;
+            }
+
+            if (!confirm(`Earn ${eligibility.points_value} points for ${eligibility.action_name}?`)) {
+                return;
+            }
+
+            const response = await fetch('../../api_parent_points.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'earn', action_key: actionKey })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                alert(`🎉 ${data.message || 'Points earned successfully!'}\nNew balance: ${data.new_balance} points`);
+                loadPointsSummary();
+                loadEarningActions();
+                loadRecentActivity();
+
+                // Mark button as earned (temporarily)
+                const btn = document.getElementById(`action-${actionKey}`);
+                if (btn) {
+                    btn.classList.add('earned');
+                    btn.innerHTML += '<span style="margin-left:auto;color:#22c55e;">✓</span>';
+                }
+            } else {
+                alert(data.error || 'Failed to earn points');
+            }
+        } catch (error) {
+            console.error('Failed to earn points:', error);
+            alert('An error occurred while earning points');
+        }
+    }
+
+    // Load redemption catalog
+    async function loadRedemptionCatalog(filter = 'all') {
+        try {
+            const url = filter === 'all' ?
+                '../../api_redemption_catalog.php?action=list' :
+                `../../api_redemption_catalog.php?action=list&category=${filter}`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success) {
+                const container = document.getElementById('redemption-catalog');
+
+                if (data.items.length === 0) {
+                    container.innerHTML = '<p style="color:#64748b;text-align:center;padding:2rem;">No items available in this category</p>';
+                    return;
+                }
+
+                const colorMap = {
+                    green:  { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', glow: 'rgba(34,197,94,0.25)', light: '#dcfce7', text: '#166534' },
+                    blue:   { bg: 'linear-gradient(135deg, #3b82f6, #2563eb)', glow: 'rgba(59,130,246,0.25)', light: '#dbeafe', text: '#1e40af' },
+                    purple: { bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', glow: 'rgba(139,92,246,0.25)', light: '#ede9fe', text: '#5b21b6' },
+                    orange: { bg: 'linear-gradient(135deg, #f97316, #ea580c)', glow: 'rgba(249,115,22,0.25)', light: '#ffedd5', text: '#9a3412' },
+                    yellow: { bg: 'linear-gradient(135deg, #eab308, #ca8a04)', glow: 'rgba(234,179,8,0.25)',  light: '#fef9c3', text: '#854d0e' },
+                    red:    { bg: 'linear-gradient(135deg, #ef4444, #dc2626)', glow: 'rgba(239,68,68,0.25)',  light: '#fee2e2', text: '#991b1b' },
+                    gold:   { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', glow: 'rgba(245,158,11,0.25)', light: '#fef3c7', text: '#92400e' }
+                };
+                const defaultColor = colorMap.blue;
+
+                container.innerHTML = data.items.map(item => {
+                    const c = colorMap[item.badge_color] || defaultColor;
+                    const icon = item.icon || '🎁';
+                    const typeLabels = { appointment: '🎫 Appointment', service: '⚙️ Service', badge: '🏅 Badge', custom: '🎁 Gift' };
+                    const typeLabel = typeLabels[item.item_type] || item.item_type;
+
+                    return `
+                    <div class="catalog-item" onclick="pointsView.openRedemptionModal(${item.item_id})" style="--card-glow:${c.glow};--card-accent-bg:${c.bg};">
+                        <div class="catalog-item-icon-wrap" style="background:${c.bg};box-shadow:0 8px 20px ${c.glow};">
+                            <span class="catalog-item-icon">${icon}</span>
+                        </div>
+                        <div class="catalog-item-body">
+                            <div class="catalog-item-header">
+                                <span class="catalog-item-name">${item.item_name}</span>
+                                <span class="catalog-item-type" style="background:${c.light};color:${c.text};">${typeLabel}</span>
+                            </div>
+                            <div class="catalog-item-description">${item.description || 'No description'}</div>
+                            <div class="catalog-item-footer">
+                                <div class="catalog-item-pricing">
+                                    <span class="catalog-item-cost">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                        ${item.points_cost.toLocaleString()} pts
+                                    </span>
+                                    ${item.original_price ? `<span class="catalog-item-original">$${parseFloat(item.original_price).toFixed(2)} value</span>` : ''}
+                                </div>
+                                <button class="catalog-redeem-btn" style="background:${c.bg};box-shadow:0 4px 12px ${c.glow};">Redeem</button>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load catalog:', error);
+        }
+    }
+
+    // Open redemption modal
+    async function openRedemptionModal(itemId) {
+        try {
+            const response = await fetch(`../../api_redemption_catalog.php?action=item&item_id=${itemId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                const item = data.item;
+                selectedItemId = itemId;
+
+                document.getElementById('redemption-preview').innerHTML = `
+                    <div class="icon">${item.icon || '🎁'}</div>
+                    <div class="name">${item.item_name}</div>
+                    <div class="description">${item.description || ''}</div>
+                `;
+                document.getElementById('redeem-points-cost').textContent = item.points_cost.toLocaleString();
+                document.getElementById('redeem-balance').textContent = currentBalance.toLocaleString();
+                document.getElementById('redemption-modal-title').textContent = 'Redeem Item';
+
+                document.getElementById('confirm-redeem-btn').onclick = () => confirmRedemption(itemId, item.points_cost);
+
+                document.getElementById('redemption-modal').classList.add('active');
+            }
+        } catch (error) {
+            console.error('Failed to load item details:', error);
+        }
+    }
+
+    // Confirm redemption
+    async function confirmRedemption(itemId, pointsCost) {
+        if (currentBalance < pointsCost) {
+            alert('Insufficient points balance');
+            return;
+        }
+
+        try {
+            const response = await fetch('../../api_parent_points.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'redeem', item_id: itemId })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                document.getElementById('redemption-modal').classList.remove('active');
+                alert(`🎁 ${data.item_name} redeemed successfully!\n${data.token_created ? 'Token added to your account!' : ''}`);
+                loadPointsSummary();
+                loadMyTokens();
+            } else {
+                alert(data.error || 'Redemption failed');
+            }
+        } catch (error) {
+            console.error('Failed to redeem:', error);
+            alert('An error occurred during redemption');
+        }
+    }
+
+    // Close redemption modal
+    function closeRedemptionModal() {
+        document.getElementById('redemption-modal').classList.remove('active');
+        selectedItemId = null;
+    }
+
+    // Load my tokens
+    async function loadMyTokens() {
+        try {
+            const response = await fetch('../../api_redemption_catalog.php?action=tokens');
+            const data = await response.json();
+
+            if (data.success) {
+                const container = document.getElementById('my-tokens');
+
+                if (data.tokens.length === 0) {
+                    container.innerHTML = '<p style="color:#64748b;text-align:center;padding:1rem;">No tokens available. Redeem points to get appointment tokens!</p>';
+                    return;
+                }
+
+                container.innerHTML = data.tokens.map(token => {
+                    const discountText = token.discount_amount > 0 ?
+                        `Save $${parseFloat(token.discount_amount).toFixed(2)}` :
+                        'Special benefit';
+
+                    return `
+                        <div class="token-item">
+                            <span class="token-icon">${token.icon || '🎫'}</span>
+                            <div class="token-info">
+                                <div class="token-name">${token.item_name || token.token_type}</div>
+                                <div class="token-discount">${discountText}</div>
+                                <div class="token-expires">Expires: ${new Date(token.expires_at).toLocaleDateString()}</div>
+                            </div>
+                            <span class="token-status available">Available</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load tokens:', error);
+        }
+    }
+
+    // Load milestones
+    async function loadMilestones() {
+        try {
+            const response = await fetch('../../api_points_notifications.php?action=milestones');
+            const data = await response.json();
+
+            if (data.success) {
+                // Update progress bar
+                if (data.next_milestone) {
+                    document.getElementById('next-milestone-target').textContent =
+                        `${data.next_milestone.milestone_value} points`;
+                    document.getElementById('milestone-current').textContent = data.total_lifetime_earned;
+                    document.getElementById('milestone-goal').textContent = data.next_milestone.milestone_value;
+
+                    const percentage = Math.min(100, (data.total_lifetime_earned / data.next_milestone.milestone_value) * 100);
+                    document.getElementById('milestone-progress-bar').style.width = percentage + '%';
+                }
+
+                // Load achieved milestones
+                const container = document.getElementById('milestones-achieved');
+
+                if (data.milestones.length === 0) {
+                    container.innerHTML = '<p style="color:#64748b;grid-column:1/-1;text-align:center;padding:1rem;">Start earning points to unlock milestones!</p>';
+                    return;
+                }
+
+                container.innerHTML = data.milestones.map(m => `
+                    <div class="milestone-badge">
+                        <div class="milestone-badge-icon">${m.badge_icon || '🏆'}</div>
+                        <div class="milestone-badge-name">${m.milestone_name}</div>
+                        <div class="milestone-badge-value">${m.milestone_value.toLocaleString()} pts</div>
+                    </div>
+                `).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load milestones:', error);
+        }
+    }
+
+    // Update milestone progress
+    function updateMilestoneProgress(current, lifetime) {
+        const thresholds = [100, 500, 1000, 5000, 10000];
+        let nextThreshold = thresholds.find(t => lifetime < t) || 10000;
+
+        document.getElementById('milestone-current').textContent = lifetime;
+        document.getElementById('milestone-goal').textContent = nextThreshold;
+        document.getElementById('next-milestone-target').textContent = `${nextThreshold} points`;
+
+        const percentage = Math.min(100, (lifetime / nextThreshold) * 100);
+        document.getElementById('milestone-progress-bar').style.width = percentage + '%';
+    }
+
+    // Load recent activity
+    async function loadRecentActivity() {
+        try {
+            const response = await fetch('../../api_parent_points.php?action=history&limit=5');
+            const data = await response.json();
+
+            if (data.success) {
+                const container = document.getElementById('recent-activity');
+
+                if (data.transactions.length === 0) {
+                    container.innerHTML = '<p style="color:#64748b;text-align:center;padding:1rem;">No activity yet. Start earning points!</p>';
+                    return;
+                }
+
+                container.innerHTML = data.transactions.map(tx => {
+                    const isPositive = tx.points_change > 0;
+                    const icon = isPositive ? '💎' : '🎁';
+                    const className = isPositive ? 'positive' : 'negative';
+                    const sign = isPositive ? '+' : '';
+
+                    return `
+                        <div class="activity-item">
+                            <div class="activity-icon ${className}">${icon}</div>
+                            <div class="activity-details">
+                                <div class="activity-title">${tx.action_name || (isPositive ? 'Points earned' : 'Redemption')}</div>
+                                <div class="activity-date">${new Date(tx.created_at).toLocaleDateString()}</div>
+                            </div>
+                            <div class="activity-points ${className}">${sign}${tx.points_change}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load activity:', error);
+        }
+    }
+
+    // Show all history
+    async function showAllHistory() {
+        document.getElementById('history-modal').classList.add('active');
+        await loadHistoryList();
+    }
+
+    // Load full history
+    async function loadHistoryList(filter = 'all') {
+        try {
+            const response = await fetch('../../api_parent_points.php?action=history&limit=100');
+            const data = await response.json();
+
+            if (data.success) {
+                const container = document.getElementById('history-list');
+                let transactions = data.transactions;
+
+                if (filter !== 'all') {
+                    transactions = transactions.filter(tx =>
+                        (filter === 'deposit' && tx.points_change > 0) ||
+                        (filter === 'withdrawal' && tx.points_change < 0)
+                    );
+                }
+
+                if (transactions.length === 0) {
+                    container.innerHTML = '<p style="color:#64748b;text-align:center;padding:1rem;">No transactions found</p>';
+                    return;
+                }
+
+                container.innerHTML = transactions.map(tx => {
+                    const isPositive = tx.points_change > 0;
+                    const sign = isPositive ? '+' : '';
+
+                    return `
+                        <div class="history-item">
+                            <div class="history-item-left">
+                                <div class="history-item-title">${tx.action_name || (isPositive ? 'Points earned' : 'Redemption')}</div>
+                                <div class="history-item-date">${new Date(tx.created_at).toLocaleString()}</div>
+                            </div>
+                            <div class="history-item-points ${isPositive ? 'positive' : 'negative'}">${sign}${tx.points_change}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load history:', error);
+        }
+    }
+
+    // Filter history
+    function filterHistory() {
+        const filter = document.getElementById('history-filter-type').value;
+        loadHistoryList(filter);
+    }
+
+    // Close history modal
+    function closeHistoryModal() {
+        document.getElementById('history-modal').classList.remove('active');
+    }
+
+    // Setup filter listeners
+    function setupFilterListeners() {
+        document.querySelectorAll('.catalog-filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.catalog-filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                loadRedemptionCatalog(currentFilter);
+            });
+        });
+    }
+
+    return {
+        init,
+        earnPoints,
+        openRedemptionModal,
+        closeRedemptionModal,
+        showAllHistory,
+        closeHistoryModal,
+        filterHistory,
+        refresh: init
+    };
+})();
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we're on the points view
+    if (document.querySelector('.points-dashboard-content')) {
+        pointsView.init();
+    }
+});
+</script>

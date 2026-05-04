@@ -19,37 +19,82 @@ if (!$stmt->fetch()) {
     exit();
 }
 
-// Fetch latest analyses joined with voice_sample (includes enhanced NLP metrics)
-$stmt = $connect->prepare("
-    SELECT
-        vs.sample_id,
-        vs.audio_url,
-        vs.feedback       AS status,
-        vs.sent_at,
-        vs.mode,
-        vs.target_text,
-        sa.transcript,
-        sa.vocabulary_score,
-        sa.clarify_score,
-        sa.match_score,
-        sa.sentence_count,
-        sa.avg_sentence_length,
-        sa.sentence_complexity_score,
-        sa.avg_word_length,
-        sa.avg_syllables_per_word,
-        sa.polysyllabic_word_count,
-        sa.flesch_reading_ease,
-        sa.flesch_kincaid_grade,
-        sa.overall_development_score,
-        sa.developmental_feedback,
-        sa.analyzed_at
-    FROM voice_sample vs
-    LEFT JOIN speech_analysis sa ON sa.sample_id = vs.sample_id
-    WHERE vs.child_id = :cid
-    ORDER BY vs.sent_at DESC
-    LIMIT 10
-");
-$stmt->execute(['cid' => $childId]);
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Fetch latest analyses joined with voice_sample
+// Try full query first (with extended NLP columns), fall back to basic columns
+$rows = [];
+
+// Attempt 1: Full query with all extended columns
+try {
+    $stmt = $connect->prepare("
+        SELECT
+            vs.sample_id,
+            vs.audio_url,
+            vs.feedback       AS status,
+            vs.sent_at,
+            sa.transcript,
+            sa.vocabulary_score,
+            sa.clarify_score,
+            sa.match_score,
+            sa.sentence_count,
+            sa.avg_sentence_length,
+            sa.sentence_complexity_score,
+            sa.avg_word_length,
+            sa.avg_syllables_per_word,
+            sa.polysyllabic_word_count,
+            sa.flesch_reading_ease,
+            sa.flesch_kincaid_grade,
+            sa.overall_development_score,
+            sa.developmental_feedback,
+            sa.analyzed_at
+        FROM voice_sample vs
+        LEFT JOIN speech_analysis sa ON sa.sample_id = vs.sample_id
+        WHERE vs.child_id = :cid
+        ORDER BY vs.sent_at DESC
+        LIMIT 10
+    ");
+    $stmt->execute(['cid' => $childId]);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    // Attempt 2: Basic JOIN with only original speech_analysis columns
+    try {
+        $stmt = $connect->prepare("
+            SELECT
+                vs.sample_id,
+                vs.audio_url,
+                vs.feedback AS status,
+                vs.sent_at,
+                sa.transcript,
+                sa.vocabulary_score,
+                sa.clarify_score,
+                sa.analyzed_at
+            FROM voice_sample vs
+            LEFT JOIN speech_analysis sa ON sa.sample_id = vs.sample_id
+            WHERE vs.child_id = :cid
+            ORDER BY vs.sent_at DESC
+            LIMIT 10
+        ");
+        $stmt->execute(['cid' => $childId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e2) {
+        // Attempt 3: voice_sample only (no analysis data)
+        try {
+            $stmt = $connect->prepare("
+                SELECT
+                    vs.sample_id,
+                    vs.audio_url,
+                    vs.feedback AS status,
+                    vs.sent_at
+                FROM voice_sample vs
+                WHERE vs.child_id = :cid
+                ORDER BY vs.sent_at DESC
+                LIMIT 10
+            ");
+            $stmt->execute(['cid' => $childId]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e3) {
+            $rows = [];
+        }
+    }
+}
 
 echo json_encode(['success' => true, 'analyses' => $rows]);

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // ══════════════════════════════════════════════════════
 // Doctor Settings — PHP Backend
 // ══════════════════════════════════════════════════════
@@ -18,14 +18,12 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
     // ── GET: Load profile ──────────────────────────────
     if ($method === 'GET' && $action === 'get_profile') {
         $stmt = $connect->prepare("
-            SELECT u.user_id, u.first_name, u.last_name, u.email,
+            SELECT u.user_id, u.first_name, u.last_name, u.email, u.status,
                    s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
-                   c.clinic_name, c.location AS clinic_location,
-                   o.goals AS bio, o.consultation_types
+                   c.clinic_name, c.location AS clinic_location
             FROM users u
-            LEFT JOIN specialist s ON u.user_id = s.specialist_id
-            LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
-            LEFT JOIN doctor_onboarding o ON u.user_id = o.doctor_id
+            INNER JOIN specialist s ON u.user_id = s.specialist_id
+            INNER JOIN clinic c ON s.clinic_id = c.clinic_id
             WHERE u.user_id = :uid
         ");
         $stmt->execute([':uid' => $doctor_id]);
@@ -52,6 +50,7 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         echo json_encode(['success' => true, 'data' => $profile]);
         exit;
     }
+
 
     // ── POST: Save profile ─────────────────────────────
     if ($method === 'POST' && $action === 'save_profile') {
@@ -89,27 +88,17 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
                 WHERE user_id = :uid
             ")->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
 
-            $connect->prepare("
-                INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience)
-                VALUES (:sid, 0, :fn, :ln, :spec, :exp, :cert)
-                ON DUPLICATE KEY UPDATE
-                    first_name = VALUES(first_name),
-                    last_name = VALUES(last_name),
-                    specialization = VALUES(specialization),
-                    experience_years = VALUES(experience_years),
-                    certificate_of_experience = VALUES(certificate_of_experience)
-            ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+            $bio  = trim($input['bio'] ?? '');
+            $phone = trim($input['phone'] ?? '');
 
-            $stmt_bio = $connect->prepare("UPDATE doctor_onboarding SET goals = :bio WHERE doctor_id = :uid");
-            $stmt_bio->execute([':bio' => $bio, ':uid' => $doctor_id]);
-            if ($stmt_bio->rowCount() === 0) {
-                $check = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = :uid");
-                $check->execute([':uid' => $doctor_id]);
-                if (!$check->fetch()) {
-                    $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, goals) VALUES (:uid, :bio)")
-                            ->execute([':uid' => $doctor_id, ':bio' => $bio]);
-                }
-            }
+            $connect->prepare("
+                UPDATE specialist SET
+                    first_name = :fn, last_name = :ln,
+                    specialization = :spec,
+                    experience_years = :exp,
+                    certificate_of_experience = :cert
+                WHERE specialist_id = :sid
+            ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
 
             $connect->commit();
 
@@ -126,6 +115,7 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         }
         exit;
     }
+
 
     // ── POST: Change password ──────────────────────────
     if ($method === 'POST' && $action === 'change_password') {
@@ -208,26 +198,53 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
 
 // ── Pre-load doctor data for page rendering ────────────
 $doctor = null;
+$onboarding = null;
 try {
     $stmt = $connect->prepare("
         SELECT u.first_name, u.last_name, u.email,
                s.specialization, s.experience_years, s.certificate_of_experience,
-               c.clinic_name, c.location AS clinic_location,
-               o.goals AS bio, o.consultation_types
+               c.clinic_name, c.location AS clinic_location
         FROM users u
-        LEFT JOIN specialist s ON u.user_id = s.specialist_id
-        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
-        LEFT JOIN doctor_onboarding o ON u.user_id = o.doctor_id
+        INNER JOIN specialist s ON u.user_id = s.specialist_id
+        INNER JOIN clinic c ON s.clinic_id = c.clinic_id
         WHERE u.user_id = :uid
     ");
     $stmt->execute([':uid' => $doctor_id]);
     $doctor = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // Also load onboarding preferences
+    $obStmt = $connect->prepare("SELECT * FROM doctor_onboarding WHERE doctor_id = :did LIMIT 1");
+    $obStmt->execute([':did' => $doctor_id]);
+    $onboarding = $obStmt->fetch(PDO::FETCH_ASSOC);
 } catch (Exception $e) {
     $doctor = null;
+    $onboarding = null;
 }
 $dr_name     = $doctor ? htmlspecialchars($doctor['first_name'] . ' ' . $doctor['last_name']) : 'Dr. User';
 $dr_spec     = $doctor ? htmlspecialchars($doctor['specialization'] ?? 'Specialist') : 'Specialist';
 $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($doctor['last_name'],0,1)) : 'DR';
+
+// Parse onboarding JSON fields
+$ob_working_days      = $onboarding ? json_decode($onboarding['working_days'] ?? '[]', true) : [];
+$ob_start_time        = $onboarding ? substr($onboarding['start_time'] ?? '09:00:00', 0, 5) : '09:00';
+$ob_end_time          = $onboarding ? substr($onboarding['end_time'] ?? '17:00:00', 0, 5) : '17:00';
+$ob_consultation_types = $onboarding ? json_decode($onboarding['consultation_types'] ?? '[]', true) : ['Online', 'On-site'];
+$ob_focus_areas       = $onboarding ? json_decode($onboarding['focus_areas'] ?? '[]', true) : [];
+$ob_goals             = $onboarding ? json_decode($onboarding['goals'] ?? '[]', true) : [];
+
+// Specialization options for dropdown
+$spec_options = [
+    'pediatrician' => 'Pediatrician',
+    'child-psychiatrist' => 'Child Psychiatrist',
+    'developmental-pediatrician' => 'Developmental Pediatrician',
+    'neurologist' => 'Pediatric Neurologist',
+    'speech-therapist' => 'Speech-Language Pathologist',
+    'occupational-therapist' => 'Occupational Therapist',
+    'behavioral-therapist' => 'Behavioral Therapist',
+    'psychologist' => 'Child Psychologist',
+    'other' => 'Other',
+];
+$current_spec = $doctor['specialization'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -503,7 +520,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-fullname">Full Name <span
                                             class="required">*</span></label>
-                                    <input type="text" id="dr-fullname" class="dr-form-input" value="<?php echo $dr_name; ?>"
+                                    <input type="text" id="dr-fullname" class="dr-form-input" value="<?php echo htmlspecialchars($dr_name); ?>"
                                         required>
                                 </div>
                                 <div class="dr-form-group">
@@ -514,7 +531,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                 </div>
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-phone">Phone Number</label>
-                                    <input type="tel" id="dr-phone" class="dr-form-input" value="+1 (555) 987-6543">
+                                    <input type="tel" id="dr-phone" class="dr-form-input" value="<?php echo htmlspecialchars($doctor['phone'] ?? ''); ?>">
                                 </div>
                             </div>
 
@@ -564,24 +581,21 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                             class="required">*</span></label>
                                     <select id="dr-specialty" class="dr-form-select" required
                                         onchange="handleSpecialtyChange()">
-                                        <option value="pediatrician" selected>Pediatrician</option>
-                                        <option value="child-psychiatrist">Child Psychiatrist</option>
-                                        <option value="developmental-pediatrician">Developmental Pediatrician</option>
-                                        <option value="neurologist">Pediatric Neurologist</option>
-                                        <option value="speech-therapist">Speech-Language Pathologist</option>
-                                        <option value="occupational-therapist">Occupational Therapist</option>
-                                        <option value="behavioral-therapist">Behavioral Therapist</option>
-                                        <option value="psychologist">Child Psychologist</option>
-                                        <option value="other">Other</option>
+                                        <?php foreach ($spec_options as $val => $label): ?>
+                                            <option value="<?php echo $val; ?>" <?php echo ($current_spec === $val) ? 'selected' : ''; ?>>
+                                                <?php echo $label; ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
                                     <input type="text" id="dr-specialty-other" class="dr-form-input"
-                                        placeholder="Enter your specialty" style="display: none; margin-top: 0.5rem;">
-                                    <input type="hidden" id="dr-specialty-final" name="specialty" value="pediatrician">
+                                        placeholder="Enter your specialty" style="display: none; margin-top: 0.5rem;"
+                                        value="<?php echo !array_key_exists($current_spec, $spec_options) ? htmlspecialchars($current_spec) : ''; ?>">
+                                    <input type="hidden" id="dr-specialty-final" name="specialty" value="<?php echo htmlspecialchars($current_spec); ?>">
                                 </div>
                                 <div class="dr-form-group">
                                     <label class="dr-form-label" for="dr-experience">Years of Experience <span
                                             class="required">*</span></label>
-                                    <input type="number" id="dr-experience" class="dr-form-input" value="10" min="0"
+                                    <input type="number" id="dr-experience" class="dr-form-input" value="<?php echo intval($doctor['experience_years'] ?? 0); ?>" min="0"
                                         max="60" required>
                                 </div>
                                 <div class="dr-form-group full-width">
@@ -593,7 +607,7 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                 <div class="dr-form-group full-width">
                                     <label class="dr-form-label" for="dr-bio">Bio </label>
                                     <textarea id="dr-bio" class="dr-form-input dr-form-textarea"
-                                        placeholder="Write a short bio about your practice and expertise..."><?php echo $doctor ? htmlspecialchars($doctor['bio'] ?? '') : ''; ?></textarea>
+                                        placeholder="Write a short bio about your practice and expertise..."></textarea>
                                 </div>
                             </div>
                         </div>
@@ -643,34 +657,24 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                             <label class="dr-form-label" style="margin-bottom: 0.75rem; display: block;">Working
                                 Days</label>
                             <div class="dr-days-grid">
+                                <?php
+                                $day_map = [
+                                    0 => ['id' => 'day-sun', 'label' => 'Sun'],
+                                    1 => ['id' => 'day-mon', 'label' => 'Mon'],
+                                    2 => ['id' => 'day-tue', 'label' => 'Tue'],
+                                    3 => ['id' => 'day-wed', 'label' => 'Wed'],
+                                    4 => ['id' => 'day-thu', 'label' => 'Thu'],
+                                    5 => ['id' => 'day-fri', 'label' => 'Fri'],
+                                    6 => ['id' => 'day-sat', 'label' => 'Sat'],
+                                ];
+                                foreach ($day_map as $dayNum => $dayInfo):
+                                    $checked = in_array($dayNum, $ob_working_days) ? 'checked' : '';
+                                ?>
                                 <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-sat" name="working-days" value="saturday">
-                                    <label for="day-sat">Sat</label>
+                                    <input type="checkbox" id="<?php echo $dayInfo['id']; ?>" name="working-days" value="<?php echo $dayNum; ?>" <?php echo $checked; ?>>
+                                    <label for="<?php echo $dayInfo['id']; ?>"><?php echo $dayInfo['label']; ?></label>
                                 </div>
-                                <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-sun" name="working-days" value="sunday" checked>
-                                    <label for="day-sun">Sun</label>
-                                </div>
-                                <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-mon" name="working-days" value="monday" checked>
-                                    <label for="day-mon">Mon</label>
-                                </div>
-                                <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-tue" name="working-days" value="tuesday" checked>
-                                    <label for="day-tue">Tue</label>
-                                </div>
-                                <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-wed" name="working-days" value="wednesday" checked>
-                                    <label for="day-wed">Wed</label>
-                                </div>
-                                <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-thu" name="working-days" value="thursday" checked>
-                                    <label for="day-thu">Thu</label>
-                                </div>
-                                <div class="dr-day-checkbox">
-                                    <input type="checkbox" id="day-fri" name="working-days" value="friday">
-                                    <label for="day-fri">Fri</label>
-                                </div>
+                                <?php endforeach; ?>
                             </div>
 
                             <!-- Working Hours -->
@@ -678,10 +682,10 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                 Hours</label>
                             <div class="dr-hours-row">
                                 <label for="dr-start-time">From</label>
-                                <input type="time" id="dr-start-time" class="dr-time-input" value="09:00">
+                                <input type="time" id="dr-start-time" class="dr-time-input" value="<?php echo htmlspecialchars($ob_start_time); ?>">
                                 <span class="dr-hours-separator">—</span>
                                 <label for="dr-end-time">To</label>
-                                <input type="time" id="dr-end-time" class="dr-time-input" value="17:00">
+                                <input type="time" id="dr-end-time" class="dr-time-input" value="<?php echo htmlspecialchars($ob_end_time); ?>">
                             </div>
 
                             <!-- Consultation Types -->
@@ -690,8 +694,8 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                 Types</label>
                             <div class="dr-consult-types">
                                 <div class="dr-consult-toggle">
-                                    <input type="checkbox" id="consult-online" name="consult-type" value="online"
-                                        checked>
+                                    <input type="checkbox" id="consult-online" name="consult-type" value="Online"
+                                        <?php echo in_array('Online', $ob_consultation_types) ? 'checked' : ''; ?>>
                                     <label for="consult-online">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path
@@ -702,8 +706,8 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                     </label>
                                 </div>
                                 <div class="dr-consult-toggle">
-                                    <input type="checkbox" id="consult-onsite" name="consult-type" value="onsite"
-                                        checked>
+                                    <input type="checkbox" id="consult-onsite" name="consult-type" value="On-site"
+                                        <?php echo in_array('On-site', $ob_consultation_types) ? 'checked' : ''; ?>>
                                     <label for="consult-onsite">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -713,6 +717,18 @@ $dr_initials = $doctor ? strtoupper(substr($doctor['first_name'],0,1) . substr($
                                     </label>
                                 </div>
                             </div>
+
+                            <?php if (!empty($ob_focus_areas)): ?>
+                            <!-- Focus Areas (from onboarding, display-only) -->
+                            <label class="dr-form-label" style="margin-top:1.5rem;margin-bottom:0.5rem;display:block;">Focus Areas</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+                                <?php foreach ($ob_focus_areas as $area): ?>
+                                <span style="background:#6366f115;color:#6366f1;border:1px solid #6366f130;border-radius:20px;padding:0.25rem 0.75rem;font-size:0.8rem;font-weight:600;">
+                                    <?php echo htmlspecialchars($area); ?>
+                                </span>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Form Actions -->

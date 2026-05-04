@@ -89,7 +89,7 @@ elseif ($action === 'update_status' && $method === 'PUT') {
 
     // Verify doctor owns this appointment
     $stmt = $db->prepare("
-        SELECT appointment_id, status, parent_id
+        SELECT appointment_id, status, parent_id, child_id, type
         FROM appointment
         WHERE appointment_id = :aid AND specialist_id = :doctor_id
     ");
@@ -123,6 +123,25 @@ elseif ($action === 'update_status' && $method === 'PUT') {
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
 
+        // Feature 2: Google Meet Link Handling on Confirmation
+        if ($newStatus === 'confirmed' && $appt['type'] === 'online') {
+            $meetLink = 'https://meet.google.com/' . substr(md5(uniqid()), 0, 3) . '-' . substr(md5(uniqid()), 3, 4) . '-' . substr(md5(uniqid()), 7, 3);
+            
+            $msgContent = "Your online appointment has been confirmed. Please join using this Google Meet link at the scheduled time.";
+            $msgStmt = $db->prepare("
+                INSERT INTO message (sender_id, receiver_id, appointment_id, child_id, content, meeting_link)
+                VALUES (:sender, :receiver, :aid, :cid, :content, :link)
+            ");
+            $msgStmt->execute([
+                ':sender' => $authUser['user_id'],
+                ':receiver' => $appt['parent_id'],
+                ':aid' => $appointmentId,
+                ':cid' => $appt['child_id'],
+                ':content' => $msgContent,
+                ':link' => $meetLink
+            ]);
+        }
+
         // Notify parent
         $notifTitle = 'Appointment ' . ucfirst($newStatus);
         $notifMessage = "Your appointment has been {$newStatus}.";
@@ -142,9 +161,93 @@ elseif ($action === 'update_status' && $method === 'PUT') {
             ':type'    => $notifType
         ]);
 
+        // Award points for attending appointment (50 points per 'attend_appointment' rule)
+        $pointsMessage = "";
+        if ($newStatus === 'completed') {
+            $today = date('Y-m-d');
+            $weekStart = date('Y-m-d', strtotime('monday this week'));
+
+            // Check/create wallet
+            $walletStmt = $db->prepare("SELECT wallet_id, total_points FROM parent_points_wallet WHERE parent_id = :pid");
+            $walletStmt->execute([':pid' => $appt['parent_id']]);
+            $wallet = $walletStmt->fetch();
+
+            if (!$wallet) {
+                $walletStmt = $db->prepare("INSERT INTO parent_points_wallet (parent_id, total_points, last_earned_at) VALUES (:pid, 0, NOW())");
+                $walletStmt->execute([':pid' => $appt['parent_id']]);
+                $walletId = $db->lastInsertId();
+            } else {
+                $walletId = $wallet['wallet_id'];
+            }
+
+            // Check daily cap (50 points/day for attend_appointment)
+            $dailyCapStmt = $db->prepare("
+                SELECT COALESCE(SUM(points_earned), 0) as daily_total
+                FROM parent_points_tracking
+                WHERE parent_id = :pid AND action_key = 'attend_appointment' AND earned_date = :today
+            ");
+            $dailyCapStmt->execute([':pid' => $appt['parent_id'], ':today' => $today]);
+            $dailyTotal = $dailyCapStmt->fetchColumn();
+
+            // Check weekly cap (100 points/week for attend_appointment)
+            $weeklyCapStmt = $db->prepare("
+                SELECT COALESCE(SUM(points_earned), 0) as weekly_total
+                FROM parent_points_tracking
+                WHERE parent_id = :pid AND action_key = 'attend_appointment' AND earned_date >= :weekStart
+            ");
+            $weeklyCapStmt->execute([':pid' => $appt['parent_id'], ':weekStart' => $weekStart]);
+            $weeklyTotal = $weeklyCapStmt->fetchColumn();
+
+            // Get rule caps
+            $ruleStmt = $db->prepare("SELECT daily_cap, weekly_cap, points_value FROM points_earning_rules WHERE action_key = 'attend_appointment'");
+            $ruleStmt->execute();
+            $rule = $ruleStmt->fetch();
+
+            $dailyCap = (int) $rule['daily_cap'];
+            $weeklyCap = (int) $rule['weekly_cap'];
+            $pointsValue = (int) $rule['points_value'];
+            $pointsToAward = 0;
+
+            // Check if already earned points for this action today
+            $alreadyEarnedStmt = $db->prepare("
+                SELECT points_earned FROM parent_points_tracking
+                WHERE parent_id = :pid AND action_key = 'attend_appointment' AND earned_date = :today
+            ");
+            $alreadyEarnedStmt->execute([':pid' => $appt['parent_id'], ':today' => $today]);
+            $alreadyEarned = $alreadyEarnedStmt->fetchColumn();
+
+            // Check if within caps and not already earned today
+            if ($alreadyEarned == null && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
+                $pointsToAward = $pointsValue;
+
+                // Update wallet balance and lifetime earned
+                $updateWallet = $db->prepare("UPDATE parent_points_wallet SET total_points = total_points + ?, lifetime_earned = lifetime_earned + ?, last_earned_at = NOW() WHERE wallet_id = ?");
+                $updateWallet->execute([$pointsToAward, $pointsToAward, $walletId]);
+
+                // Track the transaction (single entry per day)
+                $trackStmt = $db->prepare("
+                    INSERT INTO parent_points_tracking (parent_id, action_key, points_earned, earned_date, week_start_date)
+                    VALUES (:pid, 'attend_appointment', ?, ?, ?)
+                ");
+                $trackStmt->execute([$pointsToAward, $today, $weekStart]);
+
+                // Create points notification
+                $ptsNotifStmt = $db->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+                $ptsNotifStmt->execute([$appt['parent_id'], 'Points Earned!',
+                                         "You earned {$pointsToAward} points for attending your appointment."]);
+                $pointsMessage = " +{$pointsToAward} pts";
+            } elseif ($alreadyEarned > 0) {
+                $pointsMessage = " (Points already earned for this appointment today)";
+            } elseif ($dailyTotal >= $dailyCap) {
+                $pointsMessage = " (Daily appointment points cap reached)";
+            } elseif ($weeklyTotal >= $weeklyCap) {
+                $pointsMessage = " (Weekly appointment points cap reached)";
+            }
+        }
+
         $db->commit();
 
-        json_success(['updated' => 1], "Appointment {$newStatus} successfully");
+        json_success(['updated' => 1], "Appointment {$newStatus} successfully" . $pointsMessage);
 
     } catch (Exception $e) {
         $db->rollBack();

@@ -1,6 +1,8 @@
 <?php
 // api_speech_analysis.php
 // Accepts audio upload + child_id + optional mode, forwards to Python FastAPI, saves results to DB
+error_reporting(0);
+ini_set('display_errors', 0);
 header('Content-Type: application/json');
 require_once 'includes/auth_check.php';
 
@@ -135,6 +137,37 @@ $readabilityScores = $aiResult['readability_scores'] ?? [];
 $developmentalFeedback = $aiResult['developmental_feedback'] ?? null;
 $overallDevScore = isset($aiResult['overall_development_score']) ? (float) $aiResult['overall_development_score'] : null;
 
+// ── Ensure schema has required columns (outside transaction) ──────────────
+try {
+    // Test if voice_sample has 'mode' column
+    $connect->query("SELECT `mode` FROM voice_sample LIMIT 0");
+} catch (PDOException $e) {
+    try { $connect->exec("ALTER TABLE voice_sample ADD COLUMN `mode` VARCHAR(20) DEFAULT 'free_talk'"); } catch (Exception $e2) {}
+    try { $connect->exec("ALTER TABLE voice_sample ADD COLUMN `target_text` TEXT DEFAULT NULL"); } catch (Exception $e2) {}
+}
+
+try {
+    // Test if speech_analysis has extended columns
+    $connect->query("SELECT `match_score` FROM speech_analysis LIMIT 0");
+} catch (PDOException $e) {
+    $extraCols = [
+        'match_score' => 'DECIMAL(5,2) DEFAULT NULL',
+        'sentence_count' => 'INT DEFAULT NULL',
+        'avg_sentence_length' => 'DECIMAL(5,2) DEFAULT NULL',
+        'sentence_complexity_score' => 'DECIMAL(5,2) DEFAULT NULL',
+        'avg_word_length' => 'DECIMAL(5,2) DEFAULT NULL',
+        'avg_syllables_per_word' => 'DECIMAL(5,2) DEFAULT NULL',
+        'polysyllabic_word_count' => 'INT DEFAULT NULL',
+        'flesch_reading_ease' => 'DECIMAL(6,2) DEFAULT NULL',
+        'flesch_kincaid_grade' => 'DECIMAL(5,2) DEFAULT NULL',
+        'overall_development_score' => 'DECIMAL(5,2) DEFAULT NULL',
+        'developmental_feedback' => 'TEXT DEFAULT NULL',
+    ];
+    foreach ($extraCols as $col => $def) {
+        try { $connect->exec("ALTER TABLE speech_analysis ADD COLUMN `$col` $def"); } catch (Exception $e2) {}
+    }
+}
+
 try {
     $connect->beginTransaction();
 
@@ -151,8 +184,25 @@ try {
     ]);
     $sampleId = (int) $connect->lastInsertId();
 
-    $stmt = $connect->prepare(
-        "INSERT INTO speech_analysis (
+    $saParams = [
+        'sid' => $sampleId,
+        'tr'  => $aiResult['transcript'],
+        'vs'  => $vocabScore,
+        'cs'  => $clarifyScore,
+        'ms'  => $matchScore,
+        'sc'   => $sentenceComplexity['sentence_count'] ?? null,
+        'asl'  => $sentenceComplexity['avg_sentence_length'] ?? null,
+        'scs'  => $sentenceComplexity['complexity_score'] ?? null,
+        'awl'  => $wordComplexity['avg_word_length'] ?? null,
+        'aspw' => $wordComplexity['avg_syllables_per_word'] ?? null,
+        'pwc'  => $wordComplexity['polysyllabic_word_count'] ?? null,
+        'fre'  => $readabilityScores['flesch_reading_ease'] ?? null,
+        'fkg'  => $readabilityScores['flesch_kincaid_grade'] ?? null,
+        'ods'  => $overallDevScore,
+        'df'   => $developmentalFeedback ? json_encode($developmentalFeedback) : null,
+    ];
+
+    $fullSql = "INSERT INTO speech_analysis (
             sample_id, transcript, vocabulary_score, clarify_score, match_score,
             sentence_count, avg_sentence_length, sentence_complexity_score,
             avg_word_length, avg_syllables_per_word, polysyllabic_word_count,
@@ -164,36 +214,108 @@ try {
             :awl, :aspw, :pwc,
             :fre, :fkg,
             :ods, :df
-         )"
-    );
-    $stmt->execute([
-        'sid' => $sampleId,
-        'tr'  => $aiResult['transcript'],
-        'vs'  => $vocabScore,
-        'cs'  => $clarifyScore,
-        'ms'  => $matchScore,
-        // Sentence complexity metrics
-        'sc'   => $sentenceComplexity['sentence_count'] ?? null,
-        'asl'  => $sentenceComplexity['avg_sentence_length'] ?? null,
-        'scs'  => $sentenceComplexity['complexity_score'] ?? null,
-        // Word complexity metrics
-        'awl'  => $wordComplexity['avg_word_length'] ?? null,
-        'aspw' => $wordComplexity['avg_syllables_per_word'] ?? null,
-        'pwc'  => $wordComplexity['polysyllabic_word_count'] ?? null,
-        // Readability scores
-        'fre'  => $readabilityScores['flesch_reading_ease'] ?? null,
-        'fkg'  => $readabilityScores['flesch_kincaid_grade'] ?? null,
-        // Overall score and feedback
-        'ods'  => $overallDevScore,
-        'df'   => $developmentalFeedback ? json_encode($developmentalFeedback) : null,
-    ]);
+         )";
+
+    try {
+        $stmt = $connect->prepare($fullSql);
+        $stmt->execute($saParams);
+    } catch (PDOException $saErr) {
+        // Fallback: basic insert with original columns only
+        $stmt = $connect->prepare("INSERT INTO speech_analysis (sample_id, transcript, vocabulary_score, clarify_score) VALUES (:sid, :tr, :vs, :cs)");
+        $stmt->execute(['sid' => $sampleId, 'tr' => $aiResult['transcript'], 'vs' => $vocabScore, 'cs' => $clarifyScore]);
+    }
 
     $wordCount = count($aiResult['unique_words'] ?? []);
     $modeLabel = $mode === 'read_compare' ? 'Read & Compare' : 'Free Talk';
+    $pointsMessage = "";
+
+    // Award points for recording speech (15 points per 'record_speech' rule)
+    $today = date('Y-m-d');
+    $weekStart = date('Y-m-d', strtotime('monday this week'));
+
+    // Check/create wallet
+    $walletStmt = $connect->prepare("SELECT wallet_id, total_points FROM parent_points_wallet WHERE parent_id = ?");
+    $walletStmt->execute([$parentId]);
+    $wallet = $walletStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$wallet) {
+        $walletStmt = $connect->prepare("INSERT INTO parent_points_wallet (parent_id, total_points, last_earned_at) VALUES (?, 0, NOW())");
+        $walletStmt->execute([$parentId]);
+        $walletId = $connect->lastInsertId();
+    } else {
+        $walletId = $wallet['wallet_id'];
+    }
+
+    // Check daily cap (45 points/day for record_speech)
+    $dailyCapStmt = $connect->prepare("
+        SELECT COALESCE(SUM(points_earned), 0) as daily_total
+        FROM parent_points_tracking
+        WHERE parent_id = ? AND action_key = 'record_speech' AND earned_date = ?
+    ");
+    $dailyCapStmt->execute([$parentId, $today]);
+    $dailyTotal = $dailyCapStmt->fetchColumn();
+
+    // Check weekly cap (200 points/week for record_speech)
+    $weeklyCapStmt = $connect->prepare("
+        SELECT COALESCE(SUM(points_earned), 0) as weekly_total
+        FROM parent_points_tracking
+        WHERE parent_id = ? AND action_key = 'record_speech' AND earned_date >= ?
+    ");
+    $weeklyCapStmt->execute([$parentId, $weekStart]);
+    $weeklyTotal = $weeklyCapStmt->fetchColumn();
+
+    // Get rule caps
+    $ruleStmt = $connect->prepare("SELECT daily_cap, weekly_cap, points_value FROM points_earning_rules WHERE action_key = 'record_speech'");
+    $ruleStmt->execute();
+    $rule = $ruleStmt->fetch(PDO::FETCH_ASSOC);
+
+    $dailyCap = (int) $rule['daily_cap'];
+    $weeklyCap = (int) $rule['weekly_cap'];
+    $pointsValue = (int) $rule['points_value'];
+    $pointsToAward = 0;
+
+    // Check if already earned points for this action today
+    $alreadyEarnedStmt = $connect->prepare("
+        SELECT points_earned FROM parent_points_tracking
+        WHERE parent_id = ? AND action_key = 'record_speech' AND earned_date = ?
+    ");
+    $alreadyEarnedStmt->execute([$parentId, $today]);
+    $alreadyEarned = $alreadyEarnedStmt->fetchColumn();
+
+    // Check if within caps and not already earned today
+    if ($alreadyEarned == null && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
+        $pointsToAward = $pointsValue;
+
+        // Update wallet balance and lifetime earned
+        $updateWallet = $connect->prepare("UPDATE parent_points_wallet SET total_points = total_points + ?, lifetime_earned = lifetime_earned + ?, last_earned_at = NOW() WHERE wallet_id = ?");
+        $updateWallet->execute([$pointsToAward, $pointsToAward, $walletId]);
+
+        // Track the transaction (single entry per day)
+        $trackStmt = $connect->prepare("
+            INSERT INTO parent_points_tracking (parent_id, action_key, points_earned, earned_date, week_start_date)
+            VALUES (?, 'record_speech', ?, ?, ?)
+        ");
+        $trackStmt->execute([$parentId, $pointsToAward, $today, $weekStart]);
+
+        // Create notification
+        $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
+        $nstmt->execute([$parentId, 'Points Earned!',
+                         "You earned {$pointsToAward} points for recording a speech sample."]);
+        $pointsMessage = " +{$pointsToAward} points earned!";
+    } elseif ($alreadyEarned > 0) {
+        $pointsMessage = " (Points already earned for speech today - come back tomorrow!)";
+    } elseif ($dailyTotal >= $dailyCap) {
+        $pointsMessage = " (Daily speech points cap reached - come back tomorrow!)";
+    } elseif ($weeklyTotal >= $weeklyCap) {
+        $pointsMessage = " (Weekly speech points cap reached - come back next week!)";
+    }
+
     $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
     $nstmt->execute([$parentId, 'Speech Analysis Complete',
                      "$modeLabel session complete. $wordCount words detected."
-                     . ($matchScore !== null ? " Match score: {$matchScore}%." : '')]);
+                     . ($matchScore !== null ? " Match score: {$matchScore}%." : '')
+                     . $pointsMessage
+                     . ($pointsToAward > 0 ? " +{$pointsToAward} points earned!" : '')]);
 
     $connect->commit();
 } catch (Exception $e) {

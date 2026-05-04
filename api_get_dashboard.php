@@ -88,7 +88,7 @@ foreach ($children as &$child) {
     $child['growth_history'] = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 
     // Badges array and count
-    $sql4 = "SELECT b.name, b.icon, b.description FROM child_badge cb JOIN badge b ON cb.badge_id = b.badge_id WHERE cb.child_id = :child_id";
+    $sql4 = "SELECT b.name, b.icon, b.description, cb.redeemed_at FROM child_badge cb JOIN badge b ON cb.badge_id = b.badge_id WHERE cb.child_id = :child_id";
     $stmt4 = $connect->prepare($sql4);
     $stmt4->execute(['child_id' => $child['child_id']]);
     $badgesList = $stmt4->fetchAll(PDO::FETCH_ASSOC);

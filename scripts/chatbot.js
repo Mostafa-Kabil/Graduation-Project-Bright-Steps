@@ -285,6 +285,11 @@
                         }
                     }
                     addMessage(errorMsg, 'bot');
+                    if (data.fallback) {
+                        setTimeout(() => {
+                            addMessage(getFallbackResponse(), 'bot');
+                        }, 500);
+                    }
                 } else {
                     addMessage(getFallbackResponse(), 'bot');
                 }

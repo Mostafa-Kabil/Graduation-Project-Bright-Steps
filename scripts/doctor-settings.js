@@ -88,17 +88,27 @@ function getDsPreferencesHTML() {
 }
 
 function getDsNotificationsHTML() {
+    const prefs = JSON.parse(localStorage.getItem(`dr_notif_prefs_${SPECIALIST_ID}`) || '{"new_appointment":true,"new_message":true,"report_shared":true}');
     return `<div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><div><h3>Notification Preferences</h3><p>Control how and when you receive alerts</p></div></div>
         <div class="ds-card-body"><div class="ds-toggle-list">
-            <div class="ds-toggle-row"><div><strong>New Appointment</strong><p>Alert when a parent books an appointment</p></div><label class="ds-switch"><input type="checkbox" checked><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>New Message</strong><p>Alert when a parent sends a message</p></div><label class="ds-switch"><input type="checkbox" checked><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>Report Shared</strong><p>Alert when a parent shares a child report</p></div><label class="ds-switch"><input type="checkbox" checked><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>Appointment Reminders</strong><p>Get notified 30 min before appointments</p></div><label class="ds-switch"><input type="checkbox" checked><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>Email Digest</strong><p>Receive daily summary via email</p></div><label class="ds-switch"><input type="checkbox"><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>Weekly Analytics Report</strong><p>Receive weekly practice insights via email</p></div><label class="ds-switch"><input type="checkbox"><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>New Appointment</strong><p>Alert when a parent books an appointment</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-app" ${prefs.new_appointment ? 'checked' : ''}><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>New Message</strong><p>Alert when a parent sends a message</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-msg" ${prefs.new_message ? 'checked' : ''}><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>Report Shared</strong><p>Alert when a parent shares a child report</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-rep" ${prefs.report_shared ? 'checked' : ''}><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>Appointment Reminders</strong><p>Get notified 30 min before appointments</p></div><label class="ds-switch"><input type="checkbox" checked disabled><span></span></label></div>
         </div></div></div>
-        <div class="ds-actions"><button class="btn btn-gradient" onclick="showToast('Notification preferences saved!','success')">Save Preferences</button></div>`;
+        <div class="ds-actions"><button class="btn btn-gradient" onclick="dsSaveNotificationPrefs()">Save Preferences</button></div>`;
+}
+
+function dsSaveNotificationPrefs() {
+    const prefs = {
+        new_appointment: document.getElementById('ds-notif-app')?.checked || false,
+        new_message: document.getElementById('ds-notif-msg')?.checked || false,
+        report_shared: document.getElementById('ds-notif-rep')?.checked || false
+    };
+    localStorage.setItem(`dr_notif_prefs_${SPECIALIST_ID}`, JSON.stringify(prefs));
+    showToast('Notification preferences saved!','success');
+    if (typeof loadDoctorNotifications === 'function') loadDoctorNotifications();
 }
 
 function getDsSecurityHTML() {
