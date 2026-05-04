@@ -181,10 +181,105 @@ switch ($action) {
                 }
             }
 
+            // Check for category completion bonus (+20 pts)
+            $newBadges = [];
+            if ($isAchieved) {
+                $catStmt = $connect->prepare("SELECT category FROM motor_milestones WHERE id = ?");
+                $catStmt->execute([$milestoneId]);
+                $cat = $catStmt->fetchColumn();
+                if ($cat) {
+                    $totalStmt = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND category = ?");
+                    $totalStmt->execute([$childId, $cat]);
+                    $totalInCat = (int)$totalStmt->fetchColumn();
+                    $doneStmt = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND category = ? AND is_achieved = 1");
+                    $doneStmt->execute([$childId, $cat]);
+                    $doneInCat = (int)$doneStmt->fetchColumn();
+                    if ($doneInCat === $totalInCat && $totalInCat > 0) {
+                        $bonusPts = 20;
+                        $connect->prepare("UPDATE points_wallet SET total_points = total_points + ? WHERE child_id = ?")->execute([$bonusPts, $childId]);
+                        try {
+                            $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Motor Checklist Complete', ?, ?)")->execute([$parentId, $childId, $bonusPts, "Completed all $cat milestones"]);
+                        } catch (Exception $e2) { /* table may not exist yet */ }
+                    }
+                }
+
+                // Log individual milestone points
+                try {
+                    $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Motor Milestone', ?, ?)")->execute([$parentId, $childId, 15, "Achieved motor milestone"]);
+                } catch (Exception $e2) { /* table may not exist yet */ }
+
+                // Check Motor Master badge (5+ milestones achieved)
+                $totalAchieved = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND is_achieved = 1");
+                $totalAchieved->execute([$childId]);
+                if ((int)$totalAchieved->fetchColumn() >= 5) {
+                    $bStmt = $connect->prepare("SELECT badge_id FROM badge WHERE name = 'Motor Master'");
+                    $bStmt->execute();
+                    $badgeId = $bStmt->fetchColumn();
+                    if ($badgeId) {
+                        $chk = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?");
+                        $chk->execute([$childId, $badgeId]);
+                        if ($chk->fetchColumn() == 0) {
+                            $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)")->execute([$childId, $badgeId]);
+                            $newBadges[] = 'Motor Master';
+                            $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)")->execute([$parentId, 'Badge Earned: Motor Master', 'You achieved 5 motor milestones! Great progress!']);
+                        }
+                    }
+                }
+            }
+
+            echo json_encode(['success' => true, 'points_awarded' => $isAchieved ? 15 : 0, 'new_badges' => $newBadges]);
+        } catch (Exception $e) {
+            echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+        }
+        break;
+
+    case 'stats':
+        $childId = $_GET['child_id'] ?? '';
+        if (!$childId || !verifyChild($connect, $childId, $parentId)) {
+            echo json_encode(['error' => 'Invalid child']);
+            exit();
+        }
+
+        try {
+            // Gross motor stats
+            $stmt = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND category = 'gross_motor'");
+            $stmt->execute([$childId]);
+            $grossTotal = (int)$stmt->fetchColumn();
+            $stmt = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND category = 'gross_motor' AND is_achieved = 1");
+            $stmt->execute([$childId]);
+            $grossDone = (int)$stmt->fetchColumn();
+
+            // Fine motor stats
+            $stmt = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND category = 'fine_motor'");
+            $stmt->execute([$childId]);
+            $fineTotal = (int)$stmt->fetchColumn();
+            $stmt = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND category = 'fine_motor' AND is_achieved = 1");
+            $stmt->execute([$childId]);
+            $fineDone = (int)$stmt->fetchColumn();
+
+            // Per-milestone detail for chart
+            $stmt = $connect->prepare("SELECT milestone_name, category, is_achieved, achieved_at FROM motor_milestones WHERE child_id = ? ORDER BY category, milestone_name");
+            $stmt->execute([$childId]);
+            $allMilestones = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Achievement timeline (last 6 months)
+            $stmt = $connect->prepare("
+                SELECT DATE_FORMAT(achieved_at, '%Y-%m') AS month, COUNT(*) AS count
+                FROM motor_milestones
+                WHERE child_id = ? AND is_achieved = 1 AND achieved_at IS NOT NULL
+                GROUP BY DATE_FORMAT(achieved_at, '%Y-%m')
+                ORDER BY month DESC
+                LIMIT 6
+            ");
+            $stmt->execute([$childId]);
+            $timeline = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
             echo json_encode([
                 'success' => true,
-                'points_awarded' => $isAchieved ? $pointsToAward : 0,
-                'message' => $isAchieved ? 'Milestone saved!' . $pointsMessage : 'Milestone updated'
+                'gross_motor' => ['total' => $grossTotal, 'achieved' => $grossDone, 'pct' => $grossTotal > 0 ? round(($grossDone / $grossTotal) * 100) : 0],
+                'fine_motor' => ['total' => $fineTotal, 'achieved' => $fineDone, 'pct' => $fineTotal > 0 ? round(($fineDone / $fineTotal) * 100) : 0],
+                'milestones' => $allMilestones,
+                'timeline' => array_reverse($timeline)
             ]);
         } catch (Exception $e) {
             echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
@@ -192,6 +287,6 @@ switch ($action) {
         break;
 
     default:
-        echo json_encode(['error' => 'Unknown action']);
+        echo json_encode(['error' => 'Unknown action. Use: list, toggle, stats']);
 }
 ?>

@@ -1,4 +1,8 @@
 <?php
+/**
+ * Bright Steps – Appointment Booking API (Enhanced)
+ * Supports: standard booking, token-based free consultation, pre-consultation intake.
+ */
 session_start();
 require_once "connection.php";
 header('Content-Type: application/json');
@@ -20,8 +24,18 @@ $type = $_POST['type'] ?? 'onsite';
 $scheduledAt = $_POST['scheduled_at'] ?? '';
 $paymentMethod = $_POST['payment_method'] ?? 'Cash';
 $comment = trim($_POST['comment'] ?? '');
-$tokenId = $_POST['token_id'] ?? null; // Optional token to apply
-$childId = $_POST['child_id'] ?? null; // Child for this appointment
+$tokenCode = trim($_POST['token_code'] ?? '');
+$childId = $_POST['child_id'] ?? null;
+
+// Pre-consultation intake (JSON string)
+$intakeDataRaw = $_POST['intake_data'] ?? '';
+$intakeData = null;
+if ($intakeDataRaw) {
+    $intakeData = json_decode($intakeDataRaw, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        $intakeData = null;
+    }
+}
 
 if (!$specialistId || !$scheduledAt) {
     echo json_encode(['error' => 'Specialist and Date/Time are required.']);
@@ -47,35 +61,42 @@ if ($childId) {
 try {
     $connect->beginTransaction();
 
-    // 1. Calculate pricing with optional token discount
+    // 1. Create Payment Record First
+    // Standard appointment price is $50. No discount for now mapped.
     $amountPre = 50.00;
-    $discountAmount = 0.00;
-    $tokenUsed = null;
+    $amountPost = 50.00;
+    $discountRate = 0.00;
+    $tokenUsed = false;
 
-    // Apply token discount if provided and valid
-    if ($tokenId) {
-        // Verify token belongs to this parent and is available
-        $tokenStmt = $connect->prepare("
-            SELECT at.token_id, at.discount_amount, at.token_type
-            FROM appointment_tokens at
-            WHERE at.token_id = ? AND at.parent_id = ? AND at.status = 'available'
-            AND (at.expires_at IS NULL OR at.expires_at > NOW())
-        ");
-        $tokenStmt->execute([$tokenId, $parentId]);
+    // Token validation — apply 100% discount if valid token
+    if ($tokenCode) {
+        $tokenStmt = $connect->prepare("SELECT token_id, parent_id, child_id, discount_amount, status FROM appointment_tokens WHERE token_code = ? AND status = 'active'");
+        $tokenStmt->execute([$tokenCode]);
         $token = $tokenStmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($token) {
-            $discountAmount = (float) $token['discount_amount'];
-            $tokenUsed = $token['token_id'];
+        if (!$token) {
+            $connect->rollBack();
+            echo json_encode(['error' => 'Invalid or expired token code.']);
+            exit();
         }
+
+        if ($token['parent_id'] != $parentId) {
+            $connect->rollBack();
+            echo json_encode(['error' => 'This token does not belong to your account.']);
+            exit();
+        }
+
+        // Apply discount
+        $discountRate = 100.00;
+        $amountPost = 0.00;
+        $tokenUsed = true;
     }
 
-    $amountPost = $amountPre - $discountAmount;
-    $status = ($paymentMethod === 'Credit Card') ? 'Paid' : 'Pending';
+    $status = ($amountPost <= 0) ? 'Paid' : (($paymentMethod === 'Credit Card') ? 'Paid' : 'Pending');
 
-    // Include token_id in payment record
-    $stmt = $connect->prepare("INSERT INTO payment (amount_pre_discount, amount_post_discount, method, status, token_id) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$amountPre, $amountPost, $paymentMethod, $status, $tokenUsed]);
+    // 1. Create Payment Record
+    $stmt = $connect->prepare("INSERT INTO payment (amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
     $paymentId = $connect->lastInsertId();
 
     // Mark token as used if applied
@@ -85,14 +106,21 @@ try {
     }
 
     // 2. Create Appointment
-    // Ensure format matches DATETIME (YYYY-MM-DD HH:MM:SS)
     $scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+    $intakeJson = $intakeData ? json_encode($intakeData) : null;
+    $intakeCompleted = $intakeData ? 1 : 0;
 
-    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, ?, 'Scheduled', ?, ?, ?)");
-    $stmt->execute([$parentId, $childId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
+    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, child_id, payment_id, specialist_id, status, type, comment, intake_data, intake_completed, scheduled_at) VALUES (?, ?, ?, ?, ?, 'Scheduled', ?, ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $childId, $childId, $paymentId, $specialistId, $type, $comment, $intakeJson, $intakeCompleted, $scheduledDateTime]);
+    $appointmentId = $connect->lastInsertId();
     $appointmentId = $connect->lastInsertId();
 
-    // 3. Create Notification
+    // 3. Mark token as used
+    if ($tokenUsed && isset($token)) {
+        $connect->prepare("UPDATE appointment_tokens SET status = 'used', appointment_id = ?, used_at = NOW() WHERE token_id = ?")->execute([$appointmentId, $token['token_id']]);
+    }
+
+    // 4. Create Notification
     $childName = '';
     if ($childId) {
         $childStmt = $connect->prepare("SELECT first_name FROM child WHERE child_id = ?");
@@ -102,13 +130,21 @@ try {
     }
     $title = "Appointment Scheduled" . $childName;
     $message = "Your " . ($type === 'onsite' ? 'clinic visit' : 'online session') . " has been successfully scheduled for " . date('M j, Y g:i A', strtotime($scheduledDateTime)) . ".";
+    if ($tokenUsed) {
+        $message .= " (Free consultation token applied)";
+    }
     $stmtN = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
     $stmtN->execute([$parentId, $title, $message]);
 
     $connect->commit();
-    echo json_encode(['success' => true, 'appointment_id' => $appointmentId]);
+    echo json_encode([
+        'success' => true, 'appointment_id' => $appointmentId,
+        'appointment_id' => $appointmentId,
+        'token_applied' => $tokenUsed,
+        'amount_paid' => $amountPost
+    ]);
 } catch (Exception $e) {
     $connect->rollBack();
-    echo json_encode(['error' => 'Database error: occurred while booking.']);
+    echo json_encode(['error' => 'Database error occurred while booking.']);
 }
 ?>

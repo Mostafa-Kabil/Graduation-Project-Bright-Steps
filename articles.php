@@ -227,7 +227,7 @@ if (isset($_SESSION['id'])) {
         <!-- Dynamic content loaded by JS -->
     </main>
 
-    <script src="scripts/articles_data.js"></script>
+    <script src="scripts/articles_data.js?v=<?php echo filemtime('scripts/articles_data.js'); ?>"></script>
     <script>
     let currentFilter = 'all';
     const childAge = '<?php echo $childAge; ?>';

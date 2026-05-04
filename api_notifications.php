@@ -37,7 +37,9 @@ switch ($action) {
             $stmt = $connect->prepare(
                 "SELECT * FROM notifications WHERE $whereClause ORDER BY created_at DESC LIMIT ?"
             );
-            $stmt->execute([$filterValue, $limit]);
+            $stmt->bindValue(1, $filterValue);
+            $stmt->bindValue(2, $limit, PDO::PARAM_INT);
+            $stmt->execute();
             $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Unread count
@@ -77,7 +79,6 @@ switch ($action) {
         echo json_encode(['success' => true]);
         break;
 
-    // ── Create notification (for internal use/testing) ───────────
     case 'create':
         $input = json_decode(file_get_contents('php://input'), true);
         $type = $input['type'] ?? 'system';
@@ -92,14 +93,31 @@ switch ($action) {
             exit();
         }
 
-        if ($isClinic) {
+        if (!$isClinic) {
+            // Check user settings before inserting
+            $stmt = $connect->prepare("SELECT * FROM user_settings WHERE user_id = ?");
+            $stmt->execute([$targetUser]);
+            $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            $shouldInsert = true;
+            if ($settings) {
+                if ($type === 'appointment' && empty($settings['appointment_reminders'])) $shouldInsert = false;
+                if ($type === 'milestone' && empty($settings['milestone_alerts'])) $shouldInsert = false;
+                if ($type === 'system' && empty($settings['system_alerts'])) $shouldInsert = false;
+            }
+            
+            if (!$shouldInsert) {
+                echo json_encode(['success' => true, 'skipped' => true, 'reason' => 'User disabled this notification type']);
+                exit();
+            }
+
             $stmt = $connect->prepare(
-                "INSERT INTO notifications (clinic_id, type, title, message) VALUES (?, ?, ?, ?)"
+                "INSERT INTO notifications (user_id, type, title, message) VALUES (?, ?, ?, ?)"
             );
             $stmt->execute([$targetUser, $type, $title, $message]);
         } else {
             $stmt = $connect->prepare(
-                "INSERT INTO notifications (user_id, type, title, message) VALUES (?, ?, ?, ?)"
+                "INSERT INTO notifications (clinic_id, type, title, message) VALUES (?, ?, ?, ?)"
             );
             $stmt->execute([$targetUser, $type, $title, $message]);
         }

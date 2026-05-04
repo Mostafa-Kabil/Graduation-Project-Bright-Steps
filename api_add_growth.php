@@ -43,6 +43,26 @@ if (!$stmt->fetch()) {
 try {
     $connect->beginTransaction();
 
+    // Weekly limit: only allow one new measurement per 7 days (edits are still allowed)
+    if (!$recordId) {
+        $stmtWeek = $connect->prepare(
+            "SELECT recorded_at FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 1"
+        );
+        $stmtWeek->execute([$childId]);
+        $lastRecord = $stmtWeek->fetch(PDO::FETCH_ASSOC);
+        if ($lastRecord) {
+            $lastDate = new DateTime($lastRecord['recorded_at']);
+            $now = new DateTime();
+            $diff = $now->diff($lastDate)->days;
+            if ($diff < 7) {
+                $daysLeft = 7 - $diff;
+                $connect->rollBack();
+                echo json_encode(['error' => "You can only log measurements once per week. Please wait $daysLeft more day" . ($daysLeft > 1 ? 's' : '') . "."]);
+                exit();
+            }
+        }
+    }
+
     if ($recordId) {
         $stmtPrev = $connect->prepare("SELECT * FROM growth_record WHERE record_id = :rid AND child_id = :cid");
         $stmtPrev->execute(['rid' => $recordId, 'cid' => $childId]);

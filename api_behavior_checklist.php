@@ -40,7 +40,7 @@ $childId = $_GET['child_id'] ?? $_POST['child_id'] ?? null;
 $AI_API_URL = 'http://localhost:8003';
 
 // Verify child belongs to parent
-function verifyChild($connect, $childId, $parentId) {
+function verifyChildChecklist($connect, $childId, $parentId) {
     if (!$childId || !$parentId) return false;
     $stmt = $connect->prepare("SELECT child_id, first_name, last_name, birth_year, birth_month, birth_day FROM child WHERE child_id = ? AND parent_id = ?");
     $stmt->execute([$childId, $parentId]);
@@ -48,13 +48,13 @@ function verifyChild($connect, $childId, $parentId) {
 }
 
 // Calculate age in months
-function calculateAgeMonths($birthYear, $birthMonth, $birthDay) {
+function calculateAgeMonthsChecklist($birthYear, $birthMonth, $birthDay) {
     $bd = mktime(0, 0, 0, $birthMonth, $birthDay, $birthYear);
     return floor((time() - $bd) / (30.44 * 86400));
 }
 
 // Get latest growth metrics for child
-function getGrowthMetrics($connect, $childId) {
+function getGrowthMetricsChecklist($connect, $childId) {
     $stmt = $connect->prepare("SELECT weight, height, head_circumference FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 1");
     $stmt->execute([$childId]);
     $result = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -62,7 +62,7 @@ function getGrowthMetrics($connect, $childId) {
 }
 
 // Get latest speech analysis for child
-function getSpeechMetrics($connect, $childId) {
+function getSpeechMetricsChecklist($connect, $childId) {
     $stmt = $connect->prepare("
         SELECT sa.vocabulary_score, sa.clarify_score
         FROM speech_analysis sa
@@ -76,7 +76,7 @@ function getSpeechMetrics($connect, $childId) {
 }
 
 // Ensure behavior category exists in database
-function ensureCategoryExists($connect, $categoryName, $categoryType, $categoryDescription) {
+function ensureCategoryExistsChecklist($connect, $categoryName, $categoryType, $categoryDescription) {
     $stmt = $connect->prepare("SELECT category_id FROM behavior_category WHERE category_name = ?");
     $stmt->execute([$categoryName]);
     $categoryId = $stmt->fetchColumn();
@@ -90,7 +90,7 @@ function ensureCategoryExists($connect, $categoryName, $categoryType, $categoryD
 }
 
 // Ensure behavior exists in database
-function ensureBehaviorExists($connect, $categoryId, $behaviorDetails, $behaviorType = 'milestone', $indicator = 'AI-generated') {
+function ensureBehaviorExistsChecklist($connect, $categoryId, $behaviorDetails, $behaviorType = 'milestone', $indicator = 'AI-generated') {
     $stmt = $connect->prepare("SELECT behavior_id FROM behavior WHERE behavior_details = ? AND category_id = ?");
     $stmt->execute([$behaviorDetails, $categoryId]);
     $behaviorId = $stmt->fetchColumn();
@@ -184,7 +184,7 @@ switch ($action) {
             exit();
         }
 
-        $child = verifyChild($connect, $childId, $parentId);
+        $child = verifyChildChecklist($connect, $childId, $parentId);
         if (!$child) {
             http_response_code(404);
             echo json_encode(['error' => 'Child not found or access denied']);
@@ -192,13 +192,13 @@ switch ($action) {
         }
 
         try {
-            $ageMonths = calculateAgeMonths($child['birth_year'], $child['birth_month'], $child['birth_day']);
+            $ageMonths = calculateAgeMonthsChecklist($child['birth_year'], $child['birth_month'], $child['birth_day']);
 
             // Get child's growth metrics
-            $growthMetrics = getGrowthMetrics($connect, $childId);
+            $growthMetrics = getGrowthMetricsChecklist($connect, $childId);
 
             // Get child's speech metrics
-            $speechMetrics = getSpeechMetrics($connect, $childId);
+            $speechMetrics = getSpeechMetricsChecklist($connect, $childId);
 
             // Check if child already has behaviors saved (existing checklist)
             $hasExisting = hasExistingChecklist($connect, $childId);
@@ -235,7 +235,7 @@ switch ($action) {
             // If AI generated new behaviors, insert them into database only if this is a new checklist
             if ($useAI && !empty($aiResponse['categories']) && !$hasExisting) {
                 foreach ($aiResponse['categories'] as $aiCat) {
-                    $categoryId = ensureCategoryExists(
+                    $categoryId = ensureCategoryExistsChecklist(
                         $connect,
                         $aiCat['category_name'],
                         $aiCat['category_type'],
@@ -243,7 +243,7 @@ switch ($action) {
                     );
 
                     foreach ($aiCat['behaviors'] as $aiBeh) {
-                        $behaviorId = ensureBehaviorExists(
+                        $behaviorId = ensureBehaviorExistsChecklist(
                             $connect,
                             $categoryId,
                             $aiBeh['behavior_details'],

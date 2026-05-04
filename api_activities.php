@@ -48,7 +48,9 @@ function getCuratedActivities($ageMonths, $childName) {
             'articles' => [
                 ['title' => 'Baby\'s First Year: Development Guide', 'summary' => 'Essential milestones to look for in your baby\'s first 12 months, from first smiles to first steps.', 'category' => 'development', 'read_time' => '5 min'],
                 ['title' => 'Healthy Nutrition for Infants', 'summary' => 'When and how to introduce solid foods, plus tips for balanced baby nutrition.', 'category' => 'nutrition', 'read_time' => '4 min'],
-                ['title' => 'Sleep Training Basics', 'summary' => 'Gentle methods to help your baby develop healthy sleep patterns.', 'category' => 'health', 'read_time' => '6 min']
+                ['title' => 'Sleep Training Basics', 'summary' => 'Gentle methods to help your baby develop healthy sleep patterns.', 'category' => 'health', 'read_time' => '6 min'],
+                ['title' => 'Understanding Baby Cries', 'summary' => 'A guide to decoding what your infant is trying to tell you.', 'category' => 'parenting', 'read_time' => '4 min'],
+                ['title' => 'Sensory Play for Brain Growth', 'summary' => 'How simple touch and sound games wire your baby\'s developing brain.', 'category' => 'development', 'read_time' => '5 min']
             ],
             'real_life_activities' => [
                 ['title' => 'Tummy Time Play', 'description' => 'Place baby on their tummy with colorful toys in front. This strengthens neck and shoulder muscles.', 'duration' => '10 min', 'category' => 'motor', 'difficulty' => 'easy', 'materials' => 'Play mat, soft toys'],
@@ -65,7 +67,9 @@ function getCuratedActivities($ageMonths, $childName) {
             'articles' => [
                 ['title' => 'Toddler Speech: When to Worry', 'summary' => 'Understanding speech milestones and when to seek professional help for your toddler.', 'category' => 'development', 'read_time' => '5 min'],
                 ['title' => 'Healthy Meals for Picky Eaters', 'summary' => 'Creative strategies to ensure your toddler gets proper nutrition despite being selective.', 'category' => 'nutrition', 'read_time' => '4 min'],
-                ['title' => 'Toddler Hygiene Routines', 'summary' => 'Making handwashing and teeth brushing fun with songs and routines.', 'category' => 'health', 'read_time' => '3 min']
+                ['title' => 'Toddler Hygiene Routines', 'summary' => 'Making handwashing and teeth brushing fun with songs and routines.', 'category' => 'health', 'read_time' => '3 min'],
+                ['title' => 'Navigating the Terrible Twos', 'summary' => 'Expert advice on managing toddler emotions and setting boundaries.', 'category' => 'parenting', 'read_time' => '5 min'],
+                ['title' => 'Potty Training 101', 'summary' => 'Signs of readiness and a gentle approach to toilet training.', 'category' => 'health', 'read_time' => '6 min']
             ],
             'real_life_activities' => [
                 ['title' => 'Building Block Tower', 'description' => 'Stack blocks as high as possible. Count each block together as you build.', 'duration' => '15 min', 'category' => 'motor', 'difficulty' => 'easy', 'materials' => 'Building blocks'],
@@ -82,7 +86,9 @@ function getCuratedActivities($ageMonths, $childName) {
             'articles' => [
                 ['title' => 'School Readiness Checklist', 'summary' => 'Key skills your preschooler should develop before starting school, from social skills to basic counting.', 'category' => 'development', 'read_time' => '6 min'],
                 ['title' => 'Managing Tantrums Effectively', 'summary' => 'Evidence-based strategies for handling emotional outbursts with empathy and firmness.', 'category' => 'parenting', 'read_time' => '5 min'],
-                ['title' => 'Screen Time Guidelines for Kids', 'summary' => 'How much is too much? Setting healthy limits on digital device usage for preschoolers.', 'category' => 'health', 'read_time' => '4 min']
+                ['title' => 'Screen Time Guidelines for Kids', 'summary' => 'How much is too much? Setting healthy limits on digital device usage for preschoolers.', 'category' => 'health', 'read_time' => '4 min'],
+                ['title' => 'Fostering Independence', 'summary' => 'Teaching preschoolers to dress themselves and clean up their toys.', 'category' => 'development', 'read_time' => '5 min'],
+                ['title' => 'Healthy Snacks for Energy', 'summary' => 'Quick, nutritious snacks that keep active preschoolers fueled.', 'category' => 'nutrition', 'read_time' => '3 min']
             ],
             'real_life_activities' => [
                 ['title' => 'Obstacle Course', 'description' => 'Create a fun indoor or outdoor obstacle course with pillows, chairs, and hoops.', 'duration' => '20 min', 'category' => 'motor', 'difficulty' => 'medium', 'materials' => 'Pillows, chairs, hoops'],
@@ -99,7 +105,9 @@ function getCuratedActivities($ageMonths, $childName) {
             'articles' => [
                 ['title' => 'Building Confidence in Children', 'summary' => 'How to nurture self-esteem and resilience in school-age children through daily interactions.', 'category' => 'parenting', 'read_time' => '5 min'],
                 ['title' => 'Active Kids, Healthy Kids', 'summary' => 'The importance of physical activity and how to make exercise fun for school-age children.', 'category' => 'health', 'read_time' => '4 min'],
-                ['title' => 'Balanced Lunchbox Ideas', 'summary' => 'Nutritious and appealing lunch ideas that kids will actually eat at school.', 'category' => 'nutrition', 'read_time' => '4 min']
+                ['title' => 'Balanced Lunchbox Ideas', 'summary' => 'Nutritious and appealing lunch ideas that kids will actually eat at school.', 'category' => 'nutrition', 'read_time' => '4 min'],
+                ['title' => 'Helping with Homework', 'summary' => 'How to guide your child without doing the work for them.', 'category' => 'development', 'read_time' => '5 min'],
+                ['title' => 'Bullying Prevention', 'summary' => 'Signs to look out for and how to talk to your child about bullying.', 'category' => 'parenting', 'read_time' => '6 min']
             ],
             'real_life_activities' => [
                 ['title' => 'Science Experiment', 'description' => 'Make a baking soda volcano or grow crystals. Learn through hands-on discovery.', 'duration' => '30 min', 'category' => 'cognitive', 'difficulty' => 'medium', 'materials' => 'Baking soda, vinegar, food coloring'],
@@ -297,6 +305,8 @@ Return EXACTLY this JSON structure (no markdown, no backticks, just raw JSON):
   \"articles\": [
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"parenting|development|health|nutrition\", \"read_time\": \"5 min\"},
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
+    {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
+    {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"}
   ],
   \"real_life_activities\": [
@@ -427,22 +437,39 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
         $activityId = $input['activity_id'] ?? null;
         $childId = $input['child_id'] ?? null;
 
-        if (!$activityId || !$childId) {
-            echo json_encode(['error' => 'activity_id and child_id required']);
+        $category = $input['category'] ?? null;
+        $title = $input['title'] ?? 'Interactive Activity';
+
+        if (!$activityId && !$category) {
+            echo json_encode(['error' => 'activity_id or category required']);
+            exit();
+        }
+
+        if (!$childId) {
+            echo json_encode(['error' => 'child_id required']);
             exit();
         }
 
         try {
             // Mark as completed
-            $stmt = $connect->prepare(
-                "UPDATE child_activities SET is_completed = 1, completed_at = NOW(), points_earned = 15
-                 WHERE activity_id = ? AND child_id = ? AND is_completed = 0"
-            );
-            $stmt->execute([$activityId, $childId]);
+            if ($activityId) {
+                $stmt = $connect->prepare(
+                    "UPDATE child_activities SET is_completed = 1, completed_at = NOW(), points_earned = 15
+                     WHERE activity_id = ? AND child_id = ? AND is_completed = 0"
+                );
+                $stmt->execute([$activityId, $childId]);
 
-            if ($stmt->rowCount() === 0) {
-                echo json_encode(['error' => 'Activity not found or already completed']);
-                exit();
+                if ($stmt->rowCount() === 0) {
+                    echo json_encode(['error' => 'Activity not found or already completed']);
+                    exit();
+                }
+            } else {
+                // Generic completion (e.g. ad-hoc game)
+                $stmt = $connect->prepare(
+                    "INSERT INTO child_activities (child_id, title, category, is_completed, completed_at, points_earned)
+                     VALUES (?, ?, ?, 1, NOW(), 15)"
+                );
+                $stmt->execute([$childId, $title, $category]);
             }
 
             // Award points to wallet
@@ -466,6 +493,61 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
                 }
             }
 
+            // Check for activity-based badges instantly
+            $awardBadge = function($badgeName) use ($connect, $childId, $userId) {
+                $stmt = $connect->prepare("SELECT badge_id FROM badge WHERE name = ? LIMIT 1");
+                $stmt->execute([$badgeName]);
+                $badge = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($badge) {
+                    $stmt2 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?");
+                    $stmt2->execute([$childId, $badge['badge_id']]);
+                    if ($stmt2->fetchColumn() == 0) {
+                        $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)")->execute([$childId, $badge['badge_id']]);
+                        $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)")->execute([$userId, "Badge Earned: $badgeName", "Congratulations! You earned the '$badgeName' badge!"]);
+                        return $badgeName;
+                    }
+                }
+                return false;
+            };
+
+            $stmtTot = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1");
+            $stmtTot->execute([$childId]);
+            $totalActivities = (int)$stmtTot->fetchColumn();
+
+            $stmtWk = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+            $stmtWk->execute([$childId]);
+            $weeklyCount = (int)$stmtWk->fetchColumn();
+
+            $stmtMo = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
+            $stmtMo->execute([$childId]);
+            $monthlyCount = (int)$stmtMo->fetchColumn();
+
+            $stmtArt = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'article' AND is_completed = 1");
+            $stmtArt->execute([$childId]);
+            $articleCount = (int)$stmtArt->fetchColumn();
+
+            $stmtGame = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'website_game' AND is_completed = 1");
+            $stmtGame->execute([$childId]);
+            $gameCount = (int)$stmtGame->fetchColumn();
+
+            $stmtMotor = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'motor' AND is_completed = 1");
+            $stmtMotor->execute([$childId]);
+            $motorCount = (int)$stmtMotor->fetchColumn();
+
+            $stmtSpeech = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'speech' AND is_completed = 1");
+            $stmtSpeech->execute([$childId]);
+            $speechCount = (int)$stmtSpeech->fetchColumn();
+
+            $earnedBadges = [];
+            if ($totalActivities >= 1) { $b = $awardBadge('First Steps'); if ($b) $earnedBadges[] = $b; }
+            if ($weeklyCount >= 5) { $b = $awardBadge('Weekly Champion'); if ($b) $earnedBadges[] = $b; }
+            if ($monthlyCount >= 20) { $b = $awardBadge('Monthly Master'); if ($b) $earnedBadges[] = $b; }
+            if ($articleCount >= 1) { $b = $awardBadge('Article Reader'); if ($b) $earnedBadges[] = $b; }
+            if ($articleCount >= 10) { $b = $awardBadge('Bookworm'); if ($b) $earnedBadges[] = $b; }
+            if ($gameCount >= 5) { $b = $awardBadge('Game Master'); if ($b) $earnedBadges[] = $b; }
+            if ($motorCount >= 5) { $b = $awardBadge('Motor Master'); if ($b) $earnedBadges[] = $b; }
+            if ($speechCount >= 5) { $b = $awardBadge('Speech Explorer'); if ($b) $earnedBadges[] = $b; }
+
             // Create notification
             $stmtN = $connect->prepare(
                 "INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)"
@@ -479,7 +561,8 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
             echo json_encode([
                 'success' => true,
                 'message' => 'Activity completed! +15 points',
-                'points_earned' => 15
+                'points_earned' => 15,
+                'new_badges' => $earnedBadges
             ]);
         } catch (PDOException $e) {
             error_log("Complete activity error: " . $e->getMessage());
@@ -561,12 +644,34 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
         $title = $input['title'] ?? null;
         if (!$title) { echo json_encode(['error' => 'title required']); exit(); }
 
+        $alreadyRead = false;
         try {
-            $stmt = $connect->prepare("INSERT INTO article_reads (user_id, article_title) VALUES (?, ?)");
-            $stmt->execute([$userId, $title]);
-        } catch (Exception $e) { /* might already be inserted or table structure issue */ }
+            // Check if already read
+            $chk = $connect->prepare("SELECT COUNT(*) FROM article_reads WHERE user_id = ? AND article_title = ?");
+            $chk->execute([$userId, $title]);
+            if ((int)$chk->fetchColumn() > 0) {
+                $alreadyRead = true;
+            } else {
+                $stmt = $connect->prepare("INSERT INTO article_reads (user_id, article_title) VALUES (?, ?)");
+                $stmt->execute([$userId, $title]);
+            }
+        } catch (Exception $e) {
+            // Table might not exist – create it
+            try {
+                $connect->exec("CREATE TABLE IF NOT EXISTS `article_reads` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT,
+                    `user_id` int(11) NOT NULL,
+                    `article_title` varchar(500) NOT NULL,
+                    `read_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    UNIQUE KEY `unique_read` (`user_id`, `article_title`(200))
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+                $stmt = $connect->prepare("INSERT INTO article_reads (user_id, article_title) VALUES (?, ?)");
+                $stmt->execute([$userId, $title]);
+            } catch (Exception $e2) { /* skip */ }
+        }
         
-        echo json_encode(['success' => true, 'message' => 'Article marked as read']);
+        echo json_encode(['success' => true, 'already_read' => $alreadyRead, 'message' => $alreadyRead ? 'Article was already read' : 'Article marked as read']);
         break;
 
     // ── 7-day activity chart data ──────────────────────────────
@@ -598,8 +703,19 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
         }
         break;
 
+    // ── Get all articles the user has already read ────────────
+    case 'get-read-articles':
+        $readTitles = [];
+        try {
+            $stmt = $connect->prepare("SELECT article_title FROM article_reads WHERE user_id = ?");
+            $stmt->execute([$userId]);
+            $readTitles = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        } catch (Exception $e) { /* table may not exist yet */ }
+        echo json_encode(['success' => true, 'read_titles' => $readTitles]);
+        break;
+
     default:
         http_response_code(400);
-        echo json_encode(['error' => 'Invalid action. Use: recommend, complete, history, summary, summary_chart']);
+        echo json_encode(['error' => 'Invalid action. Use: recommend, complete, history, summary, summary_chart, mark-read, get-read-articles']);
         break;
 }

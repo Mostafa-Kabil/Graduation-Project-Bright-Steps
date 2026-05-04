@@ -1,3 +1,4 @@
+<?php if (session_status() === PHP_SESSION_NONE) session_start(); ?>
 <!-- Header -->
     <header class="header">
         <div class="header-container">
@@ -91,8 +92,29 @@
                     </svg>
                     عربي
                 </button>
-                <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
-                <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
+                <?php if (isset($_SESSION['id']) && isset($_SESSION['role'])): ?>
+                    <?php
+                        // Compute base URL relative to the site root
+                        $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+                        $siteRoot = '/Bright Steps Website';
+                        // If we're in a subdirectory, compute the relative path back to root
+                        if (strpos($scriptDir, $siteRoot) === 0) {
+                            $subPath = substr($scriptDir, strlen($siteRoot));
+                            $depth = substr_count(trim($subPath, '/'), '/') + (trim($subPath, '/') !== '' ? 1 : 0);
+                            $baseUrl = $depth > 0 ? str_repeat('../', $depth) : '';
+                        } else {
+                            $baseUrl = '';
+                        }
+                        $dashUrl = $baseUrl . 'dashboards/parent/dashboard.php';
+                        if ($_SESSION['role'] === 'clinic') $dashUrl = $baseUrl . 'dashboards/clinic/clinic-dashboard.php';
+                        elseif ($_SESSION['role'] === 'doctor') $dashUrl = $baseUrl . 'doctor-dashboard.php';
+                        elseif ($_SESSION['role'] === 'admin') $dashUrl = $baseUrl . 'admin-dashboard.php';
+                    ?>
+                    <a href="<?= $dashUrl ?>" class="btn btn-gradient" style="text-decoration:none;">My Dashboard</a>
+                <?php else: ?>
+                    <button class="btn btn-ghost" onclick="navigateTo('login')">Log In</button>
+                    <button class="btn btn-gradient" onclick="navigateTo('signup')">Get Started Free</button>
+                <?php endif; ?>
             </div>
             <!-- Hamburger Button (Mobile) -->
             <button class="hamburger-btn" id="hamburger-btn" onclick="toggleMobileMenu()" aria-label="Open menu">
@@ -120,18 +142,30 @@
                 عربي / English
             </button>
             <div class="mobile-nav-divider"></div>
-            <button class="mobile-nav-item" onclick="navigateTo('login')">
-                <svg viewBox="0 0 24 24">
-                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4m-5-4l5-5-5-5m5 5H3" />
-                </svg>
-                Log In
-            </button>
-            <button class="mobile-nav-item btn-gradient" onclick="navigateTo('signup')">
-                <svg viewBox="0 0 24 24" stroke="white">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <polyline points="22 4 12 14.01 9 11.01" />
-                </svg>
-                Get Started Free
-            </button>
+            <?php if (isset($_SESSION['id']) && isset($_SESSION['role'])): ?>
+                <a href="<?= $dashUrl ?>" class="mobile-nav-item btn-gradient" style="text-decoration:none;">
+                    <svg viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                    </svg>
+                    My Dashboard
+                </a>
+            <?php else: ?>
+                <button class="mobile-nav-item" onclick="navigateTo('login')">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4m-5-4l5-5-5-5m5 5H3" />
+                    </svg>
+                    Log In
+                </button>
+                <button class="mobile-nav-item btn-gradient" onclick="navigateTo('signup')">
+                    <svg viewBox="0 0 24 24" stroke="white">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                    Get Started Free
+                </button>
+            <?php endif; ?>
         </div>
     </nav>
