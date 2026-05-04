@@ -61,8 +61,7 @@ if ($childId) {
 try {
     $connect->beginTransaction();
 
-    // 1. Create Payment Record First
-    // Standard appointment price is $50. No discount for now mapped.
+    // Standard appointment price
     $amountPre = 50.00;
     $amountPost = 50.00;
     $discountRate = 0.00;

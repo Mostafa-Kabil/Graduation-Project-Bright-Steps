@@ -1237,10 +1237,15 @@ function renderProfileSection(d) {
     const fullName = ('Dr. ' + (d.first_name||'') + ' ' + (d.last_name||'')).trim();
     const spec = d.specialization || '';
     const activeSlots = (d.slots || []).map(s => parseInt(s.day_of_week));
-    const startTime = d.slots && d.slots[0] ? (d.slots[0].start_time||'09:00').substring(0,5) : '09:00';
-    const endTime   = d.slots && d.slots[0] ? (d.slots[0].end_time||'17:00').substring(0,5) : '17:00';
+    // Prefer onboarding working_days if no slots saved yet
+    let workingDays = activeSlots;
+    if (workingDays.length === 0 && d.working_days) {
+        try { workingDays = JSON.parse(d.working_days); } catch(e) { workingDays = []; }
+    }
+    const startTime = d.slots && d.slots[0] ? (d.slots[0].start_time||d.start_time||'09:00').substring(0,5) : (d.start_time||'09:00').substring(0,5);
+    const endTime   = d.slots && d.slots[0] ? (d.slots[0].end_time||d.end_time||'17:00').substring(0,5) : (d.end_time||'17:00').substring(0,5);
     const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const daysHtml = dayNames.map((day,i) => `<div class="dr-day-checkbox"><input type="checkbox" id="dd-day-${i}" value="${i}" ${activeSlots.includes(i)?'checked':''}><label for="dd-day-${i}">${day}</label></div>`).join('');
+    const daysHtml = dayNames.map((day,i) => `<div class="dr-day-checkbox"><input type="checkbox" id="dd-day-${i}" value="${i}" ${workingDays.includes(i)?'checked':''}><label for="dd-day-${i}">${day}</label></div>`).join('');
     const specVals = ['pediatrician','child-psychiatrist','developmental-pediatrician','neurologist','speech-therapist','occupational-therapist','behavioral-therapist','psychologist','other'];
     const specLabels = ['Pediatrician','Child Psychiatrist','Developmental Pediatrician','Pediatric Neurologist','Speech-Language Pathologist','Occupational Therapist','Behavioral Therapist','Child Psychologist','Other'];
     const specOpts = specVals.map((v,i) => `<option value="${v}" ${spec===v?'selected':''}>${specLabels[i]}</option>`).join('');
@@ -1280,8 +1285,8 @@ function renderProfileSection(d) {
                 <div class="dr-form-grid">
                     <div class="dr-form-group"><label class="dr-form-label" for="dd-specialty">Specialty <span class="required">*</span></label><select id="dd-specialty" class="dr-form-select" required onchange="handleDrSpecialtyChange()">${specOpts}</select><input type="text" id="dd-specialty-other" class="dr-form-input" placeholder="Enter your specialty" style="display:none;margin-top:0.5rem;"></div>
                     <div class="dr-form-group"><label class="dr-form-label" for="dd-experience">Years of Experience <span class="required">*</span></label><input type="number" id="dd-experience" class="dr-form-input" value="${d.experience_years||0}" min="0" max="60" required></div>
-                    <div class="dr-form-group full-width"><label class="dr-form-label" for="dd-cert">Certifications</label><input type="text" id="dd-cert" class="dr-form-input" value="${d.certificate_of_experience||''}" placeholder="e.g. MD, FAAP, Board Certified"></div>
-                    <div class="dr-form-group full-width"><label class="dr-form-label" for="dd-bio">Bio</label><textarea id="dd-bio" class="dr-form-input dr-form-textarea" placeholder="Write a short bio about your practice…"></textarea></div>
+                    <div class="dr-form-group full-width"><label class="dr-form-label" for="dd-cert">Certifications</label><input type="text" id="dd-cert" class="dr-form-input" value="${d.certificate_of_experience||d.onboarding_certifications||''}" placeholder="e.g. MD, FAAP, Board Certified"></div>
+                    <div class="dr-form-group full-width"><label class="dr-form-label" for="dd-bio">Bio</label><textarea id="dd-bio" class="dr-form-input dr-form-textarea" placeholder="Write a short bio about your practice…">${d.bio||''}</textarea></div>
                 </div>
             </div>
             <div class="dr-form-section">
@@ -1299,8 +1304,8 @@ function renderProfileSection(d) {
                 <div class="dr-hours-row"><label for="dd-start-time">From</label><input type="time" id="dd-start-time" class="dr-time-input" value="${startTime}"><span class="dr-hours-separator">—</span><label for="dd-end-time">To</label><input type="time" id="dd-end-time" class="dr-time-input" value="${endTime}"></div>
                 <label class="dr-form-label" style="margin:1.25rem 0 0.5rem;display:block;">Consultation Types</label>
                 <div class="dr-consult-types">
-                    <div class="dr-consult-toggle"><input type="checkbox" id="dd-consult-online" checked><label for="dd-consult-online"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/><rect x="1" y="6" width="14" height="12" rx="2" ry="2"/></svg> Online</label></div>
-                    <div class="dr-consult-toggle"><input type="checkbox" id="dd-consult-onsite" checked><label for="dd-consult-onsite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> On-site</label></div>
+                    <div class="dr-consult-toggle"><input type="checkbox" id="dd-consult-online" ${!d.consultation_types || JSON.parse(d.consultation_types||'[]').includes('Online') ? 'checked' : ''}><label for="dd-consult-online"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14"/><rect x="1" y="6" width="14" height="12" rx="2" ry="2"/></svg> Online</label></div>
+                    <div class="dr-consult-toggle"><input type="checkbox" id="dd-consult-onsite" ${!d.consultation_types || JSON.parse(d.consultation_types||'[]').includes('On-site') ? 'checked' : ''}><label for="dd-consult-onsite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> On-site</label></div>
                 </div>
             </div>
             <div class="dr-form-actions">
@@ -1384,9 +1389,10 @@ function submitDrProfileForm(e) {
         }).catch(()=>showToast('Connection error','error'));
     }
 
+    const bio = (document.getElementById('dd-bio')?.value||'').trim();
     fetch('dr-settings.php?ajax=1&action=save_profile', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({first_name, last_name, email, phone, specialization, experience_years, certificate_of_experience})
+        body: JSON.stringify({first_name, last_name, email, phone, bio, specialization, experience_years, certificate_of_experience})
     }).then(r=>r.json()).then(res => {
         if (res.success) showToast('Profile saved successfully!','success');
         else showToast(res.error||'Save failed','error');
