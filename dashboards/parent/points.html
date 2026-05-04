@@ -1004,20 +1004,47 @@ const pointsView = (function() {
                     return;
                 }
 
-                container.innerHTML = data.items.map(item => `
-                    <div class="catalog-item" onclick="pointsView.openRedemptionModal(${item.item_id})">
-                        <div class="catalog-item-header">
-                            <span class="catalog-item-icon">${item.icon || '🎁'}</span>
-                            <span class="catalog-item-name">${item.item_name}</span>
-                            <span class="catalog-item-type">${item.item_type}</span>
+                const colorMap = {
+                    green:  { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', glow: 'rgba(34,197,94,0.25)', light: '#dcfce7', text: '#166534' },
+                    blue:   { bg: 'linear-gradient(135deg, #3b82f6, #2563eb)', glow: 'rgba(59,130,246,0.25)', light: '#dbeafe', text: '#1e40af' },
+                    purple: { bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', glow: 'rgba(139,92,246,0.25)', light: '#ede9fe', text: '#5b21b6' },
+                    orange: { bg: 'linear-gradient(135deg, #f97316, #ea580c)', glow: 'rgba(249,115,22,0.25)', light: '#ffedd5', text: '#9a3412' },
+                    yellow: { bg: 'linear-gradient(135deg, #eab308, #ca8a04)', glow: 'rgba(234,179,8,0.25)',  light: '#fef9c3', text: '#854d0e' },
+                    red:    { bg: 'linear-gradient(135deg, #ef4444, #dc2626)', glow: 'rgba(239,68,68,0.25)',  light: '#fee2e2', text: '#991b1b' },
+                    gold:   { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', glow: 'rgba(245,158,11,0.25)', light: '#fef3c7', text: '#92400e' }
+                };
+                const defaultColor = colorMap.blue;
+
+                container.innerHTML = data.items.map(item => {
+                    const c = colorMap[item.badge_color] || defaultColor;
+                    const icon = item.icon || '🎁';
+                    const typeLabels = { appointment: '🎫 Appointment', service: '⚙️ Service', badge: '🏅 Badge', custom: '🎁 Gift' };
+                    const typeLabel = typeLabels[item.item_type] || item.item_type;
+
+                    return `
+                    <div class="catalog-item" onclick="pointsView.openRedemptionModal(${item.item_id})" style="--card-glow:${c.glow};--card-accent-bg:${c.bg};">
+                        <div class="catalog-item-icon-wrap" style="background:${c.bg};box-shadow:0 8px 20px ${c.glow};">
+                            <span class="catalog-item-icon">${icon}</span>
                         </div>
-                        <div class="catalog-item-description">${item.description || 'No description'}</div>
-                        <div class="catalog-item-footer">
-                            <span class="catalog-item-cost">${item.points_cost.toLocaleString()} points</span>
-                            ${item.original_price ? `<span class="catalog-item-original">$${item.original_price}</span>` : ''}
+                        <div class="catalog-item-body">
+                            <div class="catalog-item-header">
+                                <span class="catalog-item-name">${item.item_name}</span>
+                                <span class="catalog-item-type" style="background:${c.light};color:${c.text};">${typeLabel}</span>
+                            </div>
+                            <div class="catalog-item-description">${item.description || 'No description'}</div>
+                            <div class="catalog-item-footer">
+                                <div class="catalog-item-pricing">
+                                    <span class="catalog-item-cost">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                        ${item.points_cost.toLocaleString()} pts
+                                    </span>
+                                    ${item.original_price ? `<span class="catalog-item-original">$${parseFloat(item.original_price).toFixed(2)} value</span>` : ''}
+                                </div>
+                                <button class="catalog-redeem-btn" style="background:${c.bg};box-shadow:0 4px 12px ${c.glow};">Redeem</button>
+                            </div>
                         </div>
-                    </div>
-                `).join('');
+                    </div>`;
+                }).join('');
             }
         } catch (error) {
             console.error('Failed to load catalog:', error);

@@ -24,7 +24,7 @@ $type = $_POST['type'] ?? 'onsite';
 $scheduledAt = $_POST['scheduled_at'] ?? '';
 $paymentMethod = $_POST['payment_method'] ?? 'Cash';
 $comment = trim($_POST['comment'] ?? '');
-$tokenCode = trim($_POST['token_code'] ?? '');
+$tokenId = trim($_POST['token_id'] ?? $_POST['token_code'] ?? '');
 $childId = $_POST['child_id'] ?? null;
 
 // Pre-consultation intake (JSON string)
@@ -68,9 +68,9 @@ try {
     $tokenUsed = false;
 
     // Token validation — apply 100% discount if valid token
-    if ($tokenCode) {
-        $tokenStmt = $connect->prepare("SELECT token_id, parent_id, child_id, discount_amount, status FROM appointment_tokens WHERE token_code = ? AND status = 'active'");
-        $tokenStmt->execute([$tokenCode]);
+    if ($tokenId) {
+        $tokenStmt = $connect->prepare("SELECT token_id, parent_id, child_id, discount_amount, status FROM appointment_tokens WHERE token_id = ? AND status = 'available'");
+        $tokenStmt->execute([$tokenId]);
         $token = $tokenStmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$token) {
@@ -99,20 +99,17 @@ try {
     $paymentId = $connect->lastInsertId();
 
     // Mark token as used if applied
-    if ($tokenUsed) {
+    if ($tokenUsed && isset($token)) {
         $updateToken = $connect->prepare("UPDATE appointment_tokens SET status = 'used', applied_to_appointment = ?, used_at = NOW() WHERE token_id = ?");
-        $updateToken->execute([$paymentId, $tokenUsed]);
+        $updateToken->execute([$paymentId, $token['token_id']]);
     }
 
     // 2. Create Appointment
     $scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
-    $intakeJson = $intakeData ? json_encode($intakeData) : null;
-    $intakeCompleted = $intakeData ? 1 : 0;
 
-    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, child_id, payment_id, specialist_id, status, type, comment, intake_data, intake_completed, scheduled_at) VALUES (?, ?, ?, ?, ?, 'Scheduled', ?, ?, ?, ?, ?)");
-    $stmt->execute([$parentId, $childId, $childId, $paymentId, $specialistId, $type, $comment, $intakeJson, $intakeCompleted, $scheduledDateTime]);
-    $appointmentId = $connect->lastInsertId();
-    $appointmentId = $connect->lastInsertId();
+    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, 'Scheduled', ?, ?, ?)");
+    $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
+    $appointmentId = $connect->lastInsertId();
 
     // 3. Mark token as used
     if ($tokenUsed && isset($token)) {

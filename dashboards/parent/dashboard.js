@@ -1,4 +1,4 @@
-﻿// Dashboard JavaScript
+// Dashboard JavaScript
 (function () {
     var children = (window.dashboardData || {}).children || [];
 
@@ -11,7 +11,7 @@
         { id: 'motor', label: 'Motor Skills', icon: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>' },
         { id: 'activities', label: 'Activities', icon: '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>' },
         { id: 'clinic', label: 'Book Appointments', icon: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M10 14h4"/><path d="M12 12v4"/>' },
-        { id: 'points', label: 'Points & Rewards', icon: '<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+
         { id: 'reports', label: 'Reports', icon: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16l4-8 4 4 4-6"/>' },
         { id: 'messages', label: 'Messages', icon: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z"/>' }
     ];
@@ -360,7 +360,7 @@
             @keyframes fadeUpIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
             .unearned-badge:hover { filter:grayscale(0%)!important; opacity:0.8!important; transform:translateY(-5px)!important; }
         </style>
-        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('badges-modal').remove()">
             <div style="background:linear-gradient(145deg, rgba(255,255,255,0.95), rgba(248,250,252,0.9));border:1px solid rgba(255,255,255,0.8);border-radius:32px;width:100%;max-width:900px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.8);overflow:hidden;animation:slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1);">
                 <div style="padding:2.5rem 3rem 1.5rem;display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:2;">
                     <div>
@@ -370,8 +370,8 @@
                         </div>
                         <p style="color:var(--slate-500);margin:0;font-size:1rem;">Complete tasks, read articles, and maintain streaks to unlock more badges.</p>
                     </div>
-                    <button onclick="document.getElementById('badges-modal').remove()" style="background:#ffffff;border:1px solid var(--slate-200);color:var(--slate-500);cursor:pointer;padding:0.75rem;border-radius:50%;transition:all 0.2s;display:flex;box-shadow:0 2px 5px rgba(0,0,0,0.05);" onmouseover="this.style.background='#f1f5f9';this.style.color='#0f172a'" onmouseout="this.style.background='var(--white)';this.style.color='var(--slate-500)'">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    <button onclick="event.stopPropagation();document.getElementById('badges-modal').remove()" style="background:#ffffff;border:1px solid var(--slate-200);color:var(--slate-500);cursor:pointer;padding:0.75rem;border-radius:50%;transition:all 0.2s;display:flex;box-shadow:0 2px 5px rgba(0,0,0,0.05);z-index:10;" onmouseover="this.style.background='#f1f5f9';this.style.color='#0f172a'" onmouseout="this.style.background='#ffffff';this.style.color='#64748b'">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
                     </button>
                 </div>
                 <div style="padding:1.5rem 3rem 3rem;overflow-y:auto;flex:1;">
@@ -418,7 +418,7 @@
             'motor': getMotorView,
             'activities': getActivitiesView,
             'clinic': getClinicView,
-            'points': getPointsView,
+
             'notifications': getNotificationsView,
             'reports': getReportsView,
             'messages': function () { return (window.getMessagesView || function () { return '<div class="dashboard-content"><p>Messages view loading...</p></div>'; })(); },
@@ -433,10 +433,7 @@
             loadHomeActivities();
         }
 
-        // Initialize points view when switching to points tab
-        if (viewId === 'points' && typeof pointsView !== 'undefined') {
-            setTimeout(() => pointsView.init(), 100);
-        }
+
 
         // Re-apply translations to newly injected content if in Arabic mode
         if (typeof retranslateCurrentPage === 'function') {
@@ -5451,20 +5448,47 @@
                         return;
                     }
 
-                    container.innerHTML = data.items.map(item => `
-                        <div class="catalog-item" onclick="pointsView.openRedemptionModal(${item.item_id})">
-                            <div class="catalog-item-header">
-                                <span class="catalog-item-icon">${item.icon || '🎁'}</span>
-                                <span class="catalog-item-name">${item.item_name}</span>
-                                <span class="catalog-item-type">${item.item_type}</span>
+                    const colorMap = {
+                        green:  { bg: 'linear-gradient(135deg, #22c55e, #16a34a)', glow: 'rgba(34,197,94,0.25)', light: '#dcfce7', text: '#166534' },
+                        blue:   { bg: 'linear-gradient(135deg, #3b82f6, #2563eb)', glow: 'rgba(59,130,246,0.25)', light: '#dbeafe', text: '#1e40af' },
+                        purple: { bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', glow: 'rgba(139,92,246,0.25)', light: '#ede9fe', text: '#5b21b6' },
+                        orange: { bg: 'linear-gradient(135deg, #f97316, #ea580c)', glow: 'rgba(249,115,22,0.25)', light: '#ffedd5', text: '#9a3412' },
+                        yellow: { bg: 'linear-gradient(135deg, #eab308, #ca8a04)', glow: 'rgba(234,179,8,0.25)',  light: '#fef9c3', text: '#854d0e' },
+                        red:    { bg: 'linear-gradient(135deg, #ef4444, #dc2626)', glow: 'rgba(239,68,68,0.25)',  light: '#fee2e2', text: '#991b1b' },
+                        gold:   { bg: 'linear-gradient(135deg, #f59e0b, #d97706)', glow: 'rgba(245,158,11,0.25)', light: '#fef3c7', text: '#92400e' }
+                    };
+                    const defaultColor = colorMap.blue;
+
+                    container.innerHTML = data.items.map(item => {
+                        const c = colorMap[item.badge_color] || defaultColor;
+                        const icon = item.icon || '🎁';
+                        const typeLabels = { appointment: '🎫 Appointment', service: '⚙️ Service', badge: '🏅 Badge', custom: '🎁 Gift' };
+                        const typeLabel = typeLabels[item.item_type] || item.item_type;
+
+                        return `
+                        <div class="catalog-item" onclick="pointsView.openRedemptionModal(${item.item_id})" style="--card-glow:${c.glow};--card-accent-bg:${c.bg};">
+                            <div class="catalog-item-icon-wrap" style="background:${c.bg};box-shadow:0 8px 20px ${c.glow};">
+                                <span class="catalog-item-icon">${icon}</span>
                             </div>
-                            <div class="catalog-item-description">${item.description || 'No description'}</div>
-                            <div class="catalog-item-footer">
-                                <span class="catalog-item-cost">${item.points_cost.toLocaleString()} points</span>
-                                ${item.original_price ? `<span class="catalog-item-original">$${parseFloat(item.original_price).toFixed(2)}</span>` : ''}
+                            <div class="catalog-item-body">
+                                <div class="catalog-item-header">
+                                    <span class="catalog-item-name">${item.item_name}</span>
+                                    <span class="catalog-item-type" style="background:${c.light};color:${c.text};">${typeLabel}</span>
+                                </div>
+                                <div class="catalog-item-description">${item.description || 'No description'}</div>
+                                <div class="catalog-item-footer">
+                                    <div class="catalog-item-pricing">
+                                        <span class="catalog-item-cost">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                            ${item.points_cost.toLocaleString()} pts
+                                        </span>
+                                        ${item.original_price ? `<span class="catalog-item-original">$${parseFloat(item.original_price).toFixed(2)} value</span>` : ''}
+                                    </div>
+                                    <button class="catalog-redeem-btn" style="background:${c.bg};box-shadow:0 4px 12px ${c.glow};">Redeem</button>
+                                </div>
                             </div>
-                        </div>
-                    `).join('');
+                        </div>`;
+                    }).join('');
                 }
             } catch (error) {
                 console.error('Failed to load catalog:', error);
@@ -7260,12 +7284,33 @@
                 const rc = document.getElementById('wallet-rewards-content');
                 if (!rc) return;
                 const colors = ['#8b5cf6', '#3b82f6', '#22c55e', '#ec4899', '#f59e0b'];
+                // Fallback icon map for when DB emoji encoding is broken
+                const iconFallbacks = {
+                    'activity': '🎮', 'growth': '📊', 'report': '📊', 'priority': '⭐',
+                    'consultation': '🩺', 'free': '🎁', 'premium': '🎯', 'activities': '🎯',
+                    'meal': '🥗', 'nutrition': '🥗', 'appointment': '📅', 'session': '⏱️',
+                    'badge': '🏆', 'discount': '💰', 'gift': '🎁', 'card': '💳',
+                    'home': '🏠', 'visit': '🏠', 'extended': '⏱️', 'booking': '⭐'
+                };
+                function getOfferIcon(offer) {
+                    // Check if icon exists and is a valid emoji (not garbled)
+                    if (offer.icon && offer.icon.length <= 4 && !/^[\?]+$/.test(offer.icon) && !/^[\x00-\x7F]+$/.test(offer.icon)) {
+                        return offer.icon;
+                    }
+                    // Fallback: match keywords from the title
+                    const titleLower = (offer.title || '').toLowerCase();
+                    for (const [keyword, emoji] of Object.entries(iconFallbacks)) {
+                        if (titleLower.includes(keyword)) return emoji;
+                    }
+                    return '🎁';
+                }
                 if (data.success && data.offers && data.offers.length) {
                     rc.innerHTML = data.offers.map((o, idx) => {
                         const canRedeem = totalPoints >= o.points_required;
                         const c = colors[idx % colors.length];
+                        const offerIcon = getOfferIcon(o);
                         return `<div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:${canRedeem ? '#f8fafc' : '#fafafa'};border-radius:16px;border:1px solid ${canRedeem ? c + '30' : '#e2e8f0'};transition:all 0.2s;" ${canRedeem ? 'onmouseover="this.style.transform=\\\'translateX(4px)\\\'" onmouseout="this.style.transform=\\\'\\\'"' : ''}>
-                        <div style="width:3rem;height:3rem;background:${c}15;color:${c};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;">${o.icon || '🎁'}</div>
+                        <div style="width:3rem;height:3rem;background:${c}15;color:${c};border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;box-shadow:0 4px 12px ${c}20;">${offerIcon}</div>
                         <div style="flex:1;">
                             <h4 style="font-weight:700;margin:0 0 0.25rem;font-size:0.95rem;">${o.title}</h4>
                             <p style="margin:0;font-size:0.8rem;color:var(--slate-500);">${o.description || ''}</p>
