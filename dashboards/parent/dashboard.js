@@ -38,6 +38,40 @@
         // Streak check-in
         streakCheckIn();
 
+        // Startup: trigger retrospective badge check for current child
+        const startChild = (window.dashboardData || {}).children || [];
+        const sc = startChild[0];
+        if (sc && sc.child_id) {
+            fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + sc.child_id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        return fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + sc.child_id);
+                    }
+                })
+                .then(r => r && r.json())
+                .then(bData => {
+                    if (bData && bData.success) {
+                        sc.badges = bData.badges || [];
+                        sc.badge_count = sc.badges.length;
+                        const bc = document.getElementById('topbar-badge-count');
+                        if (bc) bc.textContent = sc.badge_count;
+                    }
+                })
+                .catch(() => {});
+
+            fetch('../../api_points_engine.php?action=get_balance&child_id=' + sc.child_id)
+                .then(r => r.json())
+                .then(pData => {
+                    if (pData.success) {
+                        sc.total_points = pData.balance || 0;
+                        const ptsEl = document.getElementById('topbar-points-count');
+                        if (ptsEl) ptsEl.textContent = sc.total_points;
+                    }
+                })
+                .catch(() => {});
+        }
+
         // Add click handlers
         navContainer.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', function () {
@@ -54,11 +88,10 @@
 
         const d = window.dashboardData || {};
         const p = d.parent || {};
-        const child = (d.children || [])[0] || {};
+        const child = (d.children || [])[window._selectedChildIndex || 0] || {};
         const streaks = d.streaks || {};
-        const badges = child.badges || [];
         const dailyStreak = streaks.daily_login ? streaks.daily_login.current_count : 0;
-        const badgeCount = badges.length;
+        const badgeCount = child.badge_count || (child.badges ? child.badges.length : 0);
         const totalPoints = child.total_points || 0;
         const initials = ((p.fname || 'U')[0] + (p.lname || 'S')[0]).toUpperCase();
 
@@ -169,7 +202,7 @@
 
     async function streakCheckIn() {
         const d = window.dashboardData || {};
-        const child = (d.children || [])[0] || null;
+        const child = (d.children || [])[window._selectedChildIndex || 0] || null;
         if (!child) return;
         try {
             const res = await fetch('../../api_streaks.php?action=check-in', {
@@ -183,8 +216,15 @@
                 // Show new badge notifications
                 if (data.new_badges && data.new_badges.length > 0) {
                     data.new_badges.forEach(b => showBadgeToast(b));
+                    if (!child.badges) child.badges = [];
+                    data.new_badges.forEach(bName => {
+                        if (!child.badges.find(b => b.name === bName)) {
+                            child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
+                        }
+                    });
+                    child.badge_count = child.badges.length;
                     const bc = document.getElementById('topbar-badge-count');
-                    if (bc) bc.textContent = parseInt(bc.textContent || 0) + data.new_badges.length;
+                    if (bc) bc.textContent = child.badge_count;
                 }
             }
         } catch (e) { /* silent */ }
@@ -212,13 +252,39 @@
         setTimeout(() => { toast.style.transform = 'translateX(-50%) translateY(20px)'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 5000);
     }
 
-    window.openBadgesPopup = function () {
+    window.openBadgesPopup = async function () {
         let existing = document.getElementById('badges-modal');
         if (existing) existing.remove();
 
         const d = window.dashboardData || {};
         const child = (d.children || [])[window._selectedChildIndex || 0] || {};
-        const earnedBadges = child.badges || [];
+        const childId = child.child_id;
+        
+        let progressMap = {};
+        let earnedBadges = [];
+        if (childId) {
+            try {
+                // Fetch badge progress (this also auto-awards missing badges)
+                const res = await fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + childId);
+                const data = await res.json();
+                if (data.success) {
+                    progressMap = data.progress;
+                }
+            } catch (e) { /* silent */ }
+            try {
+                // Fetch the actual earned badges from the server (fresh)
+                const res2 = await fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + childId);
+                const bData = await res2.json();
+                if (bData.success) {
+                    earnedBadges = bData.badges || [];
+                    // Update local cache
+                    child.badges = earnedBadges;
+                    child.badge_count = earnedBadges.length;
+                    const bc = document.getElementById('topbar-badge-count');
+                    if (bc) bc.textContent = child.badge_count;
+                }
+            } catch (e) { earnedBadges = child.badges || []; }
+        }
         const earnedNames = earnedBadges.map(b => b.name);
 
         const allBadges = [
@@ -247,9 +313,29 @@
 
             const earnedObj = earnedBadges.find(eb => eb.name === b.name);
             const earnedDate = earnedObj && earnedObj.redeemed_at ? new Date(earnedObj.redeemed_at).toLocaleDateString() : '';
+            
+            let progressHtml = '';
+            const pData = progressMap[b.name];
+            if (!isEarned && pData && pData.needed) {
+                const percent = Math.min(100, Math.round((pData.current / pData.needed) * 100));
+                const left = pData.needed - pData.current;
+                progressHtml = `
+                <div style="margin-top:1rem;width:100%;text-align:left;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--slate-500);margin-bottom:0.3rem;font-weight:600;">
+                        <span>${pData.current} / ${pData.needed}</span>
+                        <span>${left > 0 ? left + ' ' + pData.label + ' left' : 'Almost there!'}</span>
+                    </div>
+                    <div style="width:100%;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);">
+                        <div style="width:${percent}%;height:100%;background:linear-gradient(90deg, var(--blue-400), var(--blue-600));border-radius:4px;transition:width 1s ease;"></div>
+                    </div>
+                </div>`;
+            } else if (!isEarned) {
+                progressHtml = `<div style="font-size:0.75rem;color:var(--slate-400);margin-top:1rem;font-weight:600;">Keep going!</div>`;
+            }
+
             const statusHtml = isEarned
-                ? `<div style="font-size:0.7rem;color:#15803d;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> EARNED ${earnedDate}</div>`
-                : `<div style="font-size:0.7rem;color:var(--slate-400);font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.25rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> LOCKED</div>`;
+                ? `<div style="font-size:0.75rem;color:#15803d;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.35rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg> EARNED ${earnedDate}</div>`
+                : `<div style="font-size:0.75rem;color:var(--slate-500);font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.35rem;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> IN PROGRESS</div>`;
 
             return `
             <div class="${bgClass}" style="position:relative;background:rgba(255,255,255,0.7);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5);border-radius:20px;padding:1.5rem;text-align:center;box-shadow:0 10px 25px rgba(0,0,0,0.03);opacity:${opacity};filter:${filter};transition:all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);animation: fadeUpIn 0.5s ease forwards ${i * 0.05}s;opacity:0;transform:translateY(20px);">
@@ -258,9 +344,10 @@
                 </div>
                 <h4 style="font-size:1.1rem;font-weight:800;color:var(--slate-900);margin-bottom:0.25rem;font-family:'Inter',sans-serif;">${b.name}</h4>
                 <p style="font-size:0.8rem;color:var(--slate-500);margin-bottom:1rem;line-height:1.4;">${b.desc}</p>
-                <div style="background:${isEarned ? '#dcfce7' : '#f1f5f9'};padding:0.35rem 0.75rem;border-radius:999px;display:inline-block;border:1px solid ${isEarned ? '#bbf7d0' : '#e2e8f0'};">
+                <div style="background:${isEarned ? '#dcfce7' : '#f8fafc'};padding:0.4rem 0.85rem;border-radius:999px;display:inline-block;border:1px solid ${isEarned ? '#bbf7d0' : '#e2e8f0'};">
                     ${statusHtml}
                 </div>
+                ${progressHtml}
             </div>`;
         }).join('');
 
@@ -404,6 +491,19 @@
                 const articlesContainer = document.getElementById('home-articles-list');
                 if (articlesContainer && recs.articles) {
                     const articles = recs.articles || [];
+                    
+                    if (!window._readArticlesLoaded) {
+                        try {
+                            const raRes = await fetch('../../api_activities.php?action=get-read-articles');
+                            const raData = await raRes.json();
+                            if (raData.success) {
+                                window._readArticles = raData.read_titles || [];
+                                window._readArticlesLoaded = true;
+                            }
+                        } catch(e) {}
+                    }
+                    window._readArticles = window._readArticles || [];
+                    
                     if (articles.length === 0) {
                         articlesContainer.innerHTML = '<p style="color:var(--slate-500);padding:1rem;text-align:center;">No articles available right now.</p>';
                     } else {
@@ -420,7 +520,11 @@
                             const images = ['https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&q=80', 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=400&q=80', 'https://images.unsplash.com/photo-1472162072942-cd5147eb3959?w=400&q=80', 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&q=80', 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=400&q=80'];
                             const imgUrl = images[i % images.length];
 
-                            return `<div style="flex:0 0 220px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.04)'" onclick="openArticleModal(${child.child_id}, ${i}, '${esTitle}', '${esDesc}')">
+                            const isRead = window._readArticles.includes(art.title);
+                            const readBadgeHtml = isRead ? '<span style="font-size:0.6rem;background:#dcfce7;color:#166534;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;margin-left:0.5rem;position:absolute;top:0.75rem;right:0.75rem;z-index:2;">Read</span>' : '';
+
+                            return `<div style="flex:0 0 220px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;position:relative;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.04)'" onclick="openArticleModal(${child.child_id}, ${i}, '${esTitle}', '${esDesc}')">
+                                ${readBadgeHtml}
                                 <div style="height:100px;background:#e2e8f0;background-image:url(${imgUrl});background-size:cover;background-position:center;"></div>
                                 <div style="padding:0.75rem;flex:1;display:flex;flex-direction:column;">
                                     <span class="badge" style="background:#dbeafe;color:#1e40af;font-size:0.6rem;font-weight:700;margin-bottom:0.35rem;align-self:flex-start;">${art.category || 'Article'}</span>
@@ -658,7 +762,7 @@
             const ci = (c.first_name || '?')[0].toUpperCase();
             const al = c.age_months >= 24 ? Math.floor(c.age_months / 12) + ' yo' : c.age_months + ' mo';
             const act = i === idx;
-            selectorHtml += `<div onclick="window._selectedChildIndex=${i};switchView('profile')" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all 0.3s;${act ? '' : 'opacity:0.5;filter:grayscale(50%);'}">
+            selectorHtml += `<div onclick="switchChild(${i})" style="display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:all 0.3s;${act ? '' : 'opacity:0.5;filter:grayscale(50%);'}">
                 <div style="width:4.5rem;height:4.5rem;background:${act ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#e2e8f0'};color:${act ? 'white' : '#64748b'};border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;border:3px solid ${act ? '#c7d2fe' : 'transparent'};box-shadow:${act ? '0 4px 15px rgba(99,102,241,0.3)' : 'none'};">${ci}</div>
                 <span style="margin-top:0.5rem;font-weight:600;font-size:0.9rem;">${c.first_name}</span>
                 <span style="font-size:0.7rem;color:#94a3b8;">${al}</span></div>`;
@@ -966,7 +1070,19 @@
         else if (ageMonths < 36) expectedVocab = 450;
         else expectedVocab = 900;
 
-        setTimeout(() => loadSpeechHistory(childId), 100);
+        // Pre-populate insight cards from _speech data (already loaded from PHP)
+        const speechData = child ? child._speech : null;
+        setTimeout(() => {
+            if (speechData) {
+                const insightText = document.getElementById('insight-text');
+                const insightWords = document.getElementById('insight-words');
+                const insightStatus = document.getElementById('insight-status');
+                if (insightText && speechData.transcript) insightText.textContent = speechData.transcript;
+                if (insightWords && speechData.vocabulary_score != null) insightWords.textContent = Math.round(speechData.vocabulary_score);
+                if (insightStatus && speechData.feedback) insightStatus.textContent = speechData.feedback;
+            }
+            loadSpeechHistory(childId);
+        }, 100);
         return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
@@ -1110,7 +1226,39 @@
             // Render speech charts
             renderSpeechCharts(entries);
         } catch (err) {
-            container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#64748b;"><div style="font-size:2rem;margin-bottom:0.5rem;">🗣️</div><p>Could not load speech history. Make sure you have speech recordings.</p></div>';
+            console.error('loadSpeechHistory error:', err);
+            
+            // Try to show at least the _speech data from dashboard.php
+            const d = window.dashboardData || {};
+            const child = (d.children || [])[window._selectedChildIndex || 0] || {};
+            const speechData = child._speech || null;
+            
+            if (speechData && speechData.vocabulary_score != null) {
+                container.innerHTML = `<div class="dashboard-card" style="padding:2rem;">
+                    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+                        <div style="width:3rem;height:3rem;background:linear-gradient(135deg,#ede9fe,#c4b5fd);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">🎤</div>
+                        <div>
+                            <h4 style="margin:0;font-weight:700;">Latest Speech Analysis</h4>
+                            <span style="font-size:0.8rem;color:#64748b;">${speechData.sent_at ? new Date(speechData.sent_at).toLocaleDateString() : 'Recent'}</span>
+                        </div>
+                    </div>
+                    <p style="color:var(--slate-600);font-style:italic;margin-bottom:0.75rem;">"${speechData.transcript || 'No transcript'}"</p>
+                    <div style="display:flex;gap:1rem;font-size:0.85rem;">
+                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">📖 <strong>${Math.round(speechData.vocabulary_score)}</strong> words</span>
+                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">🔊 <strong>${Math.round(speechData.clarify_score * 100)}%</strong> clarity</span>
+                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">📊 ${speechData.feedback || '–'}</span>
+                    </div>
+                </div>`;
+                
+                // Try to render a single-point chart
+                renderSpeechCharts([{
+                    vocabulary_score: speechData.vocabulary_score,
+                    clarify_score: speechData.clarify_score,
+                    sent_at: speechData.sent_at
+                }]);
+            } else {
+                container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:#64748b;"><div style="font-size:2rem;margin-bottom:0.5rem;">🗣️</div><p>Could not load speech history. Make sure you have speech recordings.</p></div>';
+            }
         }
     }
 
@@ -3663,7 +3811,7 @@
 
     function getActivitiesView() {
         const d = window.dashboardData || {};
-        const child = (d.children || [])[0] || null;
+        const child = (d.children || [])[window._selectedChildIndex || 0] || null;
         const childParam = child ? child.child_id : '';
 
         // Load AI recommendations after rendering
@@ -3674,9 +3822,31 @@
                 <div class="dashboard-header-section">
                     <div>
                         <h1 class="dashboard-title">Activity Center 🎨</h1>
-                        <p class="dashboard-subtitle">Age-based personalized recommendations for ${child ? child.first_name : 'your child'}</p>
+                        <p class="dashboard-subtitle">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
                 </div>
+
+                <!-- Featured Game Banner -->
+                <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:24px;padding:2.5rem;color:#fff;margin-bottom:2.5rem;display:flex;align-items:center;justify-content:space-between;box-shadow:0 20px 40px rgba(99,102,241,0.25);position:relative;overflow:hidden;flex-wrap:wrap;gap:2rem;">
+                    <div style="position:absolute;top:-50px;right:-50px;width:200px;height:200px;background:rgba(255,255,255,0.1);border-radius:50%;filter:blur(20px);"></div>
+                    <div style="position:relative;z-index:1;flex:1;min-width:300px;">
+                        <div style="display:inline-block;padding:0.4rem 1rem;background:rgba(255,255,255,0.2);border-radius:99px;font-size:0.75rem;font-weight:800;letter-spacing:1px;margin-bottom:1rem;text-transform:uppercase;">FEATURED GAME</div>
+                        <h2 style="font-size:2.5rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.03em;">Memory Match Explorer</h2>
+                        <p style="font-size:1.1rem;opacity:0.9;margin:0 0 1.5rem;line-height:1.5;">Boost ${child ? child.first_name + "'s" : "your child's"} cognitive skills and working memory with this fun, interactive matching game!</p>
+                        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                            <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">⏱ 5 mins</span>
+                            <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">🧠 Cognitive</span>
+                            <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">💎 +15 pts</span>
+                        </div>
+                    </div>
+                    <div style="position:relative;z-index:1;">
+                        <button id="memory-match-btn" onclick="openGameModal(${childParam}, -1, 'Memory Match Explorer')" style="background:#fff;color:#6366f1;border:none;padding:1.25rem 2.5rem;border-radius:16px;font-size:1.1rem;font-weight:800;cursor:pointer;box-shadow:0 10px 25px rgba(0,0,0,0.1);display:flex;align-items:center;gap:0.75rem;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 15px 35px rgba(0,0,0,0.2)'" onmouseout="this.style.transform='none';this.style.boxShadow='0 10px 25px rgba(0,0,0,0.1)'">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Play Now
+                        </button>
+                    </div>
+                </div>
+
 
                 <!-- AI Recommendations Container -->
                 <div id="ai-recommendations">
@@ -3692,21 +3862,6 @@
                     </div>
                 </div>
 
-                <!-- Activity History -->
-                <div style="margin-top:2rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:1rem;">
-                        <h3 class="section-heading" style="margin:0;">Completed Activities</h3>
-                        <div style="display:flex;gap:0.5rem;" class="activity-tabs">
-                            <button class="btn btn-sm btn-gradient active" onclick="loadActivityHistory('${childParam}', 'all', this)">All Time</button>
-                            <button class="btn btn-sm btn-outline" onclick="loadActivityHistory('${childParam}', 'daily', this)">Daily</button>
-                            <button class="btn btn-sm btn-outline" onclick="loadActivityHistory('${childParam}', 'weekly', this)">Weekly</button>
-                            <button class="btn btn-sm btn-outline" onclick="loadActivityHistory('${childParam}', 'monthly', this)">Monthly</button>
-                        </div>
-                    </div>
-                    <div id="activity-history-list">
-                        <div class="dashboard-card" style="padding:1.5rem;text-align:center;color:var(--slate-500);">Loading history...</div>
-                    </div>
-                </div>
             </div>
         `;
     }
@@ -3749,6 +3904,18 @@
             const rec = data.recommendations;
             let html = '';
 
+            // Fetch read articles if not already loaded
+            if (!window._readArticlesLoaded) {
+                try {
+                    const raRes = await fetch('../../api_activities.php?action=get-read-articles');
+                    const raData = await raRes.json();
+                    if (raData.success) {
+                        window._readArticles = raData.read_titles || [];
+                        window._readArticlesLoaded = true;
+                    }
+                } catch(e) {}
+            }
+
             // Articles Section
             if (rec.articles && rec.articles.length) {
                 html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;">📚 Recommended Articles</h3>
@@ -3758,8 +3925,11 @@
                     const color = catColors[art.category] || '#6366f1';
                     const esTitle = art.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
                     const esDesc = (art.summary || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                    const isRead = window._readArticles && window._readArticles.includes(art.title);
+                    const readBadgeHtml = isRead ? '<span style="font-size:0.6rem;background:#dcfce7;color:#166534;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;position:absolute;top:0.75rem;right:0.75rem;">Read</span>' : '';
 
-                    html += `<div class="ai-card ai-card-article" style="--accent:${color}">
+                    html += `<div class="ai-card ai-card-article" style="--accent:${color};position:relative;">
+                        ${readBadgeHtml}
                         <div class="ai-card-badge" style="background:${color}15;color:${color}">${art.category || 'article'}</div>
                         <h4 class="ai-card-title">${art.title}</h4>
                         <p class="ai-card-desc">${art.summary}</p>
@@ -3801,31 +3971,6 @@
                 });
                 html += '</div>';
             }
-
-            // Website Games Section
-            if (rec.website_games && rec.website_games.length) {
-                html += `<h3 class="section-heading" style="display:flex;align-items:center;gap:0.5rem;margin-top:2rem;">🎮 Website Games & Interactive Activities</h3>
-                <div class="ai-cards-grid">`;
-                rec.website_games.forEach((game, i) => {
-                    const typeIcons = { interactive: '🕹️', quiz: '❓', creative: '🎨' };
-                    const icon = typeIcons[game.type] || '🎮';
-                    const esTitle = game.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                    html += `<div class="ai-card ai-card-game">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-                            <span style="font-size:1.75rem;">${icon}</span>
-                            <span class="ai-card-badge" style="background:#8b5cf615;color:#8b5cf6">${game.type || 'interactive'}</span>
-                        </div>
-                        <h4 class="ai-card-title">${game.title}</h4>
-                        <p class="ai-card-desc">${game.description}</p>
-                        <div class="ai-card-footer">
-                            <span class="ai-card-meta">🎯 ${game.skill_focus || 'Development'} • ${game.duration || '10 min'}</span>
-                            <button class="btn btn-outline btn-sm" onclick="openGameModal(${childId}, ${i}, '${esTitle}')">Play ▶</button>
-                        </div>
-                    </div>`;
-                });
-                html += '</div>';
-            }
-
             container.innerHTML = html;
 
             // Load activity history
@@ -3840,7 +3985,7 @@
         if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     };
 
-    window.completeActivity = async function (childId, category, index) {
+    window.completeActivity = async function (childId, category, index, title = '') {
         try {
             const res = await fetch('../../api_activities.php?action=history&child_id=' + childId);
             const data = await res.json();
@@ -3855,18 +4000,61 @@
                 }
             }
 
-            if (!activityId) {
-                if (activities.length > 0) activityId = activities[0].activity_id;
-            }
-
-            if (activityId) {
+            // We only call if we have an activityId OR if we know the category/title to insert
+            if (activityId || category) {
                 const res2 = await fetch('../../api_activities.php?action=complete', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ activity_id: activityId, child_id: childId })
+                    body: JSON.stringify({ activity_id: activityId, child_id: childId, category: category, title: title })
                 });
                 const result = await res2.json();
                 if (result.success) {
                     showBadgeToast('Activity completed! +15 points 🎉');
+
+                    // Update points in topbar immediately
+                    const d = window.dashboardData || {};
+                    const child = (d.children || [])[window._selectedChildIndex || 0];
+                    if (child) {
+                        child.total_points = (child.total_points || 0) + 15;
+                        const ptsEl = document.getElementById('topbar-points-count');
+                        if (ptsEl) ptsEl.textContent = child.total_points;
+                    }
+
+                    if (result.new_badges && result.new_badges.length > 0) {
+                        if (child) {
+                            if (!child.badges) child.badges = [];
+                            result.new_badges.forEach(bName => {
+                                if (!child.badges.find(b => b.name === bName)) {
+                                    child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
+                                    showBadgeToast('🏆 Badge Earned: ' + bName);
+                                }
+                            });
+                            child.badge_count = child.badges.length;
+                            const bc = document.getElementById('topbar-badge-count');
+                            if (bc) bc.textContent = child.badge_count;
+                        }
+                    }
+
+                    // Background: trigger retrospective badge check
+                    if (child && child.child_id) {
+                        fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + child.child_id)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.success) {
+                                    return fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + child.child_id);
+                                }
+                            })
+                            .then(r => r && r.json())
+                            .then(bData => {
+                                if (bData && bData.success) {
+                                    child.badges = bData.badges || [];
+                                    child.badge_count = child.badges.length;
+                                    const bc = document.getElementById('topbar-badge-count');
+                                    if (bc) bc.textContent = child.badge_count;
+                                }
+                            })
+                            .catch(() => {});
+                    }
+
                     streakCheckIn();
                     loadNotifCount();
                     // reload History
@@ -4035,9 +4223,15 @@
                         window.memoryState.opened = [];
                         window.memoryState.matched += 2;
                         if (window.memoryState.matched === emojis.length) {
-                            document.getElementById('game-finish-btn').disabled = false;
-                            document.getElementById('game-finish-btn').innerHTML = 'Claim Points 🎉';
-                            document.getElementById('game-finish-btn').classList.add('btn-gradient');
+                            const btn = document.getElementById('game-finish-btn');
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.innerHTML = 'Claim Points 🎉';
+                                btn.classList.add('btn-gradient');
+                                btn.style.background = '';
+                                btn.style.color = '';
+                                btn.style.cursor = 'pointer';
+                            }
                         }
                     } else {
                         setTimeout(() => {
@@ -4069,7 +4263,7 @@
                     ${gameHtml}
 
                     <button id="game-finish-btn" disabled onclick="
-                        completeActivity(${childId}, 'website_game', ${index});
+                        completeActivity(${childId}, 'website_game', ${index}, '${title.replace(/'/g, "\\'")}');
                         document.getElementById('act-modal').remove();
                     " class="btn" style="width:100%;padding:1rem;font-size:1.1rem;background:#e2e8f0;color:#94a3b8;cursor:not-allowed;margin-top:1.5rem;">Complete Game First!</button>
                 </div>
@@ -4093,6 +4287,18 @@
             const res = await fetch(`../../api_activities.php?action=history&child_id=${childId}&period=${period}`);
             const data = await res.json();
             const completed = (data.activities || []).filter(a => a.is_completed == 1);
+            
+            window._playedGames = completed.filter(a => a.category === 'website_game').map(a => a.title);
+            if (window._playedGames.includes('Memory Match Explorer')) {
+                const mmBtn = document.getElementById('memory-match-btn');
+                if (mmBtn) {
+                    mmBtn.innerHTML = '✅ Completed!';
+                    mmBtn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+                    mmBtn.style.color = '#fff';
+                    mmBtn.onclick = null;
+                }
+            }
+
             if (completed.length === 0) {
                 container.innerHTML = '<div class="dashboard-card" style="padding:1.5rem;text-align:center;color:var(--slate-500);">No completed activities yet. Start by completing a recommendation above!</div>';
                 return;
@@ -4971,7 +5177,7 @@
                                     <h4 class="settings-row-title">Current Plan: <span style="color:var(--blue-600);font-weight:700;">${sub.plan_name || 'Free'}</span></h4>
                                     <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? '$' + sub.price + '/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
                                 </div>
-                                <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../payment.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
+                                <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../pricing.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
                             </div>
                         </div>
                     </div>
@@ -5820,7 +6026,7 @@
                                 <select id="acm-gender" style="width:100%;padding:0.65rem 0.85rem;border:1.5px solid var(--border-color,#e2e8f0);border-radius:12px;font-size:0.9rem;background:var(--bg-main,#f8fafc);color:var(--text-primary,#1e293b);transition:border-color 0.2s;outline:none;box-sizing:border-box;cursor:pointer;" onfocus="this.style.borderColor='#6C63FF'" onblur="this.style.borderColor=''">
                                     <option value="male" ${childData?.gender === 'male' ? 'selected' : ''}>Male</option>
                                     <option value="female" ${childData?.gender === 'female' ? 'selected' : ''}>Female</option>
-                                    <option value="other" ${childData?.gender === 'other' ? 'selected' : ''}>Other</option>
+
                                 </select>
                             </div>
                         </div>
@@ -6194,11 +6400,12 @@
         const d = window.dashboardData || {};
         const child = (d.children || [])[window._selectedChildIndex || 0] || {};
         const totalPoints = child.total_points || 0;
+        const childId = child.child_id;
 
         const vouchers = [
+            { name: 'Activity Pack', points: 200, icon: '🎁', desc: 'Unlock exclusive activity materials', color: '#8b5cf6' },
             { name: 'Free Consultation', points: 500, icon: '🩺', desc: 'Book a free specialist session', color: '#3b82f6' },
             { name: '1 Month Premium', points: 1000, icon: '💎', desc: 'Upgrade to Premium plan for a month', color: '#8b5cf6' },
-            { name: 'Activity Pack', points: 200, icon: '🎨', desc: 'Unlock exclusive activity materials', color: '#f59e0b' },
             { name: 'Growth Report PDF', points: 150, icon: '📊', desc: 'Download detailed growth analysis', color: '#22c55e' },
             { name: 'Certificate Badge', points: 300, icon: '🏅', desc: 'Earn a printable achievement certificate', color: '#ec4899' },
         ];
@@ -6213,7 +6420,7 @@
             </div>
             <div style="text-align:right;flex-shrink:0;">
                 <div style="font-weight:800;color:${canRedeem ? v.color : '#94a3b8'};font-size:0.95rem;">${v.points} pts</div>
-                <button style="margin-top:0.25rem;padding:0.3rem 0.75rem;border-radius:8px;font-size:0.75rem;font-weight:600;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? v.color : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (v.points - totalPoints) + ' more'}</button>
+                <button onclick="redeemPointsOffer('${v.name.replace(/'/g, "\\'")}', ${v.points})" style="margin-top:0.25rem;padding:0.4rem 1rem;border-radius:12px;font-size:0.8rem;font-weight:700;cursor:${canRedeem ? 'pointer' : 'not-allowed'};border:none;background:${canRedeem ? v.color : '#e2e8f0'};color:${canRedeem ? '#fff' : '#94a3b8'};" ${canRedeem ? '' : 'disabled'}>${canRedeem ? 'Redeem' : 'Need ' + (v.points - totalPoints) + ' more'}</button>
             </div>
         </div>`;
         }).join('');
@@ -6223,27 +6430,130 @@
         modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(12px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('wallet-modal').remove()">
         <div style="background:#ffffff;border-radius:28px;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 30px 60px rgba(0,0,0,0.2);overflow:hidden;animation:slideUp 0.4s ease-out;">
-            <div style="background:linear-gradient(135deg,#6C63FF,#a78bfa);padding:2rem;text-align:center;position:relative;">
+            <div style="background:linear-gradient(135deg,#7c3aed,#a78bfa);padding:2.5rem 2rem;text-align:center;position:relative;">
                 <button onclick="document.getElementById('wallet-modal').remove()" style="position:absolute;right:1rem;top:1rem;background:rgba(255,255,255,0.2);border:none;color:#fff;width:2rem;height:2rem;border-radius:50%;cursor:pointer;font-size:1.2rem;">&times;</button>
-                <div style="font-size:3rem;margin-bottom:0.5rem;">💎</div>
-                <h2 style="color:#fff;font-size:1.75rem;font-weight:800;margin:0 0 0.25rem;">Points Wallet</h2>
-                <div style="background:rgba(255,255,255,0.2);display:inline-block;padding:0.5rem 1.5rem;border-radius:99px;margin-top:0.5rem;">
-                    <span style="font-size:2rem;font-weight:800;color:#fff;">${totalPoints}</span>
-                    <span style="color:rgba(255,255,255,0.8);margin-left:0.25rem;">points</span>
+                <div style="width:4.5rem;height:4.5rem;margin:0 auto 1rem;display:flex;justify-content:center;align-items:center;">
+                    <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2338bdf8' stroke='%230f172a' stroke-width='2.5' stroke-linejoin='round'><polygon points='12 2 2 7 12 22 22 7 12 2'/><polyline points='2 7 12 12 22 7'/><polyline points='12 22 12 12'/></svg>" style="width:100%;height:100%;" alt="Diamond">
+                </div>
+                <h2 style="color:#fff;font-size:1.85rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.5px;">Points Wallet</h2>
+                <div style="background:rgba(255,255,255,0.15);display:inline-block;padding:0.75rem 2rem;border-radius:99px;">
+                    <span style="font-size:2.25rem;font-weight:800;color:#fff;line-height:1;">${totalPoints}</span>
+                    <span style="color:rgba(255,255,255,0.9);margin-left:0.5rem;font-weight:600;">points</span>
                 </div>
             </div>
-            <div style="padding:1.5rem;overflow-y:auto;flex:1;">
-                <h3 style="font-weight:700;font-size:1.1rem;margin:0 0 1rem;color:var(--slate-800);">🎁 Redeem Rewards</h3>
-                <div style="display:flex;flex-direction:column;gap:0.75rem;">
-                    ${voucherHtml}
+            <div style="padding:1.5rem;overflow-y:auto;flex:1;background:#fff;">
+                
+                <div style="display:flex;gap:1rem;margin-bottom:1.5rem;background:#f1f5f9;border-radius:16px;padding:0.5rem;">
+                    <button onclick="document.getElementById('wallet-rewards').style.display='block';document.getElementById('wallet-history').style.display='none';this.style.background='#6366f1';this.style.color='#fff';this.nextElementSibling.style.background='transparent';this.nextElementSibling.style.color='var(--slate-600)';" style="flex:1;padding:0.75rem;border-radius:12px;border:none;background:#6366f1;color:#fff;font-weight:700;cursor:pointer;transition:all 0.2s;">🎁 Rewards</button>
+                    <button onclick="document.getElementById('wallet-history').style.display='block';document.getElementById('wallet-rewards').style.display='none';this.style.background='#6366f1';this.style.color='#fff';this.previousElementSibling.style.background='transparent';this.previousElementSibling.style.color='var(--slate-600)';" style="flex:1;padding:0.75rem;border-radius:12px;border:none;background:transparent;color:var(--slate-600);font-weight:700;cursor:pointer;transition:all 0.2s;">📜 History</button>
                 </div>
-                <div style="margin-top:1.5rem;padding:1rem;background:#eff6ff;border-radius:12px;border:1px solid #bfdbfe;">
-                    <p style="margin:0;font-size:0.85rem;color:#1e40af;line-height:1.5;"><strong>💡 How to earn points:</strong> Log growth (+25), complete activities (+10-50), read articles (+5), maintain streaks (bonus points!)</p>
+
+                <div id="wallet-rewards">
+                    <h3 style="font-weight:800;font-size:1.15rem;margin:0 0 1rem;color:var(--slate-900);">🎁 Redeem Rewards</h3>
+                    <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                        ${voucherHtml}
+                    </div>
                 </div>
+
+                <div id="wallet-history" style="display:none;">
+                    <h3 style="font-weight:800;font-size:1.15rem;margin:0 0 1rem;color:var(--slate-900);">📜 Transaction History</h3>
+                    <div id="wallet-history-content" style="display:flex;flex-direction:column;gap:0.75rem;">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-500);">Loading history...</div>
+                    </div>
+                </div>
+                
             </div>
         </div>
     </div>`;
         document.body.appendChild(modal);
+        
+        // Fetch history
+        if (childId) {
+            fetch('../../api_points_engine.php?action=get_history&child_id=' + childId)
+                .then(res => res.json())
+                .then(data => {
+                    const hc = document.getElementById('wallet-history-content');
+                    if (!hc) return;
+                    if (data.success && data.history && data.history.length) {
+                        hc.innerHTML = data.history.map(h => {
+                            const isPos = h.points > 0;
+                            const color = isPos ? '#16a34a' : '#ef4444';
+                            const sign = isPos ? '+' : '';
+                            const date = new Date(h.created_at).toLocaleDateString();
+                            return `<div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                                <div>
+                                    <div style="font-weight:700;color:var(--slate-800);margin-bottom:0.25rem;">${h.reason || h.action}</div>
+                                    <div style="font-size:0.75rem;color:var(--slate-500);">${date}</div>
+                                </div>
+                                <div style="font-weight:800;font-size:1.1rem;color:${color};">${sign}${h.points}</div>
+                            </div>`;
+                        }).join('');
+                    } else {
+                        hc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-500);">No transactions found.</div>';
+                    }
+                }).catch(() => {
+                    const hc = document.getElementById('wallet-history-content');
+                    if (hc) hc.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--red-500);">Failed to load history.</div>';
+                });
+        }
+    };
+
+    window.redeemPointsOffer = function(offerName, pointsRequired) {
+        const d = window.dashboardData || {};
+        const child = (d.children || [])[window._selectedChildIndex || 0] || {};
+        const childId = child.child_id;
+        
+        if (!childId) return;
+
+        const cModal = document.createElement('div');
+        cModal.id = 'redeem-confirm-modal';
+        cModal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;">
+            <div style="background:#fff;border-radius:20px;padding:2rem;text-align:center;max-width:400px;width:100%;box-shadow:0 20px 40px rgba(0,0,0,0.2);">
+                <h3 style="font-size:1.25rem;font-weight:800;margin-bottom:1rem;">Confirm Redemption</h3>
+                <p style="color:#64748b;margin-bottom:1.5rem;">Are you sure you want to spend <strong>${pointsRequired} pts</strong> on <strong>${offerName}</strong>?</p>
+                <div style="display:flex;gap:1rem;justify-content:center;">
+                    <button onclick="document.getElementById('redeem-confirm-modal').remove()" style="padding:0.75rem 1.5rem;border-radius:12px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-weight:600;color:#64748b;">Cancel</button>
+                    <button id="confirm-redeem-btn" style="padding:0.75rem 1.5rem;border-radius:12px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer;font-weight:600;">Confirm</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(cModal);
+
+        document.getElementById('confirm-redeem-btn').onclick = async function() {
+            this.disabled = true;
+            this.innerHTML = 'Processing...';
+            try {
+                const res = await fetch('../../api_points_engine.php?action=redeem', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        child_id: childId,
+                        offer_name: offerName,
+                        points_cost: pointsRequired
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    cModal.remove();
+                    showBadgeToast('✅ Redeemed ' + offerName + '!');
+                    
+                    // Update points locally
+                    child.total_points -= pointsRequired;
+                    const ptsEl = document.getElementById('topbar-points-count');
+                    if (ptsEl) ptsEl.textContent = child.total_points;
+                    
+                    // Re-render wallet popup
+                    window.openPointsWalletPopup();
+                } else {
+                    alert(data.error || 'Failed to redeem reward.');
+                    cModal.remove();
+                }
+            } catch (e) {
+                alert('Network error. Please try again.');
+                cModal.remove();
+            }
+        };
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -6266,12 +6576,55 @@
             setTimeout(() => loadHomeActivities(), 50);
         }
 
-        // Update topbar data
+        // Update topbar data from in-memory data first
         if (child) {
             const ptsEl = document.getElementById('topbar-points-count');
             if (ptsEl) ptsEl.textContent = child.total_points || 0;
             const badgeEl = document.getElementById('topbar-badge-count');
             if (badgeEl) badgeEl.textContent = child.badge_count || 0;
+
+            // Update streak counter for the selected child
+            const allStreaks = (window.dashboardData || {}).all_streaks || {};
+            const childStreaks = allStreaks[child.child_id] || {};
+            const dailyLogin = childStreaks['daily_login'] || {};
+            const streakEl = document.getElementById('topbar-streak-count');
+            if (streakEl) streakEl.textContent = dailyLogin.current_count || 0;
+        }
+
+        // Re-run streak check-in for the newly selected child
+        streakCheckIn();
+
+        // Then fetch fresh data from the server to ensure accuracy
+        if (child && child.child_id) {
+            fetch('../../api_points_engine.php?action=get_badge_progress&child_id=' + child.child_id)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        // Refetch earned badges for this child
+                        return fetch('../../api_points_engine.php?action=get_earned_badges&child_id=' + child.child_id);
+                    }
+                })
+                .then(r => r && r.json())
+                .then(bData => {
+                    if (bData && bData.success) {
+                        child.badges = bData.badges || [];
+                        child.badge_count = child.badges.length;
+                        const bc = document.getElementById('topbar-badge-count');
+                        if (bc) bc.textContent = child.badge_count;
+                    }
+                })
+                .catch(() => {});
+
+            fetch('../../api_points_engine.php?action=get_balance&child_id=' + child.child_id)
+                .then(r => r.json())
+                .then(pData => {
+                    if (pData.success) {
+                        child.total_points = pData.balance || 0;
+                        const ptsEl = document.getElementById('topbar-points-count');
+                        if (ptsEl) ptsEl.textContent = child.total_points;
+                    }
+                })
+                .catch(() => {});
         }
 
         // Refresh chatbot greeting with new child context
@@ -6290,16 +6643,36 @@
         btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin-right:8px"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Marking...';
         try {
             // Mark as read
-            await fetch('../../api_activities.php?action=mark-read', {
+            const res = await fetch('../../api_activities.php?action=mark-read', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: title })
+                body: JSON.stringify({ title: title, child_id: childId })
             });
-            // Complete activity
-            await completeActivity(childId, 'article', index);
-            // Show success
-            btn.innerHTML = '✅ Completed!';
-            btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
-            showBadgeToast('Article read! +15 points 📖');
+            const readData = await res.json();
+            
+            if (readData.already_read) {
+                // Already read — don't award points again
+                btn.innerHTML = '✅ Already Read';
+                btn.style.background = 'linear-gradient(135deg,#9ca3af,#6b7280)';
+                window._readArticles = window._readArticles || [];
+                if (!window._readArticles.includes(title)) {
+                    window._readArticles.push(title);
+                }
+            } else {
+                // Complete activity and get points
+                await completeActivity(childId, 'article', index, title);
+                btn.innerHTML = '✅ Completed!';
+                btn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
+                showBadgeToast('Article read! +15 points 📖');
+                
+                window._readArticles = window._readArticles || [];
+                if (!window._readArticles.includes(title)) {
+                    window._readArticles.push(title);
+                }
+            }
+
+            // Also reload articles to show the "Read" badge visually
+            if (typeof renderArticles === 'function') renderArticles();
+            
             setTimeout(() => {
                 const modal = document.getElementById('act-modal');
                 if (modal) modal.remove();
@@ -6314,6 +6687,32 @@
     // ── Messages View (Specialist + Community) ──────────────────
     // ══════════════════════════════════════════════════════════════
     window.getMessagesView = function () {
+        // Check if parent has any approved appointments
+        const d = window.dashboardData || {};
+        let hasApprovedAppt = false;
+        if (d.parent && d.parent.appointments) {
+            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed');
+        }
+
+        if (!hasApprovedAppt) {
+            return `<div class="dashboard-content">
+                <div class="dashboard-header-section">
+                    <div>
+                        <h1 class="dashboard-title">Messages</h1>
+                        <p class="dashboard-subtitle">Communicate with your specialists</p>
+                    </div>
+                </div>
+                <div style="background:#fff;border-radius:20px;padding:4rem 2rem;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.03);border:1px solid #e2e8f0;margin-top:2rem;">
+                    <div style="width:100px;height:100px;background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;box-shadow:0 10px 25px rgba(0,0,0,0.05);">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <h2 style="font-size:1.5rem;font-weight:700;color:#1e293b;margin-bottom:0.75rem;">Messages Locked</h2>
+                    <p style="color:#64748b;font-size:1rem;line-height:1.6;max-width:400px;margin:0 auto 2rem;">You need at least one approved clinic appointment to start messaging specialists directly. Book an appointment to unlock this feature.</p>
+                    <button onclick="switchView('clinic')" class="btn btn-gradient" style="padding:0.75rem 2rem;font-size:1rem;border-radius:12px;box-shadow:0 10px 25px rgba(99,102,241,0.3);">Book Appointment</button>
+                </div>
+            </div>`;
+        }
+
         setTimeout(() => initParentMessages(), 100);
         return `<div class="dashboard-content">
         <div class="dashboard-header-section"><div>

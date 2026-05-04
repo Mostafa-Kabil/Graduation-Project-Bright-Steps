@@ -3,6 +3,8 @@
  * Bright Steps – Chatbot API Endpoint
  * Accepts a user message + child_id, fetches child context, calls OpenAI.
  */
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 // Enable CORS for same-origin requests with credentials
 header('Access-Control-Allow-Origin: ' . (isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*'));
@@ -40,7 +42,10 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['email'])) {
 $userId = $_SESSION['id'];
 
 $userId = $_SESSION['id'];
+ini_set('display_errors', 0); // Disable display_errors so it doesn't break JSON output
+
 $input = json_decode(file_get_contents('php://input'), true);
+if (!is_array($input)) $input = [];
 $message = trim($input['message'] ?? '');
 $childId = $input['child_id'] ?? null;
 
@@ -72,73 +77,73 @@ if (!$apiKey || empty(trim($apiKey))) {
 // Build child context
 $childContext = "No child selected.";
 if ($childId) {
-    $stmt = $connect->prepare(
-        "SELECT c.first_name, c.last_name, c.birth_day, c.birth_month, c.birth_year, c.gender, c.health_condition
-         FROM child c WHERE c.child_id = ?"
-    );
-    $stmt->execute([$childId]);
-    $child = $stmt->fetch(PDO::FETCH_ASSOC);
-
-    if ($child) {
-        $bd = mktime(0, 0, 0, $child['birth_month'], $child['birth_day'], $child['birth_year']);
-        $ageMonths = floor((time() - $bd) / (30.44 * 86400));
-        $ageDisplay = $ageMonths >= 24 ? floor($ageMonths / 12) . ' years and ' . ($ageMonths % 12) . ' months old' : $ageMonths . ' months old';
-
-        $childContext = "Selected child: {$child['first_name']} {$child['last_name']}, {$ageDisplay}, Gender: {$child['gender']}.";
-        if (!empty($child['health_condition'])) {
-            $childContext .= " Health conditions: {$child['health_condition']}.";
-        }
-
-        // Growth
-        $stmt2 = $connect->prepare("SELECT height, weight, head_circumference FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 1");
-        $stmt2->execute([$childId]);
-        $growth = $stmt2->fetch(PDO::FETCH_ASSOC);
-        if ($growth) {
-            $childContext .= " Latest growth: Weight {$growth['weight']}kg, Height {$growth['height']}cm" . ($growth['head_circumference'] ? ", Head {$growth['head_circumference']}cm" : "") . ".";
-        } else {
-            $childContext .= " No growth data recorded.";
-        }
-
-        // Speech
-        $stmt3 = $connect->prepare(
-            "SELECT sa.vocabulary_score, sa.clarify_score
-             FROM speech_analysis sa
-             INNER JOIN voice_sample vs ON sa.sample_id = vs.sample_id
-             WHERE vs.child_id = ?
-             ORDER BY sa.analyzed_at DESC LIMIT 1"
+    try {
+        $stmt = $connect->prepare(
+            "SELECT c.first_name, c.last_name, c.birth_day, c.birth_month, c.birth_year, c.gender
+             FROM child c WHERE c.child_id = ?"
         );
-        $stmt3->execute([$childId]);
-        $speech = $stmt3->fetch(PDO::FETCH_ASSOC);
-        if ($speech) {
-            $childContext .= " Speech analysis: Vocabulary {$speech['vocabulary_score']}%, Clarity {$speech['clarify_score']}%.";
-        } else {
-            $childContext .= " No speech analysis data yet.";
+        $stmt->execute([$childId]);
+        $child = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($child) {
+            $bd = mktime(0, 0, 0, $child['birth_month'], $child['birth_day'], $child['birth_year']);
+            $ageMonths = floor((time() - $bd) / (30.44 * 86400));
+            $ageDisplay = $ageMonths >= 24 ? floor($ageMonths / 12) . ' years and ' . ($ageMonths % 12) . ' months old' : $ageMonths . ' months old';
+
+            $childContext = "Selected child: {$child['first_name']} {$child['last_name']}, {$ageDisplay}, Gender: {$child['gender']}.";
+
+            // Growth
+            $stmt2 = $connect->prepare("SELECT height, weight, head_circumference FROM growth_record WHERE child_id = ? ORDER BY recorded_at DESC LIMIT 1");
+            $stmt2->execute([$childId]);
+            $growth = $stmt2->fetch(PDO::FETCH_ASSOC);
+            if ($growth) {
+                $childContext .= " Latest growth: Weight {$growth['weight']}kg, Height {$growth['height']}cm" . ($growth['head_circumference'] ? ", Head {$growth['head_circumference']}cm" : "") . ".";
+            } else {
+                $childContext .= " No growth data recorded.";
+            }
+
+            // Speech
+            $stmt3 = $connect->prepare(
+                "SELECT sa.vocabulary_score, sa.clarify_score
+                 FROM speech_analysis sa
+                 INNER JOIN voice_sample vs ON sa.sample_id = vs.sample_id
+                 WHERE vs.child_id = ?
+                 ORDER BY sa.analyzed_at DESC LIMIT 1"
+            );
+            $stmt3->execute([$childId]);
+            $speech = $stmt3->fetch(PDO::FETCH_ASSOC);
+            if ($speech) {
+                $childContext .= " Speech analysis: Vocabulary {$speech['vocabulary_score']}%, Clarity {$speech['clarify_score']}%.";
+            } else {
+                $childContext .= " No speech analysis data yet.";
+            }
+
+            // Motor milestones
+            $stmtMT = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ?");
+            $stmtMT->execute([$childId]);
+            $motorTotal = (int)$stmtMT->fetchColumn();
+
+            $stmtMD = $connect->prepare(
+                "SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND is_achieved = 1"
+            );
+            $stmtMD->execute([$childId]);
+            $motorDone = (int)$stmtMD->fetchColumn();
+            $motorPct = $motorTotal > 0 ? round(($motorDone / $motorTotal) * 100) : 0;
+            $childContext .= " Motor milestones: {$motorDone}/{$motorTotal} achieved ({$motorPct}%).";
+
+            // Recent milestones
+            $stmtRM = $connect->prepare(
+                "SELECT milestone_name FROM motor_milestones WHERE child_id = ? AND is_achieved = 1 ORDER BY achieved_at DESC LIMIT 3"
+            );
+            $stmtRM->execute([$childId]);
+            $rm = $stmtRM->fetchAll(PDO::FETCH_COLUMN);
+            if (!empty($rm)) {
+                $childContext .= " Recent milestones: " . implode(', ', $rm) . ".";
+            }
         }
-
-        // Motor milestones
-        $stmtMT = $connect->prepare("SELECT COUNT(*) FROM milestones WHERE category IN ('gross_motor','fine_motor')");
-        $stmtMT->execute();
-        $motorTotal = (int)$stmtMT->fetchColumn();
-
-        $stmtMD = $connect->prepare(
-            "SELECT COUNT(*) FROM child_milestones cm JOIN milestones m ON cm.milestone_id = m.milestone_id
-             WHERE cm.child_id = ? AND m.category IN ('gross_motor','fine_motor') AND cm.is_achieved = 1"
-        );
-        $stmtMD->execute([$childId]);
-        $motorDone = (int)$stmtMD->fetchColumn();
-        $motorPct = $motorTotal > 0 ? round(($motorDone / $motorTotal) * 100) : 0;
-        $childContext .= " Motor milestones: {$motorDone}/{$motorTotal} achieved ({$motorPct}%).";
-
-        // Recent milestones
-        $stmtRM = $connect->prepare(
-            "SELECT m.title FROM child_milestones cm JOIN milestones m ON cm.milestone_id = m.milestone_id
-             WHERE cm.child_id = ? AND cm.is_achieved = 1 ORDER BY cm.achieved_at DESC LIMIT 3"
-        );
-        $stmtRM->execute([$childId]);
-        $rm = $stmtRM->fetchAll(PDO::FETCH_COLUMN);
-        if (!empty($rm)) {
-            $childContext .= " Recent milestones: " . implode(', ', $rm) . ".";
-        }
+    } catch (Exception $e) {
+        error_log("Chatbot DB context error: " . $e->getMessage());
+        // Continue even if context building fails
     }
 }
 
@@ -225,8 +230,21 @@ if ($httpCode !== 200) {
 }
 
 if ($httpCode !== 200 || $curlError) {
+    $errorDetail = 'AI service temporarily unavailable. Please try again in a moment.';
+    // Parse OpenAI error for more specific messaging
+    $decoded = json_decode($response, true);
+    if (isset($decoded['error']['code'])) {
+        if ($decoded['error']['code'] === 'insufficient_quota') {
+            // Provide a hardcoded fallback response so the user doesn't get blocked
+            $fallbackReply = "Hello! I am currently running in offline mode due to API limits, but based on my built-in knowledge, I see {$childContext}. Keep encouraging their development with daily reading and play. If you have specific medical concerns, please consult your pediatrician!";
+            echo json_encode(['success' => true, 'reply' => $fallbackReply, 'fallback_mode' => true]);
+            exit();
+        } elseif ($decoded['error']['code'] === 'rate_limit_exceeded') {
+            $errorDetail = 'Too many requests — please wait a moment and try again.';
+        }
+    }
     echo json_encode([
-        'error' => 'AI service temporarily unavailable. Please try again in a moment.',
+        'error' => $errorDetail,
         'fallback' => true,
         'debug' => $curlError ?: "HTTP $httpCode"
     ]);

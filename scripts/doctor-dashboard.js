@@ -1230,6 +1230,7 @@ function formatMessageTime(dateStr) {
 
 function selectConversationById(partnerId) {
     currentPartnerId = partnerId;
+    lastMessageId = 0; // Reset message tracker for new conversation
     document.querySelectorAll('.conversation-item').forEach(i => i.classList.remove('active'));
     document.querySelector(`.conversation-item[data-partner="${partnerId}"]`)?.classList.add('active');
     const activeItem = document.querySelector(`.conversation-item[data-partner="${partnerId}"]`);
@@ -1253,30 +1254,49 @@ function selectConversationById(partnerId) {
     }).catch(() => {});
 }
 
+let lastMessageId = 0;
+
 function loadChatMessages(partnerId, silent) {
     fetch(`doctor-dashboard.php?ajax=1&section=messages&action=get_messages&user_id=${SPECIALIST_ID}&partner_id=${partnerId}`)
         .then(r => r.json()).then(result => {
             const container = document.getElementById('chatMessages');
             if (!container) return;
             if (result.success && result.data && result.data.length > 0) {
-                let html = '<div class="chat-date-divider"><span>Conversation</span></div>';
-                result.data.forEach(m => {
-                    const isSent = m.sender_id == SPECIALIST_ID;
-                    const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                    html += `<div class="message-bubble ${isSent ? 'message-sent' : 'message-received'}">
-                        <div class="message-content">${m.content}</div>
-                        <div class="message-time">${time}</div></div>`;
-                });
-                
-                // Only update if content changed or not silent, to prevent flicker
-                const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 20;
-                container.innerHTML = html;
-                
-                if (!silent || isAtBottom) {
+                if (silent && lastMessageId > 0) {
+                    // Only append truly new messages (avoid full re-render)
+                    const newMsgs = result.data.filter(m => m.message_id > lastMessageId);
+                    if (newMsgs.length > 0) {
+                        const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 30;
+                        newMsgs.forEach(m => {
+                            const isSent = m.sender_id == SPECIALIST_ID;
+                            const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                            const fileHtml = m.file_path ? `<div class="message-attachment"><a href="${m.file_path}" target="_blank" style="color:inherit;text-decoration:underline;">📎 Attachment</a></div>` : '';
+                            const bubble = document.createElement('div');
+                            bubble.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
+                            bubble.innerHTML = `<div class="message-content">${m.content}${fileHtml}</div><div class="message-time">${time}</div>`;
+                            container.appendChild(bubble);
+                        });
+                        lastMessageId = Math.max(...result.data.map(m => m.message_id));
+                        if (isAtBottom) container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    // Full render (first load or non-silent)
+                    let html = '<div class="chat-date-divider"><span>Conversation</span></div>';
+                    result.data.forEach(m => {
+                        const isSent = m.sender_id == SPECIALIST_ID;
+                        const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        const fileHtml = m.file_path ? `<div class="message-attachment"><a href="${m.file_path}" target="_blank" style="color:inherit;text-decoration:underline;">📎 Attachment</a></div>` : '';
+                        html += `<div class="message-bubble ${isSent ? 'message-sent' : 'message-received'}">
+                            <div class="message-content">${m.content}${fileHtml}</div>
+                            <div class="message-time">${time}</div></div>`;
+                    });
+                    container.innerHTML = html;
+                    lastMessageId = Math.max(...result.data.map(m => m.message_id));
                     container.scrollTop = container.scrollHeight;
                 }
             } else if (!silent) {
                 container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);"><p>No messages yet. Start the conversation!</p></div>';
+                lastMessageId = 0;
             }
         }).catch(() => {});
 }

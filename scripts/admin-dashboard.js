@@ -602,7 +602,35 @@ async function loadPointsView(main) {
                 </div>`).join('')}
                 ${banners.length === 0 ? '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No banners yet</div>' : ''}
             </div></div>
-        </div></div>`;
+        </div>
+        
+        <!-- Reward Offers -->
+        <div class="section-card" style="margin-top:1rem;">
+            <div class="section-card-header">
+                <h2 class="section-heading">🎁 Redeemable Reward Offers</h2>
+                <button class="btn btn-sm btn-gradient" onclick="showAddOfferModal()">+ Add Offer</button>
+            </div>
+            <div class="clinic-table-wrap">
+                <table class="clinic-table">
+                    <thead><tr><th>Icon</th><th>Offer Title</th><th>Description</th><th>Cost (Points)</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${(ed.offers || []).map(o => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                            <td style="font-size:1.5rem;text-align:center;">${o.icon || '🎁'}</td>
+                            <td><strong>${o.title}</strong></td>
+                            <td style="color:var(--text-secondary);font-size:.85rem;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.description || '—'}</td>
+                            <td><span style="font-weight:700;color:var(--yellow-500);background:rgba(245,158,11,0.1);padding:4px 8px;border-radius:6px;">⭐ ${o.points_required}</span></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline" onclick="editOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}',${o.points_required},'${(o.description||'').replace(/'/g,"\\\\'")}', '${(o.icon||'🎁')}')">Edit</button>
+                                <button class="btn btn-sm btn-outline" style="color:var(--red-500);" onclick="deleteOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}')">Delete</button>
+                            </td>
+                        </tr>`).join('')}
+                        ${!(ed.offers && ed.offers.length) ? '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-secondary);">No reward offers configured</td></tr>' : ''}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        </div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
 }
@@ -627,6 +655,25 @@ function showAddRuleModal() {
     showModal('Add Points Rule', `<div class="form-group"><label>Action Name</label><input type="text" id="ar-name" placeholder="e.g. Daily Login"></div><div class="form-group"><label>Points Value</label><input type="number" id="ar-val" placeholder="10"></div><div class="form-group"><label>Type</label><select id="ar-sign"><option value="+">+ Deposit</option><option value="-">- Withdrawal</option></select></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="ar-save">Add Rule</button>`);
     document.getElementById('ar-save').onclick = async () => { const d = { action: 'add_rule', action_name: document.getElementById('ar-name').value, points_value: parseInt(document.getElementById('ar-val').value), adjust_sign: document.getElementById('ar-sign').value }; if (!d.action_name || !d.points_value) { showAlert('Please fill all fields.', 'warning'); return; } try { const res = await apiPost('points.php', d); if (res.success) { showAlert('Rule added!', 'success'); setTimeout(() => { closeModal(); showAdminView('points'); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } };
+}
+function showAddOfferModal() {
+    showModal('Add Reward Offer', `<div class="form-group"><label>Offer Title</label><input type="text" id="ao-title" placeholder="e.g. Free Consultation"></div><div class="form-group"><label>Points Required</label><input type="number" id="ao-pts" placeholder="500"></div><div class="form-group"><label>Description</label><input type="text" id="ao-desc" placeholder="Offer details..."></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="ao-icon" value="🎁" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
+        `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="ao-save">Add Offer</button>`);
+    document.getElementById('ao-save').onclick = async () => {
+        try { const r = await apiPost('engagement.php', {action:'save_offer', title:document.getElementById('ao-title').value, points_required:parseInt(document.getElementById('ao-pts').value), description:document.getElementById('ao-desc').value, icon:document.getElementById('ao-icon').value});
+        if(r.success) { showAlert('Offer added!', 'success'); setTimeout(()=>{closeModal();showAdminView('points');},1000); } else showAlert(r.error||'Failed','error'); } catch(e) { showAlert('Error','error'); }
+    };
+}
+function editOffer(id, title, pts, desc, icon) {
+    showModal('Edit Reward Offer', `<div class="form-group"><label>Offer Title</label><input type="text" id="eo-title" value="${title}"></div><div class="form-group"><label>Points Required</label><input type="number" id="eo-pts" value="${pts}"></div><div class="form-group"><label>Description</label><input type="text" id="eo-desc" value="${desc}"></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="eo-icon" value="${icon}" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
+        `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="eo-save">Save Changes</button>`);
+    document.getElementById('eo-save').onclick = async () => {
+        try { const r = await apiPost('engagement.php', {action:'save_offer', offer_id:id, title:document.getElementById('eo-title').value, points_required:parseInt(document.getElementById('eo-pts').value), description:document.getElementById('eo-desc').value, icon:document.getElementById('eo-icon').value});
+        if(r.success) { showAlert('Offer updated!', 'success'); setTimeout(()=>{closeModal();showAdminView('points');},1000); } else showAlert(r.error||'Failed','error'); } catch(e) { showAlert('Error','error'); }
+    };
+}
+function deleteOffer(id, title) {
+    showConfirm(`Delete offer <strong>${title}</strong>?`, async () => { try { const r = await apiPost('engagement.php', {action:'delete_offer', offer_id:id}); if(r.success){showAlert('Offer deleted!','success');setTimeout(()=>{closeModal();showAdminView('points');},800);}else showAlert('Failed','error');} catch(e){showAlert('Error','error');} });
 }
 
 // ═══ REPORTS (System Analytics + Behavioral Charts + Export) ═══

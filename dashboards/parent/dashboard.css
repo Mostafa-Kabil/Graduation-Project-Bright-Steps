@@ -2162,3 +2162,32 @@
     .doctor-avail-grid { grid-template-columns: 1fr 1fr; }
     .doctor-avail-grid .doctor-avail-slot:last-child { grid-column: span 2; }
 }
+
+/* Badge Unlock Celebration Animation */
+@keyframes badgeBounceIn {
+    0% { opacity: 0; transform: scale(0.3) rotate(-15deg); }
+    50% { opacity: 1; transform: scale(1.05) rotate(3deg); }
+    70% { transform: scale(0.95) rotate(-1deg); }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(40px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Points animation pulse */
+@keyframes pointsPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); color: #22c55e; }
+    100% { transform: scale(1); }
+}
+
+.points-earned-anim {
+    animation: pointsPulse 0.4s ease-out;
+}

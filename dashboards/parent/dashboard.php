@@ -77,12 +77,14 @@ if ($parentId) {
                 $ch['growth_history'] = $s3->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) { $ch['growth_history'] = []; }
 
-            // Badge count
+            // Badge count and badge objects
             try {
-                $s4 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = :cid");
+                $s4 = $connect->prepare("SELECT b.name, b.icon, b.description, cb.redeemed_at FROM child_badge cb JOIN badge b ON cb.badge_id = b.badge_id WHERE cb.child_id = :cid");
                 $s4->execute(['cid' => $ch['child_id']]);
-                $ch['badge_count'] = (int) $s4->fetchColumn();
-            } catch (Exception $e) { $ch['badge_count'] = 0; }
+                $badgeRows = $s4->fetchAll(PDO::FETCH_ASSOC);
+                $ch['badges'] = $badgeRows;
+                $ch['badge_count'] = count($badgeRows);
+            } catch (Exception $e) { $ch['badges'] = []; $ch['badge_count'] = 0; }
 
             // Points
             try {

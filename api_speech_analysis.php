@@ -135,6 +135,37 @@ $readabilityScores = $aiResult['readability_scores'] ?? [];
 $developmentalFeedback = $aiResult['developmental_feedback'] ?? null;
 $overallDevScore = isset($aiResult['overall_development_score']) ? (float) $aiResult['overall_development_score'] : null;
 
+// ── Ensure schema has required columns (outside transaction) ──────────────
+try {
+    // Test if voice_sample has 'mode' column
+    $connect->query("SELECT `mode` FROM voice_sample LIMIT 0");
+} catch (PDOException $e) {
+    try { $connect->exec("ALTER TABLE voice_sample ADD COLUMN `mode` VARCHAR(20) DEFAULT 'free_talk'"); } catch (Exception $e2) {}
+    try { $connect->exec("ALTER TABLE voice_sample ADD COLUMN `target_text` TEXT DEFAULT NULL"); } catch (Exception $e2) {}
+}
+
+try {
+    // Test if speech_analysis has extended columns
+    $connect->query("SELECT `match_score` FROM speech_analysis LIMIT 0");
+} catch (PDOException $e) {
+    $extraCols = [
+        'match_score' => 'DECIMAL(5,2) DEFAULT NULL',
+        'sentence_count' => 'INT DEFAULT NULL',
+        'avg_sentence_length' => 'DECIMAL(5,2) DEFAULT NULL',
+        'sentence_complexity_score' => 'DECIMAL(5,2) DEFAULT NULL',
+        'avg_word_length' => 'DECIMAL(5,2) DEFAULT NULL',
+        'avg_syllables_per_word' => 'DECIMAL(5,2) DEFAULT NULL',
+        'polysyllabic_word_count' => 'INT DEFAULT NULL',
+        'flesch_reading_ease' => 'DECIMAL(6,2) DEFAULT NULL',
+        'flesch_kincaid_grade' => 'DECIMAL(5,2) DEFAULT NULL',
+        'overall_development_score' => 'DECIMAL(5,2) DEFAULT NULL',
+        'developmental_feedback' => 'TEXT DEFAULT NULL',
+    ];
+    foreach ($extraCols as $col => $def) {
+        try { $connect->exec("ALTER TABLE speech_analysis ADD COLUMN `$col` $def"); } catch (Exception $e2) {}
+    }
+}
+
 try {
     $connect->beginTransaction();
 
@@ -151,8 +182,25 @@ try {
     ]);
     $sampleId = (int) $connect->lastInsertId();
 
-    $stmt = $connect->prepare(
-        "INSERT INTO speech_analysis (
+    $saParams = [
+        'sid' => $sampleId,
+        'tr'  => $aiResult['transcript'],
+        'vs'  => $vocabScore,
+        'cs'  => $clarifyScore,
+        'ms'  => $matchScore,
+        'sc'   => $sentenceComplexity['sentence_count'] ?? null,
+        'asl'  => $sentenceComplexity['avg_sentence_length'] ?? null,
+        'scs'  => $sentenceComplexity['complexity_score'] ?? null,
+        'awl'  => $wordComplexity['avg_word_length'] ?? null,
+        'aspw' => $wordComplexity['avg_syllables_per_word'] ?? null,
+        'pwc'  => $wordComplexity['polysyllabic_word_count'] ?? null,
+        'fre'  => $readabilityScores['flesch_reading_ease'] ?? null,
+        'fkg'  => $readabilityScores['flesch_kincaid_grade'] ?? null,
+        'ods'  => $overallDevScore,
+        'df'   => $developmentalFeedback ? json_encode($developmentalFeedback) : null,
+    ];
+
+    $fullSql = "INSERT INTO speech_analysis (
             sample_id, transcript, vocabulary_score, clarify_score, match_score,
             sentence_count, avg_sentence_length, sentence_complexity_score,
             avg_word_length, avg_syllables_per_word, polysyllabic_word_count,
@@ -164,29 +212,16 @@ try {
             :awl, :aspw, :pwc,
             :fre, :fkg,
             :ods, :df
-         )"
-    );
-    $stmt->execute([
-        'sid' => $sampleId,
-        'tr'  => $aiResult['transcript'],
-        'vs'  => $vocabScore,
-        'cs'  => $clarifyScore,
-        'ms'  => $matchScore,
-        // Sentence complexity metrics
-        'sc'   => $sentenceComplexity['sentence_count'] ?? null,
-        'asl'  => $sentenceComplexity['avg_sentence_length'] ?? null,
-        'scs'  => $sentenceComplexity['complexity_score'] ?? null,
-        // Word complexity metrics
-        'awl'  => $wordComplexity['avg_word_length'] ?? null,
-        'aspw' => $wordComplexity['avg_syllables_per_word'] ?? null,
-        'pwc'  => $wordComplexity['polysyllabic_word_count'] ?? null,
-        // Readability scores
-        'fre'  => $readabilityScores['flesch_reading_ease'] ?? null,
-        'fkg'  => $readabilityScores['flesch_kincaid_grade'] ?? null,
-        // Overall score and feedback
-        'ods'  => $overallDevScore,
-        'df'   => $developmentalFeedback ? json_encode($developmentalFeedback) : null,
-    ]);
+         )";
+
+    try {
+        $stmt = $connect->prepare($fullSql);
+        $stmt->execute($saParams);
+    } catch (PDOException $saErr) {
+        // Fallback: basic insert with original columns only
+        $stmt = $connect->prepare("INSERT INTO speech_analysis (sample_id, transcript, vocabulary_score, clarify_score) VALUES (:sid, :tr, :vs, :cs)");
+        $stmt->execute(['sid' => $sampleId, 'tr' => $aiResult['transcript'], 'vs' => $vocabScore, 'cs' => $clarifyScore]);
+    }
 
     $wordCount = count($aiResult['unique_words'] ?? []);
     $modeLabel = $mode === 'read_compare' ? 'Read & Compare' : 'Free Talk';

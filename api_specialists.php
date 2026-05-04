@@ -72,23 +72,23 @@ try {
     $slotMap = [];
     try {
         $slotStmt = $connect->query("
-            SELECT doctor_id, day_of_week, start_time, end_time, slot_duration
-            FROM appointment_slots
+            SELECT specialist_id, day_of_week, start_time, end_time, slot_duration_minutes
+            FROM specialist_availability
             WHERE is_active = 1
-            ORDER BY doctor_id, day_of_week, start_time
+            ORDER BY specialist_id, day_of_week, start_time
         ");
         $allSlots = $slotStmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($allSlots as $sl) {
-            $did = (int)$sl['doctor_id'];
+            $did = (int)$sl['specialist_id'];
             $dow = (int)$sl['day_of_week'];
             $slotMap[$did][$dow] = [
                 'start_time'    => $sl['start_time'],
                 'end_time'      => $sl['end_time'],
-                'slot_duration' => (int)$sl['slot_duration'],
+                'slot_duration' => (int)$sl['slot_duration_minutes'],
             ];
         }
     } catch (Exception $e) {
-        // appointment_slots table may not exist yet — gracefully skip
+        // specialist_availability table may not exist yet — gracefully skip
         $slotMap = [];
     }
 

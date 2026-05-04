@@ -12,7 +12,7 @@ $last_error = "";
 foreach ($hosts as $host) {
     foreach ($ports as $port) {
         try {
-            $connect = new PDO("mysql:host=$host;port=$port;dbname=$db_name;charset=utf8", $db_user, $db_pass);
+            $connect = new PDO("mysql:host=$host;port=$port;dbname=$db_name;charset=utf8mb4", $db_user, $db_pass);
             $connect->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             break 2; // Success! Break out of both loops
         } catch (PDOException $e) {
