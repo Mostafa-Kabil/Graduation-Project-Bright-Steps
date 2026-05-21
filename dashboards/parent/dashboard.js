@@ -384,13 +384,208 @@
         document.body.appendChild(modal);
     };
 
+    // Subscription Tier Logic
+    async function checkSubscriptionAccess(feature, limit = 0) {
+        const d = window.dashboardData || {};
+        const sub = d.subscription || {};
+        const children = d.children || [];
+        const child = children[window._selectedChildIndex || 0] || children[0] || null;
+
+        if (sub.plan_name === 'Premium') return true;
+
+        if (feature === 'clinic') {
+            // Clinic is Premium Only
+            showPremiumPaywallModal('Clinic Consultations', 'Unlimited access to our network of specialists, online and onsite.');
+            return false;
+        }
+
+        if (!child) return true; // Let them get to profile first
+
+        if (feature === 'speech') {
+            // 3 Free Trials
+            try {
+                const res = await fetch(`../../api_speech_history.php?child_id=${child.child_id}`);
+                const data = await res.json();
+                const count = (data.analyses || []).length;
+                if (count >= limit) {
+                    showPremiumPaywallModal('AI Speech Analysis', 'You\'ve reached your free limit of 3 analyses. Upgrade to Premium for unlimited AI insights.');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Trial check failed:', e);
+            }
+        }
+
+        if (feature === 'motor') {
+            // 1 Free Trial
+            try {
+                const res = await fetch(`../../api_motor.php?action=list&child_id=${child.child_id}`);
+                const data = await res.json();
+                const count = (data.milestones || []).length;
+                if (count >= limit) {
+                    showPremiumPaywallModal('Motor Skill Tracking', 'You\'ve reached your free limit. Upgrade to Premium to track all developmental milestones.');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Trial check failed:', e);
+            }
+        }
+
+        return true;
+    }
+
+    function showPremiumPaywallModal(featureName, featureDesc) {
+        let existing = document.getElementById('premium-paywall-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'premium-paywall-modal';
+        modal.innerHTML = `
+            <div id="paywall-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='paywall-overlay')document.getElementById('premium-paywall-modal').remove()">
+                <div style="background:var(--surface-light,#fff);border-radius:32px;padding:3rem;max-width:500px;width:100%;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+                    <div style="width:80px;height:80px;background:linear-gradient(135deg,#fde047,#f59e0b);border-radius:20px;margin:0 auto 1.5rem;display:flex;align-items:center;justify-content:center;font-size:2.5rem;box-shadow:0 10px 20px rgba(245,158,11,0.3);">💎</div>
+                    <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Unlock Premium Access</h2>
+                    <p style="color:var(--slate-500);margin-bottom:2rem;line-height:1.6;">To access <strong>${featureName}</strong>, upgrade to our Premium Plan. ${featureDesc}</p>
+
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:20px;padding:1.5rem;margin-bottom:2rem;text-align:left;">
+                        <h4 style="font-size:0.9rem;font-weight:700;color:var(--slate-900);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Premium Features:
+                        </h4>
+                        <ul style="list-style:none;padding:0;margin:0;font-size:0.85rem;color:var(--slate-600);line-height:1.8;">
+                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Unlimited AI Speech Reports</li>
+                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Full Motor Skills Tracking</li>
+                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Priority Doctor Consultations</li>
+                            <li style="display:flex;align-items:start;gap:0.5rem;"><span>✓</span> Detailed Development Insights</li>
+                        </ul>
+                    </div>
+
+                    <button onclick="triggerPaymentUI('premium_subscription')" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;font-weight:700;border-radius:14px;box-shadow:0 10px 20px rgba(99,102,241,0.3);">Upgrade Now</button>
+                    <button onclick="document.getElementById('premium-paywall-modal').remove()" style="display:block;width:100%;margin-top:1rem;background:none;border:none;color:var(--slate-400);cursor:pointer;font-size:0.85rem;font-weight:500;">Maybe Later</button>
+                </div>
+            </div>`;
+        modal.id = 'premium-paywall-modal';
+        document.body.appendChild(modal);
+    }
+
+    window.triggerPaymentUI = async function(type, amount = null, targetId = null) {
+        let total = amount;
+        let targetName = 'Premium Subscription';
+
+        if (type === 'premium_subscription') {
+            // Fetch price from dashboardData or API
+            total = (window.dashboardData || {}).subscription?.price || '24.99';
+        } else if (type === 'appointment') {
+            targetName = 'Doctor Consultation';
+            // Use the specialist fee if provided
+            total = amount || '50.00';
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'payment-modal';
+        modal.innerHTML = `
+            <div id="payment-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(10px);z-index:10001;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='payment-overlay')document.getElementById('payment-modal').remove()">
+                <div style="background:#fff;border-radius:32px;padding:2.5rem;max-width:450px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,0.3);animation: slideUpFade 0.3s ease-out;">
+                    <div style="text-align:center;margin-bottom:2rem;">
+                        <div style="width:60px;height:60px;background:linear-gradient(135deg,#4f46e5,#818cf8);color:#fff;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1rem;">💳</div>
+                        <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Complete Payment</h2>
+                        <p style="color:var(--slate-500);font-size:0.9rem;">Securely pay for ${targetName}</p>
+                    </div>
+
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:2rem;display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-weight:600;color:var(--slate-600);">Total Amount:</span>
+                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">$${total}</span>
+                    </div>
+
+                    <div class="payment-form" style="display:flex;flex-direction:column;gap:1rem;">
+                        <div style="display:flex;flex-direction:column;gap:0.4rem;">
+                            <label style="font-size:0.8rem;font-weight:600;color:var(--slate-600);">Cardholder Name</label>
+                            <input type="text" id="pay-name" placeholder="John Doe" style="padding:0.8rem;border-radius:10px;border:1px solid #e2e8f0;font-size:0.9rem;">
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:0.4rem;">
+                            <label style="font-size:0.8rem;font-weight:600;color:var(--slate-600);">Card Number</label>
+                            <input type="text" id="pay-number" placeholder="**** **** **** ****" style="padding:0.8rem;border-radius:10px;border:1px solid #e2e8f0;font-size:0.9rem;">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                            <div style="display:flex;flex-direction:column;gap:0.4rem;">
+                                <label style="font-size:0.8rem;font-weight:600;color:var(--slate-600);">Expiry Date</label>
+                                <input type="text" id="pay-expiry" placeholder="MM/YY" style="padding:0.8rem;border-radius:10px;border:1px solid #e2e8f0;font-size:0.9rem;">
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.4rem;">
+                                <label style="font-size:0.8rem;font-weight:600;color:var(--slate-600);">CVV</label>
+                                <input type="text" id="pay-cvv" placeholder="123" style="padding:0.8rem;border-radius:10px;border:1px solid #e2e8f0;font-size:0.9rem;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="pay-btn" onclick="processPayment('${type}', ${total}, ${targetId})" class="btn btn-gradient" style="width:100%;padding:1rem;margin-top:2rem;font-size:1.1rem;font-weight:700;border-radius:14px;">Pay Now</button>
+                    <button onclick="document.getElementById('payment-modal').remove()" style="display:block;width:100%;margin-top:1rem;background:none;border:none;color:var(--slate-400);cursor:pointer;font-size:0.85rem;font-weight:500;">Cancel</button>
+                </div>
+            </div>`;
+        modal.id = 'payment-modal';
+        document.body.appendChild(modal);
+    }
+
+    async function processPayment(type, amount, targetId) {
+        const btn = document.getElementById('pay-btn');
+        const name = document.getElementById('pay-name').value;
+        const number = document.getElementById('pay-number').value;
+
+        if (!name || !number) {
+            alert('Please fill in card details');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+
+        try {
+            const res = await fetch('../../api_payment.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type,
+                    amount,
+                    target_id: targetId,
+                    card_name: name,
+                    card_number: number
+                })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert('Payment successful!');
+                document.getElementById('payment-modal').remove();
+                if (type === 'premium_subscription') {
+                    window.location.reload(); // Refresh to update tier status
+                } else {
+                    switchView('clinic');
+                }
+            } else {
+                alert('Payment failed: ' + (data.error || 'Unknown error'));
+            }
+        } catch (e) {
+            alert('Error processing payment: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Pay Now';
+        }
+    }
+
     // Switch view
-    function switchView(viewId) {
+    async function switchView(viewId) {
         const contentContainer = document.getElementById('dashboard-content');
         if (!contentContainer) {
             window.location.href = '../../dashboard.php?view=' + viewId;
             return;
         }
+
+        // Check subscription limits
+        let access = true;
+        if (viewId === 'clinic') access = await checkSubscriptionAccess('clinic');
+        else if (viewId === 'speech') access = await checkSubscriptionAccess('speech', 3);
+        else if (viewId === 'motor') access = await checkSubscriptionAccess('motor', 1);
+
+        if (!access) return;
 
         // Update active nav item
         document.querySelectorAll('.nav-item').forEach(item => {
@@ -648,14 +843,15 @@
         const fullName = (child.first_name || '') + ' ' + (child.last_name || '');
 
         let apptHtml = '';
-        if (appts.length > 0) {
-            appts.forEach(a => {
+        const upcomingAppts = appts.filter(a => ['Scheduled', 'Pending Reschedule'].includes(a.status));
+        if (upcomingAppts.length > 0) {
+            upcomingAppts.slice(0, 3).forEach(a => {
                 const dt = new Date(a.scheduled_at);
                 const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
                 apptHtml += `<div class="appointment-item">
                     <div class="appointment-icon icon-blue-bg">📅</div>
                     <div class="appointment-info">
-                        <div class="appointment-title">${a.type || 'Appointment'}</div>
+                        <div class="appointment-title">${a.type || 'Appointment'} <span style="font-size:0.7rem; padding:0.1rem 0.4rem; border-radius:4px; background:var(--blue-100); color:var(--blue-700);">${a.status}</span></div>
                         <div class="appointment-date">${dateStr}</div>
                         <div class="appointment-location">Dr. ${a.doc_fname} ${a.doc_lname} - ${a.clinic_name || ''}</div>
                     </div></div>`;
@@ -1350,6 +1546,7 @@
     }
 
     window.openSpeechModal = function (childId) {
+        if (!window.checkSubscriptionAccess('speech', 3)) return;
         let existing = document.getElementById('speech-modal');
         if (existing) existing.remove();
 
@@ -2149,6 +2346,8 @@
     }
 
     window.openMilestonesModal = function () {
+        if (!window.checkSubscriptionAccess('motor', 1)) return;
+        window.incrementTrial('motor');
         if (!window._currentMilestones) return;
         const gross = window._currentMilestones.gross;
         const fine = window._currentMilestones.fine;
@@ -2186,6 +2385,21 @@
                         </div>
                         <button onclick="document.getElementById('milestone-modal').remove()" style="background:rgba(255,255,255,0.2);border:none;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.25rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">✕</button>
                     </div>
+
+                    ${window._currentMilestones && window._currentMilestones._draftLoaded ? `
+                    <div style="background:#fffbeb;border-left:4px solid #fbbf24;padding:1rem;margin-bottom:1.5rem;border-radius:0 8px 8px 0;">
+                        <div style="display:flex;align-items:center;gap:0.75rem;">
+                            <div style="flex-shrink:0;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                                    <path d="M12 9v2m0 4h.01M12 5h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p style="margin:0;font-weight:600;color:#92400e;">Unsaved changes detected</p>
+                                <p style="margin:0;font-size:0.875rem;color:#784212;">You have unsaved changes to the motor skills milestones that will be lost if you don't save them.</p>
+                            </div>
+                        </div>
+                    </div>` : ''}
                     
                     <div id="milestone-modal-content" style="padding:2rem;overflow-y:auto;flex:1;">
                         ${renderCategory('Gross Motor Skills', '🦵', gross, '#22c55e')}
@@ -2220,8 +2434,28 @@
             const gross = milestones.filter(m => m.category === 'gross_motor');
             const fine = milestones.filter(m => m.category === 'fine_motor');
 
+            // Check for and restore draft from localStorage
+            const motorDraftKey = 'bs_motor_draft_' + childId;
+            const motorDraft = localStorage.getItem(motorDraftKey);
+            let motorDraftData = {};
+            let draftRestored = false;
+            if (motorDraft) {
+                try {
+                    motorDraftData = JSON.parse(motorDraft);
+                    // Apply draft data to milestones
+                    milestones.forEach(milestone => {
+                        if (motorDraftData[milestone.milestone_id] !== undefined) {
+                            milestone.is_achieved = motorDraftData[milestone.milestone_id] ? 1 : 0;
+                            draftRestored = true;
+                        }
+                    });
+                } catch(e) {
+                    console.error('Error parsing motor skills draft:', e);
+                }
+            }
+
             // Save state globally so the modal can access it
-            window._currentMilestones = { gross, fine, childId };
+            window._currentMilestones = { gross, fine, childId, _draftLoaded: draftRestored };
 
             // If the modal is currently open, refresh its content
             if (document.getElementById('milestone-modal')) {
@@ -2299,6 +2533,25 @@
             }
             // Refresh the checklist
             loadMotorMilestones(childId);
+
+            // Save motor skills draft state
+            if (childId) {
+                // Get current motor milestones data from localStorage or initialize
+                const motorDraftKey = 'bs_motor_draft_' + childId;
+                let motorDraft = localStorage.getItem(motorDraftKey);
+                let motorDraftData = {};
+                if (motorDraft) {
+                    try {
+                        motorDraftData = JSON.parse(motorDraft);
+                    } catch(e) {
+                        motorDraftData = {};
+                    }
+                }
+
+                // Update the milestone status in draft
+                motorDraftData[milestoneId] = isAchieved;
+                localStorage.setItem(motorDraftKey, JSON.stringify(motorDraftData));
+            }
         } catch (e) { console.error('Toggle milestone error:', e); }
     };
 
@@ -3015,6 +3268,21 @@
                 childId: childId
             };
 
+            // Check if draft was loaded from localStorage
+            const draft = localStorage.getItem('bs_behavior_draft_' + childId);
+            if (draft) {
+                try {
+                    const draftData = JSON.parse(draft);
+                    if (draftData.categories) {
+                        _behaviorChecklistData._draftLoaded = true;
+                        _behaviorChecklistData.categories = draftData.categories;
+                        console.log('Restored unsaved behavior checklist draft from localStorage');
+                    }
+                } catch(e) {}
+            } else {
+                _behaviorChecklistData._draftLoaded = false;
+            }
+
             // Cache in sessionStorage for quick reloads (persists for session)
             sessionStorage.setItem('behavior_checklist_' + childId, JSON.stringify({
                 data: data,
@@ -3533,6 +3801,22 @@
         const data = _behaviorChecklistData;
         const childName = data.child_name || 'Your child';
 
+        // Show warning banner if draft was loaded
+        const draftBanner = data._draftLoaded ? `
+        <div style="background:#fffbeb;border-left:4px solid #fbbf24;padding:1rem;margin-bottom:1.5rem;border-radius:0 8px 8px 0;">
+            <div style="display:flex;align-items:center;gap:0.75rem;">
+                <div style="flex-shrink:0;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                        <path d="M12 9v2m0 4h.01M12 5h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <p style="margin:0;font-weight:600;color:#92400e;">Unsaved changes detected</p>
+                    <p style="margin:0;font-size:0.875rem;color:#784212;">You have unsaved changes to the behavior checklist that will be lost if you don't save them.</p>
+                </div>
+            </div>
+        </div>` : '';
+
         const renderBehaviorItem = (behavior) => {
             const isChecked = behavior.is_exhibited;
             const frequency = behavior.frequency || 'sometimes';
@@ -3655,6 +3939,7 @@
                                 </div>
                             </div>
                         </div>
+                        ${draftBanner}
 
                         ${data.categories.map(renderCategory).join('')}
                     </div>
@@ -3714,6 +3999,11 @@
             label.style.textDecoration = isChecked ? 'line-through' : 'none';
             label.style.color = isChecked ? 'var(--slate-400)' : 'var(--slate-700)';
         }
+
+        // Save draft state
+        if (_behaviorChecklistData.childId) {
+            localStorage.setItem('bs_behavior_draft_' + _behaviorChecklistData.childId, JSON.stringify(_behaviorChecklistData));
+        }
     };
 
     window.updateBehaviorData = function (behaviorId) {
@@ -3730,6 +4020,11 @@
                 }
             });
         });
+
+        // Save draft state
+        if (_behaviorChecklistData.childId) {
+            localStorage.setItem('bs_behavior_draft_' + _behaviorChecklistData.childId, JSON.stringify(_behaviorChecklistData));
+        }
     };
 
     window.saveBehaviorChecklist = async function (childId) {
@@ -3794,6 +4089,7 @@
                 };
 
                 console.log('Checklist saved and reloaded successfully');
+                localStorage.removeItem('bs_behavior_draft_' + saveChildId);
             } else {
                 alert('Error saving: ' + (data.error || 'Unknown error'));
             }
@@ -4607,25 +4903,43 @@
         if (appts.length > 0) {
             appts.forEach(function(a) {
                 const dt = new Date(a.scheduled_at);
-                const statusCls = a.status === 'Scheduled' ? 'badge-blue' : 'badge-green';
+                let statusCls = 'badge-blue';
+                let statusText = a.status;
+                if (a.status === 'Completed') statusCls = 'badge-green';
+                else if (a.status === 'Cancelled' || a.status === 'Refunded') statusCls = 'badge-red';
+                else if (a.status === 'Pending Reschedule') {
+                    statusCls = 'badge-yellow';
+                    statusText = 'Pending Doctor Approval';
+                }
+
+                let actionsHtml = '<div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">';
+                if (a.status === 'Scheduled') {
+                    actionsHtml += '<button onclick="window.rescheduleAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">Reschedule</button>';
+                    actionsHtml += '<button onclick="window.cancelAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1; color:var(--red-500); border-color:var(--red-200);">Cancel</button>';
+                } else if (a.status === 'Completed') {
+                    actionsHtml += '<button onclick="window.reviewDoctor(' + a.appointment_id + ', ' + a.specialist_id + ', \'' + a.doc_fname + ' ' + a.doc_lname + '\')" class="btn btn-gradient" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">⭐ Review</button>';
+                }
+                actionsHtml += '</div>';
+
                 apptHtml += (
-                    '<div class="appt-sidebar-item">' +
-                        '<div class="appt-sidebar-top">' +
-                            '<span class="badge ' + statusCls + '" style="font-size:0.7rem;">' + a.status + '</span>' +
-                            '<span class="appt-sidebar-type">' + (a.type === 'onsite' ? '📍 Clinic' : '💻 Online') + '</span>' +
+                    '<div class="appt-sidebar-item" style="border-bottom:1px solid var(--slate-100); padding-bottom:1rem; margin-bottom:1rem;">' +
+                        '<div class="appt-sidebar-top" style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">' +
+                            '<span class="badge ' + statusCls + '" style="font-size:0.7rem;">' + statusText + '</span>' +
+                            '<span class="appt-sidebar-type" style="font-size:0.75rem; color:var(--slate-500);">' + (a.type === 'onsite' ? '📍 Clinic' : '💻 Online') + '</span>' +
                         '</div>' +
-                        '<div class="appt-sidebar-body">' +
-                            '<div class="appt-sidebar-cal">' +
-                                '<div class="appt-cal-month">' + dt.toLocaleDateString('en-US', { month: 'short' }) + '</div>' +
-                                '<div class="appt-cal-day">' + dt.getDate() + '</div>' +
+                        '<div class="appt-sidebar-body" style="display:flex; gap:1rem;">' +
+                            '<div class="appt-sidebar-cal" style="text-align:center; min-width:45px;">' +
+                                '<div class="appt-cal-month" style="font-size:0.75rem; font-weight:700; color:var(--red-500); text-transform:uppercase;">' + dt.toLocaleDateString('en-US', { month: 'short' }) + '</div>' +
+                                '<div class="appt-cal-day" style="font-size:1.5rem; font-weight:800; line-height:1;">' + dt.getDate() + '</div>' +
                             '</div>' +
-                            '<div class="appt-sidebar-info">' +
-                                '<h4>Dr. ' + a.doc_fname + ' ' + a.doc_lname + '</h4>' +
-                                '<p>' + (a.specialization || '') + '</p>' +
-                                '<div class="appt-sidebar-time">' +
+                            '<div class="appt-sidebar-info" style="flex:1;">' +
+                                '<h4 style="margin:0 0 0.25rem; font-size:0.95rem; font-weight:700;">Dr. ' + a.doc_fname + ' ' + a.doc_lname + '</h4>' +
+                                '<p style="margin:0 0 0.25rem; font-size:0.8rem; color:var(--slate-500);">' + (a.specialization || '') + '</p>' +
+                                '<div class="appt-sidebar-time" style="font-size:0.8rem; color:var(--slate-700); display:flex; align-items:center; gap:0.25rem;">' +
                                     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
                                     dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) +
                                 '</div>' +
+                                actionsHtml +
                             '</div>' +
                         '</div>' +
                     '</div>'
@@ -4730,7 +5044,7 @@
                     <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;">
                         <div style="flex:1;">
                             <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1.5rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Doctor Information</h4>
-                            
+
                             <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
                                 <div>
                                     <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Experience</div>
@@ -4738,15 +5052,35 @@
                                 </div>
                                 <div>
                                     <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Consultation Fee</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.1rem;">From 200 EGP</div>
+                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.1rem;">${s.consultation_fee || '200'} EGP</div>
                                 </div>
                                 <div style="grid-column:1/-1;">
                                     <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Clinic Location</div>
                                     <div style="font-weight:700;color:var(--slate-800);font-size:1.05rem;display:flex;align-items:flex-start;gap:0.5rem;">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" style="margin-top:2px;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg> 
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" style="margin-top:2px;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                                         ${s.clinic_name}, ${s.location}
                                     </div>
                                 </div>
+                            </div>
+
+                            ${s.bio ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Biography</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.bio + '</p>' : ''}
+
+                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Availability Calendar</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
+                    const startTime = slot.start_time ? slot.start_time.substring(0, 5) : '';
+                    const endTime = slot.end_time ? slot.end_time.substring(0, 5) : '';
+                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>${slot.label}</span><span>${startTime} to ${endTime}</span></div>';
+                }).join('') + '</div>' : ''}
+
+                            ${s.certificate_of_experience ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Education & Certifications</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.certificate_of_experience + '</p>' : ''}
+
+                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Consultation Tags</h4>
+                            <div style="display:flex;flex-wrap:gap:0.5rem;margin-bottom:1.5rem;">
+                                ${s.consultation_types ? s.consultation_types.split(',').map(tag => '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">' + tag.trim() + '</span>').join('') : '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">On-site</span>'}
+                            </div>
+
+                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Patient Reviews</h4>
+                            <div id="doctor-reviews-container" style="max-height: 150px; overflow-y: auto; margin-bottom: 1.5rem; padding-right: 0.5rem;">
+                                <div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">Loading reviews...</div>
                             </div>
                         </div>
                         
@@ -4757,6 +5091,30 @@
                 </div>
             </div>`;
         document.body.appendChild(modal);
+
+        fetch('../../api_doctor_review.php?action=list&specialist_id=' + specialistId)
+            .then(r => r.json())
+            .then(data => {
+                const container = document.getElementById('doctor-reviews-container');
+                if (!container) return;
+                if (data.reviews && data.reviews.length > 0) {
+                    container.innerHTML = data.reviews.map(r => 
+                        '<div style="background:#f8fafc; border-radius:12px; padding:1rem; margin-bottom:0.75rem;">' +
+                            '<div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">' +
+                                '<span style="font-weight:700; font-size:0.9rem; color:var(--slate-800);">' + r.first_name + ' ' + (r.last_name||'')[0] + '.</span>' +
+                                '<span style="color:#eab308; font-size:0.9rem;">' + '★'.repeat(r.rating) + '☆'.repeat(5-r.rating) + '</span>' +
+                            '</div>' +
+                            (r.comment ? '<p style="margin:0; font-size:0.85rem; color:var(--slate-600);">' + r.comment + '</p>' : '') +
+                        '</div>'
+                    ).join('');
+                } else {
+                    container.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">No reviews yet.</div>';
+                }
+            })
+            .catch(() => {
+                const container = document.getElementById('doctor-reviews-container');
+                if(container) container.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">Failed to load reviews.</div>';
+            });
     };
 
     function getReportsView() {
@@ -5925,6 +6283,28 @@
                         </div>
                     </div>
 
+                    <!-- Subscription & Billing -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <span class="settings-section-icon">📊</span>
+                            <div><h3 class="settings-section-title">Subscription & Billing</h3><p class="settings-section-desc">View invoice history and payment records</p></div>
+                        </div>
+                        <div class="settings-card">
+                            <div class="settings-row">
+                                <div>
+                                    <h4 class="settings-row-title">Invoice History</h4>
+                                    <p class="settings-row-sub">View past payments and download invoices</p>
+                                </div>
+                                <div class="settings-row-action">
+                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()">Load Invoice History</button>
+                                </div>
+                            </div>
+                            <div id="invoice-history-container" style="margin-top:1.5rem;">
+                                <div style="text-align:center;color:#64748b;font-style:italic;padding:2rem;">Click 'Load Invoice History' to view your payment records</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Danger Zone -->
                     <div class="settings-section">
                         <div class="settings-card" style="border: 2px solid var(--red-200);">
@@ -5952,6 +6332,261 @@
             localStorage.setItem('theme', 'light');
         }
         saveSettingToggle('theme', isDark ? 'dark' : 'light');
+    };
+
+    // Load invoice history for subscription & billing section
+    window.loadInvoiceHistory = function() {
+        const container = document.getElementById('invoice-history-container');
+        if (!container) return;
+
+        container.innerHTML = '<div style="text-align:center;color:#64748b;padding:2rem;"><div class="spinner" style="width:2rem;height:2rem;border:2px solid #e2e8f0;border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem;"></div><p>Loading invoice history...</p></div>';
+
+        fetch('../../api_payment.php?action=history')
+            .then(res => res.json())
+            .then(data => {
+                if (data.payments && data.payments.length > 0) {
+                    container.innerHTML = `
+                        <div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">
+                            <h4 style="color:#1e293b;margin-bottom:1rem;">Recent Invoices</h4>
+                            ${data.payments.map(p => `
+                                <div style="background:#fff;border-radius:8px;padding:1rem;margin-bottom:1rem;border-left:4px solid ${p.status === 'completed' ? '#22c55e' : (p.status === 'refunded' ? '#ef4444' : '#eab308')};">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                                        <span style="font-weight:600;color:var(--slate-800);">${p.plan_name} (${p.plan_period || 'month'})</span>
+                                        <span style="font-weight:700;color:var(--slate-900);">${p.amount_post_discount || p.amount_pre_discount} EGP</span>
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;font-size:0.875rem;color:#64748b;margin-top:0.5rem;">
+                                        <span>${new Date(p.paid_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}</span>
+                                        <span style="text-transform:uppercase;font-weight:700;font-size:0.7rem;letter-spacing:0.05em;">${p.status}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            <div style="text-align:center;margin-top:1.5rem;">
+                                <button class="btn btn-outline btn-sm" onclick="window.open('../../api_export_pdf.php?type=invoice-history','_blank')">Download All Invoices (PDF)</button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--slate-400);">No payment records found.</div>';
+                }
+            })
+            .catch(() => {
+                container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--red-500);">Failed to load invoice history.</div>';
+            });
+    };
+
+    // Integrated Payment UI Modal
+    window.showIntegratedPaymentModal = function(amount, description, onPaymentSuccess) {
+        // Check if modal already exists
+        let existingModal = document.getElementById('integrated-payment-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'integrated-payment-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="padding:2rem;border-bottom:1px solid #e2e8f0;">
+                        <h2 style="margin:0 0 1rem;text-align:center;">Secure Payment</h2>
+                        <p style="text-align:center;color:#64748b;margin-bottom:1.5rem;">${description}</p>
+                        <div style="text-align:center;margin-bottom:1.5rem;">
+                            <span style="font-size:2rem;font-weight:bold;color:#1e293b;">$${amount.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <form id="paymentForm" onsubmit="window.processIntegratedPayment(event)">
+                        <div style="margin-bottom:1.5rem;">
+                            <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:#64748b;">Card Number</label>
+                            <input type="text" id="cardNumber" name="cardNumber" required style="width:100%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;" placeholder="1234 5678 9012 3456">
+                        </div>
+
+                        <div style="display:flex;gap:1rem;margin-bottom:1.5rem;">
+                            <div style="flex:1;">
+                                <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:#64748b;">Expiry Date</label>
+                                <input type="text" id="expiryDate" name="expiryDate" required style="width:100%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;" placeholder="MM/YY">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:#64748b;">CVV</label>
+                                <input type="text" id="cvv" name="cvv" required style="width:100%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;" placeholder="123">
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:1.5rem;">
+                            <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:#64748b;">Cardholder Name</label>
+                            <input type="text" id="cardholderName" name="cardholderName" required style="width:100%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.9rem;">
+                        </div>
+
+                        <div style="display:flex;justify-content:flex-end;gap:1rem;">
+                            <button type="button" onclick="document.getElementById('integrated-payment-modal').remove()" class="btn btn-outline">Cancel</button>
+                            <button type="submit" class="btn btn-gradient" id="paymentSubmitBtn">
+                                Pay Now
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Add card formatting
+        const cardNumberInput = document.getElementById('cardNumber');
+        const expiryDateInput = document.getElementById('expiryDate');
+
+        cardNumberInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\s/g, '').replace(/[^0-9]/g, '');
+            if (value.length > 0) {
+                value = value.match(/.{1,4}/g).join(' ');
+            }
+            e.target.value = value;
+        });
+
+        expiryDateInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/[^0-9]/g, '');
+            if (value.length > 2) {
+                value = value.substring(0, 2) + '/' + value.substring(2, 4);
+            }
+            e.target.value = value;
+        });
+    };
+
+    // Process integrated payment
+    window.processIntegratedPayment = function(e) {
+        e.preventDefault();
+
+        const btn = document.getElementById('paymentSubmitBtn');
+        if (!btn) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner" style="width:1rem;height:1rem;margin-right:0.5rem;"></span> Processing...';
+
+        // Get form data
+        const formData = new FormData(document.getElementById('paymentForm'));
+        const cardNumber = formData.get('cardNumber').replace(/\s/g, '');
+        const expiryDate = formData.get('expiryDate');
+        const cvv = formData.get('cvv');
+        const cardholderName = formData.get('cardholderName');
+
+        // Basic validation
+        if (!cardNumber || !expiryDate || !cvv || !cardholderName) {
+            alert('Please fill in all fields');
+            btn.disabled = false;
+            btn.innerHTML = 'Pay Now';
+            return;
+        }
+
+        // Simulate payment processing
+        setTimeout(() => {
+            // In a real implementation, this would call a payment API
+            // For now, we'll simulate a successful payment
+            const paymentSuccessful = Math.random() > 0.1; // 90% success rate
+
+            if (paymentSuccessful) {
+                // Close modal
+                document.getElementById('integrated-payment-modal')?.remove();
+
+                // Show success message
+                alert('Payment processed successfully!');
+
+                // Call success callback if provided
+                if (typeof onPaymentSuccess === 'function') {
+                    onPaymentSuccess();
+                }
+
+                // Reload dashboard to update subscription status
+                location.reload();
+            } else {
+                alert('Payment failed. Please try again or use a different card.');
+                btn.disabled = false;
+                btn.innerHTML = 'Pay Now';
+            }
+        }, 1500);
+    };
+
+    // Show Premium Paywall Modal
+    window.showPremiumPaywallModal = function(featureName) {
+        const featureDetails = {
+            'appointment': {
+                title: 'Unlimited Appointments',
+                description: 'Access to specialist consultations and clinic visits',
+                icon: '🏥',
+                benefits: [
+                    'Book unlimited specialist appointments',
+                    'Both online and on-site consultations',
+                    'Priority scheduling',
+                    'Comprehensive pediatric care'
+                ]
+            },
+            'speech': {
+                title: 'Advanced Speech Analysis',
+                description: 'Unlimited speech assessments and AI-powered insights',
+                icon: '🗣️',
+                benefits: [
+                    'Unlimited speech recording and analysis',
+                    'Detailed vocabulary and pronunciation reports',
+                    'Speech progress tracking over time',
+                    'AI-powered speech development insights'
+                ]
+            },
+            'motor': {
+                title: 'Complete Motor Skills Tracking',
+                description: 'Full access to motor skills milestones and assessments',
+                icon: '💪',
+                benefits: [
+                    'Unlimited motor skills checklists',
+                    'Both gross and fine motor tracking',
+                    'Developmental progress charts',
+                    'Exportable reports for pediatricians'
+                ]
+            }
+        };
+
+        const details = featureDetails[featureName] || {
+            title: 'Premium Features',
+            description: 'Access to advanced features and unlimited usage',
+            icon: '💎',
+            benefits: [
+                'Unlimited access to all features',
+                'Advanced AI-powered insights',
+                'Priority customer support',
+                'Exportable reports and analytics'
+            ]
+        };
+
+        // Check if modal already exists
+        let existingModal = document.getElementById('premium-paywall-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'premium-paywall-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="padding:2rem;border-bottom:1px solid #e2e8f0;">
+                        <h2 style="margin:0 0 1rem;text-align:center;">Unlock ${details.title}</h2>
+                        <p style="text-align:center;color:#64748b;margin-bottom:1.5rem;">${details.description}</p>
+                        <div style="background:#f8fafc;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+                            <h3 style="margin:0 0 1rem;text-align:center;color:#1e293b;">${details.icon} ${details.title}</h3>
+                            <ul style="text-align:left;max-width:300px;margin:0 auto;padding-left:1.25rem;">
+                                ${details.benefits.map(b => `<li style="margin-bottom:0.5rem;display:flex;align-items:flex-start;"><span style="flex-shrink:0;">• </span><span>${b}</span></li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:1rem;">
+                        <button type="button" onclick="document.getElementById('premium-paywall-modal').remove()" class="btn btn-outline">Not Now</button>
+                        <button type="button" onclick="window.showIntegratedPaymentModal(29.99, 'Premium Monthly Subscription - Access to all premium features including ${details.title.toLowerCase()}', function() { alert('Payment successful! You now have access to premium features.'); location.reload(); })" class="btn btn-gradient">
+                            Upgrade to Premium - $29.99/month
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
     };
 
     window.handleLangChange = function (lang) {
@@ -6975,9 +7610,208 @@
     };
 
     // ══════════════════════════════════════════════════════════════
+    // ── Premium Subscription & Trials ──────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.showPremiumModal = function () {
+        let existing = document.getElementById('premium-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'premium-modal';
+        modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;text-align:center;padding:2.5rem 2rem;">
+                <div style="font-size:3.5rem;margin-bottom:1rem;">⭐</div>
+                <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin:0 0 0.5rem;">Upgrade to Premium</h2>
+                <p style="color:var(--slate-500);margin:0 0 2rem;font-size:1rem;">Unlock unlimited AI reports, doctor consultations, and advanced insights.</p>
+                <div style="text-align:left;background:var(--blue-50);padding:1.5rem;border-radius:16px;margin-bottom:2rem;border:1px solid var(--blue-100);">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Unlimited Speech Analysis</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Unlimited Motor Skills Tracking</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Book Doctor Appointments</span>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;font-weight:700;">Upgrade for $29.99/mo</button>
+                <button onclick="document.getElementById('premium-modal').remove()" style="background:none;border:none;color:var(--slate-400);margin-top:1rem;font-weight:600;cursor:pointer;">Maybe Later</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+    };
+
+    window.checkSubscriptionAccess = function (feature, maxTrials) {
+        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
+        if (isPremium) return true;
+
+                // Special handling for speech analysis: check actual speech history count
+        if (feature === 'speech') {
+            const child = (window.dashboardData && window.dashboardData.children && window.dashboardData.children[window._selectedChildIndex || 0]) || null;
+            const speechHistoryCount = child && child._speech_history ? child._speech_history.length : 0;
+            if (speechHistoryCount > 3) {
+                window.showPremiumPaywallModal('speech');
+                return false;
+            }
+            return true;
+        }
+
+        if (maxTrials === 0) {
+            window.showPremiumModal();
+            return false;
+        }
+
+        const trialKey = 'bs_trial_' + feature;
+        let used = parseInt(localStorage.getItem(trialKey) || '0');
+        if (used >= maxTrials) {
+            window.showPremiumModal();
+            return false;
+        }
+        return true;
+    };
+
+    window.incrementTrial = function (feature) {
+        // Don't increment trial count for speech analysis as we use actual speech history count
+        if (feature === 'speech') {
+            return;
+        }
+
+        const trialKey = 'bs_trial_' + feature;
+        let used = parseInt(localStorage.getItem(trialKey) || '0');
+        localStorage.setItem(trialKey, used + 1);
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // ── Integrated Payment UI ──────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.showPaymentModal = function(planName, price) {
+        const modal = document.createElement('div');
+        modal.id = 'integrated-payment-modal';
+        modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;">
+            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:400px;box-shadow:0 25px 50px rgba(0,0,0,0.25);padding:2rem;">
+                <h3 style="margin:0 0 1rem;font-size:1.25rem;">Complete Payment</h3>
+                <div style="display:flex;justify-content:space-between;margin-bottom:1rem;font-weight:600;color:var(--slate-700);">
+                    <span>${planName} Plan</span>
+                    <span>$${price}</span>
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;margin-bottom:0.5rem;font-size:0.875rem;">Card Details</label>
+                    <input type="text" placeholder="Card Number" style="width:100%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:0.5rem;outline:none;" />
+                    <div style="display:flex;gap:0.5rem;">
+                        <input type="text" placeholder="MM/YY" style="width:50%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;outline:none;" />
+                        <input type="text" placeholder="CVC" style="width:50%;padding:0.75rem;border:1px solid #e2e8f0;border-radius:8px;outline:none;" />
+                    </div>
+                </div>
+                <button onclick="window.processIntegratedPayment('${planName}')" class="btn btn-gradient" style="width:100%;padding:1rem;">Pay $${price}</button>
+                <button onclick="document.getElementById('integrated-payment-modal').remove()" style="width:100%;background:none;border:none;margin-top:1rem;color:var(--slate-500);cursor:pointer;">Cancel</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+    };
+
+    window.processIntegratedPayment = async function(planName) {
+        const btn = document.querySelector('#integrated-payment-modal .btn-gradient');
+        if(btn) btn.innerHTML = 'Processing...';
+        
+        try {
+            // Find subscription ID for the plan
+            const subRes = await fetch('../../api_payment.php?action=subscriptions');
+            const subData = await subRes.json();
+            const plan = subData.plans.find(p => p.plan_name === planName);
+            
+            if(plan) {
+                const payRes = await fetch('../../api_payment.php?action=process', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ subscription_id: plan.subscription_id, payment_method: 'card' })
+                });
+                const payData = await payRes.json();
+                if(payData.success) {
+                    alert('Payment successful! You are now on the ' + planName + ' plan.');
+                    location.reload();
+                    return;
+                }
+            }
+            alert('Payment failed. Please try again.');
+        } catch(e) {
+            console.error(e);
+            alert('An error occurred during payment.');
+        }
+        document.getElementById('integrated-payment-modal').remove();
+    };
+
+    // ══════════════════════════════════════════════════════════════
+    // ── Appointment Management ─────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.cancelAppt = async function(appointmentId) {
+        if (!confirm('Are you sure you want to cancel this appointment?')) return;
+        
+        const fd = new FormData();
+        fd.append('appointment_id', appointmentId);
+        
+        try {
+            const res = await fetch('../../api_cancel_appointment.php', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                alert('Appointment cancelled.');
+                location.reload();
+            } else {
+                alert(data.error || 'Failed to cancel.');
+            }
+        } catch(e) { console.error(e); }
+    };
+
+    window.rescheduleAppt = function(appointmentId) {
+        const newDate = prompt('Enter the new date and time for rescheduling (e.g. YYYY-MM-DD HH:MM):');
+        if (!newDate) return;
+        
+        const fd = new FormData();
+        fd.append('appointment_id', appointmentId);
+        fd.append('new_date', newDate);
+        
+        fetch('../../api_reschedule_appointment.php', { method: 'POST', body: fd })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Reschedule request sent. Waiting for doctor approval.');
+                location.reload();
+            } else {
+                alert(data.error || 'Failed to reschedule.');
+            }
+        })
+        .catch(console.error);
+    };
+
+    window.reviewDoctor = function(appointmentId, specialistId, docName) {
+        const rating = prompt('Rate ' + docName + ' from 1 to 5:');
+        if (!rating || rating < 1 || rating > 5) { alert('Invalid rating.'); return; }
+        
+        const comment = prompt('Leave a comment (optional):') || '';
+        
+        fetch('../../api_doctor_review.php?action=submit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ appointment_id: appointmentId, specialist_id: specialistId, rating: parseInt(rating), comment: comment })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert('Review submitted! Thank you.');
+                location.reload();
+            } else {
+                alert(data.error || 'Failed to submit review.');
+            }
+        })
+        .catch(console.error);
+    };
+
+    // ══════════════════════════════════════════════════════════════
     // ── Book Specialist Modal ──────────────────────────────────────
     // ══════════════════════════════════════════════════════════════
     window.bookSpecialist = function (specId, specName, preDate) {
+        if (!window.checkSubscriptionAccess('appointment', 0)) return;
         let existing = document.getElementById('book-modal');
         if (existing) existing.remove();
 

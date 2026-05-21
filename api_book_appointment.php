@@ -24,7 +24,8 @@ $type = $_POST['type'] ?? 'onsite';
 $scheduledAt = $_POST['scheduled_at'] ?? '';
 $paymentMethod = $_POST['payment_method'] ?? 'Cash';
 $comment = trim($_POST['comment'] ?? '');
-$tokenId = trim($_POST['token_id'] ?? $_POST['token_code'] ?? '');
+$tokenId = trim($_POST['token_id'] ?? $_POST['token_code'] ?? '');
+
 $childId = $_POST['child_id'] ?? null;
 
 // Pre-consultation intake (JSON string)
@@ -70,7 +71,8 @@ try {
     // Token validation — apply 100% discount if valid token
     if ($tokenId) {
         $tokenStmt = $connect->prepare("SELECT token_id, parent_id, child_id, discount_amount, status FROM appointment_tokens WHERE token_id = ? AND status = 'available'");
-        $tokenStmt->execute([$tokenId]);
+        $tokenStmt->execute([$tokenId]);
+
         $token = $tokenStmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$token) {
@@ -109,7 +111,8 @@ try {
 
     $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, 'Scheduled', ?, ?, ?)");
     $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
-    $appointmentId = $connect->lastInsertId();
+    $appointmentId = $connect->lastInsertId();
+
 
     // 3. Mark token as used
     if ($tokenUsed && isset($token)) {

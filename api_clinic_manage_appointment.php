@@ -68,12 +68,24 @@ try {
         case 'reschedule':
             $newDate = $input['new_date'] ?? '';
             if (!$newDate) throw new Exception("New date is required for rescheduling.");
-            
+
             $stmt = $connect->prepare("UPDATE appointment SET scheduled_at = ?, status = 'Scheduled' WHERE appointment_id = ?");
             $stmt->execute([$newDate, $appointmentId]);
-            
+
             $notificationTitle = "Appointment Rescheduled";
             $notificationMessage = "Your appointment has been rescheduled to " . date('M j, Y g:i A', strtotime($newDate)) . ".";
+            break;
+
+        case 'reject':
+            $stmt = $connect->prepare("UPDATE appointment SET status = 'Refunded' WHERE appointment_id = ?");
+            $stmt->execute([$appointmentId]);
+
+            // Mark the corresponding payment as Refunded
+            $stmtP = $connect->prepare("UPDATE payment SET status = 'refunded' WHERE payment_id = (SELECT payment_id FROM appointment WHERE appointment_id = ?)");
+            $stmtP->execute([$appointmentId]);
+
+            $notificationTitle = "Appointment Refunded";
+            $notificationMessage = "The doctor was unable to reschedule your appointment. Your funds have been credited back/refunded.";
             break;
 
         default:

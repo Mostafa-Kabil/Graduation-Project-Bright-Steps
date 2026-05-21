@@ -702,6 +702,9 @@ function viewAppointmentDetails(id) {
                 ${apt.status === 'pending' ? `
                     <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);" onclick="manageAppointment(${apt.appointment_id}, 'approve')">Approve Appointment</button>
                 ` : ''}
+                ${apt.status === 'Pending Reschedule' ? `
+                    <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #ef4444; background: white; color: #ef4444; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="manageAppointment(${apt.appointment_id}, 'reject')">Reject & Refund</button>
+                ` : ''}
                 <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #3b82f6; background: white; color: #3b82f6; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="showRescheduleModal(${apt.appointment_id})">Reschedule</button>
                 <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #ef4444; background: white; color: #ef4444; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="manageAppointment(${apt.appointment_id}, 'cancel')">Cancel Appointment</button>
             </div>

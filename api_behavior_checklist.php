@@ -357,7 +357,7 @@ switch ($action) {
             exit();
         }
 
-        $child = verifyChild($connect, $childId, $parentId);
+        $child = verifyChildChecklist($connect, $childId, $parentId);
         if (!$child) {
             http_response_code(404);
             echo json_encode(['error' => 'Child not found or access denied']);

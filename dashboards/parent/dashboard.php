@@ -130,14 +130,14 @@ if ($parentId) {
 
     // Appointments
     try {
-        $sql = "SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
+        $sql = "SELECT a.appointment_id, a.specialist_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
                        s.first_name AS doc_fname, s.last_name AS doc_lname, s.specialization,
                        c.clinic_name, c.location AS clinic_location
                 FROM appointment a
                 INNER JOIN specialist s ON a.specialist_id = s.specialist_id
                 INNER JOIN clinic c ON s.clinic_id = c.clinic_id
-                WHERE a.parent_id = :parent_id AND a.scheduled_at >= NOW()
-                ORDER BY a.scheduled_at ASC LIMIT 10";
+                WHERE a.parent_id = :parent_id
+                ORDER BY a.scheduled_at DESC";
         $stmt = $connect->prepare($sql);
         $stmt->execute(['parent_id' => $parentId]);
         $dashboardData['appointments'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -605,28 +605,12 @@ if ($parentId) {
     <script src="../../scripts/language-toggle.js?v=5"></script>
     <script src="../../scripts/navigation.js?v=3"></script>
     <script src="dashboard.js?t=<?php echo time(); ?>"></script>
-    <script>
-        // Inline bootstrap fallback
-        (function() {
-            var el = document.getElementById('dashboard-content');
-            if (!el) return;
-            // Check if content already loaded by dashboard.js bootstrap
-            if (el.innerHTML.trim() !== '' && !el.innerHTML.includes('Content will be loaded')) {
-                return; // dashboard.js already handled it
-            }
-            // dashboard.js bootstrap didn't run - call hoisted functions directly
-            try {
-                if (typeof window._dashboardInitNav === 'function') {
-                    window._dashboardInitNav();
-                    window._dashboardSwitchView('home');
-                } else {
-                    el.innerHTML = '<div style="padding:2rem;color:red;font-size:1.2rem;">ERROR: initNav function not found.</div>';
-                }
-            } catch(e) {
-                el.innerHTML = '<div style="padding:2rem;color:red;font-size:1.2rem;"><strong>Error:</strong> ' + e.message + '</div>';
-            }
-        })();
-    </script>
+    <!--
+        The inline bootstrap fallback has been removed because dashboard.js
+        now handles its own initialization and error handling properly.
+        Keeping this caused a race condition where it checked for functions
+        before they were available.
+    -->
     <script src="../../scripts/chatbot.js"></script>
     <script>
         // Dashboard sidebar toggle for mobile
