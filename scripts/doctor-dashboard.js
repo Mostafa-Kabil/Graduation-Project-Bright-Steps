@@ -1396,10 +1396,9 @@ function submitDrProfileForm(e) {
         }).catch(()=>showToast('Connection error','error'));
     }
 
-    const bio = (document.getElementById('dd-bio')?.value||'').trim();
     fetch('dr-settings.php?ajax=1&action=save_profile', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({first_name, last_name, email, phone, specialization, experience_years, certificate_of_experience})
+        body: JSON.stringify({first_name, last_name, email, phone, specialization, experience_years, certificate_of_experience, bio})
     }).then(r=>r.json()).then(res => {
         if (res.success) showToast('Profile saved successfully!','success');
         else showToast(res.error||'Save failed','error');

@@ -51,7 +51,8 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_conversations') {
             ':uid6' => $userId,
             ':uid7' => $userId
         ]);
-        echo json_encode(['success' => true, 'conversations' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        $conversations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'data' => $conversations, 'conversations' => $conversations]);
     } catch (PDOException $e) {
         echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
     }
@@ -106,6 +107,7 @@ try {
 
     echo json_encode([
         'success' => true,
+        'data' => $messages,
         'messages' => $messages
     ]);
 } catch (PDOException $e) {

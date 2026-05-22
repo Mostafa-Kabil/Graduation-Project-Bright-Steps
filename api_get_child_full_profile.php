@@ -55,78 +55,95 @@ try {
     }
 
     // 2. Growth Records
-    $growthStmt = $connect->prepare("
-        SELECT height, weight, head_circumference, recorded_at 
-        FROM growth_record 
-        WHERE child_id = :child_id 
-        ORDER BY recorded_at DESC LIMIT 5
-    ");
-    $growthStmt->execute([':child_id' => $childId]);
-    $growth_records = $growthStmt->fetchAll(PDO::FETCH_ASSOC);
+    $growth_records = [];
+    try {
+        $growthStmt = $connect->prepare("
+            SELECT height, weight, head_circumference, recorded_at 
+            FROM growth_record 
+            WHERE child_id = :child_id 
+            ORDER BY recorded_at DESC LIMIT 5
+        ");
+        $growthStmt->execute([':child_id' => $childId]);
+        $growth_records = $growthStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
 
     // Milestones
-    $milestoneStmt = $connect->prepare("
-        SELECT m.title, m.category, cm.achieved_at 
-        FROM child_milestones cm 
-        JOIN milestones m ON cm.milestone_id = m.milestone_id 
-        WHERE cm.child_id = :child_id 
-        ORDER BY cm.achieved_at DESC LIMIT 10
-    ");
-    $milestoneStmt->execute([':child_id' => $childId]);
-    $milestones = $milestoneStmt->fetchAll(PDO::FETCH_ASSOC);
+    $milestones = [];
+    try {
+        $milestoneStmt = $connect->prepare("
+            SELECT m.title, m.category, cm.achieved_at 
+            FROM child_milestones cm 
+            JOIN milestones m ON cm.milestone_id = m.milestone_id 
+            WHERE cm.child_id = :child_id 
+            ORDER BY cm.achieved_at DESC LIMIT 10
+        ");
+        $milestoneStmt->execute([':child_id' => $childId]);
+        $milestones = $milestoneStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
 
     // Appointments
-    $aptStmt = $connect->prepare("
-        SELECT status, type, scheduled_at 
-        FROM appointment 
-        WHERE child_id = :child_id 
-        ORDER BY scheduled_at DESC LIMIT 5
-    ");
-    $aptStmt->execute([':child_id' => $childId]);
-    $appointments = $aptStmt->fetchAll(PDO::FETCH_ASSOC);
+    $appointments = [];
+    try {
+        $aptStmt = $connect->prepare("
+            SELECT status, type, scheduled_at 
+            FROM appointment 
+            WHERE parent_id = :parent_id 
+            ORDER BY scheduled_at DESC LIMIT 5
+        ");
+        $aptStmt->execute([':parent_id' => $child['parent_id']]);
+        $appointments = $aptStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
 
     // 3. Speech Analysis (latest)
-    $speechStmt = $connect->prepare("
-        SELECT sa.transcript, sa.vocabulary_score, sa.clarify_score, sa.analyzed_at
-        FROM speech_analysis sa
-        JOIN voice_sample vs ON sa.sample_id = vs.sample_id
-        WHERE vs.child_id = :child_id
-        ORDER BY sa.analyzed_at DESC LIMIT 5
-    ");
-    $speechStmt->execute([':child_id' => $childId]);
-    $speech = $speechStmt->fetchAll(PDO::FETCH_ASSOC);
+    $speech = [];
+    try {
+        $speechStmt = $connect->prepare("
+            SELECT sa.transcript, sa.vocabulary_score, sa.clarify_score, sa.analyzed_at
+            FROM speech_analysis sa
+            JOIN voice_sample vs ON sa.sample_id = vs.sample_id
+            WHERE vs.child_id = :child_id
+            ORDER BY sa.analyzed_at DESC LIMIT 5
+        ");
+        $speechStmt->execute([':child_id' => $childId]);
+        $speech = $speechStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
 
     // 4. Motor/Behavior Data
-    $behaviorStmt = $connect->prepare("
-        SELECT b.behavior_type, b.behavior_details, cb.frequency, cb.severity, cb.recorded_at, bc.category_name
-        FROM child_exhibited_behavior cb
-        JOIN behavior b ON cb.behavior_id = b.behavior_id
-        JOIN behavior_category bc ON b.category_id = bc.category_id
-        WHERE cb.child_id = :child_id
-        ORDER BY cb.recorded_at DESC LIMIT 20
-    ");
-    $behaviorStmt->execute([':child_id' => $childId]);
-    $behaviors = $behaviorStmt->fetchAll(PDO::FETCH_ASSOC);
+    $behaviors = [];
+    try {
+        $behaviorStmt = $connect->prepare("
+            SELECT b.behavior_type, b.behavior_details, cb.frequency, cb.severity, cb.recorded_at, bc.category_name
+            FROM child_exhibited_behavior cb
+            JOIN behavior b ON cb.behavior_id = b.behavior_id
+            JOIN behavior_category bc ON b.category_id = bc.category_id
+            WHERE cb.child_id = :child_id
+            ORDER BY cb.recorded_at DESC LIMIT 20
+        ");
+        $behaviorStmt->execute([':child_id' => $childId]);
+        $behaviors = $behaviorStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
 
     // 5. Doctor Notes
-    // If parent, only show 'shared'. If doctor/specialist, show all (private and shared).
-    $notesQuery = "
-        SELECT dr.doctor_report_id, dr.doctor_notes, dr.recommendations, dr.visibility, dr.report_date,
-               u.first_name as doctor_first_name, u.last_name as doctor_last_name
-        FROM doctor_report dr
-        JOIN users u ON dr.specialist_id = u.user_id
-        WHERE dr.child_id = :child_id
-    ";
-    
-    if ($role === 'parent') {
-        $notesQuery .= " AND dr.visibility = 'shared'";
-    }
-    
-    $notesQuery .= " ORDER BY dr.report_date DESC, dr.created_at DESC";
-    
-    $notesStmt = $connect->prepare($notesQuery);
-    $notesStmt->execute([':child_id' => $childId]);
-    $notes = $notesStmt->fetchAll(PDO::FETCH_ASSOC);
+    $notes = [];
+    try {
+        $notesQuery = "
+            SELECT dr.doctor_report_id, dr.doctor_notes, dr.recommendations, dr.visibility, dr.report_date,
+                   u.first_name as doctor_first_name, u.last_name as doctor_last_name
+            FROM doctor_report dr
+            JOIN users u ON dr.specialist_id = u.user_id
+            WHERE dr.child_id = :child_id
+        ";
+        
+        if ($role === 'parent') {
+            $notesQuery .= " AND dr.visibility = 'shared'";
+        }
+        
+        $notesQuery .= " ORDER BY dr.report_date DESC, dr.created_at DESC";
+        
+        $notesStmt = $connect->prepare($notesQuery);
+        $notesStmt->execute([':child_id' => $childId]);
+        $notes = $notesStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {}
 
     echo json_encode([
         'success' => true,

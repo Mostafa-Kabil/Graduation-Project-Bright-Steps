@@ -592,8 +592,8 @@ if ($isAjax) {
                     SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
                            u.first_name AS parent_first_name, u.last_name AS parent_last_name,
                            p.parent_id,
-                           (SELECT CONCAT(c2.first_name, ' ', c2.last_name)
-                            FROM child c2 WHERE c2.child_id = a.child_id) AS children_names,
+                           (SELECT GROUP_CONCAT(c2.first_name SEPARATOR ', ')
+                            FROM child c2 WHERE c2.parent_id = a.parent_id) AS children_names,
                            (SELECT meeting_link FROM message WHERE appointment_id = a.appointment_id AND meeting_link IS NOT NULL LIMIT 1) AS meeting_link
                     FROM appointment a
                     JOIN parent p ON p.parent_id = a.parent_id
@@ -675,7 +675,7 @@ if ($isAjax) {
                     }
                 } catch (Exception $e) { /* non-critical notification */ }
                 if (isset($input['status'])) {
-                    $pst = $connect->prepare("SELECT p.parent_id AS user_id, a.type, a.specialist_id, a.child_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
+                    $pst = $connect->prepare("SELECT p.parent_id AS user_id, a.type, a.specialist_id FROM appointment a JOIN parent p ON a.parent_id = p.parent_id WHERE a.appointment_id = ?");
                     $pst->execute([$appointment_id]);
                     $apptInfo = $pst->fetch(PDO::FETCH_ASSOC);
                     if ($apptInfo && $apptInfo['user_id']) {
@@ -693,7 +693,7 @@ if ($isAjax) {
                             $mst->execute([
                                 $apptInfo['specialist_id'], 
                                 $uid, 
-                                $apptInfo['child_id'],
+                                null,
                                 $appointment_id, 
                                 $msgContent, 
                                 $meetingLink
