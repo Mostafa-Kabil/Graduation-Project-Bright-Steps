@@ -123,6 +123,13 @@ if ($parentId) {
 
                 $ch['_motorPct'] = $motorTotal > 0 ? round(($motorDone / $motorTotal) * 100) : 0;
             } catch (Exception $e) { $ch['_motorPct'] = 0; }
+
+            // Activities completed
+            try {
+                $s9 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = :cid AND is_completed = 1");
+                $s9->execute(['cid' => $ch['child_id']]);
+                $ch['activities_completed'] = (int)$s9->fetchColumn();
+            } catch (Exception $e) { $ch['activities_completed'] = 0; }
         }
         unset($ch);
     } catch (Exception $e) { $children = []; }

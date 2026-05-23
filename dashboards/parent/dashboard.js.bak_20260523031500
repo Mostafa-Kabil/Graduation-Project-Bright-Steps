@@ -22,7 +22,7 @@
         if (!navContainer) return;
 
         navContainer.innerHTML = navItems.map(item => {
-            const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
+            const isPremium = window._isPremium || false;
             const needsPremium = (item.id === 'speech' || item.id === 'motor');
             const showLock = needsPremium && !isPremium;
             return `
@@ -401,35 +401,78 @@
         if (sub.plan_name === 'Premium') return true;
 
         if (feature === 'clinic') {
-            // Clinic is Premium Only (if we wanted it locked, but user wants it open. Wait, we removed this check from switchView anyway)
-            return true;
+            // Clinic is Premium Only
+            showPremiumPaywallModal('Clinic Consultations', 'Unlimited access to our network of specialists, online and onsite.');
+            return false;
         }
 
         if (!child) return true; // Let them get to profile first
 
         if (feature === 'speech') {
+            // 3 Free Trials
             try {
                 const res = await fetch(`../../api_speech_history.php?child_id=${child.child_id}`);
                 const data = await res.json();
                 const count = (data.analyses || []).length;
-                localStorage.setItem('bs_trial_speech', count);
-            } catch (e) {}
+                if (count >= limit) {
+                    showPremiumPaywallModal('AI Speech Analysis', 'You\'ve reached your free limit of 3 analyses. Upgrade to Premium for unlimited AI insights.');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Trial check failed:', e);
+            }
         }
 
-
-        // Also check localStorage if they used trials via the button
-        if (window.checkSubscriptionAccess) {
-            if (!window.checkSubscriptionAccess(feature, limit)) {
-                return false;
+        if (feature === 'motor') {
+            // 1 Free Trial
+            try {
+                const res = await fetch(`../../api_motor.php?action=list&child_id=${child.child_id}`);
+                const data = await res.json();
+                const count = (data.milestones || []).length;
+                if (count >= limit) {
+                    showPremiumPaywallModal('Motor Skill Tracking', 'You\'ve reached your free limit. Upgrade to Premium to track all developmental milestones.');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Trial check failed:', e);
             }
         }
 
         return true;
-
-        return true;
     }
 
+    function showPremiumPaywallModal(featureName, featureDesc) {
+        let existing = document.getElementById('premium-paywall-modal');
+        if (existing) existing.remove();
 
+        const modal = document.createElement('div');
+        modal.id = 'premium-paywall-modal';
+        modal.innerHTML = `
+            <div id="paywall-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='paywall-overlay')document.getElementById('premium-paywall-modal').remove()">
+                <div style="background:var(--surface-light,#fff);border-radius:32px;padding:3rem;max-width:500px;width:100%;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
+                    <div style="width:80px;height:80px;background:linear-gradient(135deg,#fde047,#f59e0b);border-radius:20px;margin:0 auto 1.5rem;display:flex;align-items:center;justify-content:center;font-size:2.5rem;box-shadow:0 10px 20px rgba(245,158,11,0.3);">💎</div>
+                    <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Unlock Premium Access</h2>
+                    <p style="color:var(--slate-500);margin-bottom:2rem;line-height:1.6;">To access <strong>${featureName}</strong>, upgrade to our Premium Plan. ${featureDesc}</p>
+
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:20px;padding:1.5rem;margin-bottom:2rem;text-align:left;">
+                        <h4 style="font-size:0.9rem;font-weight:700;color:var(--slate-900);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Premium Features:
+                        </h4>
+                        <ul style="list-style:none;padding:0;margin:0;font-size:0.85rem;color:var(--slate-600);line-height:1.8;">
+                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Unlimited AI Speech Reports</li>
+                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Full Motor Skills Tracking</li>
+                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Priority Doctor Consultations</li>
+                            <li style="display:flex;align-items:start;gap:0.5rem;"><span>✓</span> Detailed Development Insights</li>
+                        </ul>
+                    </div>
+
+                    <button onclick="triggerPaymentUI('premium_subscription')" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;font-weight:700;border-radius:14px;box-shadow:0 10px 20px rgba(99,102,241,0.3);">Upgrade Now</button>
+                    <button onclick="document.getElementById('premium-paywall-modal').remove()" style="display:block;width:100%;margin-top:1rem;background:none;border:none;color:var(--slate-400);cursor:pointer;font-size:0.85rem;font-weight:500;">Maybe Later</button>
+                </div>
+            </div>`;
+        modal.id = 'premium-paywall-modal';
+        document.body.appendChild(modal);
+    }
 
     window.triggerPaymentUI = async function(type, amount = null, targetId = null) {
         let total = amount;
@@ -448,7 +491,7 @@
         modal.id = 'payment-modal';
         modal.innerHTML = `
             <div id="payment-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(10px);z-index:10001;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='payment-overlay')document.getElementById('payment-modal').remove()">
-                <div style="background:#fff;border-radius:32px;padding:2.5rem;max-width:550px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,0.3);animation: slideUpFade 0.3s ease-out;max-height:90vh;overflow-y:auto;">
+                <div style="background:#fff;border-radius:32px;padding:2.5rem;max-width:450px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,0.3);animation: slideUpFade 0.3s ease-out;">
                     <div style="text-align:center;margin-bottom:2rem;">
                         <div style="width:60px;height:60px;background:linear-gradient(135deg,#4f46e5,#818cf8);color:#fff;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1rem;">💳</div>
                         <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Complete Payment</h2>
@@ -545,8 +588,9 @@
 
         // Check subscription limits
         let access = true;
-        if (viewId === 'speech') access = await checkSubscriptionAccess('speech', 3);
-        else if (viewId === 'motor') access = await checkSubscriptionAccess('motor', 3);
+        if (viewId === 'clinic') access = await checkSubscriptionAccess('clinic');
+        else if (viewId === 'speech') access = await checkSubscriptionAccess('speech', 3);
+        else if (viewId === 'motor') access = await checkSubscriptionAccess('motor', 1);
 
         if (!access) return;
 
@@ -589,17 +633,6 @@
         // Post-render hooks
         if (viewId === 'home' || !viewId) {
             loadHomeActivities();
-            // Auto-load checklist so Weekly Plan works
-            var _homeChild = (window.dashboardData || {}).children || [];
-            var _hc = _homeChild[window._selectedChildIndex || 0];
-            if (_hc && _hc.child_id && typeof loadBehaviorChecklist === 'function') {
-                if (!window._behaviorChecklistLoaded) {
-                    window._behaviorChecklistLoaded = true;
-                    loadBehaviorChecklist(_hc.child_id);
-                } else if (typeof generateWeeklyActivities === 'function') {
-                    generateWeeklyActivities(false, false);
-                }
-            }
         }
 
 
@@ -621,8 +654,6 @@
         const children = d.children || [];
         const child = children[window._selectedChildIndex || 0] || children[0] || null;
         if (!child) return;
-
-        if (container) container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--slate-400);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.4rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Refreshing activities...</div>';
 
         try {
             const res = await fetch('../../api_activities.php?action=recommend&child_id=' + child.child_id);
@@ -698,15 +729,14 @@
                             // Generate dynamic image based on article title keywords
                             const words = art.title.split(' ').filter(w => w.length > 3);
                             const keyword = words.length > 0 ? words[0].toLowerCase() : 'toddler';
-                            const gradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
-                            const imgUrl = gradients[i % gradients.length];
+                            const imgUrl = `https://source.unsplash.com/400x300/?${keyword},child`;
 
                             const isRead = window._readArticles.includes(art.title);
                             const readBadgeHtml = isRead ? '<span style="font-size:0.6rem;background:#dcfce7;color:#166534;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;margin-left:0.5rem;position:absolute;top:0.75rem;right:0.75rem;z-index:2;">Read</span>' : '';
 
                             return `<div style="flex:0 0 220px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;position:relative;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.04)'" onclick="openArticleModal(${child.child_id}, ${i}, '${esTitle}', '${esDesc}')">
                                 ${readBadgeHtml}
-                                <div style="height:100px;background:#e2e8f0;background:${imgUrl};"></div>
+                                <div style="height:100px;background:#e2e8f0;background-image:url(${imgUrl});background-size:cover;background-position:center;"></div>
                                 <div style="padding:0.75rem;flex:1;display:flex;flex-direction:column;">
                                     <span class="badge" style="background:#dbeafe;color:#1e40af;font-size:0.6rem;font-weight:700;margin-bottom:0.35rem;align-self:flex-start;">${art.category || 'Article'}</span>
                                     <h4 style="font-weight:700;font-size:0.85rem;color:#1e293b;line-height:1.3;margin:0 0 0.3rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${art.title}</h4>
@@ -885,7 +915,7 @@
                     <div class="dashboard-card">
                         <div class="card-header" style="padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
                             <h3 class="card-title" style="font-size:0.95rem;margin:0;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Activities for ${child.first_name}</h3>
-                            <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Activities" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                            <button onclick="loadHomeActivities()" style="background:none;border:none;color:var(--slate-400);cursor:pointer;padding:0.25rem;" title="Refresh"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg></button>
                         </div>
                         <div class="card-content" id="home-activities-list" style="padding:0.75rem 1.25rem;">
                             <div style="text-align:center;padding:1.5rem;color:var(--slate-400);">
@@ -897,21 +927,13 @@
                     <div class="dashboard-card" style="margin-top:1.5rem;">
                         <div class="card-header" style="padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
                             <h3 class="card-title" style="font-size:0.95rem;margin:0;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>📅 Weekly Plan</h3>
-                            <button onclick="generateWeeklyActivities(true, true)" style="background:linear-gradient(135deg,#10b981,#06b6d4);color:white;border:none;padding:0.3rem 0.75rem;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.25rem;">
+                            <button onclick="generateWeeklyActivities()" style="background:linear-gradient(135deg,#10b981,#06b6d4);color:white;border:none;padding:0.3rem 0.75rem;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.25rem;">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Shuffle
                             </button>
                         </div>
                         <div class="card-content" style="padding:0.75rem 1.25rem;">
                             <div id="weekly-plan-container" style="display:grid;gap:0.75rem;">
-                                ${(window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium') ? 
-                                    '<div style="text-align:center;padding:2rem;color:var(--slate-400);font-size:0.85rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.5rem;display:block;color:var(--slate-300);"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading personalized activities...</div>' :
-                                    `<div style="text-align:center;padding:2.5rem 1.5rem;background:linear-gradient(135deg, #f8fafc, #f1f5f9);border-radius:16px;border:1px dashed #cbd5e1;position:relative;overflow:hidden;">
-                                        <div style="font-size:2.5rem;margin-bottom:1rem;opacity:0.8;">🔒</div>
-                                        <h4 style="margin:0 0 0.5rem;color:#334155;font-weight:700;">Premium Feature</h4>
-                                        <p style="color:#64748b;font-size:0.85rem;margin:0 0 1.25rem;line-height:1.5;">Upgrade to get personalized weekly activity plans tailored to your child's developmental needs.</p>
-                                        <button onclick="window.showPremiumModal('weekly_plan')" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:white;border:none;padding:0.6rem 1.25rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">Unlock Premium</button>
-                                    </div>`
-                                }
+                                <div style="text-align:center;padding:1.5rem;color:var(--slate-500);font-size:0.85rem;">Open the checklist to generate personalized activities</div>
                             </div>
                         </div>
                     </div>
@@ -933,7 +955,7 @@
                                 <h3 class="card-title" style="font-size:0.95rem;margin-bottom:0.15rem;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Weekly Articles & Tips</h3>
                                 <div style="display:flex;align-items:center;gap:0.5rem;">
                                     <div id="article-countdown" style="font-size:0.7rem;color:var(--slate-400);display:flex;align-items:center;gap:0.3rem;"></div>
-                                    <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Articles" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                                    <button onclick="loadHomeActivities()" style="background:none;border:none;color:var(--slate-400);cursor:pointer;padding:0;display:flex;align-items:center;" title="Refresh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg></button>
                                 </div>
                             </div>
                             <a href="../../articles.php" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.8rem;color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);text-decoration:none;font-weight:600;padding:0.45rem 1rem;border-radius:10px;box-shadow:0 2px 8px rgba(99,102,241,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(99,102,241,0.3)'">View All →</a>
@@ -1297,10 +1319,7 @@
         return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-                            Speech Analysis
-                            ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(124,58,237,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_speech') || '0'}/3 Free Trials Used</span>` : ''}
-                        </h1>
+                        <h1 class="dashboard-title">Speech Analysis</h1>
                         <p class="dashboard-subtitle">Track ${child ? child.first_name + "'s" : ''} vocabulary and pronunciation progress</p>
                     </div>
                     <button class="btn btn-gradient" onclick="openSpeechModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;">
@@ -2049,16 +2068,9 @@
         const viewHtml = `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-                            Motor Skills Checklist
-                            ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#f97316,#ea580c);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(249,115,22,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_motor') || '0'}/3 Free Trials Used</span>` : ''}
-                        </h1>
+                        <h1 class="dashboard-title">Motor Skills Checklist</h1>
                         <p class="dashboard-subtitle">Track and evaluate ${name}'s physical development milestones via AI</p>
                     </div>
-                    <button class="btn btn-gradient" onclick="openBehaviorChecklistModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;background:linear-gradient(135deg,#f97316,#ea580c);box-shadow:0 4px 12px rgba(249,115,22,0.3);">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                        Evaluate Milestones
-                    </button>
                 </div>
 
                 <!-- 5-Pillar Summary Cards with Traffic Light Alerts -->
@@ -2265,8 +2277,8 @@
                     <div style="display:flex;gap:1rem;align-items:flex-start;">
                         <div style="font-size:2.5rem;flex-shrink:0;">🤖</div>
                         <div style="flex:1;color:#fff;">
-                            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><div style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);">🧠</div><h4 style="font-weight:800;font-size:1.15rem;margin:0;letter-spacing:0.3px;">Developmental Insights</h4></div>
-                            <div id="ai-feedback-text" style="font-size:1rem;line-height:1.7;margin:0;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.15);">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</div>
+                            <h4 style="font-weight:800;font-size:1.1rem;margin:0 0 0.5rem;letter-spacing:0.5px;text-shadow:0 2px 4px rgba(0,0,0,0.2);">Developmental Insights</h4>
+                            <p id="ai-feedback-text" style="font-size:1rem;line-height:1.7;margin:0;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.15);">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</p>
                         </div>
                     </div>
                 </div>
@@ -2511,7 +2523,7 @@
     };
 
     // ── Behavior Checklist Functions ────────────────────────────────────
-    let _behaviorChecklistData = null; window._behaviorChecklistDataRef = () => _behaviorChecklistData;
+    let _behaviorChecklistData = null;
     let _pillarRadarChart = null; // Store radar chart instance
     let _currentChildId = null; // Store current child ID for activities
 
@@ -2878,20 +2890,7 @@
     }
 
     // Generate Weekly Activities based on lowest scoring pillar (with shuffle) - 5 pillars
-    window.generateWeeklyActivities = function(forceRandom = false, fromUserClick = false) {
-        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
-        if (!isPremium) {
-            if (fromUserClick) window.showPremiumModal('weekly_plan');
-            document.getElementById('weekly-plan-container').innerHTML = `
-                <div style="text-align:center;padding:2.5rem 1.5rem;background:linear-gradient(135deg, #f8fafc, #f1f5f9);border-radius:16px;border:1px dashed #cbd5e1;position:relative;overflow:hidden;">
-                    <div style="font-size:2.5rem;margin-bottom:1rem;opacity:0.8;">🔒</div>
-                    <h4 style="margin:0 0 0.5rem;color:#334155;font-weight:700;">Premium Feature</h4>
-                    <p style="color:#64748b;font-size:0.85rem;margin:0 0 1.25rem;line-height:1.5;">Upgrade to get personalized weekly activity plans tailored to your child's developmental needs.</p>
-                    <button onclick="window.showPremiumModal('weekly_plan')" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:white;border:none;padding:0.6rem 1.25rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">Unlock Premium</button>
-                </div>
-            `;
-            return;
-        }
+    window.generateWeeklyActivities = function(forceRandom = false) {
         if (!_behaviorChecklistData) {
             document.getElementById('weekly-plan-container').innerHTML = `
                 <div style="text-align:center;padding:2rem;color:var(--slate-500,#64748b);font-size:0.9rem;">
@@ -2941,9 +2940,6 @@
             });
         }
 
-        const pillarLabels = { attention: 'Attention', communication: 'Speech', social: 'Social Skills', motor: 'Motor Skills', fine_motor: 'Fine Motor Skills' };
-        const categoryLabel = pillarLabels[weakestPillar] || 'Activity';
-
         // Get activities for weakest pillar (or random if shuffle) - fine_motor uses motor activities
         const activities = activityDatabase[weakestPillar] || activityDatabase.motor;
         const shuffled = activities.sort(() => Math.random() - 0.5).slice(0, 3);
@@ -2963,7 +2959,7 @@
             const esDesc = (act.description || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
             const esReason = 'Materials: ' + materials.replace(/'/g, "\\'").replace(/"/g, "&quot;") + '<br><br>Steps: ' + (act.steps ? act.steps.join(' → ') : "Follow child's lead").replace(/'/g, "\\'").replace(/"/g, "&quot;");
             return `
-            <div onclick="openActivityDetailModal('${esTitle}', '${esDesc}', '${esReason}', '${categoryLabel}', '${colors[i].numBg}', '${colors[i].numColor}')" style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
+            <div onclick="openActivityDetailModal('${esTitle}', '${esDesc}', '${esReason}', 'Activity', '${colors[i].numBg}', '${colors[i].numColor}')" style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
                 <div style="display:flex;align-items:center;gap:1rem;">
                     <div style="width:40px;height:40px;border-radius:8px;background:${colors[i].numBg};display:flex;align-items:center;justify-content:center;font-weight:700;color:${colors[i].numColor};flex-shrink:0;">${i + 1}</div>
                     <div style="flex:1;">
@@ -3375,7 +3371,7 @@
                     const s = stats[pillar];
                     // Calculate percentage based on age expectation
                     const pct = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
-                    const displayPct = Math.max(pct, 8); // Minimum 8% for visibility
+                    const displayPct = Math.max(pct, 5); // Minimum 5% for visibility
                     bar.style.height = displayPct + '%';
                     bar.setAttribute('data-pillar', pillar);
                     bar.setAttribute('data-percent', pct);
@@ -3475,36 +3471,15 @@
 
             // Generate AI analysis based on actual data patterns
             if (status.icon === '🟢') {
-                messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #10b981;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
-                        <span style="background:#10b981;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(16,185,129,0.3);">✓</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
-                        <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
-                    </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.expected} age-expected skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
-                </div>`);
+                messages.push(`✓ ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} demonstrates ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${expectation ? expectation.description + '.' : 'Healthy developmental progress.'}`);
                 analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.expected} age-expected skills` });
             } else if (status.icon === '🟡') {
                 const gap = s.expected - s.achieved;
-                messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #f59e0b;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
-                        <span style="background:#f59e0b;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(245,158,11,0.3);">⚠</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
-                        <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
-                    </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.expected} age-expected skills. ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend targeted play activities.</div>
-                </div>`);
+                messages.push(`⚠ ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} shows ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend: targeted play activities 10-15 min daily.`);
                 analysisPoints.push({ pillar, status: 'developing', detail: `${gap} skills below age expectation; focus area identified` });
             } else {
                 const gap = s.expected - s.achieved;
-                messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #ef4444;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
-                        <span style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(239,68,68,0.3);">✕</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
-                        <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
-                    </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.expected} age-expected skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
-                </div>`);
+                messages.push(`🔴 ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} has ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${gap} skills below expectation. Suggest: pediatric consultation + daily structured activities.`);
                 analysisPoints.push({ pillar, status: 'concern', detail: `Significant gap (${gap} skills); early intervention may benefit` });
             }
         });
@@ -3526,64 +3501,35 @@
 
         let aiSummary = '';
         if (strengths.length >= 3) {
-            aiSummary = `${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
+            aiSummary = `\n\n🌟 Developmental Summary: ${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
         } else if (concerns.length === 0) {
-            aiSummary = `${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
+            aiSummary = `\n\n💪 Developmental Summary: ${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
         } else if (concerns.length <= 1) {
-            aiSummary = `${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
+            aiSummary = `\n\n📋 Developmental Summary: ${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
         } else {
-            aiSummary = `Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
+            aiSummary = `\n\n📋 Developmental Summary: Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
         }
 
         // Combine server feedback with AI analysis
         let finalText = '';
         if (serverFeedback) {
-            finalText = `<div style="background:rgba(255,255,255,0.2);padding:1rem 1.25rem;border-radius:12px;margin-bottom:1.5rem;font-size:0.95rem;font-style:italic;box-shadow:0 4px 12px rgba(0,0,0,0.05);border-left:4px solid #fff;">"${serverFeedback}"</div>`;
+            finalText = serverFeedback + '\n\n';
         }
-        
-        finalText += `<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:1rem;margin-bottom:1.5rem;margin-top:1rem;">
-            ${messages.join('')}
-        </div>`;
-        
-        let aiSummaryHtml = `<div style="background:rgba(0,0,0,0.2);padding:1.5rem;border-radius:16px;margin-bottom:1rem;box-shadow:inset 0 2px 10px rgba(0,0,0,0.1);">
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                <span style="font-size:1.25rem;">📝</span>
-                <strong style="font-size:1.05rem;letter-spacing:0.5px;">Summary</strong>
-            </div>
-            <div style="font-size:0.95rem;line-height:1.6;opacity:0.95;">${aiSummary}</div>
-        </div>`;
-        
-        finalText += aiSummaryHtml;
+        finalText += '📊 AI Developmental Analysis:\n' + messages.join('\n') + aiSummary;
 
         // Add specific recommendations
         if (concerns.length > 0 || developing.length > 0) {
-            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${a.pillar.charAt(0).toUpperCase() + a.pillar.slice(1)}</span>`);
-            finalText += `<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;padding-top:1.5rem;border-top:1px dashed rgba(255,255,255,0.2);">
-                <strong style="font-size:0.95rem;opacity:0.9;">Priority Focus:</strong>
-                ${focusAreas.join('')}
-            </div>`;
+            const focusAreas = [...concerns, ...developing].map(a => a.pillar);
+            finalText += `\n\n🎯 Priority Focus: ${focusAreas.join(', ')} - See Weekly Plan for targeted activities.`;
         }
 
-        el.innerHTML = finalText;
+        el.textContent = finalText;
     }
 
     // ── Auto Weekly Activities (called from updateBehaviorSummary) ────────
     function generateWeeklyActivitiesFromStats(stats) {
         const container = document.getElementById('weekly-plan-container');
         if (!container) return;
-
-        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
-        if (!isPremium) {
-            container.innerHTML = `
-                <div style="text-align:center;padding:2.5rem 1.5rem;background:linear-gradient(135deg, #f8fafc, #f1f5f9);border-radius:16px;border:1px dashed #cbd5e1;position:relative;overflow:hidden;">
-                    <div style="font-size:2.5rem;margin-bottom:1rem;opacity:0.8;">🔒</div>
-                    <h4 style="margin:0 0 0.5rem;color:#334155;font-weight:700;">Premium Feature</h4>
-                    <p style="color:#64748b;font-size:0.85rem;margin:0 0 1.25rem;line-height:1.5;">Upgrade to get personalized weekly activity plans tailored to your child's developmental needs.</p>
-                    <button onclick="window.showPremiumModal('weekly_plan')" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:white;border:none;padding:0.6rem 1.25rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">Unlock Premium</button>
-                </div>
-            `;
-            return;
-        }
 
         const pillars = ['attention', 'communication', 'social', 'motor'];
         let weakestPillar = 'motor';
@@ -3600,27 +3546,20 @@
             }
         });
 
-        const pillarLabels = { attention: 'Attention', communication: 'Speech', social: 'Social Skills', motor: 'Motor Skills', fine_motor: 'Fine Motor Skills' };
-        const categoryLabel = pillarLabels[weakestPillar] || 'Activity';
-
         const activities = (activityDatabase[weakestPillar] || activityDatabase.motor)
             .slice().sort(() => Math.random() - 0.5).slice(0, 3);
         const days = ['Monday', 'Wednesday', 'Friday'];
         const colors = [
             { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', numBg: '#fef3c7', numColor: '#92400e' },
             { bg: 'rgba(59,130,246,0.1)',  border: '#3b82f6',  numBg: '#dbeafe', numColor: '#1e40af' },
-            { bg: 'rgba(10,185,129,0.1)',  border: '#10b981', numBg: '#d1fae5', numColor: '#065f46' }
+            { bg: 'rgba(16,185,129,0.1)',  border: '#10b981', numBg: '#d1fae5', numColor: '#065f46' }
         ];
 
         container.innerHTML = activities.map((act, i) => {
             const materials = act.materials ? act.materials.join(', ') : 'Household items';
             const difficultyColor = act.difficulty === 'Easy' ? '#22c55e' : act.difficulty === 'Medium' ? '#f59e0b' : '#ef4444';
-            const esTitle = act.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            const esDesc = (act.description || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            const esReason = 'Materials: ' + materials.replace(/'/g, "\\'").replace(/"/g, "&quot;") + '<br><br>Steps: ' + (act.steps ? act.steps.join(' → ') : "Follow child's lead").replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            
             return `
-            <div onclick="openActivityDetailModal('${esTitle}', '${esDesc}', '${esReason}', '${categoryLabel}', '${colors[i].numBg}', '${colors[i].numColor}')" style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
+            <div style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};">
                 <div style="display:flex;align-items:center;gap:1rem;">
                     <div style="width:40px;height:40px;border-radius:8px;background:${colors[i].numBg};display:flex;align-items:center;justify-content:center;font-weight:700;color:${colors[i].numColor};flex-shrink:0;">${i + 1}</div>
                     <div style="flex:1;">
@@ -4240,12 +4179,11 @@
 
         return `
         <div class="dashboard-content">
-                <div class="dashboard-header-section" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;">
+                <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title" style="margin-bottom:0.25rem;">Activity Center 🎨</h1>
-                        <p class="dashboard-subtitle" style="margin:0;">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
+                        <h1 class="dashboard-title">Activity Center 🎨</h1>
+                        <p class="dashboard-subtitle">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
-                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('' + childParam + '')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                 </div>
 
                 <!-- Featured Game Banner -->
@@ -4489,14 +4427,7 @@
     window.openArticleModal = function (childId, index, title, summary) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
-        const images = [
-            'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1537655780520-1e392ead81f2?auto=format&fit=crop&q=80&w=600&h=300'
-        ];
-        const randImg = images[(index || 0) % images.length];
+        const randImg = 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600&h=300';
 
         const modal = document.createElement('div');
         modal.id = 'act-modal';
@@ -4523,14 +4454,7 @@
     window.openActivityModal = function (childId, index, title, desc, mat, category) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
-        const images = [
-            'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1472162072942-cd5147eb39bd?auto=format&fit=crop&q=80&w=600&h=300',
-            'https://images.unsplash.com/photo-1485546246426-d0ae38eba581?auto=format&fit=crop&q=80&w=600&h=300'
-        ];
-        const randImg = images[(index || 0) % images.length];
+        const randImg = 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&q=80&w=600&h=300';
 
         const modal = document.createElement('div');
         modal.id = 'act-modal';
@@ -4828,12 +4752,12 @@
                     window._allSpecialists = data.specialists;
 
                     const specVals = [...new Set(data.specialists.map(function(s){ return s.specialization; }).filter(Boolean))];
-                    const locVals  = [...new Set(data.specialists.map(function(s){ return s.clinic_name; }).filter(Boolean))];
+                    const locVals  = [...new Set(data.specialists.map(function(s){ return s.location; }).filter(Boolean))];
 
                     const specF = document.getElementById('spec-filter');
                     const locF  = document.getElementById('loc-filter');
                     if (specF) specF.innerHTML = '<option value="">All Specialties</option>' + specVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
-                    if (locF)  locF.innerHTML  = '<option value="">All Clinics</option>'   + locVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
+                    if (locF)  locF.innerHTML  = '<option value="">All Locations</option>'   + locVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
 
                     window.renderSpecialists();
                 } else {
@@ -4857,7 +4781,7 @@
             const filtered = window._allSpecialists.filter(function(s) {
                 const matchQ = !q || (s.first_name + ' ' + s.last_name + ' ' + (s.clinic_name || '') + ' ' + (s.specialization || '')).toLowerCase().includes(q);
                 const matchS = !sf || s.specialization === sf;
-                const matchL = !lf || s.clinic_name === lf;
+                const matchL = !lf || s.location === lf;
                 return matchQ && matchS && matchL;
             });
 
@@ -5032,7 +4956,7 @@
                                 '<option value="">All Specialties</option>' +
                             '</select>' +
                             '<select id="loc-filter" class="clinic-filter-select" onchange="window.renderSpecialists()">' +
-                                '<option value="">All Clinics</option>' +
+                                '<option value="">All Locations</option>' +
                             '</select>' +
                         '</div>' +
 
@@ -5078,10 +5002,10 @@
         modal.id = 'act-modal';
         modal.innerHTML = `
             <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-                <div style="background:#ffffff;border-radius:16px;width:100%;max-width:750px;display:flex;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out; position:relative; max-height:90vh;">
+                <div style="background:#ffffff;border-radius:16px;width:100%;max-width:750px;display:flex;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out; position:relative;">
                     <button onclick="document.getElementById('act-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:#f1f5f9;border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#64748b;font-weight:bold;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
                     
-                    <div style="width:250px;background:#f8fafc;padding:2.5rem 2rem;display:flex;flex-direction:column;align-items:center;border-right:1px solid #e2e8f0;overflow-y:auto;">
+                    <div style="width:250px;background:#f8fafc;padding:2.5rem 2rem;display:flex;flex-direction:column;align-items:center;border-right:1px solid #e2e8f0;">
                         <img src="${avatar}" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);margin-bottom:1.5rem;" />
                         <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0 0 0.25rem;text-align:center;">Dr. ${s.first_name} ${s.last_name}</h2>
                         <p style="color:var(--blue-600);font-weight:600;font-size:0.9rem;margin:0 0 1.25rem;text-align:center;">${s.specialization || 'Specialist'}</p>
@@ -5090,7 +5014,7 @@
                         </div>
                     </div>
                     
-                    <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;overflow-y:auto;">
+                    <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;">
                         <div style="flex:1;">
                             <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1.5rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Doctor Information</h4>
 
@@ -5114,16 +5038,16 @@
 
                             ${s.bio ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Biography</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.bio + '</p>' : ''}
 
-                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Next Available Slots</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
+                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Availability Calendar</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
                     const startTime = slot.start_time ? slot.start_time.substring(0, 5) : '';
                     const endTime = slot.end_time ? slot.end_time.substring(0, 5) : '';
-                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>' + slot.label + '</span><span>' + startTime + ' to ' + endTime + '</span></div>';
+                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>${slot.label}</span><span>${startTime} to ${endTime}</span></div>';
                 }).join('') + '</div>' : ''}
 
                             ${s.certificate_of_experience ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Education & Certifications</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.certificate_of_experience + '</p>' : ''}
 
                             <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Consultation Tags</h4>
-                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;">
+                            <div style="display:flex;flex-wrap:gap:0.5rem;margin-bottom:1.5rem;">
                                 ${s.consultation_types ? s.consultation_types.split(',').map(tag => '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">' + tag.trim() + '</span>').join('') : '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">On-site</span>'}
                             </div>
 
@@ -5231,7 +5155,23 @@
                         </div>
                     </div>
 
-                    
+                    <!-- Child Profile Card -->
+                    <div class="dashboard-card" style="display: flex; flex-direction: column;">
+                         <div style="height: 120px; background: linear-gradient(135deg, #3b82f620, #93c5fd20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <svg style="width: 3rem; height: 3rem; color: #3b82f6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </div>
+                        <div class="card-content" style="flex: 1;">
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Child Profile</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Basic info, badges & points</p>
+                             <span class="badge badge-blue" style="margin-bottom: 1rem;">Profile Data</span>
+                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-outline btn-sm" style="color:#3b82f6;border-color:#3b82f6;" onclick="openShareReportModal('child-report', ${childId})">📤 Share</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Speech Report Card -->
@@ -5264,7 +5204,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Upload a custom PDF report to share with your doctor</p>
                              <span class="badge" style="background:#fff7ed;color:#ea580c;margin-bottom: 1rem;">Custom Upload</span>
                             <div style="margin-top: 1rem;">
-                                <button class="btn btn-outline btn-sm btn-full" style="color:#f97316;border-color:#f97316;" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}openShareReportModal('uploaded-pdf', ${childId})">📎 Upload & Share</button>
+                                <button class="btn btn-outline btn-sm btn-full" style="color:#f97316;border-color:#f97316;" onclick="openShareReportModal('uploaded-pdf', ${childId})">📎 Upload & Share</button>
                             </div>
                         </div>
                     </div>
@@ -6484,8 +6424,6 @@
         });
     };
 
-    // Show Premium Paywall Modal
-
     // Process integrated payment
     window.processIntegratedPayment = function(e) {
         e.preventDefault();
@@ -6539,6 +6477,90 @@
         }, 1500);
     };
 
+    // Show Premium Paywall Modal
+    window.showPremiumPaywallModal = function(featureName) {
+        const featureDetails = {
+            'appointment': {
+                title: 'Unlimited Appointments',
+                description: 'Access to specialist consultations and clinic visits',
+                icon: '🏥',
+                benefits: [
+                    'Book unlimited specialist appointments',
+                    'Both online and on-site consultations',
+                    'Priority scheduling',
+                    'Comprehensive pediatric care'
+                ]
+            },
+            'speech': {
+                title: 'Advanced Speech Analysis',
+                description: 'Unlimited speech assessments and AI-powered insights',
+                icon: '🗣️',
+                benefits: [
+                    'Unlimited speech recording and analysis',
+                    'Detailed vocabulary and pronunciation reports',
+                    'Speech progress tracking over time',
+                    'AI-powered speech development insights'
+                ]
+            },
+            'motor': {
+                title: 'Complete Motor Skills Tracking',
+                description: 'Full access to motor skills milestones and assessments',
+                icon: '💪',
+                benefits: [
+                    'Unlimited motor skills checklists',
+                    'Both gross and fine motor tracking',
+                    'Developmental progress charts',
+                    'Exportable reports for pediatricians'
+                ]
+            }
+        };
+
+        const details = featureDetails[featureName] || {
+            title: 'Premium Features',
+            description: 'Access to advanced features and unlimited usage',
+            icon: '💎',
+            benefits: [
+                'Unlimited access to all features',
+                'Advanced AI-powered insights',
+                'Priority customer support',
+                'Exportable reports and analytics'
+            ]
+        };
+
+        // Check if modal already exists
+        let existingModal = document.getElementById('premium-paywall-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'premium-paywall-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="padding:2rem;border-bottom:1px solid #e2e8f0;">
+                        <h2 style="margin:0 0 1rem;text-align:center;">Unlock ${details.title}</h2>
+                        <p style="text-align:center;color:#64748b;margin-bottom:1.5rem;">${details.description}</p>
+                        <div style="background:#f8fafc;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+                            <h3 style="margin:0 0 1rem;text-align:center;color:#1e293b;">${details.icon} ${details.title}</h3>
+                            <ul style="text-align:left;max-width:300px;margin:0 auto;padding-left:1.25rem;">
+                                ${details.benefits.map(b => `<li style="margin-bottom:0.5rem;display:flex;align-items:flex-start;"><span style="flex-shrink:0;">• </span><span>${b}</span></li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:1rem;">
+                        <button type="button" onclick="document.getElementById('premium-paywall-modal').remove()" class="btn btn-outline">Not Now</button>
+                        <button type="button" onclick="window.showIntegratedPaymentModal(29.99, 'Premium Monthly Subscription - Access to all premium features including ${details.title.toLowerCase()}', function() { alert('Payment successful! You now have access to premium features.'); location.reload(); })" class="btn btn-gradient">
+                            Upgrade to Premium - $29.99/month
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+    };
 
     window.handleLangChange = function (lang) {
         document.getElementById('lang-en').classList.toggle('active', lang === 'en');
@@ -6985,7 +7007,7 @@
                                 if (prevRec) {
                                     const pdate = new Date(prevRec.recorded_at);
                                     const monthsDiff = (rdate - pdate) / (1000 * 60 * 60 * 24 * 30.44);
-                                    if (monthsDiff > 0.5) { // Minimum half-month gap to avoid velocity spikes
+                                    if (monthsDiff > 0) {
                                         if (r.weight && prevRec.weight) velWeight.push({ x: ageM, y: (r.weight - prevRec.weight) / monthsDiff });
                                         if (r.height && prevRec.height) velHeight.push({ x: ageM, y: (r.height - prevRec.height) / monthsDiff });
                                         if (r.head_circumference && prevRec.head_circumference) velHead.push({ x: ageM, y: (r.head_circumference - prevRec.head_circumference) / monthsDiff });
@@ -7302,12 +7324,6 @@
     window.openAddChildModal = function (childDataOrEmpty) {
         let childData = childDataOrEmpty;
         const children = window.dashboardData?.children || [];
-        
-        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
-        if (!childData && children.length >= 1 && !isPremium) {
-            window.showPremiumModal('');
-            return;
-        }
 
         // Remove existing
         const old = document.getElementById('add-child-modal');
@@ -7592,105 +7608,31 @@
     // ══════════════════════════════════════════════════════════════
     // ── Premium Subscription & Trials ──────────────────────────────
     // ══════════════════════════════════════════════════════════════
-    window.showPremiumModal = function (feature) {
+    window.showPremiumModal = function () {
         let existing = document.getElementById('premium-modal');
         if (existing) existing.remove();
-
-        let title = "Upgrade to Premium";
-        let desc = "Unlock unlimited AI reports, personalized plans, and advanced insights for your child's development.";
-        let icon = "⭐";
-        
-        const maxTrials = 3;
-        const trialKey = feature ? 'bs_trial_' + feature : null;
-        let used = trialKey ? parseInt(localStorage.getItem(trialKey) || '0') : 0;
-        
-        // Safeguard to clear corrupted local storage data from previous bug
-        if (used > maxTrials) {
-            used = 0;
-            if (trialKey) localStorage.setItem(trialKey, '0');
-        }
-        
-        let left = Math.max(0, maxTrials - used);
-
-        if (feature === 'motor') {
-            title = "Unlock Motor Skills";
-            desc = "Track your child's physical development milestones and generate therapist-ready reports using AI.";
-            icon = "🏃";
-        } else if (feature === 'speech') {
-            title = "Unlock Speech Analysis";
-            desc = "Analyze your child's speech patterns and vocabulary development using advanced AI.";
-            icon = "🗣️";
-        } else if (feature === 'weekly_plan') {
-            title = "Unlock Weekly Plans";
-            desc = "Get personalized, AI-curated weekly activity plans tailored to your child's development needs.";
-            icon = "📅";
-        } else if (feature === 'growth') {
-            title = "Growth Analysis";
-            desc = "Track your child's physical growth percentiles against WHO standards using AI.";
-            icon = "📈";
-        }
-
-
-        
-        // Trial section HTML
-        let trialHtml = '';
-        if (feature === 'motor' || feature === 'speech' || feature === 'growth') {
-            trialHtml = `
-            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">
-                <div>
-                    <div style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">ACTIVE TRIAL USAGE</div>
-                    <div style="font-size:1rem;font-weight:700;color:#1e293b;">${left} of ${maxTrials} free trials remaining</div>
-                </div>
-                <div style="background:#e0e7ff;color:#4f46e5;font-size:0.75rem;font-weight:700;padding:0.4rem 0.75rem;border-radius:999px;">7-Day Free Trial</div>
-            </div>
-            `;
-        }
-
-        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium</button>`;
-        
-        if ((feature === 'motor' || feature === 'speech' || feature === 'growth') && left > 0) {
-            actionHtml += `<button onclick="document.getElementById('premium-modal').remove(); window.incrementTrial('${feature}'); if('${feature}'==='motor') switchView('motor'); else if('${feature}'==='speech') switchView('speech'); else switchView('growth');" style="width:100%;padding:1.1rem;background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">Use Free Trial (${left} left)</button>`;
-        } else {
-             actionHtml += `<button onclick="document.getElementById('premium-modal').remove()" style="width:100%;padding:1rem;background:none;color:#64748b;border:none;font-weight:600;font-size:0.95rem;cursor:pointer;">Maybe Later</button>`;
-        }
 
         const modal = document.createElement('div');
         modal.id = 'premium-modal';
         modal.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:480px;box-shadow:0 25px 50px rgba(0,0,0,0.3);overflow:hidden;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
-                <div style="background:linear-gradient(135deg, #7c3aed, #4f46e5);padding:2.5rem 2rem;text-align:center;">
-                    <div style="font-size:3rem;margin-bottom:1rem;line-height:1;">${icon}</div>
-                    <h2 style="font-size:1.75rem;font-weight:800;color:#ffffff !important;margin:0 0 0.75rem;">${title}</h2>
-                    <p style="margin:0;font-size:0.95rem;line-height:1.5;opacity:0.9;color:#ffffff !important;">${desc}</p>
-                </div>
-                <div style="padding:2rem;">
-                    <div style="margin-bottom:1.5rem;">
-                        <div style="font-weight:700;color:#1e293b;margin-bottom:1rem;">Premium Benefits:</div>
-                        <div style="display:flex;flex-direction:column;gap:0.75rem;">
-                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                <span style="color:#475569;font-size:0.95rem;">Unlimited AI motor skills assessment</span>
-                            </div>
-                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                <span style="color:#475569;font-size:0.95rem;">Automatic WHO/CDC milestone tracking</span>
-                            </div>
-                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                <span style="color:#475569;font-size:0.95rem;">Downloadable therapist reports (PDF)</span>
-                            </div>
-                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                <span style="color:#475569;font-size:0.95rem;">Weekly tailored physical activity plans</span>
-                            </div>
-                        </div>
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;text-align:center;padding:2.5rem 2rem;">
+                <div style="font-size:3.5rem;margin-bottom:1rem;">⭐</div>
+                <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin:0 0 0.5rem;">Upgrade to Premium</h2>
+                <p style="color:var(--slate-500);margin:0 0 2rem;font-size:1rem;">Unlock unlimited AI reports, doctor consultations, and advanced insights.</p>
+                <div style="text-align:left;background:var(--blue-50);padding:1.5rem;border-radius:16px;margin-bottom:2rem;border:1px solid var(--blue-100);">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Unlimited Speech Analysis</span>
                     </div>
-                    ${trialHtml}
-                    <div>
-                        ${actionHtml}
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Unlimited Motor Skills Tracking</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Book Doctor Appointments</span>
                     </div>
                 </div>
+                <button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;font-weight:700;">Upgrade for $29.99/mo</button>
+                <button onclick="document.getElementById('premium-modal').remove()" style="background:none;border:none;color:var(--slate-400);margin-top:1rem;font-weight:600;cursor:pointer;">Maybe Later</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -7700,30 +7642,32 @@
         const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
         if (isPremium) return true;
 
-        if (maxTrials === 0) {
-            window.showPremiumModal(feature);
-            return false;
-        }
-
-        const trialKey = 'bs_trial_' + feature;
-        let used = parseInt(localStorage.getItem(trialKey) || '0');
-        
-        // Always show the modal for free users unless they've clicked 'Use Free Trial' this session
-        if (window['_access_granted_' + feature]) {
-            if (used >= maxTrials) {
-                window.showPremiumModal(feature);
+                // Special handling for speech analysis: check actual speech history count
+        if (feature === 'speech') {
+            const child = (window.dashboardData && window.dashboardData.children && window.dashboardData.children[window._selectedChildIndex || 0]) || null;
+            const speechHistoryCount = child && child._speech_history ? child._speech_history.length : 0;
+            if (speechHistoryCount > 3) {
+                window.showPremiumPaywallModal('speech');
                 return false;
             }
             return true;
         }
 
-        window.showPremiumModal(feature);
-        return false;
+        if (maxTrials === 0) {
+            window.showPremiumModal();
+            return false;
+        }
+
+        const trialKey = 'bs_trial_' + feature;
+        let used = parseInt(localStorage.getItem(trialKey) || '0');
+        if (used >= maxTrials) {
+            window.showPremiumModal();
+            return false;
+        }
+        return true;
     };
 
     window.incrementTrial = function (feature) {
-        window['_access_granted_' + feature] = true;
-        
         // Don't increment trial count for speech analysis as we use actual speech history count
         if (feature === 'speech') {
             return;
@@ -7863,6 +7807,7 @@
     // ── Book Specialist Modal ──────────────────────────────────────
     // ══════════════════════════════════════════════════════════════
     window.bookSpecialist = function (specId, specName, preDate) {
+        if (!window.checkSubscriptionAccess('appointment', 0)) return;
         let existing = document.getElementById('book-modal');
         if (existing) existing.remove();
 
@@ -7891,52 +7836,22 @@
                         <option value="online">Online (Video Session)</option>
                     </select>
                 </div>
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Available Slots</label>
-                    <select id="bk-slot" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;">
-                        ${(function(){
-                            let slotOptions = '<option value="">No available slots</option>';
-                            if (window._allSpecialists) {
-                                const spec = window._allSpecialists.find(s => s.specialist_id == specId);
-                                if (spec && spec.availability) {
-                                    try {
-                                        const slots = spec.availability.filter(s => s.available);
-                                        if (slots && slots.length > 0) {
-                                            let allOptions = [];
-                                            slots.forEach(s => {
-                                                let currentStr = s.start_time;
-                                                const endStr = s.end_time;
-                                                const dur = parseInt(s.slot_duration) || 30;
-                                                
-                                                while (currentStr < endStr) {
-                                                    // Parse time string to format it nicely (e.g. 09:00 AM)
-                                                    let [h, m] = currentStr.split(':').map(Number);
-                                                    let ampm = h >= 12 ? 'PM' : 'AM';
-                                                    let dispH = h % 12 || 12;
-                                                    let minStr = m < 10 ? '0' + m : m;
-                                                    let formattedTime = `${dispH}:${minStr} ${ampm}`;
-                                                    
-                                                    allOptions.push(`<option value="${s.date}|${currentStr}">${s.label} at ${formattedTime}</option>`);
-                                                    
-                                                    // Add duration
-                                                    m += dur;
-                                                    h += Math.floor(m / 60);
-                                                    m = m % 60;
-                                                    
-                                                    // Format back to string
-                                                    currentStr = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m) + ':00';
-                                                }
-                                            });
-                                            if (allOptions.length > 0) {
-                                                slotOptions = allOptions.join('');
-                                            }
-                                        }
-                                    } catch(e){}
-                                }
-                            }
-                            return slotOptions;
-                        })()}
-                    </select>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                    <div>
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Date</label>
+                        <input type="date" id="bk-date" min="${minDate}" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Time</label>
+                        <select id="bk-time" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;">
+                            <option value="09:00">09:00 AM</option>
+                            <option value="10:00">10:00 AM</option>
+                            <option value="11:30">11:30 AM</option>
+                            <option value="13:00">01:00 PM</option>
+                            <option value="15:00">03:00 PM</option>
+                            <option value="16:30">04:30 PM</option>
+                        </select>
+                    </div>
                 </div>
                 <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Notes for Specialist (Optional)</label>
@@ -7999,17 +7914,7 @@
         document.body.appendChild(modal);
 
         // Pre-fill date if a slot was pre-selected
-        if (typeof preDate !== 'undefined' && preDate) { 
-            const el = document.getElementById('bk-slot'); 
-            if (el) { 
-                for (let i = 0; i < el.options.length; i++) {
-                    if (el.options[i].value.startsWith(preDate)) {
-                        el.selectedIndex = i;
-                        break;
-                    }
-                }
-            } 
-        }
+        if (typeof preDate !== 'undefined' && preDate) { var el = document.getElementById('bk-date'); if (el) { el.value = preDate; el.min = preDate; } }
 
         window.goToBookingStep1 = function () {
             document.getElementById('bk-step-1').style.display = 'block';
@@ -8018,8 +7923,9 @@
         };
 
         window.goToBookingStep2 = function () {
-            const slotVal = document.getElementById('bk-slot').value;
-            if (!slotVal) { showToast("Please select an available slot.", "error"); return; }
+            const d = document.getElementById('bk-date').value;
+            const t = document.getElementById('bk-time').value;
+            if (!d || !t) { alert("Please select a valid date and time."); return; }
 
             document.getElementById('bk-step-1').style.display = 'none';
             document.getElementById('bk-step-2').style.display = 'block';
@@ -8100,10 +8006,8 @@
             btn.innerHTML = 'Processing...';
 
             const type = document.getElementById('bk-type').value;
-            const slotVal = document.getElementById('bk-slot').value;
-            const parts = slotVal.split('|');
-            const date = parts[0];
-            const time = parts[1];
+            const date = document.getElementById('bk-date').value;
+            const time = document.getElementById('bk-time').value;
             const comment = document.getElementById('bk-comment').value;
             const method = document.querySelector('input[name="bk-payment"]:checked').value;
             const tokenSelect = document.getElementById('bk-token');
@@ -8869,9 +8773,9 @@ window.checkMemoryMatchCooldown = async function(childId) {
                 const mmBtn = document.getElementById('memory-match-btn');
                 if (mmBtn) {
                     const daysLeft = Math.ceil(3 - daysSince);
-                    mmBtn.innerHTML = '⏳ Cooldown (' + daysLeft + ' day' + (daysLeft>1?'s':'') + ')';
-                    mmBtn.style.background = 'linear-gradient(135deg,#cbd5e1,#94a3b8)';
-                    mmBtn.style.color = '#fff';mmBtn.style.fontSize = '1rem';mmBtn.style.padding = '1rem 2rem';
+                    mmBtn.innerHTML = '? Cooldown (' + daysLeft + ' day' + (daysLeft>1?'s':'') + ')';
+                    mmBtn.style.background = '#e2e8f0';
+                    mmBtn.style.color = '#64748b';
                     mmBtn.onclick = null;
                     mmBtn.style.boxShadow = 'none';
                     mmBtn.style.cursor = 'not-allowed';
@@ -8881,68 +8785,3 @@ window.checkMemoryMatchCooldown = async function(childId) {
     } catch(e) {}
 };
 
-
-// ── Activity Detail Modal (for Today's Activities & Weekly Plan clicks) ──
-window.openActivityDetailModal = function(title, description, reason, category, bgColor, textColor) {
-    let existing = document.getElementById('activity-detail-modal');
-    if (existing) existing.remove();
-    
-    let timeEstimate = '15-20 mins';
-    if (category.toLowerCase().includes('motor')) timeEstimate = '20-30 mins';
-    if (category.toLowerCase().includes('speech')) timeEstimate = '10-15 mins';
-
-    const modal = document.createElement('div');
-    modal.id = 'activity-detail-modal';
-    modal.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
-                <div style="background:linear-gradient(135deg,${bgColor || '#dbeafe'},${textColor ? textColor+'20' : '#ede9fe'});padding:2.5rem 2.5rem 2rem;position:relative;border-bottom:1px solid rgba(0,0,0,0.05);">
-                    <button onclick="document.getElementById('activity-detail-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.8);border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:#64748b;backdrop-filter:blur(4px);">✕</button>
-                    <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:1rem;">
-                        <div style="width:64px;height:64px;background:#ffffff;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 10px 25px ${textColor ? textColor+'30' : 'rgba(0,0,0,0.1)'};">🎯</div>
-                        <div>
-                            <span style="display:inline-block;padding:0.35rem 0.85rem;background:rgba(255,255,255,0.8);border-radius:20px;font-size:0.8rem;font-weight:800;color:${textColor || '#1e40af'};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.75rem;box-shadow:0 2px 8px rgba(0,0,0,0.05);">${category || 'Activity'}</span>
-                            <h2 style="margin:0;font-size:1.75rem;font-weight:800;color:#1e293b;line-height:1.3;">${title}</h2>
-                        </div>
-                    </div>
-                </div>
-                <div style="padding:2rem 2.5rem;overflow-y:auto;flex:1;">
-                    <div style="display:flex;gap:1rem;margin-bottom:1.75rem;">
-                        <div style="flex:1;background:#f8fafc;padding:1rem;border-radius:12px;display:flex;align-items:center;gap:0.75rem;border:1px solid #e2e8f0;">
-                            <span style="font-size:1.5rem;">⏱️</span>
-                            <div>
-                                <div style="font-size:0.75rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Duration</div>
-                                <div style="font-size:0.95rem;font-weight:800;color:#1e293b;">${timeEstimate}</div>
-                            </div>
-                        </div>
-                        <div style="flex:1;background:#f8fafc;padding:1rem;border-radius:12px;display:flex;align-items:center;gap:0.75rem;border:1px solid #e2e8f0;">
-                            <span style="font-size:1.5rem;">🧠</span>
-                            <div>
-                                <div style="font-size:0.75rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Focus</div>
-                                <div style="font-size:0.95rem;font-weight:800;color:#1e293b;">Development</div>
-                            </div>
-                        </div>
-                    </div>
-                    ${description ? '<div style="margin-bottom:1.75rem;background:#f8fafc;padding:1.5rem;border-radius:16px;border-left:4px solid #6366f1;"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#334155;margin:0 0 0.75rem;font-size:1.05rem;"><span>📝</span> Description</h4><p style="color:#475569;line-height:1.8;margin:0;font-size:0.95rem;">' + description + '</p></div>' : ''}
-                    ${(() => {
-                        if (reason && reason.includes('Materials:') && reason.includes('Steps:')) {
-                            let parts = reason.split('<br><br>Steps:');
-                            let materialsStr = parts[0].replace('Materials:', '').trim();
-                            let stepsStr = parts[1].trim();
-                            let stepsArray = stepsStr.split('→').map(s => s.trim());
-                            let stepsList = stepsArray.map((s, idx) => '<li style="margin-bottom:1rem;display:flex;gap:1rem;align-items:flex-start;"><span style="background:rgba(99,102,241,0.15);color:#4f46e5;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.85rem;flex-shrink:0;">' + (idx+1) + '</span><span style="padding-top:0.3rem;">' + s + '</span></li>').join('');
-                            return '<div style="background:rgba(16,185,129,0.05);border-radius:16px;padding:1.5rem;border:1px solid rgba(16,185,129,0.15);margin-bottom:1.5rem;"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#059669;margin:0 0 0.75rem;font-size:1.05rem;"><span>📦</span> Materials Needed</h4><p style="color:#047857;line-height:1.6;margin:0;font-size:0.95rem;font-weight:500;">' + materialsStr + '</p></div><div style="background:rgba(99,102,241,0.05);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.15);"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#4f46e5;margin:0 0 1.25rem;font-size:1.05rem;"><span>👟</span> Action Steps</h4><ul style="color:#4338ca;margin:0;padding:0;list-style:none;font-size:0.95rem;line-height:1.6;font-weight:500;">' + stepsList + '</ul></div>';
-                        } else if (reason) {
-                            return '<div style="background:rgba(99,102,241,0.05);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.1);"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#4f46e5;margin:0 0 0.75rem;font-size:1rem;"><span>✨</span> Why this activity?</h4><p style="color:#4338ca;line-height:1.8;margin:0;font-size:0.95rem;">' + reason + '</p></div>';
-                        }
-                        return '';
-                    })()}
-                </div>
-                <div style="padding:1.5rem 2.5rem;border-top:1px solid #f1f5f9;background:#f8fafc;">
-                    <button onclick="document.getElementById('activity-detail-modal').remove()" style="width:100%;padding:1rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:16px;font-weight:700;font-size:1.05rem;cursor:pointer;transition:all 0.2s;box-shadow:0 10px 20px rgba(99,102,241,0.3);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 24px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 20px rgba(99,102,241,0.3)'">Let\'s Go! 🚀</button>
-                </div>
-            </div>
-        </div>`;
-    document.body.appendChild(modal);
-};
-    window.showPremiumPaywallModal = function(featureName) { window.showPremiumModal(featureName); };

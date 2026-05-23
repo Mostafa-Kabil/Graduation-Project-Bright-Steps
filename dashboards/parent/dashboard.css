@@ -1322,13 +1322,13 @@
 .ai-loading-state { padding: 1rem 0; }
 .ai-shimmer-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem; }
 .ai-shimmer-card {
-    background: var(--white, #fff);
-    border: 1px solid var(--slate-200);
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #e2e8f0);
     border-radius: 16px; height: 200px; overflow: hidden;
 }
 .shimmer {
     width: 100%; height: 100%;
-    background: linear-gradient(90deg, var(--slate-100) 25%, var(--slate-50, #f8fafc) 50%, var(--slate-100) 75%);
+    background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-secondary) 50%, var(--bg-card) 75%);
     background-size: 200% 100%;
     animation: shimmerAnim 1.5s infinite linear;
 }
@@ -1634,19 +1634,19 @@
 
 /* ── Loading / empty states ─────────────────────── */
 .doctor-loading-state {
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
+    background: var(--bg-card, #fff);
+    border: 1.5px solid var(--border-color, #e2e8f0);
     border-radius: 20px;
     padding: 3rem 2rem;
     text-align: center;
-    color: #94a3b8;
+    color: var(--text-secondary, #94a3b8);
     font-size: 0.9rem;
     font-weight: 500;
 }
 
 .doctor-empty-state {
-    background: #fff;
-    border: 1.5px solid #e2e8f0;
+    background: var(--bg-card, #fff);
+    border: 1.5px solid var(--border-color, #e2e8f0);
     border-radius: 20px;
     padding: 3rem 2rem;
     text-align: center;
@@ -1658,11 +1658,11 @@
 .doctor-empty-state h3 {
     font-size: 1.1rem;
     font-weight: 700;
-    color: #334155;
+    color: var(--text-primary, #334155);
     margin-bottom: 0.5rem;
 }
 .doctor-empty-state p {
-    color: #64748b;
+    color: var(--text-secondary, #64748b);
     font-size: 0.875rem;
     margin: 0;
 }
@@ -1671,8 +1671,8 @@
    DOCTOR CARD
    ═══════════════════════════════════════════════ */
 .doctor-card {
-    background: #ffffff;
-    border: 1.5px solid #e8edf3;
+    background: var(--bg-card, #ffffff);
+    border: 1.5px solid var(--border-color, #e8edf3);
     border-radius: 20px;
     overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
@@ -2556,3 +2556,562 @@
 [data-theme="dark"] .modal-content { background: #1e293b; }
 [data-theme="dark"] .modal-header { border-color: #334155; }
 [data-theme="dark"] .modal-header h3 { color: #f1f5f9; }
+
+/* Clinic Partner Card Banner Styles */
+.doctor-card.clinic-partner {
+    position: relative;
+    border: 2px solid #6366f1 !important;
+}
+.doctor-card.clinic-partner:hover {
+    border-color: #4f46e5 !important;
+    box-shadow: 0 20px 40px rgba(99,102,241,0.18) !important;
+}
+.clinic-banner {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: #ffffff !important;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.clinic-banner-icon {
+    font-size: 1rem;
+}
+.clinic-banner-text {
+    flex: 1;
+}
+
+/* Specialist Details Subpage Animations & Styling */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.spec-details-container {
+    animation: fadeIn 0.4s ease-out;
+}
+
+.back-btn-wrap {
+    margin-bottom: 1.5rem;
+}
+.btn-back-specialists {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    color: #475569;
+    padding: 0.6rem 1.2rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.btn-back-specialists:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #1e293b;
+    transform: translateX(-3px);
+}
+
+[data-theme="dark"] .btn-back-specialists {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+}
+[data-theme="dark"] .btn-back-specialists:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+
+/* Premium Top-Right Toast Notifications */
+#toast-container {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    pointer-events: none;
+    max-width: 380px;
+    width: 90%;
+}
+
+.toast-card {
+    pointer-events: auto;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    transform: translateX(120%);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+[data-theme="dark"] .toast-card {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.toast-card.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast-card.hide {
+    transform: translateX(120%) scale(0.9);
+    opacity: 0;
+}
+
+.toast-card-icon {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    background: rgba(99, 102, 241, 0.1);
+    color: #6366f1;
+}
+
+.toast-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.toast-card-title {
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: var(--text-color, #1e293b);
+    margin: 0 0 0.25rem 0;
+    line-height: 1.3;
+}
+
+[data-theme="dark"] .toast-card-title {
+    color: #f1f5f9;
+}
+
+.toast-card-message {
+    font-size: 0.775rem;
+    color: var(--slate-600, #475569);
+    margin: 0;
+    line-height: 1.4;
+}
+
+[data-theme="dark"] .toast-card-message {
+    color: #cbd5e1;
+}
+
+.toast-card-close {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: var(--slate-400, #94a3b8);
+    padding: 0;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -0.2rem;
+    margin-right: -0.4rem;
+    transition: color 0.2s;
+}
+
+.toast-card-close:hover {
+    color: var(--slate-600, #475569);
+}
+
+[data-theme="dark"] .toast-card-close:hover {
+    color: #f1f5f9;
+}
+
+.toast-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 4px;
+    background: #6366f1;
+}
+
+.toast-card.toast-system::before { background: #3b82f6; }
+.toast-card.toast-appointment_reminder::before { background: #10b981; }
+.toast-card.toast-milestone::before { background: #f59e0b; }
+.toast-card.toast-payment_success::before { background: #10b981; }
+.toast-card.toast-growth_alert::before { background: #ec4899; }
+
+/* ═══════════════════════════════════════════════════════
+   DARK MODE – Text Visibility Fixes
+   Ensures ALL text (English & Arabic) is readable on dark backgrounds.
+   ═══════════════════════════════════════════════════════ */
+
+/* Generic text inside the dashboard main area */
+[data-theme="dark"] .dashboard-main p,
+[data-theme="dark"] .dashboard-main span,
+[data-theme="dark"] .dashboard-main label,
+[data-theme="dark"] .dashboard-main h1,
+[data-theme="dark"] .dashboard-main h2,
+[data-theme="dark"] .dashboard-main h3,
+[data-theme="dark"] .dashboard-main h4,
+[data-theme="dark"] .dashboard-main h5,
+[data-theme="dark"] .dashboard-main h6,
+[data-theme="dark"] .dashboard-main li,
+[data-theme="dark"] .dashboard-main td,
+[data-theme="dark"] .dashboard-main th,
+[data-theme="dark"] .dashboard-main div {
+    color: inherit;
+}
+
+/* Force white/light for the main dashboard area in dark mode */
+[data-theme="dark"] .dashboard-main {
+    color: #e2e8f0;
+}
+
+/* Override inline-styled text colors that use hardcoded dark values */
+[data-theme="dark"] [style*="color: #1e293b"],
+[data-theme="dark"] [style*="color:#1e293b"],
+[data-theme="dark"] [style*="color: #334155"],
+[data-theme="dark"] [style*="color:#334155"],
+[data-theme="dark"] [style*="color: #475569"],
+[data-theme="dark"] [style*="color:#475569"],
+[data-theme="dark"] [style*="color: #64748b"],
+[data-theme="dark"] [style*="color:#64748b"] {
+    color: #cbd5e1 !important;
+}
+
+/* Settings section */
+[data-theme="dark"] .settings-section-title,
+[data-theme="dark"] .settings-section-desc,
+[data-theme="dark"] .settings-row-title,
+[data-theme="dark"] .settings-row-sub {
+    color: #e2e8f0 !important;
+}
+
+/* Language buttons – non-active should be readable */
+[data-theme="dark"] .lang-btn {
+    color: #e2e8f0;
+    border-color: var(--slate-600, #475569);
+}
+[data-theme="dark"] .lang-btn:hover {
+    border-color: var(--blue-400, #60a5fa);
+    color: #f1f5f9;
+}
+[data-theme="dark"] .lang-btn.active {
+    color: #fff;
+}
+
+/* Chatbot panel dark mode */
+[data-theme="dark"] .chatbot-panel {
+    background: var(--bg-card, #1e293b);
+}
+[data-theme="dark"] .chat-msg.bot .chat-bubble {
+    background: var(--bg-tertiary, #334155);
+    color: #e2e8f0;
+}
+[data-theme="dark"] .topic-chip {
+    background: var(--bg-tertiary, #334155);
+    color: #cbd5e1;
+}
+[data-theme="dark"] .topic-chip:hover {
+    background: var(--bg-card-hover, #475569);
+    color: #f1f5f9;
+}
+
+/* Invoice history dark mode */
+[data-theme="dark"] #invoice-history-container div {
+    color: #cbd5e1;
+}
+
+/* Milestone Journey dark mode text */
+[data-theme="dark"] #milestone-journey-container div,
+[data-theme="dark"] #badges-container div {
+    color: #cbd5e1;
+}
+
+/* Motor Skills Checklist cards dark mode */
+[data-theme="dark"] .motor-skills-card,
+[data-theme="dark"] .pillar-card {
+    background: var(--bg-card, #1e293b) !important;
+    color: #e2e8f0 !important;
+}
+
+/* ══════════════════════════════════════════════════
+   COMPREHENSIVE DARK MODE OVERRIDES
+   ══════════════════════════════════════════════════ */
+
+/* CSS Variables Override */
+[data-theme="dark"] {
+    --surface-light: #1e293b !important;
+    --surface-border: #334155 !important;
+    --text-color: #f1f5f9 !important;
+}
+
+/* --- Clinic / Book Appointments --- */
+[data-theme="dark"] .clinic-filter-bar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .clinic-search-input {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .clinic-search-input::placeholder {
+    color: #64748b !important;
+}
+[data-theme="dark"] .clinic-filter-select {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .doctor-loading-state,
+[data-theme="dark"] .doctor-empty-state {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .doctor-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .doctor-card:hover {
+    border-color: #6366f1 !important;
+    box-shadow: 0 16px 32px rgba(99,102,241,0.2) !important;
+}
+[data-theme="dark"] .doctor-card-header {
+    border-bottom-color: #334155 !important;
+}
+[data-theme="dark"] .doctor-name {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .doctor-specialty {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .doctor-empty-state h3 {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .doctor-empty-state p {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .doctor-avatar-img {
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .clinic-appt-sidebar {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .clinic-appt-sidebar-header {
+    background: #334155 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .clinic-appt-sidebar-body {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .clinic-appt-sidebar-footer {
+    border-top-color: #334155 !important;
+}
+[data-theme="dark"] .clinic-appt-sidebar-footer p {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .clinic-stats-pill {
+    background: rgba(99,102,241,0.15) !important;
+    color: #a5b4fc !important;
+}
+
+/* --- Doctor Card Details (slots, tags, meta) --- */
+[data-theme="dark"] .doctor-meta-pills span,
+[data-theme="dark"] .slot-card {
+    background: #334155 !important;
+    color: #cbd5e1 !important;
+    border-color: #475569 !important;
+}
+[data-theme="dark"] .slot-day {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .slot-time {
+    color: #cbd5e1 !important;
+}
+
+/* --- Motor Skills Checklist / Pillar Cards --- */
+[data-theme="dark"] .dashboard-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .dashboard-card h2,
+[data-theme="dark"] .dashboard-card h3,
+[data-theme="dark"] .dashboard-card h4 {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .dashboard-card p {
+    color: #cbd5e1 !important;
+}
+[data-theme="dark"] .motor-skills-card,
+[data-theme="dark"] .pillar-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] .pillar-card h3 {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .pillar-card p {
+    color: #cbd5e1 !important;
+}
+
+/* --- Settings / Subscription & Billing --- */
+[data-theme="dark"] .settings-card {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .settings-row {
+    border-color: #334155 !important;
+}
+[data-theme="dark"] .settings-section-title {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .settings-section-desc {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] .settings-row-title {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] .settings-row-sub {
+    color: #94a3b8 !important;
+}
+[data-theme="dark"] #invoice-history-container {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] #invoice-history-container div {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] #invoice-history-container h4 {
+    color: #f1f5f9 !important;
+}
+
+/* --- Modals / Popups Dark Mode --- */
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] [id$="-modal"] > div {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] [id$="-modal"] h2,
+[data-theme="dark"] [id$="-modal"] h3,
+[data-theme="dark"] [id$="-modal"] h4 {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] [id$="-modal"] p,
+[data-theme="dark"] [id$="-modal"] span,
+[data-theme="dark"] [id$="-modal"] label {
+    color: #cbd5e1 !important;
+}
+[data-theme="dark"] [id$="-modal"] input,
+[data-theme="dark"] [id$="-modal"] select,
+[data-theme="dark"] [id$="-modal"] textarea {
+    background: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f1f5f9 !important;
+}
+
+/* --- Messages Section --- */
+[data-theme="dark"] #messages-container {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] #messages-container .dashboard-card {
+    background: #1e293b !important;
+}
+[data-theme="dark"] #messages-container [style*="background:#fff"],
+[data-theme="dark"] .message-bubble {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+    border-color: #334155 !important;
+}
+
+/* --- Specific Section Fixes --- */
+[data-theme="dark"] #growth-container div,
+[data-theme="dark"] #speech-analysis-container div {
+    color: #cbd5e1;
+}
+[data-theme="dark"] #growth-container h2,
+[data-theme="dark"] #growth-container h3,
+[data-theme="dark"] #growth-container h4,
+[data-theme="dark"] #speech-analysis-container h2,
+[data-theme="dark"] #speech-analysis-container h3,
+[data-theme="dark"] #speech-analysis-container h4 {
+    color: #f1f5f9 !important;
+}
+
+/* Milestone Journey dark mode text */
+[data-theme="dark"] #milestone-journey-container div,
+[data-theme="dark"] #badges-container div {
+    color: #cbd5e1;
+}
+
+/* Charts Backgrounds */
+[data-theme="dark"] canvas {
+    filter: invert(0.9) hue-rotate(180deg);
+}
+
+/* --- General inline style overrides for common patterns --- */
+[data-theme="dark"] [style*="background:#ffffff"],
+[data-theme="dark"] [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background:#fff;"],
+[data-theme="dark"] [style*="background: #fff;"] {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] [style*="background:#f1f5f9"],
+[data-theme="dark"] [style*="background: #f1f5f9"],
+[data-theme="dark"] [style*="background:#f8fafc"],
+[data-theme="dark"] [style*="background: #f8fafc"] {
+    background: #334155 !important;
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] [style*="color:#1e293b"],
+[data-theme="dark"] [style*="color: #1e293b"] {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] [style*="color:#334155"],
+[data-theme="dark"] [style*="color: #334155"] {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] [style*="color:var(--slate-900)"],
+[data-theme="dark"] [style*="color: var(--slate-900)"] {
+    color: #f1f5f9 !important;
+}
+[data-theme="dark"] [style*="color:var(--slate-800)"],
+[data-theme="dark"] [style*="color: var(--slate-800)"] {
+    color: #e2e8f0 !important;
+}
+[data-theme="dark"] [style*="border:1px solid #e2e8f0"],
+[data-theme="dark"] [style*="border:1.5px solid #e2e8f0"],
+[data-theme="dark"] [style*="border: 1px solid #e2e8f0"],
+[data-theme="dark"] [style*="border:1px solid #e8edf3"],
+[data-theme="dark"] [style*="border:1.5px solid #e8edf3"] {
+    border-color: #334155 !important;
+}
+
+
