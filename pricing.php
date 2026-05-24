@@ -71,18 +71,7 @@ $plans = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <?php endforeach; ?>
         </div>
 
-        <div class="content-section" style="margin-top: 3rem; text-align: center;">
-            <h2>Frequently Asked Questions</h2>
-            <p style="margin-bottom: 2rem;">Have questions? We've got answers.</p>
-            <div style="text-align: left; max-width: 700px; margin: 0 auto;">
-                <p><strong style="color: white;">Can I cancel anytime?</strong><br>Yes! You can cancel your Premium
-                    subscription at any time with no penalties.</p>
-                <p><strong style="color: white;">Is there a free trial?</strong><br>Premium comes with a 7-day free
-                    trial. No credit card required to start.</p>
-                <p><strong style="color: white;">What payment methods do you accept?</strong><br>We accept all major
-                    credit cards, PayPal, and Apple Pay.</p>
-            </div>
-        </div>
+
     </div>
     </main>
 

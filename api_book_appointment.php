@@ -96,8 +96,8 @@ try {
     $status = ($amountPost <= 0) ? 'Paid' : (($paymentMethod === 'Credit Card') ? 'Paid' : 'Pending');
 
     // 1. Create Payment Record
-    $stmt = $connect->prepare("INSERT INTO payment (amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
+    $stmt = $connect->prepare("INSERT INTO payment (parent_id, amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
     $paymentId = $connect->lastInsertId();
 
     // Mark token as used if applied

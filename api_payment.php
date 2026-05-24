@@ -57,10 +57,10 @@ switch ($action) {
 
             // Insert payment record
             $stmt = $connect->prepare(
-                "INSERT INTO payment (subscription_id, amount_pre_discount, discount_rate, method, status) 
-                 VALUES (?, ?, ?, ?, ?)"
+                "INSERT INTO payment (parent_id, subscription_id, amount_pre_discount, discount_rate, method, status) 
+                 VALUES (?, ?, ?, ?, ?, ?)"
             );
-            $stmt->execute([$subscriptionId, $amount, 0.00, $paymentMethod, 'completed']);
+            $stmt->execute([$parentId, $subscriptionId, $amount, 0.00, $paymentMethod, 'completed']);
             $paymentId = $connect->lastInsertId();
 
             // Insert/update parent subscription
@@ -93,11 +93,14 @@ switch ($action) {
         $stmt = $connect->prepare(
             "SELECT p.payment_id, p.amount_pre_discount, p.amount_post_discount,
                     p.discount_rate, p.method, p.status, p.paid_at,
-                    s.plan_name, s.plan_period
+                    s.plan_name, s.plan_period,
+                    a.type as appointment_type, a.scheduled_at,
+                    CONCAT(sp.first_name, ' ', sp.last_name) as doctor_name
              FROM payment p
-             INNER JOIN subscription s ON p.subscription_id = s.subscription_id
-             INNER JOIN parent_subscription ps ON p.subscription_id = ps.subscription_id
-             WHERE ps.parent_id = ?
+             LEFT JOIN subscription s ON p.subscription_id = s.subscription_id
+             LEFT JOIN appointment a ON a.payment_id = p.payment_id
+             LEFT JOIN specialist sp ON a.specialist_id = sp.specialist_id
+             WHERE p.parent_id = ?
              ORDER BY p.paid_at DESC"
         );
         $stmt->execute([$parentId]);

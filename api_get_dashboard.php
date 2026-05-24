@@ -101,6 +101,12 @@ foreach ($children as &$child) {
     $stmtAct->execute(['child_id' => $child['child_id']]);
     $child['activities_completed'] = (int)$stmtAct->fetchColumn();
 
+    // Speech analyses count
+    $sqlSpeech = "SELECT COUNT(*) FROM speech_analysis sa INNER JOIN voice_sample vs ON sa.sample_id = vs.sample_id WHERE vs.child_id = :child_id";
+    $stmtSpeech = $connect->prepare($sqlSpeech);
+    $stmtSpeech->execute(['child_id' => $child['child_id']]);
+    $child['speech_analyses_count'] = (int)$stmtSpeech->fetchColumn();
+
     // Points wallet
     $sql5 = "SELECT total_points FROM points_wallet WHERE child_id = :child_id LIMIT 1";
     $stmt5 = $connect->prepare($sql5);

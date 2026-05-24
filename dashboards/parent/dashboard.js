@@ -44,7 +44,11 @@
         loadNotifCount();
 
         // Streak check-in
-        streakCheckIn();
+        const todayKey = 'bs_streak_checkin_' + new Date().toDateString();
+        if (!sessionStorage.getItem(todayKey)) {
+            sessionStorage.setItem(todayKey, '1');
+            streakCheckIn();
+        }
 
         // Startup: trigger retrospective badge check for current child
         const startChild = (window.dashboardData || {}).children || [];
@@ -223,9 +227,11 @@
                 if (el) el.textContent = data.current_streak || 0;
                 // Show new badge notifications
                 if (data.new_badges && data.new_badges.length > 0) {
-                    data.new_badges.forEach(b => showBadgeToast(b));
+                    const existingNames = (child.badges || []).map(b => b.name);
+                    const trulyNew = data.new_badges.filter(bName => !existingNames.includes(bName));
+                    trulyNew.forEach(b => showBadgeToast(b));
                     if (!child.badges) child.badges = [];
-                    data.new_badges.forEach(bName => {
+                    trulyNew.forEach(bName => {
                         if (!child.badges.find(b => b.name === bName)) {
                             child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
                         }
@@ -411,8 +417,9 @@
             try {
                 const res = await fetch(`../../api_speech_history.php?child_id=${child.child_id}`);
                 const data = await res.json();
-                const count = (data.analyses || []).length;
-                localStorage.setItem('bs_trial_speech', count);
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                const recentCount = (data.analyses || []).filter(a => new Date(a.sent_at) > sevenDaysAgo).length;
+                localStorage.setItem('bs_trial_speech', recentCount);
             } catch (e) {}
         }
 
@@ -437,7 +444,7 @@
 
         if (type === 'premium_subscription') {
             // Fetch price from dashboardData or API
-            total = (window.dashboardData || {}).subscription?.price || '24.99';
+            total = (window.dashboardData || {}).subscription?.price || '250';
         } else if (type === 'appointment') {
             targetName = 'Doctor Consultation';
             // Use the specialist fee if provided
@@ -457,7 +464,7 @@
 
                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:2rem;display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-weight:600;color:var(--slate-600);">Total Amount:</span>
-                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">$${total}</span>
+                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">${total} EGP</span>
                     </div>
 
                     <div class="payment-form" style="display:flex;flex-direction:column;gap:1rem;">
@@ -587,6 +594,11 @@
         contentContainer.innerHTML = viewFunction();
 
         // Post-render hooks
+        if (viewId === 'settings') {
+            setTimeout(() => {
+                if (typeof loadInvoiceHistory === 'function') loadInvoiceHistory();
+            }, 150);
+        }
         if (viewId === 'home' || !viewId) {
             loadHomeActivities();
             // Auto-load checklist so Weekly Plan works
@@ -611,6 +623,7 @@
     }
 
     // Load home activities from API
+    window.loadHomeActivities = loadHomeActivities;
     async function loadHomeActivities() {
         // Trigger daily notifications in the background
         fetch('../../api_trigger_daily.php').catch(e => console.error(e));
@@ -1302,6 +1315,10 @@
                             ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(124,58,237,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_speech') || '0'}/3 Free Trials Used</span>` : ''}
                         </h1>
                         <p class="dashboard-subtitle">Track ${child ? child.first_name + "'s" : ''} vocabulary and pronunciation progress</p>
+                    <p style="font-size:0.8rem;color:var(--slate-500);margin-top:0.25rem;display:flex;align-items:center;gap:0.4rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 1 0 20 14.5 14.5 0 0 1 0-20"/><path d="M2 12h20"/></svg>
+                        Supports <strong>English 🇬🇧</strong> and <strong>Arabic 🇪🇬</strong>
+                    </p>
                     </div>
                     <button class="btn btn-gradient" onclick="openSpeechModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -2073,7 +2090,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🧠 Attention</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
                             </div>
-                            <span id="alert-attention" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-attention"></span>
                         </div>
                         <div style="background:rgba(245,158,11,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2094,7 +2113,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">💬 Communication</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Speech & expression</p>
                             </div>
-                            <span id="alert-communication" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-communication"></span>
                         </div>
                         <div style="background:rgba(59,130,246,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2115,7 +2136,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🤝 Social Skills</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Interaction & play</p>
                             </div>
-                            <span id="alert-social" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-social"></span>
                         </div>
                         <div style="background:rgba(16,185,129,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2136,7 +2159,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🦵 Gross Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Large movements</p>
                             </div>
-                            <span id="alert-motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-motor"></span>
                         </div>
                         <div style="background:rgba(102,126,234,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2157,7 +2182,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">✋ Fine Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Hand precision</p>
                             </div>
-                            <span id="alert-fine_motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-fine_motor"></span>
                         </div>
                         <div style="background:rgba(236,72,153,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="fine_motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ec4899,#f43f5e);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2189,23 +2216,23 @@
                             📊 Milestone Progress
                         </h3>
                         <div style="display:flex;align-items:flex-end;gap:0.75rem;height:200px;padding:1rem 0;">
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Attention</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Communication</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Social</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Motor</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-fine_motor" style="width:100%;background:linear-gradient(180deg,#ec4899,#f43f5e);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Fine Motor</span>
                             </div>
@@ -2222,24 +2249,6 @@
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
                                 🏆 Milestone Journey
                             </h3>
-                        </div>
-                        <div id="milestone-journey-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
-                            <div style="text-align:center;padding:1rem;background:rgba(245,158,11,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🌟</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Steps</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(59,130,246,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Words</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(16,185,129,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Social Play</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(102,126,234,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🎯</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Focus Master</div>
-                            </div>
                         </div>
                         <div id="badges-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;"></div>
                     </div>
@@ -2757,7 +2766,18 @@
             const status = getTrafficLightStatus(percent);
             const alertEl = document.getElementById(`alert-${pillar}`);
             if (alertEl) {
-                alertEl.innerHTML = `${status.icon} <span style="font-size:0.7rem;margin-left:0.25rem;color:${status.color};font-weight:600;">${status.label}</span>`;
+                alertEl.style.display = 'inline-flex';
+                alertEl.style.flexDirection = 'row';
+                alertEl.style.alignItems = 'center';
+                alertEl.style.justifyContent = 'center';
+                alertEl.style.gap = '0.35rem';
+                alertEl.style.padding = '0.3rem 0.65rem';
+                alertEl.style.borderRadius = '20px';
+                alertEl.style.background = `${status.color}15`;
+                alertEl.style.color = status.color;
+                alertEl.style.flexShrink = '0';
+                
+                alertEl.innerHTML = `<span style="font-size:0.5rem; line-height:1;">●</span><span style="font-size:0.65rem; font-weight:700; white-space:nowrap; line-height:1;">${status.label}</span>`;
                 alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
             }
         });
@@ -2843,7 +2863,7 @@
             fine_motor: stats.fine_motor.achieved
         };
 
-        let earnedBadges = [];
+        let allBadgesHTML = '';
         badgeDefinitions.forEach(badge => {
             let earned = false;
             if (badge.pillar === 'all') {
@@ -2851,30 +2871,27 @@
             } else {
                 earned = pillarAchievements[badge.pillar] >= badge.threshold;
             }
+            
             if (earned) {
-                earnedBadges.push(badge);
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:12px;animation:pulse 2s infinite;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.05);" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;font-weight:700;color:var(--text-color,#1e293b);">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:#f59e0b;margin-top:2px;font-weight:bold;">✅ Achieved!</div>
+                </div>`;
+            } else {
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:var(--surface-light,#fff);border-radius:12px;opacity:0.6;border:1px dashed var(--slate-300,#cbd5e1);" title="Requires ${badge.threshold} milestones in ${badge.pillar}">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;filter:grayscale(100%);opacity:0.7;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;color:var(--slate-500,#64748b);font-weight:500;">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:var(--slate-400,#94a3b8);margin-top:2px;">🔒 ${badge.threshold} needed</div>
+                </div>`;
             }
         });
 
-        // Render badges with unlock animation
-        badgesContainer.innerHTML = earnedBadges.map(badge => `
-            <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:10px;animation:pulse 2s infinite;cursor:pointer;" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
-                <div style="font-size:1.5rem;">${badge.icon}</div>
-                <div style="font-size:0.65rem;color:var(--slate-600,#475569);font-weight:600;">${badge.name}</div>
-            </div>
-        `).join('');
-
-        // Show locked badges for milestones not yet earned
-        const lockedBadges = badgeDefinitions.filter(b => !earnedBadges.find(eb => eb.id === b.id));
-        if (lockedBadges.length > 0 && earnedBadges.length < badgeDefinitions.length) {
-            badgesContainer.innerHTML += lockedBadges.map(badge => `
-                <div style="text-align:center;padding:0.75rem;background:rgba(148,163,184,0.1);border-radius:10px;opacity:0.5;filter:grayscale(100%);">
-                    <div style="font-size:1.5rem;filter:grayscale(100%);">${badge.icon}</div>
-                    <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);font-weight:600;">${badge.name}</div>
-                    <div style="font-size:0.55rem;color:var(--slate-500,#64748b);margin-top:0.25rem;">🔒 ${badge.threshold} needed</div>
-                </div>
-            `).join('');
-        }
+        // Set grid layout to fit more nicely
+        badgesContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(110px, 1fr))';
+        badgesContainer.innerHTML = allBadgesHTML;
     }
 
     // Generate Weekly Activities based on lowest scoring pillar (with shuffle) - 5 pillars
@@ -2992,7 +3009,7 @@
 
         // Show toast indicating which pillar was targeted
         const pillarNames = { attention: 'Attention', communication: 'Communication', social: 'Social Skills', motor: 'Motor Skills' };
-        showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
+        if (fromUserClick) showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
     }
 
     // Generate Advanced Doctor Report (Comprehensive PDF-ready)
@@ -3032,11 +3049,14 @@
                 stats[pillar].total++;
                 if (b.is_exhibited) {
                     stats[pillar].achieved++;
-                    stats[pillar].behaviors.push({
-                        name: b.behavior_details,
-                        frequency: b.frequency,
-                        severity: b.severity
-                    });
+                    // Avoid duplicates in the list
+                    if (!stats[pillar].behaviors.some(x => x.name === b.behavior_details)) {
+                        stats[pillar].behaviors.push({
+                            name: b.behavior_details,
+                            frequency: b.frequency,
+                            severity: b.severity
+                        });
+                    }
                 }
             });
         });
@@ -3067,7 +3087,49 @@
 
         // Build comprehensive report HTML
         const reportContent = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <style>
+                @media print {
+                    body > *:not(#doctor-report-modal) { display: none !important; }
+                    
+                    #doctor-report-modal { 
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        width: 100% !important;
+                        height: auto !important;
+                    }
+                    
+                    #doctor-report-modal .doctor-report-modal-inner {
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        height: auto !important;
+                    }
+
+                    #doctor-report-modal .doctor-report-modal-inner > div { 
+                        display: block !important;
+                        max-height: none !important; 
+                        width: 100% !important; 
+                        max-width: none !important; 
+                        box-shadow: none !important; 
+                        border-radius: 0 !important; 
+                        overflow: visible !important;
+                        height: auto !important;
+                    }
+                    
+                    .report-scrollable { 
+                        max-height: none !important; 
+                        overflow: visible !important; 
+                        padding: 0 !important; 
+                        height: auto !important;
+                    }
+                    
+                    .report-footer { display: none !important; }
+                }
+            </style>
+            <div class="doctor-report-modal-inner" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('doctor-report-modal').remove()">
                 <div style="background:#ffffff;border-radius:24px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;">
                     <!-- Report Header -->
                     <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:2rem;color:#fff;">
@@ -3107,7 +3169,7 @@
                     </div>
 
                     <!-- Scrollable Content -->
-                    <div style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
+                    <div class="report-scrollable" style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
                         <!-- Executive Summary -->
                         <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem;">
                             <h3 style="margin:0 0 0.5rem;font-size:1rem;font-weight:700;color:#0369a1;display:flex;align-items:center;gap:0.5rem;">
@@ -3129,17 +3191,18 @@
                                 const status = getTrafficLightStatus(percent);
                                 const expected = expectations[pillar] || 0;
                                 const vsExpected = data.achieved >= expected ? '✓ Age-appropriate' : `⚠ ${expected - data.achieved} below expectation`;
-                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵' };
-                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea' };
+                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵', fine_motor: '✍️' };
+                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea', fine_motor: '#d946ef' };
+                                let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
                                 return `
                                     <div style="padding:1.25rem;background:#f8fafc;border-radius:16px;border:1px solid #e2e8f0;">
                                         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                                            <span style="font-size:1.25rem;">${pillarIcons[pillar]}</span>
-                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillar}</span>
+                                            <span style="font-size:1.25rem;">${pillarIcons[pillar] || '📋'}</span>
+                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillarName}</span>
                                             <span style="margin-left:auto;font-size:1.25rem;">${status.icon}</span>
                                         </div>
                                         <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;margin-bottom:0.5rem;">
-                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]},${pillarColors[pillar]}88);height:100%;width:${percent}%;border-radius:8px;"></div>
+                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]||'#cbd5e1'},${pillarColors[pillar]||'#cbd5e1'}88);height:100%;width:${percent}%;border-radius:8px;"></div>
                                         </div>
                                         <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#64748b;margin-bottom:0.5rem;">
                                             <span>${data.achieved}/${data.total} skills observed</span>
@@ -3150,8 +3213,7 @@
                                             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed #e2e8f0;">
                                                 <div style="font-size:0.7rem;color:#94a3b8;margin-bottom:0.25rem;">Observed behaviors:</div>
                                                 <ul style="margin:0;padding-left:1rem;font-size:0.75rem;color:#475569;line-height:1.5;">
-                                                    ${data.behaviors.slice(0, 4).map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
-                                                    ${data.behaviors.length > 4 ? `<li>+${data.behaviors.length - 4} more...</li>` : ''}
+                                                    ${data.behaviors.map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
                                                 </ul>
                                             </div>
                                         ` : ''}
@@ -3192,7 +3254,7 @@
                     </div>
 
                     <!-- Footer Actions -->
-                    <div style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+                    <div class="report-footer" style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
                         <div style="font-size:0.8rem;color:#64748b;">
                             Generated by Bright Steps Developmental Tracking
                         </div>
@@ -3353,13 +3415,13 @@
         ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
             // Progress is based on age-appropriate expectation, not just total behaviors in checklist
-            const percent = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+            const percent = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
             const countEl   = document.getElementById(`${pillar}-count`);
             const totalEl2  = document.getElementById(`${pillar}-total`);
             const percentEl = document.getElementById(`${pillar}-percent`);
             const progressEl= document.getElementById(`${pillar}-progress`);
             if (countEl)    countEl.textContent   = s.achieved;
-            if (totalEl2)   totalEl2.textContent  = s.expected; // Show expected milestones for age
+            if (totalEl2)   totalEl2.textContent  = s.total; // Show expected milestones for age
             if (percentEl)  percentEl.textContent = percent + '%';
             if (progressEl) progressEl.style.width = percent + '%';
         });
@@ -3374,7 +3436,7 @@
                 if (bar) {
                     const s = stats[pillar];
                     // Calculate percentage based on age expectation
-                    const pct = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+                    const pct = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
                     const displayPct = Math.max(pct, 8); // Minimum 8% for visibility
                     bar.style.height = displayPct + '%';
                     bar.setAttribute('data-pillar', pillar);
@@ -3463,76 +3525,80 @@
         const messages = [];
         const analysisPoints = [];
 
-        // AI Analysis per pillar - using stats.expected (age-appropriate benchmark)
-        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+        // AI Analysis per pillar
+        ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
-            if (!s || s.expected === 0) return;
+            if (!s || s.total === 0) return;
 
-            // Calculate percentage based on age expectation
-            const pct = Math.round((s.achieved / s.expected) * 100);
+            // Calculate percentage based on checklist total
+            const pct = Math.round((s.achieved / s.total) * 100);
             const status = getTrafficLightStatus(pct);
-            const expectation = ageExpectations[pillar][ageRange];
+            const expectation = ageExpectations[pillar] && ageExpectations[pillar][ageRange] ? ageExpectations[pillar][ageRange] : {description: 'steady progress expected'};
+
+            let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
 
             // Generate AI analysis based on actual data patterns
             if (status.icon === '🟢') {
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #10b981;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#10b981;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(16,185,129,0.3);">✓</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.expected} age-expected skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.total} targeted skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
                 </div>`);
-                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.expected} age-expected skills` });
+                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.total} targeted skills` });
             } else if (status.icon === '🟡') {
-                const gap = s.expected - s.achieved;
+                const gap = s.total - s.achieved;
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #f59e0b;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#f59e0b;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(245,158,11,0.3);">⚠</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.expected} age-expected skills. ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend targeted play activities.</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.total} targeted skills. ${gap > 0 ? gap + ' skills still emerging.' : ''} Recommend targeted play activities.</div>
                 </div>`);
-                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} skills below age expectation; focus area identified` });
+                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} targeted skills emerging; focus area identified` });
             } else {
-                const gap = s.expected - s.achieved;
+                const gap = s.total - s.achieved;
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #ef4444;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(239,68,68,0.3);">✕</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.expected} age-expected skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.total} targeted skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
                 </div>`);
                 analysisPoints.push({ pillar, status: 'concern', detail: `Significant gap (${gap} skills); early intervention may benefit` });
             }
         });
 
-        // Overall AI synthesis - based on age expectations
-        let totalExpected = 0;
+        // Overall AI synthesis
+        let totalTarget = 0;
         let totalAchieved = 0;
         Object.values(stats).forEach(s => {
-            if (s && s.expected) {
-                totalExpected += s.expected;
+            if (s && s.total) {
+                totalTarget += s.total;
                 totalAchieved += s.achieved;
             }
         });
-        const overallPercent = totalExpected > 0 ? Math.round((totalAchieved / totalExpected) * 100) : 0;
+        const overallPercent = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
 
         const strengths = analysisPoints.filter(p => p.status === 'strength');
         const concerns = analysisPoints.filter(p => p.status === 'concern');
         const developing = analysisPoints.filter(p => p.status === 'developing');
 
+        const formatPillarName = (p) => p === 'fine_motor' ? 'Fine Motor' : p.charAt(0).toUpperCase() + p.slice(1);
+        
         let aiSummary = '';
         if (strengths.length >= 3) {
-            aiSummary = `${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
+            aiSummary = `${name} is meeting or exceeding expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
         } else if (concerns.length === 0) {
-            aiSummary = `${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
+            aiSummary = `${name} is progressing well overall (${overallPercent}% of targeted skills). Focus on ${developing.map(d => formatPillarName(d.pillar)).join(' & ')} for continued growth.`;
         } else if (concerns.length <= 1) {
-            aiSummary = `${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
+            aiSummary = `${name} shows ${overallPercent}% of targeted development. ${concerns[0] ? formatPillarName(concerns[0].pillar) : 'one area'} identified as focus area. Early enrichment recommended.`;
         } else {
-            aiSummary = `Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
+            aiSummary = `Multiple domains (${concerns.map(c => formatPillarName(c.pillar)).join(', ')}) show delays relative to expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
         }
 
         // Combine server feedback with AI analysis
@@ -3557,7 +3623,7 @@
 
         // Add specific recommendations
         if (concerns.length > 0 || developing.length > 0) {
-            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${a.pillar.charAt(0).toUpperCase() + a.pillar.slice(1)}</span>`);
+            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${formatPillarName(a.pillar)}</span>`);
             finalText += `<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;padding-top:1.5rem;border-top:1px dashed rgba(255,255,255,0.2);">
                 <strong style="font-size:0.95rem;opacity:0.9;">Priority Focus:</strong>
                 ${focusAreas.join('')}
@@ -4245,7 +4311,7 @@
                         <h1 class="dashboard-title" style="margin-bottom:0.25rem;">Activity Center 🎨</h1>
                         <p class="dashboard-subtitle" style="margin:0;">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
-                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('' + childParam + '')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('${childParam}')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                 </div>
 
                 <!-- Featured Game Banner -->
@@ -5207,7 +5273,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#6C63FF;border-color:#6C63FF;" onclick="openShareReportModal('full-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5225,7 +5291,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
                              <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#22c55e;border-color:#22c55e;" onclick="openShareReportModal('growth-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5244,7 +5310,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Vocabulary, clarity & full transcripts</p>
                              <span class="badge" style="background:#f3e8ff;color:#9333ea;margin-bottom: 1rem;">Speech Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#9333ea;border-color:#9333ea;" onclick="openShareReportModal('speech-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -6329,11 +6395,11 @@
                                     <p class="settings-row-sub">View past payments and download invoices</p>
                                 </div>
                                 <div class="settings-row-action">
-                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()">Load Invoice History</button>
+                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()" id="invoice-refresh-btn">🔄 Refresh</button>
                                 </div>
                             </div>
                             <div id="invoice-history-container" style="margin-top:1.5rem;">
-                                <div style="text-align:center;color:#64748b;font-style:italic;padding:2rem;">Click 'Load Invoice History' to view your payment records</div>
+                                <div style="text-align:center;color:#64748b;padding:2rem;">Loading...</div>
                             </div>
                         </div>
                     </div>
@@ -7609,6 +7675,17 @@
             used = 0;
             if (trialKey) localStorage.setItem(trialKey, '0');
         }
+
+        const windowKey = feature ? 'bs_trial_window_' + feature : null;
+        if (windowKey) {
+            const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (Date.now() - windowStart > sevenDays) {
+                localStorage.setItem(trialKey, '0');
+                localStorage.setItem(windowKey, String(Date.now()));
+                used = 0;
+            }
+        }
         
         let left = Math.max(0, maxTrials - used);
 
@@ -7634,7 +7711,7 @@
         
         // Trial section HTML
         let trialHtml = '';
-        if (feature === 'motor' || feature === 'speech' || feature === 'growth') {
+        if (feature === 'motor' || feature === 'speech') {
             trialHtml = `
             <div style="border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">
                 <div>
@@ -7646,9 +7723,9 @@
             `;
         }
 
-        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium</button>`;
+        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 250)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium — 250 EGP/month</button>`;
         
-        if ((feature === 'motor' || feature === 'speech' || feature === 'growth') && left > 0) {
+        if ((feature === 'motor' || feature === 'speech') && left > 0) {
             actionHtml += `<button onclick="document.getElementById('premium-modal').remove(); window.incrementTrial('${feature}'); if('${feature}'==='motor') switchView('motor'); else if('${feature}'==='speech') switchView('speech'); else switchView('growth');" style="width:100%;padding:1.1rem;background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">Use Free Trial (${left} left)</button>`;
         } else {
              actionHtml += `<button onclick="document.getElementById('premium-modal').remove()" style="width:100%;padding:1rem;background:none;color:#64748b;border:none;font-weight:600;font-size:0.95rem;cursor:pointer;">Maybe Later</button>`;
@@ -7708,6 +7785,16 @@
         const trialKey = 'bs_trial_' + feature;
         let used = parseInt(localStorage.getItem(trialKey) || '0');
         
+        const windowKey = 'bs_trial_window_' + feature;
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (Date.now() - windowStart > sevenDays) {
+            // Window expired — reset
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(Date.now()));
+            used = 0;
+        }
+        
         // Always show the modal for free users unless they've clicked 'Use Free Trial' this session
         if (window['_access_granted_' + feature]) {
             if (used >= maxTrials) {
@@ -7721,17 +7808,26 @@
         return false;
     };
 
-    window.incrementTrial = function (feature) {
+    window.incrementTrial = function(feature) {
         window['_access_granted_' + feature] = true;
         
-        // Don't increment trial count for speech analysis as we use actual speech history count
-        if (feature === 'speech') {
-            return;
-        }
-
         const trialKey = 'bs_trial_' + feature;
-        let used = parseInt(localStorage.getItem(trialKey) || '0');
-        localStorage.setItem(trialKey, used + 1);
+        const windowKey = 'bs_trial_window_' + feature;
+        const now = Date.now();
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        
+        // Reset counter if 7-day window has expired
+        if (now - windowStart > sevenDays) {
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(now));
+        }
+        
+        // Don't increment for speech (speech uses actual DB count)
+        if (feature === 'speech') return;
+        
+        const used = parseInt(localStorage.getItem(trialKey) || '0');
+        localStorage.setItem(trialKey, String(used + 1));
     };
 
     // ══════════════════════════════════════════════════════════════

@@ -1,0 +1,1 @@
+[23-May-2026 04:35:32 Europe/Berlin] PHP Notice:  session_start(): Ignoring session_start() because a session is already active in C:\xampp\htdocs\Bright Steps Website\api_add_growth.php on line 2

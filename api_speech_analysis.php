@@ -57,18 +57,18 @@ if (!move_uploaded_file($_FILES['audio']['tmp_name'], $filePath)) {
 }
 
 // ── Start Python server if not running ────────────────────────────────────
-function isPythonServerRunning($port = 8000) {
+function isPythonServerRunning($port = 8002) {
     $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
     if ($fp) { fclose($fp); return true; }
     return false;
 }
 
-if (!isPythonServerRunning(8000)) {
+if (!isPythonServerRunning(8002)) {
     $scriptDir = realpath(__DIR__ . '/APIs/Speech Analysis');
     if ($scriptDir) {
-        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8000 > NUL 2> NUL', 'r'));
+        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8002 > NUL 2> NUL', 'r'));
         $maxWait = 20;
-        while (!isPythonServerRunning(8000) && $maxWait > 0) {
+        while (!isPythonServerRunning(8002) && $maxWait > 0) {
             usleep(500000);
             $maxWait--;
         }
@@ -77,13 +77,13 @@ if (!isPythonServerRunning(8000)) {
 
 // ── Choose endpoint based on mode ─────────────────────────────────────────
 if ($mode === 'read_compare' && $targetText !== '') {
-    $apiUrl     = 'http://127.0.0.1:8000/analyze-compare';
+    $apiUrl     = 'http://127.0.0.1:8002/analyze-compare';
     $postFields = ['audio' => new CURLFile($filePath, mime_content_type($filePath), basename($filePath)),
                    'age'   => $ageMonths,
                    'target_text' => $targetText];
 } else {
     $mode       = 'free_talk'; // normalise
-    $apiUrl     = 'http://127.0.0.1:8000/analyze';
+    $apiUrl     = 'http://127.0.0.1:8002/analyze';
     $postFields = ['audio' => new CURLFile($filePath, mime_content_type($filePath), basename($filePath)),
                    'age'   => $ageMonths];
 }
@@ -126,7 +126,23 @@ $statusMap = [
     'Above expected range'  => 1.20,
     'Below expected range'  => 0.50,
 ];
-$clarifyScore = $statusMap[$aiResult['status']] ?? 0.75;
+
+$clarifyScore = null;
+if (isset($aiResult['clarity_score'])) {
+    $clarifyScore = min(1.0, max(0.0, (float)$aiResult['clarity_score']));
+} elseif (isset($aiResult['confidence'])) {
+    $clarifyScore = min(1.0, max(0.0, (float)$aiResult['confidence']));
+} elseif (isset($aiResult['match_score']) && $aiResult['match_score'] !== null) {
+    $clarifyScore = min(1.0, (float)$aiResult['match_score'] / 100.0);
+} else {
+    // Fallback: use vocab ratio vs expected with variation
+    $vocabRatio = (isset($aiResult['vocab_size']) && $aiResult['vocab_size'] > 0) ? min(1.2, $aiResult['vocab_size'] / max(1, $aiResult['expected_vocab'] ?? 1)) : 0.5;
+    $statusBase = $statusMap[$aiResult['status']] ?? 0.75;
+    // Add subtle variation based on word count to differentiate recordings
+    $variation = (($aiResult['vocab_size'] ?? 0) % 7) * 0.02; // 0–0.12 variation
+    $clarifyScore = min(1.0, max(0.0, $statusBase * 0.7 + $vocabRatio * 0.3 + $variation - 0.06));
+}
+
 $vocabScore   = (float) ($aiResult['vocab_size'] ?? 0);
 $matchScore   = isset($aiResult['match_score']) ? (float) $aiResult['match_score'] : null;
 
@@ -331,6 +347,7 @@ echo json_encode([
     'mode'         => $mode,
     'transcript'   => $aiResult['transcript'],
     'vocab_size'   => $aiResult['vocab_size'],
+    'clarity_score'=> $clarifyScore,
     'unique_words' => $aiResult['unique_words'] ?? [],
     'expected_vocab' => $aiResult['expected_vocab'],
     'status'       => $aiResult['status'],

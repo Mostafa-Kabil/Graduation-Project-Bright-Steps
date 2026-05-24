@@ -1,9 +1,8 @@
 <?php
 require 'connection.php';
-try {
-    $stmt = $connect->query("SHOW TABLES");
-    $tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    echo json_encode(["success" => true, "tables" => $tables]);
-} catch (PDOException $e) {
-    echo json_encode(["success" => false, "msg" => $e->getMessage()]);
+$tables = ['parent_points_wallet', 'parent_points_tracking', 'points_earning_rules'];
+foreach ($tables as $t) {
+    $stmt = $connect->query("SHOW TABLES LIKE '$t'");
+    echo "$t exists: " . ($stmt->fetch() ? "YES" : "NO") . "\n";
 }
+?>

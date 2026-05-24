@@ -25,9 +25,14 @@ $dashboardData = [
 ];
 
 if ($parentId) {
+    // Add missing column fallback
+    try {
+        $connect->exec("ALTER TABLE parent_subscription ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+    } catch (Exception $e) { /* ignore if already exists or fails */ }
+
     // Subscription
     try {
-        $sql = "SELECT s.plan_name, s.price, s.plan_period
+        $sql = "SELECT s.plan_name, s.price, s.plan_period, ps.created_at AS subscribed_at
                 FROM parent_subscription ps
                 INNER JOIN subscription s ON ps.subscription_id = s.subscription_id
                 WHERE ps.parent_id = :parent_id LIMIT 1";
@@ -36,6 +41,21 @@ if ($parentId) {
         $plan = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($plan) {
             $planname = $plan['plan_name'];
+            
+            // Calculate expiry: subscribed_at + 30 days
+            $subscribedAt = strtotime($plan['subscribed_at'] ?? 'now');
+            $expiresAt = $subscribedAt + (30 * 86400);
+            $isExpired = time() > $expiresAt;
+            $plan['expires_at'] = date('Y-m-d H:i:s', $expiresAt);
+            $plan['is_expired'] = $isExpired;
+            
+            // If expired, downgrade to Free in memory
+            if ($isExpired && $plan['plan_name'] === 'Premium') {
+                $planname = 'Free';
+                $plan['plan_name'] = 'Free';
+                $plan['expired_premium'] = true; // flag to show re-subscription UI
+            }
+            
             $dashboardData['subscription'] = $plan;
         }
     } catch (Exception $e) { /* subscription query failed gracefully */ }
@@ -65,7 +85,7 @@ if ($parentId) {
 
             // All growth history
             try {
-                $s3 = $connect->prepare("SELECT height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = :cid ORDER BY recorded_at ASC");
+                $s3 = $connect->prepare("SELECT record_id, height, weight, head_circumference, recorded_at FROM growth_record WHERE child_id = :cid ORDER BY recorded_at ASC");
                 $s3->execute(['cid' => $ch['child_id']]);
                 $ch['growth_history'] = $s3->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) { $ch['growth_history'] = []; }
