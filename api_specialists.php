@@ -21,15 +21,17 @@ try {
     $colCheck = $connect->query("SHOW COLUMNS FROM `specialist`");
     $existingCols = array_column($colCheck->fetchAll(PDO::FETCH_ASSOC), 'Field');
 
-    $hasBio       = in_array('bio',                $existingCols);
-    $hasFee       = in_array('consultation_fee',   $existingCols);
-    $hasPhoto     = in_array('profile_photo',      $existingCols);
-    $hasCtypes    = in_array('consultation_types', $existingCols);
+    $hasBio           = in_array('bio',                $existingCols);
+    $hasFee           = in_array('consultation_fee',   $existingCols);
+    $hasPhoto         = in_array('profile_photo',      $existingCols);
+    $hasCtypes        = in_array('consultation_types', $existingCols);
+    $hasCertifications = in_array('certifications',     $existingCols);
 
     $bioCol    = $hasBio    ? 's.bio'                : "NULL AS bio";
     $feeCol    = $hasFee    ? 's.consultation_fee'   : "200.00 AS consultation_fee";
     $photoCol  = $hasPhoto  ? 's.profile_photo'      : "NULL AS profile_photo";
     $ctypesCol = $hasCtypes ? 's.consultation_types' : "'onsite,online' AS consultation_types";
+    $certificationsCol = $hasCertifications ? 's.certifications AS certificate_of_experience' : 's.certificate_of_experience';
 
     // ── Main specialists query ─────────────────────────────────────
     // Only exposes professional/public fields — never email, password, phone
@@ -40,7 +42,7 @@ try {
             s.last_name,
             s.specialization,
             s.experience_years,
-            s.certificate_of_experience,
+            {$certificationsCol},
             {$ctypesCol},
             {$feeCol},
             {$photoCol},

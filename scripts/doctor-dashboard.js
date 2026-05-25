@@ -2,9 +2,15 @@
 const SPECIALIST_ID = (typeof SESSION_SPECIALIST_ID !== 'undefined') ? SESSION_SPECIALIST_ID : 0;
 let messagesPollInterval = null;
 
+let doctorNotifPollInterval = null;
+
 document.addEventListener('DOMContentLoaded', function () {
     initDoctorNav();
     loadPatientsData();
+    if (doctorNotifPollInterval) clearInterval(doctorNotifPollInterval);
+    doctorNotifPollInterval = setInterval(() => {
+        if (typeof loadDoctorNotifications === 'function') loadDoctorNotifications();
+    }, 60000);
 });
 
 // ─── Navigation ─────────────────────────────────────
@@ -126,11 +132,31 @@ async function toggleDoctorNotifDropdown() {
     }
 }
 
+function getDoctorNotifPrefs() {
+    return JSON.parse(localStorage.getItem(`dr_notif_prefs_${SPECIALIST_ID}`) || '{"new_appointment":true,"new_message":true,"report_shared":true,"appointment_reminder":true}');
+}
+
+function filterDoctorNotifications(notifications) {
+    const prefs = getDoctorNotifPrefs();
+    return notifications.filter(n => {
+        if (n.type === 'new_appointment') return prefs.new_appointment !== false;
+        if (n.type === 'new_message') return prefs.new_message !== false;
+        if (n.type === 'report_shared') return prefs.report_shared !== false;
+        if (n.type === 'appointment_reminder') return prefs.appointment_reminder !== false;
+        // Legacy system notifications for report shared
+        if (n.type === 'system' && (n.title || '').toLowerCase().includes('report shared')) {
+            return prefs.report_shared !== false;
+        }
+        return true;
+    });
+}
+
 async function loadDoctorNotifications() {
     const contentDiv = document.getElementById('doctor-notif-content');
     if (!contentDiv) return;
 
     try {
+        fetch('api_doctor_appointment_reminders.php').catch(() => {});
         const res = await fetch('api_notifications.php?action=list');
         const data = await res.json();
         
@@ -138,15 +164,7 @@ async function loadDoctorNotifications() {
         let unreadCount = 0;
         
         if (data.notifications) {
-            const prefs = JSON.parse(localStorage.getItem(`dr_notif_prefs_${SPECIALIST_ID}`) || '{"new_appointment":true,"new_message":true,"report_shared":true}');
-            
-            notifications = data.notifications.filter(n => {
-                if (n.type === 'appointment_reminder' || n.type === 'new_appointment') return prefs.new_appointment !== false;
-                if (n.type === 'new_message') return prefs.new_message !== false;
-                if (n.type === 'report_shared') return prefs.report_shared !== false;
-                return true; // keep system or other notifications
-            });
-            
+            notifications = filterDoctorNotifications(data.notifications);
             unreadCount = notifications.filter(n => n.is_read == 0).length;
         }
 
@@ -174,14 +192,17 @@ async function loadDoctorNotifications() {
         } else {
             contentDiv.style.cssText = 'max-height:400px; overflow-y:auto; padding:0;';
 
-            const getIcon = (type) => {
+            const getIcon = (type, title) => {
                 const icons = {
                     'appointment_reminder': { bg: 'rgba(13,148,136,0.12)', color: '#0d9488', path: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+                    'new_appointment': { bg: 'rgba(34,197,94,0.12)', color: '#16a34a', path: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/>' },
                     'new_message': { bg: 'rgba(168,85,247,0.12)', color: '#7c3aed', path: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
                     'report_shared': { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', path: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>' },
                     'system': { bg: 'rgba(100,116,139,0.12)', color: '#475569', path: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' }
                 };
-                const i = icons[type] || icons['system'];
+                let iconType = type;
+                if (type === 'system' && (title || '').toLowerCase().includes('report shared')) iconType = 'report_shared';
+                const i = icons[iconType] || icons['system'];
                 return `<div style="width:38px;height:38px;border-radius:12px;background:${i.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${i.color}" stroke-width="2">${i.path}</svg></div>`;
             };
 
@@ -197,8 +218,8 @@ async function loadDoctorNotifications() {
             };
 
             let html = notifications.map(n => `
-                <div onclick="markDoctorNotifRead(${n.notification_id}, this); handleDoctorNotifClick('${n.type}')" style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color); display:flex; gap:0.875rem; align-items:flex-start; transition:background 0.15s ease; cursor:pointer; ${n.is_read == 0 ? 'background:rgba(13,148,136,0.04);' : ''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'rgba(13,148,136,0.04)' : 'transparent'}'">
-                    ${getIcon(n.type)}
+                <div onclick="markDoctorNotifRead(${n.notification_id || n.id}, this); handleDoctorNotifClick('${n.type}', '${(n.title || '').replace(/'/g, "\\'")}')" style="padding:1rem 1.25rem; border-bottom:1px solid var(--border-color); display:flex; gap:0.875rem; align-items:flex-start; transition:background 0.15s ease; cursor:pointer; ${n.is_read == 0 ? 'background:rgba(13,148,136,0.04);' : ''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'rgba(13,148,136,0.04)' : 'transparent'}'">
+                    ${getIcon(n.type, n.title)}
                     <div style="flex:1; min-width:0;">
                         <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
                             <span style="font-weight:600; font-size:0.9rem; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${n.title || 'Notification'}</span>
@@ -246,10 +267,11 @@ async function markDoctorNotifRead(id, el) {
     } catch (e) {}
 }
 
-function handleDoctorNotifClick(type) {
+function handleDoctorNotifClick(type, title) {
+    const t = (title || '').toLowerCase();
     if (type === 'new_appointment' || type === 'appointment_reminder') navigateToView('appointments');
     else if (type === 'new_message') navigateToView('messages');
-    else if (type === 'report_shared') navigateToView('reports');
+    else if (type === 'report_shared' || (type === 'system' && t.includes('report shared'))) navigateToView('reports');
     
     const dropdown = document.getElementById('doctor-notif-dropdown');
     if (dropdown) dropdown.style.display = 'none';
@@ -275,22 +297,19 @@ function openAllDoctorNotificationsModal() {
     fetch('api_notifications.php?action=list')
     .then(r => r.json())
     .then(data => {
-        const prefs = JSON.parse(localStorage.getItem(`dr_notif_prefs_${SPECIALIST_ID}`) || '{"new_appointment":true,"new_message":true,"report_shared":true}');
-        let notifications = (data.notifications || []).filter(n => {
-            if (n.type === 'appointment_reminder' || n.type === 'new_appointment') return prefs.new_appointment !== false;
-            if (n.type === 'new_message') return prefs.new_message !== false;
-            if (n.type === 'report_shared') return prefs.report_shared !== false;
-            return true;
-        });
+        let notifications = filterDoctorNotifications(data.notifications || []);
         
-        const getIcon = (type) => {
+        const getIcon = (type, title) => {
             const icons = {
                 'appointment_reminder': { bg: 'rgba(13,148,136,0.12)', color: '#0d9488', path: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+                'new_appointment': { bg: 'rgba(34,197,94,0.12)', color: '#16a34a', path: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
                 'new_message': { bg: 'rgba(168,85,247,0.12)', color: '#7c3aed', path: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
                 'report_shared': { bg: 'rgba(59,130,246,0.12)', color: '#2563eb', path: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>' },
                 'system': { bg: 'rgba(100,116,139,0.12)', color: '#475569', path: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>' }
             };
-            const i = icons[type] || icons['system'];
+            let iconType = type;
+            if (type === 'system' && (title || '').toLowerCase().includes('report shared')) iconType = 'report_shared';
+            const i = icons[iconType] || icons['system'];
             return `<div style="width:44px;height:44px;border-radius:14px;background:${i.bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${i.color}" stroke-width="2">${i.path}</svg></div>`;
         };
 
@@ -306,8 +325,8 @@ function openAllDoctorNotificationsModal() {
         };
 
         const notifRows = notifications.length > 0 ? notifications.map(n => `
-            <div onclick="markDoctorNotifRead(${n.notification_id}, this); handleDoctorNotifClick('${n.type}'); this.closest('.report-modal-overlay').remove();" style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-color); display:flex; gap:1rem; align-items:flex-start; transition:background 0.15s; cursor:pointer; position:relative; ${n.is_read == 0 ? 'background:rgba(13,148,136,0.04);' : ''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'rgba(13,148,136,0.04)' : 'transparent'}'">
-                ${getIcon(n.type)}
+            <div onclick="markDoctorNotifRead(${n.notification_id || n.id}, this); handleDoctorNotifClick('${n.type}', '${(n.title || '').replace(/'/g, "\\'")}'); this.closest('.report-modal-overlay').remove();" style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-color); display:flex; gap:1rem; align-items:flex-start; transition:background 0.15s; cursor:pointer; position:relative; ${n.is_read == 0 ? 'background:rgba(13,148,136,0.04);' : ''}" onmouseover="this.style.background='var(--bg-secondary)'" onmouseout="this.style.background='${n.is_read == 0 ? 'rgba(13,148,136,0.04)' : 'transparent'}'">
+                ${getIcon(n.type, n.title)}
                 <div style="flex:1;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.35rem;">
                         <span style="font-weight:600; font-size:1rem; color:var(--text-primary);">${n.title || 'Notification'}</span>
@@ -378,7 +397,9 @@ function showToast(message, type) {
     toast.className = `dr-toast dr-toast-${type}`;
     const icon = type === 'success'
         ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'
-        : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+        : (type === 'info'
+            ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'
+            : '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>');
     toast.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;flex-shrink:0;">${icon}</svg><span>${message}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => toast.classList.add('show'), 10);
@@ -858,21 +879,47 @@ function submitDoctorReport(e) {
 // ═══════════════════════════════════════════════════
 function viewSharedReport(filePath, reportType) {
     if (!filePath) { showToast('No report file available', 'error'); return; }
-    window.open(filePath, '_blank');
+    // For system-generated reports (api_export_pdf.php), open without auto-print
+    if (filePath.includes('api_export_pdf.php')) {
+        // Add a flag to prevent auto-print when just viewing
+        const viewUrl = filePath + (filePath.includes('?') ? '&' : '?') + 'view=1';
+        window.open(viewUrl, '_blank');
+    } else {
+        // Uploaded PDF – open directly
+        window.open(filePath, '_blank');
+    }
 }
 
 function downloadSharedReport(filePath, reportType) {
     if (!filePath) { showToast('No report file available', 'error'); return; }
+
+    showToast('Generating PDF, please wait...', 'info');
+
+    // For system-generated reports, request a real PDF via download=1
+    let downloadUrl = filePath;
+    if (filePath.includes('api_export_pdf.php')) {
+        downloadUrl = filePath + (filePath.includes('?') ? '&' : '?') + 'download=1';
+    }
+
+    // Trigger download directly via a temporary anchor element
     const a = document.createElement('a');
-    a.href = filePath;
-    a.download = 'report_' + reportType + '_' + Date.now() + '.pdf';
-    a.target = '_blank';
+    a.href = downloadUrl;
+    // Set custom filename if it is an uploaded PDF
+    if (!filePath.includes('api_export_pdf.php')) {
+        a.download = 'BrightSteps_' + reportType + '_' + Date.now() + '.pdf';
+    } else {
+        // For system generated reports, let it open in a new tab/window to trigger attachment download
+        a.target = '_blank';
+    }
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+
+    // Update toast to success after a brief delay
+    setTimeout(() => {
+        showToast('Report download initiated successfully!', 'success');
+    }, 1500);
 }
-
-
 
 // ═══════════════════════════════════════════════════
 // APPOINTMENTS PAGE
@@ -1485,10 +1532,23 @@ function getMessagesView() {
             </div>
             <div class="chat-window" id="chatWindow">
                 <div class="chat-header" id="chatHeader">
-                    <div class="chat-header-info">
-                        <div class="conversation-avatar chat-header-avatar">?</div>
-                        <div><div class="chat-header-name">Select a conversation</div>
-                        <div class="chat-header-detail">Choose a parent from the list to start chatting</div></div>
+                    <div class="chat-header-info" style="display:flex; align-items:center; justify-content:space-between; width:100%;">
+                        <div style="display:flex; align-items:center; gap:0.75rem;">
+                            <div class="conversation-avatar chat-header-avatar">?</div>
+                            <div><div class="chat-header-name">Select a conversation</div>
+                            <div class="chat-header-detail">Choose a parent from the list to start chatting</div></div>
+                        </div>
+                        <button id="dr-reminder-btn" onclick="sendDrReminder()" title="Send meeting reminder" style="display:none;padding:0.4rem 0.85rem;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:600;white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">📅 Reminder</button>
+                    </div>
+                </div>
+                <!-- Appointment Info Bar -->
+                <div id="dr-appt-bar" style="display:none;padding:0.6rem 1.25rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-bottom:1px solid #c7d2fe;flex-shrink:0;"></div>
+                <!-- In-chat search -->
+                <div id="dr-chat-search-bar" style="display:none;padding:0.5rem 1rem;border-bottom:1px solid #f1f5f9;background:#fafbfc;flex-shrink:0;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="dr-chat-search-input" placeholder="Search in conversation..." style="flex:1;padding:0.4rem 0.6rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.8rem;outline:none;" oninput="filterDrMessages(this.value)">
+                        <button onclick="toggleDrChatSearch()" style="border:none;background:none;cursor:pointer;color:#94a3b8;font-size:1rem;padding:0.2rem;">✕</button>
                     </div>
                 </div>
                 <div class="chat-messages" id="chatMessages">
@@ -1502,10 +1562,13 @@ function getMessagesView() {
                 <div class="chat-input-bar">
                     <div class="chat-input-wrapper">
                         <textarea class="chat-input" id="chatInput" placeholder="Type your message..." rows="1" onkeydown="handleChatKeydown(event)"></textarea>
-                        <button onclick="document.getElementById('drChatFile').click()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;">
+                        <button onclick="document.getElementById('drChatFile').click()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;" title="Attach file">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         </button>
                         <input type="file" id="drChatFile" style="display:none" onchange="handleDrChatFile(event)">
+                        <button onclick="toggleDrChatSearch()" title="Search messages" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </button>
                         <button class="chat-send-btn" onclick="sendMessage()" title="Send message">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
@@ -1616,15 +1679,39 @@ function selectConversationById(partnerId) {
     const activeItem = document.querySelector(`.conversation-item[data-partner="${partnerId}"]`);
     const badge = activeItem?.querySelector('.conversation-unread');
     if (badge) badge.remove();
+    
+    // Reset search bar state on selecting new conversation
+    const searchBar = document.getElementById('dr-chat-search-bar');
+    if (searchBar) searchBar.style.display = 'none';
+    const searchInput = document.getElementById('dr-chat-search-input');
+    if (searchInput) searchInput.value = '';
+    
     const conv = allConversationsCache.find(c => c.partner_id == partnerId);
     if (conv) {
         const header = document.getElementById('chatHeader');
         if (header) {
             const initials = (conv.partner_first_name?.charAt(0) || '') + (conv.partner_last_name?.charAt(0) || '');
             header.querySelector('.chat-header-info').innerHTML = `
-                <div class="conversation-avatar chat-header-avatar">${initials}</div>
-                <div><div class="chat-header-name">${conv.partner_first_name} ${conv.partner_last_name}</div>
-                <div class="chat-header-detail">${conv.partner_role === 'parent' ? 'Parent' : conv.partner_role || 'User'}</div></div>`;
+                <div style="display:flex; align-items:center; gap:0.75rem;">
+                    <div class="conversation-avatar chat-header-avatar">${initials}</div>
+                    <div><div class="chat-header-name">${conv.partner_first_name} ${conv.partner_last_name}</div>
+                    <div class="chat-header-detail">${conv.partner_role === 'parent' ? 'Parent' : conv.partner_role || 'User'}</div></div>
+                </div>
+                <button id="dr-reminder-btn" onclick="sendDrReminder()" title="Send meeting reminder" style="display:inline-flex;padding:0.4rem 0.85rem;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:600;white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">📅 Reminder</button>
+            `;
+        }
+
+        // Show appointment info bar
+        const apptBar = document.getElementById('dr-appt-bar');
+        if (apptBar && conv.appointment_id) {
+            const aptDate = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+            const aptTime = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+            const aptType = (conv.appointment_type || '').charAt(0).toUpperCase() + (conv.appointment_type || '').slice(1);
+            const statusColor = conv.appointment_status === 'confirmed' ? '#10b981' : (conv.appointment_status === 'completed' ? '#6366f1' : '#f59e0b');
+            apptBar.style.display = 'flex';
+            apptBar.innerHTML = `<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;width:100%;"><span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;font-weight:600;color:#4338ca;">📅 ${aptDate}</span><span style="font-size:0.75rem;color:#6366f1;font-weight:500;">⏰ ${aptTime}</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:6px;background:${statusColor}18;color:${statusColor};font-weight:600;text-transform:capitalize;">${conv.appointment_status}</span><span style="font-size:0.7rem;color:#64748b;margin-left:auto;">${aptType}${conv.clinic_name ? ' · ' + conv.clinic_name : ''}</span></div>`;
+        } else if (apptBar) {
+            apptBar.style.display = 'none';
         }
     }
     loadChatMessages(partnerId);
@@ -1635,6 +1722,53 @@ function selectConversationById(partnerId) {
 }
 
 let lastMessageId = 0;
+
+function renderDrMessageItem(m) {
+    const isSent = m.sender_id == SPECIALIST_ID;
+    const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const senderName = isSent ? 'You' : (m.sender_first_name || 'Parent');
+    
+    // Checkmarks
+    let checkmark = '';
+    if (isSent) {
+        checkmark = m.is_read == 1
+            ? '<span style="color:rgba(255,255,255,0.85);font-size:0.65rem;margin-left:4px;" title="Read">✓✓</span>'
+            : '<span style="color:rgba(255,255,255,0.5);font-size:0.65rem;margin-left:4px;" title="Sent">✓</span>';
+    }
+
+    // Google Meet links in content detection
+    let contentHtml = '';
+    const msgText = m.content || '';
+    const meetRegex = /(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/gi;
+    const hasMeetInContent = meetRegex.test(msgText);
+    
+    // Clean text of meet link to display text separately
+    const cleanText = msgText.replace(meetRegex, '').trim();
+    if (cleanText) {
+        contentHtml += `<div>${cleanText}</div>`;
+    }
+    
+    // Render meet link card if present
+    let meetUrl = m.meeting_link || (hasMeetInContent ? msgText.match(/(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/i)[0] : null);
+    if (meetUrl) {
+        if (!/^https?:\/\//i.test(meetUrl)) meetUrl = 'https://' + meetUrl;
+        contentHtml += `<a href="${meetUrl}" target="_blank" style="display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;padding:0.6rem 0.85rem;background:${isSent ? 'rgba(255,255,255,0.15)' : '#f0fdf4'};border:1px solid ${isSent ? 'rgba(255,255,255,0.2)' : '#bbf7d0'};border-radius:10px;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <div style="width:32px;height:32px;background:linear-gradient(135deg,#34d399,#10b981);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+            <div><div style="font-size:0.8rem;font-weight:700;color:${isSent ? '#fff' : '#059669'};">Google Meet</div><div style="font-size:0.7rem;color:${isSent ? 'rgba(255,255,255,0.75)' : '#6b7280'};">Click to join meeting</div></div></a>`;
+    }
+    
+    if (m.file_path) {
+        contentHtml += `<div style="margin-top:0.5rem;"><a href="${m.file_path}" target="_blank" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.65rem;background:${isSent ? 'rgba(255,255,255,0.15)' : '#f1f5f9'};border:1px solid ${isSent ? 'rgba(255,255,255,0.2)' : '#e2e8f0'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.78rem;color:${isSent ? '#fff' : '#6366f1'};">📎 Attachment</a></div>`;
+    }
+
+    return `<div class="dr-msg-bubble-wrapper" style="display:flex;${isSent ? 'justify-content:flex-end;' : ''};margin-bottom:0.6rem;">
+        <div class="message-bubble ${isSent ? 'message-sent' : 'message-received'}" style="max-width:75%;padding:0.65rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.5;position:relative;${isSent ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;'}">
+            <div style="font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;color:${isSent ? 'rgba(255,255,255,0.8)' : '#6366f1'};">${senderName}</div>
+            <div class="message-content">${contentHtml}</div>
+            <div class="message-time" style="font-size:0.65rem;margin-top:0.3rem;display:flex;align-items:center;justify-content:flex-end;${isSent ? 'color:rgba(255,255,255,0.7);' : 'color:#94a3b8;'}">${time}${checkmark}</div>
+        </div>
+    </div>`;
+}
 
 function loadChatMessages(partnerId, silent) {
     fetch(`api_get_messages.php?other_user_id=${partnerId}`)
@@ -1648,27 +1782,19 @@ function loadChatMessages(partnerId, silent) {
                     if (newMsgs.length > 0) {
                         const isAtBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 30;
                         newMsgs.forEach(m => {
-                            const isSent = m.sender_id == SPECIALIST_ID;
-                            const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                            const fileHtml = m.file_path ? `<div class="message-attachment"><a href="${m.file_path}" target="_blank" style="color:inherit;text-decoration:underline;">📎 Attachment</a></div>` : '';
-                            const bubble = document.createElement('div');
-                            bubble.className = `message-bubble ${isSent ? 'message-sent' : 'message-received'}`;
-                            bubble.innerHTML = `<div class="message-content">${m.content}${fileHtml}</div><div class="message-time">${time}</div>`;
-                            container.appendChild(bubble);
+                            const htmlString = renderDrMessageItem(m);
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = htmlString;
+                            container.appendChild(tempDiv.firstElementChild);
                         });
                         lastMessageId = Math.max(...result.data.map(m => m.message_id));
                         if (isAtBottom) container.scrollTop = container.scrollHeight;
                     }
                 } else {
                     // Full render (first load or non-silent)
-                    let html = '<div class="chat-date-divider"><span>Conversation</span></div>';
+                    let html = '<div class="chat-date-divider" style="text-align:center;margin:1rem 0;color:var(--text-secondary);font-size:0.75rem;"><span>Conversation</span></div>';
                     result.data.forEach(m => {
-                        const isSent = m.sender_id == SPECIALIST_ID;
-                        const time = new Date(m.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                        const fileHtml = m.file_path ? `<div class="message-attachment"><a href="${m.file_path}" target="_blank" style="color:inherit;text-decoration:underline;">📎 Attachment</a></div>` : '';
-                        html += `<div class="message-bubble ${isSent ? 'message-sent' : 'message-received'}">
-                            <div class="message-content">${m.content}${fileHtml}</div>
-                            <div class="message-time">${time}</div></div>`;
+                        html += renderDrMessageItem(m);
                     });
                     container.innerHTML = html;
                     lastMessageId = Math.max(...result.data.map(m => m.message_id));
@@ -1694,12 +1820,27 @@ function sendMessage() {
     const text = input?.value.trim();
     if (!text || !currentPartnerId) return;
     
+    // Client-side Zoom/Teams rejection
+    if (text && (/zoom\.(us|com)/i.test(text) || /teams\.(microsoft|live)\.com/i.test(text))) {
+        alert('Only Google Meet links are allowed. Zoom and Teams links are not permitted.');
+        return;
+    }
+    
     // Optimistic UI update
     const container = document.getElementById('chatMessages');
     if (container) {
         const bubble = document.createElement('div');
-        bubble.className = 'message-bubble message-sent';
-        bubble.innerHTML = `<div class="message-content">${text}</div><div class="message-time">Just now</div>`;
+        bubble.className = 'dr-msg-bubble-wrapper';
+        bubble.style.display = 'flex';
+        bubble.style.justifyContent = 'flex-end';
+        bubble.style.marginBottom = '0.6rem';
+        bubble.innerHTML = `
+            <div class="message-bubble message-sent" style="max-width:75%;padding:0.65rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.5;position:relative;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;">
+                <div style="font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;color:rgba(255,255,255,0.8);">You</div>
+                <div class="message-content"><div>${text}</div></div>
+                <div class="message-time" style="font-size:0.65rem;margin-top:0.3rem;display:flex;align-items:center;justify-content:flex-end;color:rgba(255,255,255,0.7);">Just now</div>
+            </div>
+        `;
         container.appendChild(bubble);
         container.scrollTop = container.scrollHeight;
     }
@@ -1727,8 +1868,12 @@ function sendRealMessage(text, file) {
     fetch('api_send_message.php', {
         method: 'POST', body: fd
     }).then(r => r.json()).then(result => {
-        if (result.success) loadChatMessages(currentPartnerId, false);
-        else showToast('Failed to send message', 'error');
+        if (result.success) {
+            loadChatMessages(currentPartnerId, false);
+        } else {
+            if (result.error) alert(result.error);
+            else showToast('Failed to send message', 'error');
+        }
     }).catch(() => {});
 }
 
@@ -1742,6 +1887,48 @@ function filterConversations(query) {
         const name = item.querySelector('.conversation-name')?.textContent.toLowerCase() || '';
         item.style.display = name.includes(q) ? '' : 'none';
     });
+}
+
+function toggleDrChatSearch() {
+    const bar = document.getElementById('dr-chat-search-bar');
+    if (!bar) return;
+    if (bar.style.display === 'none' || !bar.style.display) {
+        bar.style.display = 'block';
+        const inp = document.getElementById('dr-chat-search-input');
+        if (inp) { inp.value = ''; inp.focus(); }
+    } else {
+        bar.style.display = 'none';
+        filterDrMessages('');
+    }
+}
+
+function filterDrMessages(q) {
+    const bubbles = document.querySelectorAll('#chatMessages .dr-msg-bubble-wrapper');
+    q = q.toLowerCase();
+    bubbles.forEach(b => {
+        const text = b.textContent.toLowerCase();
+        b.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+}
+
+function sendDrReminder() {
+    if (!currentPartnerId) return;
+    const conv = allConversationsCache.find(c => c.partner_id == currentPartnerId);
+    if (!conv || !conv.appointment_scheduled_at) {
+        alert('No appointment data available.');
+        return;
+    }
+    const aptDate = new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const aptTime = new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const reminderText = `📅 Appointment Reminder: Our ${conv.appointment_type || 'appointment'} is scheduled for ${aptDate} at ${aptTime}${conv.clinic_name ? ' at ' + conv.clinic_name : ''}. Looking forward to it!`;
+    
+    const input = document.getElementById('chatInput');
+    if (input) {
+        input.value = reminderText;
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+        input.focus();
+    }
 }
 
 // ═══════════════════════════════════════════════════

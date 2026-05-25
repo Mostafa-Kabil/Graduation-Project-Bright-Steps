@@ -8383,11 +8383,11 @@
     // ── Messages View (Specialist + Community) ──────────────────
     // ══════════════════════════════════════════════════════════════
     window.getMessagesView = function () {
-        // Check if parent has any approved appointments
+        // Check if parent has any active appointments (confirmed/completed/approved)
         const d = window.dashboardData || {};
         let hasApprovedAppt = false;
         if (d.parent && d.parent.appointments) {
-            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed');
+            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed' || a.status === 'confirmed');
         }
 
         if (!hasApprovedAppt) {
@@ -8415,7 +8415,7 @@
             <h1 class="dashboard-title">Messages</h1>
             <p class="dashboard-subtitle">Communicate with your specialists</p>
         </div></div>
-        <div style="display:flex;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;height:550px;background:#fff;">
+        <div style="display:flex;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;height:600px;background:#fff;">
             <!-- Conversation List -->
             <div style="width:320px;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0;">
                 <div style="padding:1rem;border-bottom:1px solid #f1f5f9;">
@@ -8425,16 +8425,30 @@
             </div>
             <!-- Chat Window -->
             <div style="flex:1;display:flex;flex-direction:column;">
-                <div id="parent-chat-header" style="padding:1rem 1.5rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:1rem;">
+                <div id="parent-chat-header" style="padding:0.85rem 1.25rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:0.85rem;">
                     <div id="pch-avatar" style="width:2.75rem;height:2.75rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.9rem;flex-shrink:0;">SA</div>
                     <div style="flex:1;"><div id="pch-name" style="font-weight:700;font-size:0.95rem;color:#1e293b;">Dr. Sarah Ahmed</div><div id="pch-detail" style="font-size:0.8rem;color:#94a3b8;">Pediatric Specialist</div></div>
+                    <button id="pch-reminder-btn" onclick="sendParentReminder()" title="Send meeting reminder" style="display:none;padding:0.4rem 0.85rem;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:600;white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">📅 Reminder</button>
                 </div>
-                <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:0.75rem;background:#f8fafc;"></div>
+                <!-- Appointment Info Bar -->
+                <div id="parent-appt-bar" style="display:none;padding:0.6rem 1.25rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-bottom:1px solid #c7d2fe;"></div>
+                <!-- In-chat search -->
+                <div id="parent-chat-search-bar" style="display:none;padding:0.5rem 1rem;border-bottom:1px solid #f1f5f9;background:#fafbfc;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="parent-chat-search-input" placeholder="Search in conversation..." style="flex:1;padding:0.4rem 0.6rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.8rem;outline:none;" oninput="filterParentMessages(this.value)">
+                        <button onclick="toggleParentChatSearch()" style="border:none;background:none;cursor:pointer;color:#94a3b8;font-size:1rem;padding:0.2rem;">✕</button>
+                    </div>
+                </div>
+                <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:0.6rem;background:#f8fafc;"></div>
                 <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;">
-                    <button onclick="document.getElementById('parentChatFile').click()" style="width:40px;height:40px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color=\'#6366f1\'" onmouseout="this.style.color=\'#94a3b8\'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <button onclick="document.getElementById('parentChatFile').click()" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                     </button>
                     <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
+                    <button onclick="toggleParentChatSearch()" title="Search messages" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </button>
                     <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
                     <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -8467,29 +8481,52 @@
                 return;
             }
 
+            window._parentConversationsCache = data.conversations;
             var html = '';
             data.conversations.forEach(c => {
                 var lastMsg = c.last_message || '';
                 var preview = lastMsg.length > 35 ? lastMsg.substring(0, 35) + '...' : lastMsg;
+                if (!preview) preview = 'No messages yet';
                 var isActive = c.partner_id == window._parentCurrentChat;
                 var initials = (c.partner_first_name.charAt(0) + c.partner_last_name.charAt(0)).toUpperCase();
                 var gradient = 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+                var unread = parseInt(c.unread_count) || 0;
                 
-                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ', \'' + c.partner_first_name + ' ' + c.partner_last_name + '\', \'' + (c.specialization || 'Specialist') + '\', \'' + initials + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
+                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ')" style="padding:0.85rem 1.15rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
                     + '<div style="width:2.5rem;height:2.5rem;background:' + gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initials + '</div>'
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.partner_first_name + ' ' + c.partner_last_name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + (c.last_message_time ? formatRelativeDate(c.last_message_time) : '') + '</span></div>'
-                    + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
+                    + '<div style="display:flex;justify-content:space-between;align-items:center;"><p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + preview + '</p>' + (unread > 0 ? '<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.65rem;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px;margin-left:6px;">' + unread + '</span>' : '') + '</div></div></div>';
             });
             list.innerHTML = html;
         } catch(e) {}
     };
 
-    window.selectParentConvo = async function (partnerId, name, detail, initials) {
+    window.selectParentConvo = async function (partnerId) {
         window._parentCurrentChat = partnerId;
         
-        var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
-        var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = name;
-        var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = detail;
+        // Find conversation data from cache
+        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == partnerId);
+        if (conv) {
+            var initials = (conv.partner_first_name.charAt(0) + conv.partner_last_name.charAt(0)).toUpperCase();
+            var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
+            var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = conv.partner_first_name + ' ' + conv.partner_last_name;
+            var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = conv.specialization || 'Specialist';
+
+            // Show appointment info bar
+            var apptBar = document.getElementById('parent-appt-bar');
+            if (apptBar && conv.appointment_id) {
+                var aptDate = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                var aptTime = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+                var aptType = (conv.appointment_type || '').charAt(0).toUpperCase() + (conv.appointment_type || '').slice(1);
+                var statusColor = conv.appointment_status === 'confirmed' ? '#10b981' : (conv.appointment_status === 'completed' ? '#6366f1' : '#f59e0b');
+                apptBar.style.display = 'flex';
+                apptBar.innerHTML = '<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;width:100%;"><span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;font-weight:600;color:#4338ca;">📅 ' + aptDate + '</span><span style="font-size:0.75rem;color:#6366f1;font-weight:500;">⏰ ' + aptTime + '</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:6px;background:' + statusColor + '18;color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + conv.appointment_status + '</span><span style="font-size:0.7rem;color:#64748b;margin-left:auto;">' + aptType + (conv.clinic_name ? ' · ' + conv.clinic_name : '') + '</span></div>';
+            }
+
+            // Show reminder button
+            var reminderBtn = document.getElementById('pch-reminder-btn');
+            if (reminderBtn) reminderBtn.style.display = 'inline-flex';
+        }
         
         renderParentConvoList(); // Update active state
         loadParentChatMessages();
@@ -8517,22 +8554,49 @@
                     data.messages.forEach(function (msg) {
                         var isMine = msg.sender_id != window._parentCurrentChat; // If not from partner, it's mine
                         var timeStr = new Date(msg.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        var senderName = isMine ? 'You' : (msg.sender_first_name || '');
                         
-                        let contentHtml = '<div>' + (msg.content || '') + '</div>';
+                        // Build content HTML
+                        let contentHtml = '';
                         
-                        if (msg.meeting_link) {
-                            contentHtml += `<div style="margin-top:0.5rem;"><a href="${msg.meeting_link}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Join Meeting</a></div>`;
+                        // Detect Google Meet links in content
+                        var msgText = msg.content || '';
+                        var meetRegex = /(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/gi;
+                        var hasMeetInContent = meetRegex.test(msgText);
+                        
+                        // Render text (replace meet links with card below)
+                        var cleanText = msgText.replace(meetRegex, '').trim();
+                        if (cleanText) {
+                            contentHtml += '<div>' + cleanText + '</div>';
+                        }
+                        
+                        // Google Meet card (from meeting_link column or detected in content)
+                        var meetUrl = msg.meeting_link || (hasMeetInContent ? msgText.match(/(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/i)[0] : null);
+                        if (meetUrl) {
+                            if (!/^https?:\/\//i.test(meetUrl)) meetUrl = 'https://' + meetUrl;
+                            contentHtml += '<a href="' + meetUrl + '" target="_blank" style="display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;padding:0.6rem 0.85rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f0fdf4') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#bbf7d0') + ';border-radius:10px;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.1)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+                                + '<div style="width:32px;height:32px;background:linear-gradient(135deg,#34d399,#10b981);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>'
+                                + '<div><div style="font-size:0.8rem;font-weight:700;color:' + (isMine ? '#fff' : '#059669') + ';">Google Meet</div><div style="font-size:0.7rem;color:' + (isMine ? 'rgba(255,255,255,0.75)' : '#6b7280') + ';">Click to join meeting</div></div></a>';
                         }
                         
                         if (msg.file_path) {
-                            contentHtml += `<div style="margin-top:0.5rem;"><a href="../../${msg.file_path}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);">📎 View Attachment</a></div>`;
+                            contentHtml += '<div style="margin-top:0.5rem;"><a href="../../' + msg.file_path + '" target="_blank" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.65rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f1f5f9') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#e2e8f0') + ';border-radius:8px;text-decoration:none;font-weight:600;font-size:0.78rem;color:' + (isMine ? '#fff' : '#6366f1') + ';">📎 Attachment</a></div>';
                         }
 
-                        html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
-                            + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
+                        // Read status checkmarks
+                        var checkmark = '';
+                        if (isMine) {
+                            checkmark = msg.is_read == 1
+                                ? '<span style="color:rgba(255,255,255,0.85);font-size:0.65rem;margin-left:4px;" title="Read">✓✓</span>'
+                                : '<span style="color:rgba(255,255,255,0.5);font-size:0.65rem;margin-left:4px;" title="Sent">✓</span>';
+                        }
+
+                        html += '<div class="parent-msg-bubble" style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
+                            + '<div style="max-width:75%;padding:0.65rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
                             + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
+                            + '<div style="font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;color:' + (isMine ? 'rgba(255,255,255,0.8)' : '#6366f1') + ';">' + senderName + '</div>'
                             + contentHtml
-                            + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + timeStr + '</div>'
+                            + '<div style="font-size:0.65rem;margin-top:0.3rem;display:flex;align-items:center;justify-content:flex-end;' + (isMine ? 'color:rgba(255,255,255,0.7);' : 'color:#94a3b8;') + '">' + timeStr + checkmark + '</div>'
                             + '</div></div>';
                     });
                 }
@@ -8567,6 +8631,12 @@
         
         if (!text && !file) return;
         
+        // Client-side Zoom/Teams rejection
+        if (text && (/zoom\.(us|com)/i.test(text) || /teams\.(microsoft|live)\.com/i.test(text))) {
+            alert('Only Google Meet links are allowed. Zoom and Teams links are not permitted.');
+            return;
+        }
+        
         const fd = new FormData();
         fd.append('receiver_id', window._parentCurrentChat);
         if (text) fd.append('content', text);
@@ -8578,9 +8648,14 @@
         }
         
         try {
-            await fetch('../../api_send_message.php', { method: 'POST', body: fd });
-            loadParentChatMessages();
-            renderParentConvoList();
+            const res = await fetch('../../api_send_message.php', { method: 'POST', body: fd });
+            const result = await res.json();
+            if (result.error) {
+                alert(result.error);
+            } else {
+                loadParentChatMessages();
+                renderParentConvoList();
+            }
         } catch(e) {
             alert('Failed to send message.');
         }
@@ -8590,6 +8665,49 @@
         var items = document.querySelectorAll('#parent-convo-list > div');
         q = q.toLowerCase();
         items.forEach(function (item) { var name = item.textContent.toLowerCase(); item.style.display = name.includes(q) ? '' : 'none'; });
+    };
+
+    window.toggleParentChatSearch = function() {
+        var bar = document.getElementById('parent-chat-search-bar');
+        if (!bar) return;
+        if (bar.style.display === 'none' || !bar.style.display) {
+            bar.style.display = 'block';
+            var inp = document.getElementById('parent-chat-search-input');
+            if (inp) { inp.value = ''; inp.focus(); }
+        } else {
+            bar.style.display = 'none';
+            // Reset filter
+            filterParentMessages('');
+        }
+    };
+
+    window.filterParentMessages = function(q) {
+        var bubbles = document.querySelectorAll('#parent-chat-messages .parent-msg-bubble');
+        q = q.toLowerCase();
+        bubbles.forEach(function(b) {
+            var text = b.textContent.toLowerCase();
+            b.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+    };
+
+    window.sendParentReminder = async function() {
+        if (!window._parentCurrentChat) return;
+        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == window._parentCurrentChat);
+        if (!conv || !conv.appointment_scheduled_at) {
+            alert('No appointment data available.');
+            return;
+        }
+        var aptDate = new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        var aptTime = new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        var reminderText = '📅 Appointment Reminder: Our ' + (conv.appointment_type || 'appointment') + ' is scheduled for ' + aptDate + ' at ' + aptTime + (conv.clinic_name ? ' at ' + conv.clinic_name : '') + '. Looking forward to it!';
+        
+        var input = document.getElementById('parent-chat-input');
+        if (input) {
+            input.value = reminderText;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+            input.focus();
+        }
     };
 
     window.loadMessages = function () {
