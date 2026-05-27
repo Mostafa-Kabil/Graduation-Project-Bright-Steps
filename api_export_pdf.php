@@ -2,10 +2,17 @@
 /**
  * Bright Steps – PDF Export API
  * Generates branded PDF reports for child development data.
- * Uses pure PHP – no external libraries required.
+ * Supports real PDF download via Dompdf when download=1 is passed.
  */
 session_start();
 include 'connection.php';
+
+// Load Dompdf for PDF generation
+$dompdfAutoload = __DIR__ . '/vendor/autoload.php';
+$hasDompdf = file_exists($dompdfAutoload);
+if ($hasDompdf) {
+    require_once $dompdfAutoload;
+}
 
 if (!isset($_SESSION['id'])) {
     http_response_code(401);
@@ -39,7 +46,8 @@ if ($userRole === 'parent') {
     $stmt = $connect->prepare("SELECT * FROM child WHERE child_id = ? AND parent_id = ?");
     $stmt->execute([$childId, $userId]);
 } else {
-    // Doctor/Specialist: check if shared
+    // Doctor/Specialist/Clinic: check if shared
+    $specialistId = $_SESSION['specialist_id'] ?? $_SESSION['id'] ?? null;
     $stmt = $connect->prepare("
         SELECT c.* 
         FROM child c
@@ -47,7 +55,7 @@ if ($userRole === 'parent') {
         WHERE c.child_id = ? AND sr.doctor_id = ? AND sr.is_shared = 1
         LIMIT 1
     ");
-    $stmt->execute([$childId, $userId]);
+    $stmt->execute([$childId, $specialistId]);
 }
 
 $child = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -145,15 +153,29 @@ ob_start();
             line-height: 1.6;
         }
 
+        /* ── Header: use table layout for Dompdf ── */
         .header {
-            background: linear-gradient(135deg, #6C63FF, #a78bfa);
+            background-color: #6C63FF;
             color: white;
             padding: 24px 30px;
             border-radius: 12px;
             margin-bottom: 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            overflow: hidden;
+        }
+
+        .header-inner {
+            width: 100%;
+        }
+
+        .header-left {
+            float: left;
+            width: 60%;
+        }
+
+        .header-right {
+            float: right;
+            width: 35%;
+            text-align: right;
         }
 
         .header h1 {
@@ -165,6 +187,12 @@ ob_start();
             text-align: right;
             font-size: 9pt;
             opacity: 0.9;
+        }
+
+        .clearfix::after {
+            content: "";
+            display: block;
+            clear: both;
         }
 
         .section {
@@ -181,26 +209,33 @@ ob_start();
             margin-bottom: 12px;
         }
 
+        /* ── Info grid: use table layout for Dompdf ── */
         .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px 24px;
+            width: 100%;
             margin-bottom: 16px;
         }
 
+        .info-row {
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+
         .info-item {
-            display: flex;
-            gap: 8px;
+            float: left;
+            width: 48%;
+            margin-right: 2%;
+            padding: 2px 0;
         }
 
         .info-label {
             font-weight: 600;
             color: #64748b;
-            min-width: 110px;
+            display: inline;
         }
 
         .info-value {
             font-weight: 500;
+            display: inline;
         }
 
         table {
@@ -226,10 +261,6 @@ ob_start();
             font-size: 10pt;
         }
 
-        tr:hover td {
-            background: #fafbfc;
-        }
-
         .badge {
             display: inline-block;
             padding: 2px 10px;
@@ -253,19 +284,26 @@ ob_start();
             color: #991b1b;
         }
 
+        /* ── Stat cards: use table layout for Dompdf ── */
         .stat-cards {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
+            width: 100%;
             margin-bottom: 20px;
+            overflow: hidden;
         }
 
         .stat-card {
+            float: left;
+            width: 23%;
+            margin-right: 2%;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
             border-radius: 10px;
             padding: 14px;
             text-align: center;
+        }
+
+        .stat-card:last-child {
+            margin-right: 0;
         }
 
         .stat-card .value {
@@ -307,44 +345,52 @@ ob_start();
 
 <body>
 
-    <div class="header">
-        <div>
-            <h1>✦ Bright Steps</h1>
-            <div style="font-size: 10pt; margin-top: 4px;">
-                <?= htmlspecialchars($reportTitle) ?>
+    <div class="header clearfix">
+        <div class="header-inner">
+            <div class="header-left">
+                <h1>Bright Steps</h1>
+                <div style="font-size: 10pt; margin-top: 4px;">
+                    <?= htmlspecialchars($reportTitle) ?>
+                </div>
             </div>
-        </div>
-        <div class="meta">
-            <div>Generated:
-                <?= $today ?>
-            </div>
-            <div>Parent:
-                <?= htmlspecialchars($parentName) ?>
+            <div class="header-right">
+                <div class="meta">
+                    <div>Generated: <?= $today ?></div>
+                    <div>Parent: <?= htmlspecialchars($parentName) ?></div>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Child Profile -->
     <div class="section">
-        <div class="section-title">👶 Child Profile</div>
+        <div class="section-title">Child Profile</div>
         <div class="info-grid">
-            <div class="info-item"><span class="info-label">Name:</span><span class="info-value">
-                    <?= htmlspecialchars($child['first_name'] . ' ' . $child['last_name']) ?>
-                </span></div>
-            <div class="info-item"><span class="info-label">Date of Birth:</span><span class="info-value">
-                    <?= $birthFormatted ?>
-                </span></div>
-            <div class="info-item"><span class="info-label">Age:</span><span class="info-value">
-                    <?= $ageDisplay ?>
-                </span></div>
-            <div class="info-item"><span class="info-label">Gender:</span><span class="info-value">
-                    <?= htmlspecialchars($child['gender'] ?? 'Not specified') ?>
-                </span></div>
+            <div class="info-row clearfix">
+                <div class="info-item">
+                    <span class="info-label">Name: </span>
+                    <span class="info-value"><?= htmlspecialchars($child['first_name'] . ' ' . $child['last_name']) ?></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Date of Birth: </span>
+                    <span class="info-value"><?= $birthFormatted ?></span>
+                </div>
+            </div>
+            <div class="info-row clearfix" style="margin-top: 6px;">
+                <div class="info-item">
+                    <span class="info-label">Age: </span>
+                    <span class="info-value"><?= $ageDisplay ?></span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Gender: </span>
+                    <span class="info-value"><?= htmlspecialchars($child['gender'] ?? 'Not specified') ?></span>
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- Quick Stats -->
-    <div class="stat-cards">
+    <div class="stat-cards clearfix">
         <div class="stat-card">
             <div class="value">
                 <?= $growthRecords ? htmlspecialchars($growthRecords[0]['weight'] ?? '—') : '—' ?>
@@ -374,7 +420,7 @@ ob_start();
     <?php if ($type !== 'child-report'): ?>
         <!-- Growth History -->
         <div class="section">
-            <div class="section-title">📏 Growth History</div>
+            <div class="section-title">Growth History</div>
             <?php if (count($growthRecords) > 0): ?>
                 <table>
                     <thead>
@@ -413,7 +459,7 @@ ob_start();
     <?php if ($type === 'full-report'): ?>
         <!-- Appointments -->
         <div class="section">
-            <div class="section-title">📅 Appointment History</div>
+            <div class="section-title">Appointment History</div>
             <?php if (count($appointments) > 0): ?>
                 <table>
                     <thead>
@@ -456,7 +502,7 @@ ob_start();
     <?php if ($type === 'full-report' || $type === 'speech-report'): ?>
         <!-- Speech Analysis -->
         <div class="section">
-            <div class="section-title">🗣️ Speech Analysis History</div>
+            <div class="section-title">Speech Analysis History</div>
             <?php if (count($speechRecords) > 0): ?>
                 <table>
                     <thead>
@@ -497,7 +543,7 @@ ob_start();
     <?php endif; ?>
 
     <div class="footer">
-        <span class="watermark">✦ Bright Steps</span> — AI-Powered Child Development Platform<br>
+        <span class="watermark">Bright Steps</span> — AI-Powered Child Development Platform<br>
         This report was generated on
         <?= $today ?>. Consult your pediatrician for medical advice.
     </div>
@@ -508,8 +554,46 @@ ob_start();
 <?php
 $html = ob_get_clean();
 
-// Output as HTML for browser print-to-PDF
-header('Content-Type: text/html; charset=UTF-8');
-echo $html;
-// Auto-trigger print dialog
-echo '<script>window.onload = function() { window.print(); }</script>';
+$isDownload = isset($_GET['download']) && $_GET['download'] == '1';
+$isViewOnly = isset($_GET['view']) && $_GET['view'] == '1';
+
+// ── Download mode: generate a real PDF file using Dompdf ──
+if ($isDownload && $hasDompdf) {
+    // Prevent any PHP warnings or notices from prepending to the PDF stream
+    error_reporting(0);
+    ini_set('display_errors', 0);
+
+    try {
+        $dompdf = new \Dompdf\Dompdf([
+            'isRemoteEnabled' => true,
+            'defaultFont' => 'sans-serif',
+        ]);
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $childName = preg_replace('/[^a-zA-Z0-9_-]/', '_', ($child['first_name'] ?? '') . '_' . ($child['last_name'] ?? ''));
+        $fileName = 'BrightSteps_' . ucfirst(str_replace('-', '_', $type)) . '_' . $childName . '_' . date('Y-m-d') . '.pdf';
+
+        // Clear all active output buffers to ensure no leading/trailing junk
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        // Stream PDF inline so browser's native viewer opens it cleanly without forcing Adobe save dialog
+        $dompdf->stream($fileName, ['Attachment' => false]);
+        exit;
+    } catch (Exception $e) {
+        // Fallback to HTML if Dompdf fails
+        header('Content-Type: text/html; charset=UTF-8');
+        echo $html;
+        echo '<script>window.onload = function() { window.print(); }</script>';
+    }
+} else {
+    // ── View / default mode: output HTML ──
+    header('Content-Type: text/html; charset=UTF-8');
+    echo $html;
+    if (!$isViewOnly) {
+        echo '<script>window.onload = function() { window.print(); }</script>';
+    }
+}

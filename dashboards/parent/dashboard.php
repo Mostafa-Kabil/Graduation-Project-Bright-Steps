@@ -216,7 +216,7 @@ if ($parentId) {
     <title>Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="../../assets/logo.png">
     <link rel="stylesheet" href="../../styles/globals.css">
-    <link rel="stylesheet" href="dashboard.css">
+    <link rel="stylesheet" href="dashboard.css?v=2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 

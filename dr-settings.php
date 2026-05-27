@@ -394,9 +394,27 @@ try {
     $obStmt = $connect->prepare("SELECT * FROM doctor_onboarding WHERE doctor_id = :did LIMIT 1");
     $obStmt->execute([':did' => $doctor_id]);
     $onboarding = $obStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Also load user settings
+    $settingsStmt = $connect->prepare("SELECT * FROM user_settings WHERE user_id = :uid LIMIT 1");
+    $settingsStmt->execute([':uid' => $doctor_id]);
+    $settings = $settingsStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$settings) {
+        $connect->prepare("INSERT IGNORE INTO user_settings (user_id) VALUES (:uid)")->execute([':uid' => $doctor_id]);
+        $settings = [
+            'push_notifications' => 1,
+            'email_notifications' => 1,
+            'appointment_reminders' => 1
+        ];
+    }
 } catch (Exception $e) {
     $doctor = null;
     $onboarding = null;
+    $settings = [
+        'push_notifications' => 1,
+        'email_notifications' => 1,
+        'appointment_reminders' => 1
+    ];
 }
 $dr_name     = $doctor ? htmlspecialchars($doctor['first_name'] . ' ' . $doctor['last_name']) : 'Dr. User';
 $dr_spec     = $doctor ? htmlspecialchars($doctor['specialization'] ?? 'Specialist') : 'Specialist';
@@ -584,7 +602,7 @@ $current_spec = $doctor['specialization'] ?? '';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('push_notifications', this.checked ? 1 : 0)" <?php echo ($settings['push_notifications'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -594,7 +612,7 @@ $current_spec = $doctor['specialization'] ?? '';
                                     <div class="settings-item-description">Weekly progress reports via email</div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('email_notifications', this.checked ? 1 : 0)" <?php echo ($settings['email_notifications'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -605,7 +623,7 @@ $current_spec = $doctor['specialization'] ?? '';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('appointment_reminders', this.checked ? 1 : 0)" <?php echo ($settings['appointment_reminders'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -1284,6 +1302,20 @@ $current_spec = $doctor['specialization'] ?? '';
             toast.className = 'dr-toast ' + type;
             setTimeout(function () { toast.classList.add('show'); }, 50);
             setTimeout(function () { toast.classList.remove('show'); }, 3500);
+        }
+
+        function updateSetting(key, value) {
+            fetch('api_settings.php?action=update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [key]: value })
+            }).then(r => r.json()).then(res => {
+                if (res.success) {
+                    showToast('Setting updated!', 'success');
+                } else {
+                    showToast(res.error || 'Failed to update setting', 'error');
+                }
+            }).catch(() => showToast('Connection error', 'error'));
         }
 
         // ── Specialty "Other" Toggle ──

@@ -7,18 +7,22 @@ session_start();
 include 'connection.php';
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['id']) && !isset($_GET['clinic_id'])) {
+if (!isset($_SESSION['id']) && !isset($_GET['clinic_id']) && !isset($_GET['user_id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authenticated']);
     exit();
 }
 
 $userId = $_SESSION['id'] ?? null;
+if (isset($_GET['user_id'])) {
+    $userId = (int)$_GET['user_id'];
+}
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 switch ($action) {
 
     // ── Get notifications ────────────────────────────────────────
+    case 'get':
     case 'list':
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
         $isClinic = (isset($_SESSION['role']) && $_SESSION['role'] === 'clinic');

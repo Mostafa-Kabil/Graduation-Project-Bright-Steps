@@ -31,9 +31,8 @@ try {
         JOIN users u ON u.user_id = a.parent_id
         WHERE a.specialist_id = ?
           AND LOWER(a.status) IN ('scheduled', 'confirmed', 'approved', 'pending')
-          AND a.scheduled_at > NOW()
-          AND a.scheduled_at <= DATE_ADD(NOW(), INTERVAL 35 MINUTE)
-          AND a.scheduled_at >= DATE_ADD(NOW(), INTERVAL 25 MINUTE)
+          AND a.scheduled_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+          AND a.scheduled_at <= DATE_ADD(NOW(), INTERVAL 30 MINUTE)
     ");
     $stmt->execute([$doctorId]);
     $upcoming = $stmt->fetchAll(PDO::FETCH_ASSOC);

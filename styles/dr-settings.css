@@ -143,6 +143,8 @@
 .dr-toast.success svg,.dr-toast-success svg{stroke:#fff}
 .dr-toast.error,.dr-toast-error{background:var(--red-500);color:#fff}
 .dr-toast.error svg,.dr-toast-error svg{stroke:#fff}
+.dr-toast.info,.dr-toast-info{background:var(--blue-500);color:#fff}
+.dr-toast.info svg,.dr-toast-info svg{stroke:#fff}
 
 /* ── Focus Areas & Goals Cards ── */
 .dr-focus-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem}
@@ -234,3 +236,9 @@
 [data-theme="dark"] .ds-cert-upload-btn:hover{background:rgba(34,197,94,.15)}
 [data-theme="dark"] .ds-cert-file-info{color:var(--green-400)}
 [data-theme="dark"] .ds-cert-file-info svg{stroke:var(--green-400)}
+
+/* Disabled state for preferences chips */
+.ds-chip.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+}

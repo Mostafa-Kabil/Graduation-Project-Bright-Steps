@@ -156,7 +156,9 @@ async function loadDoctorNotifications() {
     if (!contentDiv) return;
 
     try {
-        fetch('api_doctor_appointment_reminders.php').catch(() => {});
+        try {
+            await fetch('api_doctor_appointment_reminders.php');
+        } catch (e) {}
         const res = await fetch('api_notifications.php?action=list');
         const data = await res.json();
         

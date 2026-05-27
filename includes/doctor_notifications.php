@@ -13,6 +13,23 @@ function doctor_notify(PDO $connect, int $doctorUserId, string $type, string $ti
         $type = 'system';
     }
 
+    // Check doctor's notification settings
+    try {
+        $settingsStmt = $connect->prepare("SELECT * FROM user_settings WHERE user_id = ? LIMIT 1");
+        $settingsStmt->execute([$doctorUserId]);
+        $settings = $settingsStmt->fetch(PDO::FETCH_ASSOC);
+        if ($settings) {
+            if ($type === 'appointment_reminder' && empty($settings['appointment_reminders'])) {
+                return false; // Disabled by setting
+            }
+            if (($type === 'new_appointment' || $type === 'new_message') && empty($settings['push_notifications'])) {
+                return false; // Disabled by setting
+            }
+        }
+    } catch (Exception $e) {
+        // If user_settings doesn't exist or errors out, fallback to inserting
+    }
+
     try {
         $stmt = $connect->prepare(
             "INSERT INTO notifications (user_id, type, title, message) VALUES (?, ?, ?, ?)"
