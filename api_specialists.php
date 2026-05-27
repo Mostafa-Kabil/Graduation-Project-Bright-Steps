@@ -33,6 +33,22 @@ try {
     $ctypesCol = $hasCtypes ? 's.consultation_types' : "'onsite,online' AS consultation_types";
     $certificationsCol = $hasCertifications ? 's.certifications AS certificate_of_experience' : 's.certificate_of_experience';
 
+    $tableCheck = $connect->query("SHOW TABLES LIKE 'specialist_reviews'");
+    $hasReviewsTable = $tableCheck->rowCount() > 0;
+    $reviewsCols = $hasReviewsTable ? "
+            (
+                SELECT COUNT(*)
+                FROM specialist_reviews sr
+                WHERE sr.specialist_id = s.specialist_id
+            ) AS total_reviews,
+            (
+                SELECT AVG(rating)
+                FROM specialist_reviews sr
+                WHERE sr.specialist_id = s.specialist_id
+            ) AS db_rating" : "
+            0 AS total_reviews,
+            NULL AS db_rating";
+
     // ── Main specialists query ─────────────────────────────────────
     // Only exposes professional/public fields — never email, password, phone
     $stmt = $connect->prepare("
@@ -47,20 +63,21 @@ try {
             {$feeCol},
             {$photoCol},
             {$bioCol},
-            c.clinic_name,
-            c.location,
-            c.rating,
+            COALESCE(c.clinic_name, 'Independent Practice') AS clinic_name,
+            COALESCE(c.location, 'Online/Remote') AS location,
+            COALESCE(c.rating, 5.0) AS clinic_rating,
             (
                 SELECT COUNT(*)
                 FROM appointment a
                 WHERE a.specialist_id = s.specialist_id
                   AND a.status IN ('Scheduled','Completed')
-            ) AS total_appointments
+            ) AS total_appointments,
+            {$reviewsCols}
         FROM specialist s
-        INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
         INNER JOIN users u ON u.user_id = s.specialist_id
         WHERE u.status = 'active'
-        ORDER BY c.rating DESC, s.experience_years DESC
+        ORDER BY COALESCE(c.rating, 5.0) DESC, s.experience_years DESC
     ");
     $stmt->execute();
     $specialists = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -90,9 +107,24 @@ try {
             ];
         }
     } catch (Exception $e) {
-        // specialist_availability table may not exist yet — gracefully skip
         $slotMap = [];
     }
+
+    $bookedMap = [];
+    try {
+        $apptsStmt = $connect->query("
+            SELECT specialist_id, scheduled_at 
+            FROM appointment 
+            WHERE status IN ('Scheduled', 'Pending Reschedule', 'Completed') 
+              AND scheduled_at >= CURDATE()
+        ");
+        $allAppts = $apptsStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($allAppts as $a) {
+            $sid = (int)$a['specialist_id'];
+            $dt = substr($a['scheduled_at'], 0, 16); // format: YYYY-MM-DD HH:MM
+            $bookedMap[$sid][] = $dt;
+        }
+    } catch (Exception $e) {}
 
     // ── Build next-3-days availability for each specialist ─────────
     $today = new DateTime();
@@ -127,9 +159,12 @@ try {
 
         $sp['availability']       = $availability;
         $sp['experience_years']   = (int)($sp['experience_years'] ?? 0);
-        $sp['rating']             = $sp['rating'] !== null ? (float)$sp['rating'] : null;
+        $sp['rating']             = $sp['db_rating'] !== null ? (float)$sp['db_rating'] : null;
+        $sp['clinic_rating']      = $sp['clinic_rating'] !== null ? (float)$sp['clinic_rating'] : null;
         $sp['consultation_fee']   = (float)($sp['consultation_fee'] ?? 200.00);
         $sp['total_appointments'] = (int)($sp['total_appointments'] ?? 0);
+        $sp['total_reviews']      = (int)($sp['total_reviews'] ?? 0);
+        $sp['booked_slots']       = $bookedMap[$sid] ?? [];
     }
     unset($sp);
 

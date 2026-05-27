@@ -76,6 +76,7 @@ try {
         $stmt = $connect->prepare("UPDATE growth_record SET height = :h, weight = :w, head_circumference = :hc WHERE record_id = :rid");
         $stmt->execute(['rid' => $recordId, 'h' => $height, 'w' => $weight, 'hc' => $headCirc]);
         $pointsToAward = 0; // No points for editing
+        $pointsMessage = "";
     } else {
         // Fetch latest known values to carry over if a field is omitted for new record
         $stmtPrev = $connect->prepare("
@@ -142,9 +143,9 @@ try {
         $ruleStmt->execute();
         $rule = $ruleStmt->fetch(PDO::FETCH_ASSOC);
 
-        $dailyCap = (int) $rule['daily_cap'];
-        $weeklyCap = (int) $rule['weekly_cap'];
-        $pointsValue = (int) $rule['points_value'];
+        $dailyCap = $rule ? (int) $rule['daily_cap'] : 25;
+        $weeklyCap = $rule ? (int) $rule['weekly_cap'] : 100;
+        $pointsValue = $rule ? (int) $rule['points_value'] : 25;
         $pointsToAward = 0;
         $pointsMessage = "";
 
@@ -157,7 +158,7 @@ try {
         $alreadyEarned = $alreadyEarnedStmt->fetchColumn();
 
         // Check if within caps and not already earned today
-        if ($alreadyEarned == null && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
+        if ($alreadyEarned === false && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
             $pointsToAward = $pointsValue;
             // Update wallet balance and lifetime earned
             $stmt = $connect->prepare("UPDATE parent_points_wallet SET total_points = total_points + ?, lifetime_earned = lifetime_earned + ?, last_earned_at = NOW() WHERE wallet_id = ?");

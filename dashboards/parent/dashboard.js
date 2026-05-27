@@ -21,14 +21,21 @@
         const navContainer = document.getElementById('sidebar-nav');
         if (!navContainer) return;
 
-        navContainer.innerHTML = navItems.map(item => `
+        navContainer.innerHTML = navItems.map(item => {
+            const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
+            const needsPremium = (item.id === 'speech' || item.id === 'motor');
+            const showLock = needsPremium && !isPremium;
+            return `
             <button class="nav-item ${item.id === 'home' ? 'active' : ''}" data-view="${item.id}">
-                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    ${item.icon}
-                </svg>
-                <span>${item.label}</span>
+                <div style="display:flex;align-items:center;gap:0.5rem;width:100%;">
+                    <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        ${item.icon}
+                    </svg>
+                    <span>${item.label}</span>
+                    ${showLock ? '<svg style="margin-left:auto;width:14px;height:14px;color:#f59e0b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>' : ''}
+                </div>
             </button>
-        `).join('');
+        `}).join('');
 
         // Render Top Bar
         renderTopBar();
@@ -37,7 +44,11 @@
         loadNotifCount();
 
         // Streak check-in
-        streakCheckIn();
+        const todayKey = 'bs_streak_checkin_' + new Date().toDateString();
+        if (!sessionStorage.getItem(todayKey)) {
+            sessionStorage.setItem(todayKey, '1');
+            streakCheckIn();
+        }
 
         // Startup: trigger retrospective badge check for current child
         const startChild = (window.dashboardData || {}).children || [];
@@ -216,9 +227,11 @@
                 if (el) el.textContent = data.current_streak || 0;
                 // Show new badge notifications
                 if (data.new_badges && data.new_badges.length > 0) {
-                    data.new_badges.forEach(b => showBadgeToast(b));
+                    const existingNames = (child.badges || []).map(b => b.name);
+                    const trulyNew = data.new_badges.filter(bName => !existingNames.includes(bName));
+                    trulyNew.forEach(b => showBadgeToast(b));
                     if (!child.badges) child.badges = [];
-                    data.new_badges.forEach(bName => {
+                    trulyNew.forEach(bName => {
                         if (!child.badges.find(b => b.name === bName)) {
                             child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
                         }
@@ -394,78 +407,36 @@
         if (sub.plan_name === 'Premium') return true;
 
         if (feature === 'clinic') {
-            // Clinic is Premium Only
-            showPremiumPaywallModal('Clinic Consultations', 'Unlimited access to our network of specialists, online and onsite.');
-            return false;
+            // Clinic is Premium Only (if we wanted it locked, but user wants it open. Wait, we removed this check from switchView anyway)
+            return true;
         }
 
         if (!child) return true; // Let them get to profile first
 
         if (feature === 'speech') {
-            // 3 Free Trials
             try {
                 const res = await fetch(`../../api_speech_history.php?child_id=${child.child_id}`);
                 const data = await res.json();
-                const count = (data.analyses || []).length;
-                if (count >= limit) {
-                    showPremiumPaywallModal('AI Speech Analysis', 'You\'ve reached your free limit of 3 analyses. Upgrade to Premium for unlimited AI insights.');
-                    return false;
-                }
-            } catch (e) {
-                console.error('Trial check failed:', e);
-            }
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                const recentCount = (data.analyses || []).filter(a => new Date(a.sent_at) > sevenDaysAgo).length;
+                localStorage.setItem('bs_trial_speech', recentCount);
+            } catch (e) {}
         }
 
-        if (feature === 'motor') {
-            // 1 Free Trial
-            try {
-                const res = await fetch(`../../api_motor.php?action=list&child_id=${child.child_id}`);
-                const data = await res.json();
-                const count = (data.milestones || []).length;
-                if (count >= limit) {
-                    showPremiumPaywallModal('Motor Skill Tracking', 'You\'ve reached your free limit. Upgrade to Premium to track all developmental milestones.');
-                    return false;
-                }
-            } catch (e) {
-                console.error('Trial check failed:', e);
+
+        // Also check localStorage if they used trials via the button
+        if (window.checkSubscriptionAccess) {
+            if (!window.checkSubscriptionAccess(feature, limit)) {
+                return false;
             }
         }
 
         return true;
+
+        return true;
     }
 
-    function showPremiumPaywallModal(featureName, featureDesc) {
-        let existing = document.getElementById('premium-paywall-modal');
-        if (existing) existing.remove();
 
-        const modal = document.createElement('div');
-        modal.id = 'premium-paywall-modal';
-        modal.innerHTML = `
-            <div id="paywall-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='paywall-overlay')document.getElementById('premium-paywall-modal').remove()">
-                <div style="background:var(--surface-light,#fff);border-radius:32px;padding:3rem;max-width:500px;width:100%;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);">
-                    <div style="width:80px;height:80px;background:linear-gradient(135deg,#fde047,#f59e0b);border-radius:20px;margin:0 auto 1.5rem;display:flex;align-items:center;justify-content:center;font-size:2.5rem;box-shadow:0 10px 20px rgba(245,158,11,0.3);">💎</div>
-                    <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Unlock Premium Access</h2>
-                    <p style="color:var(--slate-500);margin-bottom:2rem;line-height:1.6;">To access <strong>${featureName}</strong>, upgrade to our Premium Plan. ${featureDesc}</p>
-
-                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:20px;padding:1.5rem;margin-bottom:2rem;text-align:left;">
-                        <h4 style="font-size:0.9rem;font-weight:700;color:var(--slate-900);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Premium Features:
-                        </h4>
-                        <ul style="list-style:none;padding:0;margin:0;font-size:0.85rem;color:var(--slate-600);line-height:1.8;">
-                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Unlimited AI Speech Reports</li>
-                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Full Motor Skills Tracking</li>
-                            <li style="display:flex;align-items:start;gap:0.5rem;margin-bottom:0.5rem;"><span>✓</span> Priority Doctor Consultations</li>
-                            <li style="display:flex;align-items:start;gap:0.5rem;"><span>✓</span> Detailed Development Insights</li>
-                        </ul>
-                    </div>
-
-                    <button onclick="triggerPaymentUI('premium_subscription')" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;font-weight:700;border-radius:14px;box-shadow:0 10px 20px rgba(99,102,241,0.3);">Upgrade Now</button>
-                    <button onclick="document.getElementById('premium-paywall-modal').remove()" style="display:block;width:100%;margin-top:1rem;background:none;border:none;color:var(--slate-400);cursor:pointer;font-size:0.85rem;font-weight:500;">Maybe Later</button>
-                </div>
-            </div>`;
-        modal.id = 'premium-paywall-modal';
-        document.body.appendChild(modal);
-    }
 
     window.triggerPaymentUI = async function(type, amount = null, targetId = null) {
         let total = amount;
@@ -473,7 +444,7 @@
 
         if (type === 'premium_subscription') {
             // Fetch price from dashboardData or API
-            total = (window.dashboardData || {}).subscription?.price || '24.99';
+            total = (window.dashboardData || {}).subscription?.price || '250';
         } else if (type === 'appointment') {
             targetName = 'Doctor Consultation';
             // Use the specialist fee if provided
@@ -484,7 +455,7 @@
         modal.id = 'payment-modal';
         modal.innerHTML = `
             <div id="payment-overlay" style="position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(10px);z-index:10001;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='payment-overlay')document.getElementById('payment-modal').remove()">
-                <div style="background:#fff;border-radius:32px;padding:2.5rem;max-width:450px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,0.3);animation: slideUpFade 0.3s ease-out;">
+                <div style="background:#fff;border-radius:32px;padding:2.5rem;max-width:550px;width:100%;box-shadow:0 30px 60px rgba(0,0,0,0.3);animation: slideUpFade 0.3s ease-out;max-height:90vh;overflow-y:auto;">
                     <div style="text-align:center;margin-bottom:2rem;">
                         <div style="width:60px;height:60px;background:linear-gradient(135deg,#4f46e5,#818cf8);color:#fff;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1rem;">💳</div>
                         <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Complete Payment</h2>
@@ -493,7 +464,7 @@
 
                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:2rem;display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-weight:600;color:var(--slate-600);">Total Amount:</span>
-                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">$${total}</span>
+                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">${total} EGP</span>
                     </div>
 
                     <div class="payment-form" style="display:flex;flex-direction:column;gap:1rem;">
@@ -581,9 +552,8 @@
 
         // Check subscription limits
         let access = true;
-        if (viewId === 'clinic') access = await checkSubscriptionAccess('clinic');
-        else if (viewId === 'speech') access = await checkSubscriptionAccess('speech', 3);
-        else if (viewId === 'motor') access = await checkSubscriptionAccess('motor', 1);
+        if (viewId === 'speech') access = await checkSubscriptionAccess('speech', 3);
+        else if (viewId === 'motor') access = await checkSubscriptionAccess('motor', 3);
 
         if (!access) return;
 
@@ -624,8 +594,24 @@
         contentContainer.innerHTML = viewFunction();
 
         // Post-render hooks
+        if (viewId === 'settings') {
+            setTimeout(() => {
+                if (typeof loadInvoiceHistory === 'function') loadInvoiceHistory();
+            }, 150);
+        }
         if (viewId === 'home' || !viewId) {
             loadHomeActivities();
+            // Auto-load checklist so Weekly Plan works
+            var _homeChild = (window.dashboardData || {}).children || [];
+            var _hc = _homeChild[window._selectedChildIndex || 0];
+            if (_hc && _hc.child_id && typeof loadBehaviorChecklist === 'function') {
+                if (!window._behaviorChecklistLoaded) {
+                    window._behaviorChecklistLoaded = true;
+                    loadBehaviorChecklist(_hc.child_id);
+                } else if (typeof generateWeeklyActivities === 'function') {
+                    generateWeeklyActivities(false, false);
+                }
+            }
         }
 
 
@@ -637,6 +623,7 @@
     }
 
     // Load home activities from API
+    window.loadHomeActivities = loadHomeActivities;
     async function loadHomeActivities() {
         // Trigger daily notifications in the background
         fetch('../../api_trigger_daily.php').catch(e => console.error(e));
@@ -647,6 +634,8 @@
         const children = d.children || [];
         const child = children[window._selectedChildIndex || 0] || children[0] || null;
         if (!child) return;
+
+        if (container) container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--slate-400);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.4rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Refreshing activities...</div>';
 
         try {
             const res = await fetch('../../api_activities.php?action=recommend&child_id=' + child.child_id);
@@ -671,7 +660,10 @@
                 } else {
                     container.innerHTML = activities.slice(0, 3).map((act, i) => {
                         const badge = catBadges[act.category] || catBadges.real_life;
-                        return `<div style="display:flex;gap:0.75rem;padding:0.6rem 0;${i > 0 ? 'border-top:1px solid #f1f5f9;' : ''}align-items:flex-start;">
+                        const esTitle = act.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                        const esDesc = (act.description || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                        const esReason = (act.reason_picked || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+                        return `<div onclick="openActivityDetailModal('${esTitle}', '${esDesc}', '${esReason}', '${badge.label}', '${badge.bg}', '${badge.color}')" style="display:flex;gap:0.75rem;padding:0.6rem 0;${i > 0 ? 'border-top:1px solid #f1f5f9;' : ''}align-items:flex-start;cursor:pointer;transition:background 0.2s;border-radius:8px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
                             <div style="flex-shrink:0;width:2.25rem;height:2.25rem;background:${badge.bg};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem;">${badge.label.split(' ')[1] || '⭐'}</div>
                             <div style="flex:1;min-width:0;">
                                 <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.15rem;">
@@ -716,15 +708,18 @@
                         articlesContainer.innerHTML = articles.slice(0, 5).map((art, i) => {
                             const esTitle = art.title.replace(/'/g, "\\'").replace(/"/g, "&quot;");
                             const esDesc = (art.summary || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                            const images = ['https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&q=80', 'https://images.unsplash.com/photo-1516627145497-ae6968895b74?w=400&q=80', 'https://images.unsplash.com/photo-1472162072942-cd5147eb3959?w=400&q=80', 'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?w=400&q=80', 'https://images.unsplash.com/photo-1519689680058-324335c77eba?w=400&q=80'];
-                            const imgUrl = images[i % images.length];
+                            // Generate dynamic image based on article title keywords
+                            const words = art.title.split(' ').filter(w => w.length > 3);
+                            const keyword = words.length > 0 ? words[0].toLowerCase() : 'toddler';
+                            const gradients = ['linear-gradient(135deg,#667eea,#764ba2)','linear-gradient(135deg,#f093fb,#f5576c)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#fa709a,#fee140)','linear-gradient(135deg,#a18cd1,#fbc2eb)'];
+                            const imgUrl = gradients[i % gradients.length];
 
                             const isRead = window._readArticles.includes(art.title);
                             const readBadgeHtml = isRead ? '<span style="font-size:0.6rem;background:#dcfce7;color:#166534;padding:0.15rem 0.4rem;border-radius:4px;font-weight:600;margin-left:0.5rem;position:absolute;top:0.75rem;right:0.75rem;z-index:2;">Read</span>' : '';
 
                             return `<div style="flex:0 0 220px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;cursor:pointer;scroll-snap-align:start;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 6px rgba(0,0,0,0.04);display:flex;flex-direction:column;position:relative;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.08)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 6px rgba(0,0,0,0.04)'" onclick="openArticleModal(${child.child_id}, ${i}, '${esTitle}', '${esDesc}')">
                                 ${readBadgeHtml}
-                                <div style="height:100px;background:#e2e8f0;background-image:url(${imgUrl});background-size:cover;background-position:center;"></div>
+                                <div style="height:100px;background:#e2e8f0;background:${imgUrl};"></div>
                                 <div style="padding:0.75rem;flex:1;display:flex;flex-direction:column;">
                                     <span class="badge" style="background:#dbeafe;color:#1e40af;font-size:0.6rem;font-weight:700;margin-bottom:0.35rem;align-self:flex-start;">${art.category || 'Article'}</span>
                                     <h4 style="font-weight:700;font-size:0.85rem;color:#1e293b;line-height:1.3;margin:0 0 0.3rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${art.title}</h4>
@@ -899,12 +894,38 @@
             })()}
 
             <div class="dashboard-grid">
-                <div class="dashboard-card">
-                    <div class="card-header" style="padding:1rem 1.25rem;"><h3 class="card-title" style="font-size:0.95rem;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Activities for ${child.first_name}</h3></div>
-                    <div class="card-content" id="home-activities-list" style="padding:0.75rem 1.25rem;">
-                        <div style="text-align:center;padding:1.5rem;color:var(--slate-400);">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.4rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-                            Loading...
+                <div>
+                    <div class="dashboard-card">
+                        <div class="card-header" style="padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
+                            <h3 class="card-title" style="font-size:0.95rem;margin:0;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Activities for ${child.first_name}</h3>
+                            <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Activities" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                        </div>
+                        <div class="card-content" id="home-activities-list" style="padding:0.75rem 1.25rem;">
+                            <div style="text-align:center;padding:1.5rem;color:var(--slate-400);">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.4rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dashboard-card" style="margin-top:1.5rem;">
+                        <div class="card-header" style="padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
+                            <h3 class="card-title" style="font-size:0.95rem;margin:0;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>📅 Weekly Plan</h3>
+                            <button onclick="generateWeeklyActivities(true, true)" style="background:linear-gradient(135deg,#10b981,#06b6d4);color:white;border:none;padding:0.3rem 0.75rem;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.25rem;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Shuffle
+                            </button>
+                        </div>
+                        <div class="card-content" style="padding:0.75rem 1.25rem;">
+                            <div id="weekly-plan-container" style="display:grid;gap:0.75rem;">
+                                ${(window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium') ? 
+                                    '<div style="text-align:center;padding:2rem;color:var(--slate-400);font-size:0.85rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.5rem;display:block;color:var(--slate-300);"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Loading personalized activities...</div>' :
+                                    `<div style="text-align:center;padding:2.5rem 1.5rem;background:linear-gradient(135deg, #f8fafc, #f1f5f9);border-radius:16px;border:1px dashed #cbd5e1;position:relative;overflow:hidden;">
+                                        <div style="font-size:2.5rem;margin-bottom:1rem;opacity:0.8;">🔒</div>
+                                        <h4 style="margin:0 0 0.5rem;color:#334155;font-weight:700;">Premium Feature</h4>
+                                        <p style="color:#64748b;font-size:0.85rem;margin:0 0 1.25rem;line-height:1.5;">Upgrade to get personalized weekly activity plans tailored to your child's developmental needs.</p>
+                                        <button onclick="window.showPremiumModal('weekly_plan')" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:white;border:none;padding:0.6rem 1.25rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">Unlock Premium</button>
+                                    </div>`
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -923,7 +944,10 @@
                         <div class="card-header" style="justify-content:space-between;padding:1rem 1.25rem;align-items:center;">
                             <div>
                                 <h3 class="card-title" style="font-size:0.95rem;margin-bottom:0.15rem;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Weekly Articles & Tips</h3>
-                                <div id="article-countdown" style="font-size:0.7rem;color:var(--slate-400);display:flex;align-items:center;gap:0.3rem;"></div>
+                                <div style="display:flex;align-items:center;gap:0.5rem;">
+                                    <div id="article-countdown" style="font-size:0.7rem;color:var(--slate-400);display:flex;align-items:center;gap:0.3rem;"></div>
+                                    <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Articles" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                                </div>
                             </div>
                             <a href="../../articles.php" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.8rem;color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);text-decoration:none;font-weight:600;padding:0.45rem 1rem;border-radius:10px;box-shadow:0 2px 8px rgba(99,102,241,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(99,102,241,0.3)'">View All →</a>
                         </div>
@@ -981,7 +1005,7 @@
         const gender = child.gender || 'unknown';
         const genderIcon = gender === 'male' ? '♂️' : gender === 'female' ? '♀️' : '';
         const actCompleted = child.activities_completed || 0;
-        const milestoneScore = g.motor_milestones_score ? parseFloat(g.motor_milestones_score).toFixed(0) + '%' : '0%';
+        const milestoneScore = child._motorPct ? child._motorPct + '%' : '0%';
         const totalPoints = child.total_points || 0;
         const badgeCount = badges.length || child.badge_count || 0;
         const ageMonths = child.age_months || 0;
@@ -1057,7 +1081,7 @@
                 <div style="display:flex;align-items:center;gap:2rem;position:relative;z-index:1;">
                     <div style="width:6rem;height:6rem;background:rgba(255,255,255,0.2);backdrop-filter:blur(10px);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;font-weight:800;border:3px solid rgba(255,255,255,0.3);flex-shrink:0;">${init}</div>
                     <div style="flex:1;"><h2 style="font-size:1.75rem;font-weight:800;margin:0 0 0.25rem;color:#fff;">${fullName} ${genderIcon}</h2>
-                        <p style="margin:0 0 0.75rem;opacity:0.85;font-size:1rem;">${ageStr} old · ${devStage} Stage</p>
+                        <p style="margin:0 0 0.75rem;opacity:0.85;font-size:1rem;color:#fff;">${ageStr} old · ${devStage} Stage</p>
                         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
                             <span style="background:rgba(255,255,255,0.15);padding:0.35rem 0.85rem;border-radius:20px;font-size:0.8rem;font-weight:600;">🎂 ${child.birth_date_formatted || 'Unknown DOB'}</span>
                             <span style="background:rgba(255,255,255,0.15);padding:0.35rem 0.85rem;border-radius:20px;font-size:0.8rem;font-weight:600;">📋 ${sub.plan_name || 'Free'} Plan</span></div></div></div></div>
@@ -1286,8 +1310,15 @@
         return `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title">Speech Analysis</h1>
+                        <h1 class="dashboard-title" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                            Speech Analysis
+                            ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(124,58,237,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_speech') || '0'}/3 Free Trials Used</span>` : ''}
+                        </h1>
                         <p class="dashboard-subtitle">Track ${child ? child.first_name + "'s" : ''} vocabulary and pronunciation progress</p>
+                    <p style="font-size:0.8rem;color:var(--slate-500);margin-top:0.25rem;display:flex;align-items:center;gap:0.4rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 1 0 20 14.5 14.5 0 0 1 0-20"/><path d="M2 12h20"/></svg>
+                        Supports <strong>English 🇬🇧</strong> and <strong>Arabic 🇪🇬</strong>
+                    </p>
                     </div>
                     <button class="btn btn-gradient" onclick="openSpeechModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -2035,12 +2066,15 @@
         const viewHtml = `<div class="dashboard-content">
                 <div class="dashboard-header-section">
                     <div>
-                        <h1 class="dashboard-title">Motor Skills Checklist</h1>
+                        <h1 class="dashboard-title" style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                            Motor Skills Checklist
+                            ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#f97316,#ea580c);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(249,115,22,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_motor') || '0'}/3 Free Trials Used</span>` : ''}
+                        </h1>
                         <p class="dashboard-subtitle">Track and evaluate ${name}'s physical development milestones via AI</p>
                     </div>
-                    <button class="btn btn-gradient" onclick="openBehaviorChecklistModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;box-shadow:0 10px 25px rgba(108,99,255,0.4);">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                        Open Checklist
+                    <button class="btn btn-gradient" onclick="openBehaviorChecklistModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;background:linear-gradient(135deg,#f97316,#ea580c);box-shadow:0 4px 12px rgba(249,115,22,0.3);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                        Evaluate Milestones
                     </button>
                 </div>
 
@@ -2056,7 +2090,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🧠 Attention</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
                             </div>
-                            <span id="alert-attention" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-attention"></span>
                         </div>
                         <div style="background:rgba(245,158,11,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2077,7 +2113,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">💬 Communication</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Speech & expression</p>
                             </div>
-                            <span id="alert-communication" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-communication"></span>
                         </div>
                         <div style="background:rgba(59,130,246,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2098,7 +2136,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🤝 Social Skills</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Interaction & play</p>
                             </div>
-                            <span id="alert-social" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-social"></span>
                         </div>
                         <div style="background:rgba(16,185,129,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2119,7 +2159,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🦵 Gross Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Large movements</p>
                             </div>
-                            <span id="alert-motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-motor"></span>
                         </div>
                         <div style="background:rgba(102,126,234,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2140,7 +2182,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">✋ Fine Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Hand precision</p>
                             </div>
-                            <span id="alert-fine_motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-fine_motor"></span>
                         </div>
                         <div style="background:rgba(236,72,153,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="fine_motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ec4899,#f43f5e);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2172,23 +2216,23 @@
                             📊 Milestone Progress
                         </h3>
                         <div style="display:flex;align-items:flex-end;gap:0.75rem;height:200px;padding:1rem 0;">
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Attention</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Communication</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Social</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Motor</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-fine_motor" style="width:100%;background:linear-gradient(180deg,#ec4899,#f43f5e);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Fine Motor</span>
                             </div>
@@ -2196,27 +2240,8 @@
                     </div>
                 </div>
 
-                <!-- Weekly Plan & Milestone Journey Row -->
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:1.5rem;margin-bottom:1.5rem;">
-                    <!-- Weekly Plan Generator -->
-                    <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-                            <h3 style="margin:0;font-size:1.1rem;color:var(--text-color,#1e293b);display:flex;align-items:center;gap:0.5rem;">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                                📅 Weekly Plan
-                            </h3>
-                            <button onclick="generateWeeklyActivities()" style="background:linear-gradient(135deg,#10b981,#06b6d4);color:white;border:none;padding:0.5rem 1rem;border-radius:10px;font-size:0.85rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:0.35rem;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                                Shuffle
-                            </button>
-                        </div>
-                        <div id="weekly-plan-container" style="display:grid;gap:0.75rem;">
-                            <div style="text-align:center;padding:2rem;color:var(--slate-500,#64748b);font-size:0.9rem;">
-                                Open the checklist to generate personalized activities
-                            </div>
-                        </div>
-                    </div>
-
+                <!-- Milestone Journey Row -->
+                <div style="display:grid;grid-template-columns:1fr;gap:1.5rem;margin-bottom:1.5rem;">
                     <!-- Milestone Journey Map -->
                     <div style="background:var(--surface-light,#fff);border-radius:20px;padding:1.5rem;border:1px solid var(--surface-border,#e2e8f0);">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
@@ -2224,24 +2249,6 @@
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
                                 🏆 Milestone Journey
                             </h3>
-                        </div>
-                        <div id="milestone-journey-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
-                            <div style="text-align:center;padding:1rem;background:rgba(245,158,11,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🌟</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Steps</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(59,130,246,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Words</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(16,185,129,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Social Play</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(102,126,234,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🎯</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Focus Master</div>
-                            </div>
                         </div>
                         <div id="badges-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;"></div>
                     </div>
@@ -2267,8 +2274,8 @@
                     <div style="display:flex;gap:1rem;align-items:flex-start;">
                         <div style="font-size:2.5rem;flex-shrink:0;">🤖</div>
                         <div style="flex:1;color:#fff;">
-                            <h4 style="font-weight:800;font-size:1.1rem;margin:0 0 0.5rem;letter-spacing:0.5px;text-shadow:0 2px 4px rgba(0,0,0,0.2);">AI Developmental Insights</h4>
-                            <p id="ai-feedback-text" style="font-size:1rem;line-height:1.7;margin:0;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.15);">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</p>
+                            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;"><div style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);">🧠</div><h4 style="font-weight:800;font-size:1.15rem;margin:0;letter-spacing:0.3px;">Developmental Insights</h4></div>
+                            <div id="ai-feedback-text" style="font-size:1rem;line-height:1.7;margin:0;font-weight:500;text-shadow:0 1px 2px rgba(0,0,0,0.15);">Loading personalized insights based on ${name}'s growth metrics, motor skills, and speech analysis...</div>
                         </div>
                     </div>
                 </div>
@@ -2282,50 +2289,7 @@
                     </div>
                 </div>
 
-                <!-- Behavior Checklist Summary -->
-                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:2rem;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);margin-bottom:2rem;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
-                        <div>
-                            <h3 style="font-weight:700;font-size:1.2rem;color:#1e293b;margin:0 0 0.25rem;">📋 AI-Powered Behavior Checklist</h3>
-                            <p style="color:#64748b;font-size:0.9rem;margin:0;">Personalized based on ${name}'s age (${ageMonths} months)</p>
-                        </div>
-                        <button onclick="openBehaviorChecklistModal(${childId})" class="btn btn-gradient" style="padding:0.75rem 1.5rem;font-size:0.95rem;border-radius:12px;">
-                            Open Full Checklist
-                        </button>
-                    </div>
-                    <div id="behavior-checklist-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.75rem;">
-                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">🦵</div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Gross Motor</div>
-                            <div id="summary-gross-motor" style="font-size:1.1rem;font-weight:700;color:#22c55e;">Loading...</div>
-                        </div>
-                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">✋</div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Fine Motor</div>
-                            <div id="summary-fine-motor" style="font-size:1.1rem;font-weight:700;color:#3b82f6;">Loading...</div>
-                        </div>
-                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">🧠</div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Attention</div>
-                            <div id="summary-attention" style="font-size:1.1rem;font-weight:700;color:#f59e0b;">Loading...</div>
-                        </div>
-                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Communication</div>
-                            <div id="summary-communication" style="font-size:1.1rem;font-weight:700;color:#8b5cf6;">Loading...</div>
-                        </div>
-                        <div style="padding:1rem;background:#f8fafc;border-radius:12px;text-align:center;">
-                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
-                            <div style="font-size:0.75rem;color:#64748b;margin-bottom:0.35rem;">Social Skills</div>
-                            <div id="summary-social" style="font-size:1.1rem;font-weight:700;color:#ec4899;">Loading...</div>
-                        </div>
-                        <div style="padding:1rem;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:12px;text-align:center;color:#fff;">
-                            <div style="font-size:1.75rem;margin-bottom:0.25rem;">✅</div>
-                            <div style="font-size:0.75rem;opacity:0.9;margin-bottom:0.35rem;">Total Behaviors</div>
-                            <div id="summary-total" style="font-size:1.1rem;font-weight:800;">Loading...</div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Behavior Checklist Summary (Removed) -->
             </div>
         `;
 
@@ -2556,7 +2520,7 @@
     };
 
     // ── Behavior Checklist Functions ────────────────────────────────────
-    let _behaviorChecklistData = null;
+    let _behaviorChecklistData = null; window._behaviorChecklistDataRef = () => _behaviorChecklistData;
     let _pillarRadarChart = null; // Store radar chart instance
     let _currentChildId = null; // Store current child ID for activities
 
@@ -2802,7 +2766,18 @@
             const status = getTrafficLightStatus(percent);
             const alertEl = document.getElementById(`alert-${pillar}`);
             if (alertEl) {
-                alertEl.innerHTML = `${status.icon} <span style="font-size:0.7rem;margin-left:0.25rem;color:${status.color};font-weight:600;">${status.label}</span>`;
+                alertEl.style.display = 'inline-flex';
+                alertEl.style.flexDirection = 'row';
+                alertEl.style.alignItems = 'center';
+                alertEl.style.justifyContent = 'center';
+                alertEl.style.gap = '0.35rem';
+                alertEl.style.padding = '0.3rem 0.65rem';
+                alertEl.style.borderRadius = '20px';
+                alertEl.style.background = `${status.color}15`;
+                alertEl.style.color = status.color;
+                alertEl.style.flexShrink = '0';
+                
+                alertEl.innerHTML = `<span style="font-size:0.5rem; line-height:1;">●</span><span style="font-size:0.65rem; font-weight:700; white-space:nowrap; line-height:1;">${status.label}</span>`;
                 alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
             }
         });
@@ -2888,7 +2863,7 @@
             fine_motor: stats.fine_motor.achieved
         };
 
-        let earnedBadges = [];
+        let allBadgesHTML = '';
         badgeDefinitions.forEach(badge => {
             let earned = false;
             if (badge.pillar === 'all') {
@@ -2896,34 +2871,44 @@
             } else {
                 earned = pillarAchievements[badge.pillar] >= badge.threshold;
             }
+            
             if (earned) {
-                earnedBadges.push(badge);
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:12px;animation:pulse 2s infinite;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.05);" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;font-weight:700;color:var(--text-color,#1e293b);">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:#f59e0b;margin-top:2px;font-weight:bold;">✅ Achieved!</div>
+                </div>`;
+            } else {
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:var(--surface-light,#fff);border-radius:12px;opacity:0.6;border:1px dashed var(--slate-300,#cbd5e1);" title="Requires ${badge.threshold} milestones in ${badge.pillar}">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;filter:grayscale(100%);opacity:0.7;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;color:var(--slate-500,#64748b);font-weight:500;">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:var(--slate-400,#94a3b8);margin-top:2px;">🔒 ${badge.threshold} needed</div>
+                </div>`;
             }
         });
 
-        // Render badges with unlock animation
-        badgesContainer.innerHTML = earnedBadges.map(badge => `
-            <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:10px;animation:pulse 2s infinite;cursor:pointer;" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
-                <div style="font-size:1.5rem;">${badge.icon}</div>
-                <div style="font-size:0.65rem;color:var(--slate-600,#475569);font-weight:600;">${badge.name}</div>
-            </div>
-        `).join('');
-
-        // Show locked badges for milestones not yet earned
-        const lockedBadges = badgeDefinitions.filter(b => !earnedBadges.find(eb => eb.id === b.id));
-        if (lockedBadges.length > 0 && earnedBadges.length < badgeDefinitions.length) {
-            badgesContainer.innerHTML += lockedBadges.map(badge => `
-                <div style="text-align:center;padding:0.75rem;background:rgba(148,163,184,0.1);border-radius:10px;opacity:0.5;filter:grayscale(100%);">
-                    <div style="font-size:1.5rem;filter:grayscale(100%);">${badge.icon}</div>
-                    <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);font-weight:600;">${badge.name}</div>
-                    <div style="font-size:0.55rem;color:var(--slate-500,#64748b);margin-top:0.25rem;">🔒 ${badge.threshold} needed</div>
-                </div>
-            `).join('');
-        }
+        // Set grid layout to fit more nicely
+        badgesContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(110px, 1fr))';
+        badgesContainer.innerHTML = allBadgesHTML;
     }
 
     // Generate Weekly Activities based on lowest scoring pillar (with shuffle) - 5 pillars
-    window.generateWeeklyActivities = function(forceRandom = false) {
+    window.generateWeeklyActivities = function(forceRandom = false, fromUserClick = false) {
+        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
+        if (!isPremium) {
+            if (fromUserClick) window.showPremiumModal('weekly_plan');
+            document.getElementById('weekly-plan-container').innerHTML = `
+                <div style="text-align:center;padding:2.5rem 1.5rem;background:linear-gradient(135deg, #f8fafc, #f1f5f9);border-radius:16px;border:1px dashed #cbd5e1;position:relative;overflow:hidden;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;opacity:0.8;">🔒</div>
+                    <h4 style="margin:0 0 0.5rem;color:#334155;font-weight:700;">Premium Feature</h4>
+                    <p style="color:#64748b;font-size:0.85rem;margin:0 0 1.25rem;line-height:1.5;">Upgrade to get personalized weekly activity plans tailored to your child's developmental needs.</p>
+                    <button onclick="window.showPremiumModal('weekly_plan')" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:white;border:none;padding:0.6rem 1.25rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">Unlock Premium</button>
+                </div>
+            `;
+            return;
+        }
         if (!_behaviorChecklistData) {
             document.getElementById('weekly-plan-container').innerHTML = `
                 <div style="text-align:center;padding:2rem;color:var(--slate-500,#64748b);font-size:0.9rem;">
@@ -2973,6 +2958,9 @@
             });
         }
 
+        const pillarLabels = { attention: 'Attention', communication: 'Speech', social: 'Social Skills', motor: 'Motor Skills', fine_motor: 'Fine Motor Skills' };
+        const categoryLabel = pillarLabels[weakestPillar] || 'Activity';
+
         // Get activities for weakest pillar (or random if shuffle) - fine_motor uses motor activities
         const activities = activityDatabase[weakestPillar] || activityDatabase.motor;
         const shuffled = activities.sort(() => Math.random() - 0.5).slice(0, 3);
@@ -2988,8 +2976,11 @@
         container.innerHTML = shuffled.map((act, i) => {
             const materials = act.materials ? act.materials.join(', ') : 'Household items';
             const difficultyColor = act.difficulty === 'Easy' ? '#22c55e' : act.difficulty === 'Medium' ? '#f59e0b' : '#ef4444';
+            const esTitle = act.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            const esDesc = (act.description || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            const esReason = 'Materials: ' + materials.replace(/'/g, "\\'").replace(/"/g, "&quot;") + '<br><br>Steps: ' + (act.steps ? act.steps.join(' → ') : "Follow child's lead").replace(/'/g, "\\'").replace(/"/g, "&quot;");
             return `
-            <div style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};">
+            <div onclick="openActivityDetailModal('${esTitle}', '${esDesc}', '${esReason}', '${categoryLabel}', '${colors[i].numBg}', '${colors[i].numColor}')" style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
                 <div style="display:flex;align-items:center;gap:1rem;">
                     <div style="width:40px;height:40px;border-radius:8px;background:${colors[i].numBg};display:flex;align-items:center;justify-content:center;font-weight:700;color:${colors[i].numColor};flex-shrink:0;">${i + 1}</div>
                     <div style="flex:1;">
@@ -3018,7 +3009,7 @@
 
         // Show toast indicating which pillar was targeted
         const pillarNames = { attention: 'Attention', communication: 'Communication', social: 'Social Skills', motor: 'Motor Skills' };
-        showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
+        if (fromUserClick) showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
     }
 
     // Generate Advanced Doctor Report (Comprehensive PDF-ready)
@@ -3058,11 +3049,14 @@
                 stats[pillar].total++;
                 if (b.is_exhibited) {
                     stats[pillar].achieved++;
-                    stats[pillar].behaviors.push({
-                        name: b.behavior_details,
-                        frequency: b.frequency,
-                        severity: b.severity
-                    });
+                    // Avoid duplicates in the list
+                    if (!stats[pillar].behaviors.some(x => x.name === b.behavior_details)) {
+                        stats[pillar].behaviors.push({
+                            name: b.behavior_details,
+                            frequency: b.frequency,
+                            severity: b.severity
+                        });
+                    }
                 }
             });
         });
@@ -3093,7 +3087,49 @@
 
         // Build comprehensive report HTML
         const reportContent = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <style>
+                @media print {
+                    body > *:not(#doctor-report-modal) { display: none !important; }
+                    
+                    #doctor-report-modal { 
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        width: 100% !important;
+                        height: auto !important;
+                    }
+                    
+                    #doctor-report-modal .doctor-report-modal-inner {
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        height: auto !important;
+                    }
+
+                    #doctor-report-modal .doctor-report-modal-inner > div { 
+                        display: block !important;
+                        max-height: none !important; 
+                        width: 100% !important; 
+                        max-width: none !important; 
+                        box-shadow: none !important; 
+                        border-radius: 0 !important; 
+                        overflow: visible !important;
+                        height: auto !important;
+                    }
+                    
+                    .report-scrollable { 
+                        max-height: none !important; 
+                        overflow: visible !important; 
+                        padding: 0 !important; 
+                        height: auto !important;
+                    }
+                    
+                    .report-footer { display: none !important; }
+                }
+            </style>
+            <div class="doctor-report-modal-inner" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('doctor-report-modal').remove()">
                 <div style="background:#ffffff;border-radius:24px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;">
                     <!-- Report Header -->
                     <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:2rem;color:#fff;">
@@ -3133,7 +3169,7 @@
                     </div>
 
                     <!-- Scrollable Content -->
-                    <div style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
+                    <div class="report-scrollable" style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
                         <!-- Executive Summary -->
                         <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem;">
                             <h3 style="margin:0 0 0.5rem;font-size:1rem;font-weight:700;color:#0369a1;display:flex;align-items:center;gap:0.5rem;">
@@ -3155,17 +3191,18 @@
                                 const status = getTrafficLightStatus(percent);
                                 const expected = expectations[pillar] || 0;
                                 const vsExpected = data.achieved >= expected ? '✓ Age-appropriate' : `⚠ ${expected - data.achieved} below expectation`;
-                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵' };
-                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea' };
+                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵', fine_motor: '✍️' };
+                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea', fine_motor: '#d946ef' };
+                                let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
                                 return `
                                     <div style="padding:1.25rem;background:#f8fafc;border-radius:16px;border:1px solid #e2e8f0;">
                                         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                                            <span style="font-size:1.25rem;">${pillarIcons[pillar]}</span>
-                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillar}</span>
+                                            <span style="font-size:1.25rem;">${pillarIcons[pillar] || '📋'}</span>
+                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillarName}</span>
                                             <span style="margin-left:auto;font-size:1.25rem;">${status.icon}</span>
                                         </div>
                                         <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;margin-bottom:0.5rem;">
-                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]},${pillarColors[pillar]}88);height:100%;width:${percent}%;border-radius:8px;"></div>
+                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]||'#cbd5e1'},${pillarColors[pillar]||'#cbd5e1'}88);height:100%;width:${percent}%;border-radius:8px;"></div>
                                         </div>
                                         <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#64748b;margin-bottom:0.5rem;">
                                             <span>${data.achieved}/${data.total} skills observed</span>
@@ -3176,8 +3213,7 @@
                                             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed #e2e8f0;">
                                                 <div style="font-size:0.7rem;color:#94a3b8;margin-bottom:0.25rem;">Observed behaviors:</div>
                                                 <ul style="margin:0;padding-left:1rem;font-size:0.75rem;color:#475569;line-height:1.5;">
-                                                    ${data.behaviors.slice(0, 4).map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
-                                                    ${data.behaviors.length > 4 ? `<li>+${data.behaviors.length - 4} more...</li>` : ''}
+                                                    ${data.behaviors.map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
                                                 </ul>
                                             </div>
                                         ` : ''}
@@ -3218,7 +3254,7 @@
                     </div>
 
                     <!-- Footer Actions -->
-                    <div style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+                    <div class="report-footer" style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
                         <div style="font-size:0.8rem;color:#64748b;">
                             Generated by Bright Steps Developmental Tracking
                         </div>
@@ -3379,13 +3415,13 @@
         ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
             // Progress is based on age-appropriate expectation, not just total behaviors in checklist
-            const percent = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+            const percent = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
             const countEl   = document.getElementById(`${pillar}-count`);
             const totalEl2  = document.getElementById(`${pillar}-total`);
             const percentEl = document.getElementById(`${pillar}-percent`);
             const progressEl= document.getElementById(`${pillar}-progress`);
             if (countEl)    countEl.textContent   = s.achieved;
-            if (totalEl2)   totalEl2.textContent  = s.expected; // Show expected milestones for age
+            if (totalEl2)   totalEl2.textContent  = s.total; // Show expected milestones for age
             if (percentEl)  percentEl.textContent = percent + '%';
             if (progressEl) progressEl.style.width = percent + '%';
         });
@@ -3400,8 +3436,8 @@
                 if (bar) {
                     const s = stats[pillar];
                     // Calculate percentage based on age expectation
-                    const pct = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
-                    const displayPct = Math.max(pct, 5); // Minimum 5% for visibility
+                    const pct = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
+                    const displayPct = Math.max(pct, 8); // Minimum 8% for visibility
                     bar.style.height = displayPct + '%';
                     bar.setAttribute('data-pillar', pillar);
                     bar.setAttribute('data-percent', pct);
@@ -3489,77 +3525,131 @@
         const messages = [];
         const analysisPoints = [];
 
-        // AI Analysis per pillar - using stats.expected (age-appropriate benchmark)
-        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+        // AI Analysis per pillar
+        ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
-            if (!s || s.expected === 0) return;
+            if (!s || s.total === 0) return;
 
-            // Calculate percentage based on age expectation
-            const pct = Math.round((s.achieved / s.expected) * 100);
+            // Calculate percentage based on checklist total
+            const pct = Math.round((s.achieved / s.total) * 100);
             const status = getTrafficLightStatus(pct);
-            const expectation = ageExpectations[pillar][ageRange];
+            const expectation = ageExpectations[pillar] && ageExpectations[pillar][ageRange] ? ageExpectations[pillar][ageRange] : {description: 'steady progress expected'};
+
+            let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
 
             // Generate AI analysis based on actual data patterns
             if (status.icon === '🟢') {
-                messages.push(`✓ ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} demonstrates ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${expectation ? expectation.description + '.' : 'Healthy developmental progress.'}`);
-                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.expected} age-expected skills` });
+                messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #10b981;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                        <span style="background:#10b981;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(16,185,129,0.3);">✓</span>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
+                        <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
+                    </div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.total} targeted skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
+                </div>`);
+                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.total} targeted skills` });
             } else if (status.icon === '🟡') {
-                const gap = s.expected - s.achieved;
-                messages.push(`⚠ ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} shows ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend: targeted play activities 10-15 min daily.`);
-                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} skills below age expectation; focus area identified` });
+                const gap = s.total - s.achieved;
+                messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #f59e0b;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                        <span style="background:#f59e0b;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(245,158,11,0.3);">⚠</span>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
+                        <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
+                    </div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.total} targeted skills. ${gap > 0 ? gap + ' skills still emerging.' : ''} Recommend targeted play activities.</div>
+                </div>`);
+                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} targeted skills emerging; focus area identified` });
             } else {
-                const gap = s.expected - s.achieved;
-                messages.push(`🔴 ${pillar.charAt(0).toUpperCase() + pillar.slice(1)}: ${name} has ${s.achieved}/${s.expected} age-expected skills (${pct}%). ${gap} skills below expectation. Suggest: pediatric consultation + daily structured activities.`);
+                const gap = s.total - s.achieved;
+                messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #ef4444;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                        <span style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(239,68,68,0.3);">✕</span>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
+                        <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
+                    </div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.total} targeted skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
+                </div>`);
                 analysisPoints.push({ pillar, status: 'concern', detail: `Significant gap (${gap} skills); early intervention may benefit` });
             }
         });
 
-        // Overall AI synthesis - based on age expectations
-        let totalExpected = 0;
+        // Overall AI synthesis
+        let totalTarget = 0;
         let totalAchieved = 0;
         Object.values(stats).forEach(s => {
-            if (s && s.expected) {
-                totalExpected += s.expected;
+            if (s && s.total) {
+                totalTarget += s.total;
                 totalAchieved += s.achieved;
             }
         });
-        const overallPercent = totalExpected > 0 ? Math.round((totalAchieved / totalExpected) * 100) : 0;
+        const overallPercent = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
 
         const strengths = analysisPoints.filter(p => p.status === 'strength');
         const concerns = analysisPoints.filter(p => p.status === 'concern');
         const developing = analysisPoints.filter(p => p.status === 'developing');
 
+        const formatPillarName = (p) => p === 'fine_motor' ? 'Fine Motor' : p.charAt(0).toUpperCase() + p.slice(1);
+        
         let aiSummary = '';
         if (strengths.length >= 3) {
-            aiSummary = `\n\n🌟 Developmental Summary: ${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
+            aiSummary = `${name} is meeting or exceeding expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
         } else if (concerns.length === 0) {
-            aiSummary = `\n\n💪 Developmental Summary: ${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
+            aiSummary = `${name} is progressing well overall (${overallPercent}% of targeted skills). Focus on ${developing.map(d => formatPillarName(d.pillar)).join(' & ')} for continued growth.`;
         } else if (concerns.length <= 1) {
-            aiSummary = `\n\n📋 Developmental Summary: ${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
+            aiSummary = `${name} shows ${overallPercent}% of targeted development. ${concerns[0] ? formatPillarName(concerns[0].pillar) : 'one area'} identified as focus area. Early enrichment recommended.`;
         } else {
-            aiSummary = `\n\n📋 Developmental Summary: Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
+            aiSummary = `Multiple domains (${concerns.map(c => formatPillarName(c.pillar)).join(', ')}) show delays relative to expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
         }
 
         // Combine server feedback with AI analysis
         let finalText = '';
         if (serverFeedback) {
-            finalText = serverFeedback + '\n\n';
+            finalText = `<div style="background:rgba(255,255,255,0.2);padding:1rem 1.25rem;border-radius:12px;margin-bottom:1.5rem;font-size:0.95rem;font-style:italic;box-shadow:0 4px 12px rgba(0,0,0,0.05);border-left:4px solid #fff;">"${serverFeedback}"</div>`;
         }
-        finalText += '📊 AI Developmental Analysis:\n' + messages.join('\n') + aiSummary;
+        
+        finalText += `<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:1rem;margin-bottom:1.5rem;margin-top:1rem;">
+            ${messages.join('')}
+        </div>`;
+        
+        let aiSummaryHtml = `<div style="background:rgba(0,0,0,0.2);padding:1.5rem;border-radius:16px;margin-bottom:1rem;box-shadow:inset 0 2px 10px rgba(0,0,0,0.1);">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                <span style="font-size:1.25rem;">📝</span>
+                <strong style="font-size:1.05rem;letter-spacing:0.5px;">Summary</strong>
+            </div>
+            <div style="font-size:0.95rem;line-height:1.6;opacity:0.95;">${aiSummary}</div>
+        </div>`;
+        
+        finalText += aiSummaryHtml;
 
         // Add specific recommendations
         if (concerns.length > 0 || developing.length > 0) {
-            const focusAreas = [...concerns, ...developing].map(a => a.pillar);
-            finalText += `\n\n🎯 Priority Focus: ${focusAreas.join(', ')} - See Weekly Plan for targeted activities.`;
+            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${formatPillarName(a.pillar)}</span>`);
+            finalText += `<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;padding-top:1.5rem;border-top:1px dashed rgba(255,255,255,0.2);">
+                <strong style="font-size:0.95rem;opacity:0.9;">Priority Focus:</strong>
+                ${focusAreas.join('')}
+            </div>`;
         }
 
-        el.textContent = finalText;
+        el.innerHTML = finalText;
     }
 
     // ── Auto Weekly Activities (called from updateBehaviorSummary) ────────
     function generateWeeklyActivitiesFromStats(stats) {
         const container = document.getElementById('weekly-plan-container');
         if (!container) return;
+
+        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
+        if (!isPremium) {
+            container.innerHTML = `
+                <div style="text-align:center;padding:2.5rem 1.5rem;background:linear-gradient(135deg, #f8fafc, #f1f5f9);border-radius:16px;border:1px dashed #cbd5e1;position:relative;overflow:hidden;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;opacity:0.8;">🔒</div>
+                    <h4 style="margin:0 0 0.5rem;color:#334155;font-weight:700;">Premium Feature</h4>
+                    <p style="color:#64748b;font-size:0.85rem;margin:0 0 1.25rem;line-height:1.5;">Upgrade to get personalized weekly activity plans tailored to your child's developmental needs.</p>
+                    <button onclick="window.showPremiumModal('weekly_plan')" style="background:linear-gradient(135deg, #6366f1, #8b5cf6);color:white;border:none;padding:0.6rem 1.25rem;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">Unlock Premium</button>
+                </div>
+            `;
+            return;
+        }
 
         const pillars = ['attention', 'communication', 'social', 'motor'];
         let weakestPillar = 'motor';
@@ -3576,20 +3666,27 @@
             }
         });
 
+        const pillarLabels = { attention: 'Attention', communication: 'Speech', social: 'Social Skills', motor: 'Motor Skills', fine_motor: 'Fine Motor Skills' };
+        const categoryLabel = pillarLabels[weakestPillar] || 'Activity';
+
         const activities = (activityDatabase[weakestPillar] || activityDatabase.motor)
             .slice().sort(() => Math.random() - 0.5).slice(0, 3);
         const days = ['Monday', 'Wednesday', 'Friday'];
         const colors = [
             { bg: 'rgba(245,158,11,0.1)', border: '#f59e0b', numBg: '#fef3c7', numColor: '#92400e' },
             { bg: 'rgba(59,130,246,0.1)',  border: '#3b82f6',  numBg: '#dbeafe', numColor: '#1e40af' },
-            { bg: 'rgba(16,185,129,0.1)',  border: '#10b981', numBg: '#d1fae5', numColor: '#065f46' }
+            { bg: 'rgba(10,185,129,0.1)',  border: '#10b981', numBg: '#d1fae5', numColor: '#065f46' }
         ];
 
         container.innerHTML = activities.map((act, i) => {
             const materials = act.materials ? act.materials.join(', ') : 'Household items';
             const difficultyColor = act.difficulty === 'Easy' ? '#22c55e' : act.difficulty === 'Medium' ? '#f59e0b' : '#ef4444';
+            const esTitle = act.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            const esDesc = (act.description || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            const esReason = 'Materials: ' + materials.replace(/'/g, "\\'").replace(/"/g, "&quot;") + '<br><br>Steps: ' + (act.steps ? act.steps.join(' → ') : "Follow child's lead").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            
             return `
-            <div style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};">
+            <div onclick="openActivityDetailModal('${esTitle}', '${esDesc}', '${esReason}', '${categoryLabel}', '${colors[i].numBg}', '${colors[i].numColor}')" style="display:flex;flex-direction:column;gap:0.5rem;padding:1rem;background:${colors[i].bg};border-radius:12px;border-left:4px solid ${colors[i].border};cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
                 <div style="display:flex;align-items:center;gap:1rem;">
                     <div style="width:40px;height:40px;border-radius:8px;background:${colors[i].numBg};display:flex;align-items:center;justify-content:center;font-weight:700;color:${colors[i].numColor};flex-shrink:0;">${i + 1}</div>
                     <div style="flex:1;">
@@ -4203,14 +4300,18 @@
 
         // Load AI recommendations after rendering
         setTimeout(() => loadAIRecommendations(childParam), 200);
+        setTimeout(() => {
+            if (window.checkMemoryMatchCooldown) window.checkMemoryMatchCooldown(childParam);
+        }, 300);
 
         return `
         <div class="dashboard-content">
-                <div class="dashboard-header-section">
+                <div class="dashboard-header-section" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;">
                     <div>
-                        <h1 class="dashboard-title">Activity Center 🎨</h1>
-                        <p class="dashboard-subtitle">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
+                        <h1 class="dashboard-title" style="margin-bottom:0.25rem;">Activity Center 🎨</h1>
+                        <p class="dashboard-subtitle" style="margin:0;">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
+                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('${childParam}')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                 </div>
 
                 <!-- Featured Game Banner -->
@@ -4218,8 +4319,8 @@
                     <div style="position:absolute;top:-50px;right:-50px;width:200px;height:200px;background:rgba(255,255,255,0.1);border-radius:50%;filter:blur(20px);"></div>
                     <div style="position:relative;z-index:1;flex:1;min-width:300px;">
                         <div style="display:inline-block;padding:0.4rem 1rem;background:rgba(255,255,255,0.2);border-radius:99px;font-size:0.75rem;font-weight:800;letter-spacing:1px;margin-bottom:1rem;text-transform:uppercase;">FEATURED GAME</div>
-                        <h2 style="font-size:2.5rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.03em;">Memory Match Explorer</h2>
-                        <p style="font-size:1.1rem;opacity:0.9;margin:0 0 1.5rem;line-height:1.5;">Boost ${child ? child.first_name + "'s" : "your child's"} cognitive skills and working memory with this fun, interactive matching game!</p>
+                        <h2 style="font-size:2.5rem;font-weight:800;margin:0 0 1rem;letter-spacing:-0.03em;color:#fff;">Memory Match Explorer</h2>
+                        <p style="font-size:1.1rem;opacity:0.9;margin:0 0 1.5rem;line-height:1.5;color:#fff;">Boost ${child ? child.first_name + "'s" : "your child's"} cognitive skills and working memory with this fun, interactive matching game!</p>
                         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
                             <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">⏱ 5 mins</span>
                             <span style="background:rgba(255,255,255,0.15);padding:0.5rem 1rem;border-radius:12px;font-size:0.85rem;font-weight:600;display:flex;align-items:center;gap:0.5rem;">🧠 Cognitive</span>
@@ -4454,7 +4555,14 @@
     window.openArticleModal = function (childId, index, title, summary) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
-        const randImg = 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600&h=300';
+        const images = [
+            'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1537655780520-1e392ead81f2?auto=format&fit=crop&q=80&w=600&h=300'
+        ];
+        const randImg = images[(index || 0) % images.length];
 
         const modal = document.createElement('div');
         modal.id = 'act-modal';
@@ -4481,7 +4589,14 @@
     window.openActivityModal = function (childId, index, title, desc, mat, category) {
         let existing = document.getElementById('act-modal');
         if (existing) existing.remove();
-        const randImg = 'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&q=80&w=600&h=300';
+        const images = [
+            'https://images.unsplash.com/photo-1596461404969-9ae70f2830c1?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1519689680058-324335c77eba?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1472162072942-cd5147eb39bd?auto=format&fit=crop&q=80&w=600&h=300',
+            'https://images.unsplash.com/photo-1485546246426-d0ae38eba581?auto=format&fit=crop&q=80&w=600&h=300'
+        ];
+        const randImg = images[(index || 0) % images.length];
 
         const modal = document.createElement('div');
         modal.id = 'act-modal';
@@ -4678,7 +4793,7 @@
             window._playedGames = completed.filter(a => a.category === 'website_game').map(a => a.title);
             if (window._playedGames.includes('Memory Match Explorer')) {
                 const mmBtn = document.getElementById('memory-match-btn');
-                if (mmBtn) {
+                if (mmBtn && mmBtn.innerHTML.indexOf('Cooldown') === -1) {
                     mmBtn.innerHTML = '✅ Completed!';
                     mmBtn.style.background = 'linear-gradient(135deg,#22c55e,#16a34a)';
                     mmBtn.style.color = '#fff';
@@ -4779,12 +4894,12 @@
                     window._allSpecialists = data.specialists;
 
                     const specVals = [...new Set(data.specialists.map(function(s){ return s.specialization; }).filter(Boolean))];
-                    const locVals  = [...new Set(data.specialists.map(function(s){ return s.location; }).filter(Boolean))];
+                    const locVals  = [...new Set(data.specialists.map(function(s){ return s.clinic_name; }).filter(Boolean))];
 
                     const specF = document.getElementById('spec-filter');
                     const locF  = document.getElementById('loc-filter');
                     if (specF) specF.innerHTML = '<option value="">All Specialties</option>' + specVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
-                    if (locF)  locF.innerHTML  = '<option value="">All Locations</option>'   + locVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
+                    if (locF)  locF.innerHTML  = '<option value="">All Clinics</option>'   + locVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
 
                     window.renderSpecialists();
                 } else {
@@ -4808,7 +4923,7 @@
             const filtered = window._allSpecialists.filter(function(s) {
                 const matchQ = !q || (s.first_name + ' ' + s.last_name + ' ' + (s.clinic_name || '') + ' ' + (s.specialization || '')).toLowerCase().includes(q);
                 const matchS = !sf || s.specialization === sf;
-                const matchL = !lf || s.location === lf;
+                const matchL = !lf || s.clinic_name === lf;
                 return matchQ && matchS && matchL;
             });
 
@@ -4983,7 +5098,7 @@
                                 '<option value="">All Specialties</option>' +
                             '</select>' +
                             '<select id="loc-filter" class="clinic-filter-select" onchange="window.renderSpecialists()">' +
-                                '<option value="">All Locations</option>' +
+                                '<option value="">All Clinics</option>' +
                             '</select>' +
                         '</div>' +
 
@@ -5029,10 +5144,10 @@
         modal.id = 'act-modal';
         modal.innerHTML = `
             <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-                <div style="background:#ffffff;border-radius:16px;width:100%;max-width:750px;display:flex;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out; position:relative;">
+                <div style="background:#ffffff;border-radius:16px;width:100%;max-width:750px;display:flex;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out; position:relative; max-height:90vh;">
                     <button onclick="document.getElementById('act-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:#f1f5f9;border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#64748b;font-weight:bold;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
                     
-                    <div style="width:250px;background:#f8fafc;padding:2.5rem 2rem;display:flex;flex-direction:column;align-items:center;border-right:1px solid #e2e8f0;">
+                    <div style="width:250px;background:#f8fafc;padding:2.5rem 2rem;display:flex;flex-direction:column;align-items:center;border-right:1px solid #e2e8f0;overflow-y:auto;">
                         <img src="${avatar}" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);margin-bottom:1.5rem;" />
                         <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0 0 0.25rem;text-align:center;">Dr. ${s.first_name} ${s.last_name}</h2>
                         <p style="color:var(--blue-600);font-weight:600;font-size:0.9rem;margin:0 0 1.25rem;text-align:center;">${s.specialization || 'Specialist'}</p>
@@ -5041,7 +5156,7 @@
                         </div>
                     </div>
                     
-                    <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;">
+                    <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;overflow-y:auto;">
                         <div style="flex:1;">
                             <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1.5rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Doctor Information</h4>
 
@@ -5065,16 +5180,16 @@
 
                             ${s.bio ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Biography</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.bio + '</p>' : ''}
 
-                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Availability Calendar</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
+                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Next Available Slots</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
                     const startTime = slot.start_time ? slot.start_time.substring(0, 5) : '';
                     const endTime = slot.end_time ? slot.end_time.substring(0, 5) : '';
-                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>${slot.label}</span><span>${startTime} to ${endTime}</span></div>';
+                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>' + slot.label + '</span><span>' + startTime + ' to ' + endTime + '</span></div>';
                 }).join('') + '</div>' : ''}
 
                             ${s.certificate_of_experience ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Education & Certifications</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.certificate_of_experience + '</p>' : ''}
 
                             <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Consultation Tags</h4>
-                            <div style="display:flex;flex-wrap:gap:0.5rem;margin-bottom:1.5rem;">
+                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;">
                                 ${s.consultation_types ? s.consultation_types.split(',').map(tag => '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">' + tag.trim() + '</span>').join('') : '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">On-site</span>'}
                             </div>
 
@@ -5158,7 +5273,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#6C63FF;border-color:#6C63FF;" onclick="openShareReportModal('full-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5176,29 +5291,13 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
                              <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#22c55e;border-color:#22c55e;" onclick="openShareReportModal('growth-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Child Profile Card -->
-                    <div class="dashboard-card" style="display: flex; flex-direction: column;">
-                         <div style="height: 120px; background: linear-gradient(135deg, #3b82f620, #93c5fd20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
-                            <svg style="width: 3rem; height: 3rem; color: #3b82f6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="12" cy="7" r="4"></circle>
-                            </svg>
-                        </div>
-                        <div class="card-content" style="flex: 1;">
-                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Child Profile</h3>
-                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Basic info, badges & points</p>
-                             <span class="badge badge-blue" style="margin-bottom: 1rem;">Profile Data</span>
-                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=child-report${childParam}','_blank')">📥 Download</button>
-                                <button class="btn btn-outline btn-sm" style="color:#3b82f6;border-color:#3b82f6;" onclick="openShareReportModal('child-report', ${childId})">📤 Share</button>
-                            </div>
-                        </div>
+                    
                     </div>
 
                     <!-- Speech Report Card -->
@@ -5211,7 +5310,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Vocabulary, clarity & full transcripts</p>
                              <span class="badge" style="background:#f3e8ff;color:#9333ea;margin-bottom: 1rem;">Speech Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#9333ea;border-color:#9333ea;" onclick="openShareReportModal('speech-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5231,7 +5330,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Upload a custom PDF report to share with your doctor</p>
                              <span class="badge" style="background:#fff7ed;color:#ea580c;margin-bottom: 1rem;">Custom Upload</span>
                             <div style="margin-top: 1rem;">
-                                <button class="btn btn-outline btn-sm btn-full" style="color:#f97316;border-color:#f97316;" onclick="openShareReportModal('uploaded-pdf', ${childId})">📎 Upload & Share</button>
+                                <button class="btn btn-outline btn-sm btn-full" style="color:#f97316;border-color:#f97316;" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}openShareReportModal('uploaded-pdf', ${childId})">📎 Upload & Share</button>
                             </div>
                         </div>
                     </div>
@@ -6296,11 +6395,11 @@
                                     <p class="settings-row-sub">View past payments and download invoices</p>
                                 </div>
                                 <div class="settings-row-action">
-                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()">Load Invoice History</button>
+                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()" id="invoice-refresh-btn">🔄 Refresh</button>
                                 </div>
                             </div>
                             <div id="invoice-history-container" style="margin-top:1.5rem;">
-                                <div style="text-align:center;color:#64748b;font-style:italic;padding:2rem;">Click 'Load Invoice History' to view your payment records</div>
+                                <div style="text-align:center;color:#64748b;padding:2rem;">Loading...</div>
                             </div>
                         </div>
                     </div>
@@ -6451,6 +6550,8 @@
         });
     };
 
+    // Show Premium Paywall Modal
+
     // Process integrated payment
     window.processIntegratedPayment = function(e) {
         e.preventDefault();
@@ -6504,90 +6605,6 @@
         }, 1500);
     };
 
-    // Show Premium Paywall Modal
-    window.showPremiumPaywallModal = function(featureName) {
-        const featureDetails = {
-            'appointment': {
-                title: 'Unlimited Appointments',
-                description: 'Access to specialist consultations and clinic visits',
-                icon: '🏥',
-                benefits: [
-                    'Book unlimited specialist appointments',
-                    'Both online and on-site consultations',
-                    'Priority scheduling',
-                    'Comprehensive pediatric care'
-                ]
-            },
-            'speech': {
-                title: 'Advanced Speech Analysis',
-                description: 'Unlimited speech assessments and AI-powered insights',
-                icon: '🗣️',
-                benefits: [
-                    'Unlimited speech recording and analysis',
-                    'Detailed vocabulary and pronunciation reports',
-                    'Speech progress tracking over time',
-                    'AI-powered speech development insights'
-                ]
-            },
-            'motor': {
-                title: 'Complete Motor Skills Tracking',
-                description: 'Full access to motor skills milestones and assessments',
-                icon: '💪',
-                benefits: [
-                    'Unlimited motor skills checklists',
-                    'Both gross and fine motor tracking',
-                    'Developmental progress charts',
-                    'Exportable reports for pediatricians'
-                ]
-            }
-        };
-
-        const details = featureDetails[featureName] || {
-            title: 'Premium Features',
-            description: 'Access to advanced features and unlimited usage',
-            icon: '💎',
-            benefits: [
-                'Unlimited access to all features',
-                'Advanced AI-powered insights',
-                'Priority customer support',
-                'Exportable reports and analytics'
-            ]
-        };
-
-        // Check if modal already exists
-        let existingModal = document.getElementById('premium-paywall-modal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        const modal = document.createElement('div');
-        modal.id = 'premium-paywall-modal';
-        modal.innerHTML = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
-                    <div style="padding:2rem;border-bottom:1px solid #e2e8f0;">
-                        <h2 style="margin:0 0 1rem;text-align:center;">Unlock ${details.title}</h2>
-                        <p style="text-align:center;color:#64748b;margin-bottom:1.5rem;">${details.description}</p>
-                        <div style="background:#f8fafc;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
-                            <h3 style="margin:0 0 1rem;text-align:center;color:#1e293b;">${details.icon} ${details.title}</h3>
-                            <ul style="text-align:left;max-width:300px;margin:0 auto;padding-left:1.25rem;">
-                                ${details.benefits.map(b => `<li style="margin-bottom:0.5rem;display:flex;align-items:flex-start;"><span style="flex-shrink:0;">• </span><span>${b}</span></li>`).join('')}
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div style="display:flex;justify-content:flex-end;gap:1rem;">
-                        <button type="button" onclick="document.getElementById('premium-paywall-modal').remove()" class="btn btn-outline">Not Now</button>
-                        <button type="button" onclick="window.showIntegratedPaymentModal(29.99, 'Premium Monthly Subscription - Access to all premium features including ${details.title.toLowerCase()}', function() { alert('Payment successful! You now have access to premium features.'); location.reload(); })" class="btn btn-gradient">
-                            Upgrade to Premium - $29.99/month
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-    };
 
     window.handleLangChange = function (lang) {
         document.getElementById('lang-en').classList.toggle('active', lang === 'en');
@@ -6984,14 +7001,17 @@
                                 <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
                                     <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">📈 Weight Velocity</h4></div>
                                     <div style="position:relative;height:300px;padding:1rem;"><canvas id="vel-weight-chart"></canvas></div>
+                                    <div style="padding:0.75rem 1.5rem 1.25rem;font-size:0.8rem;color:#64748b;line-height:1.5;border-top:1px solid #f1f5f9;">This graph shows how quickly your child is gaining weight per month. Rapid spikes or drops may warrant a pediatrician's review.</div>
                                 </div>
                                 <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
                                     <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">📈 Length Velocity</h4></div>
                                     <div style="position:relative;height:300px;padding:1rem;"><canvas id="vel-height-chart"></canvas></div>
+                                    <div style="padding:0.75rem 1.5rem 1.25rem;font-size:0.8rem;color:#64748b;line-height:1.5;border-top:1px solid #f1f5f9;">This graph tracks your child's growth in length over time. Consistent growth velocity is a strong indicator of healthy development.</div>
                                 </div>
                                 <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">
                                     <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:1rem;color:#1e293b;">📈 Head Circumference Velocity</h4></div>
                                     <div style="position:relative;height:300px;padding:1rem;"><canvas id="vel-head-chart"></canvas></div>
+                                    <div style="padding:0.75rem 1.5rem 1.25rem;font-size:0.8rem;color:#64748b;line-height:1.5;border-top:1px solid #f1f5f9;">This graph measures head circumference growth velocity, an important metric for early brain development and health.</div>
                                 </div>
                             </div>
                         `;
@@ -7031,7 +7051,7 @@
                                 if (prevRec) {
                                     const pdate = new Date(prevRec.recorded_at);
                                     const monthsDiff = (rdate - pdate) / (1000 * 60 * 60 * 24 * 30.44);
-                                    if (monthsDiff > 0) {
+                                    if (monthsDiff > 0.5) { // Minimum half-month gap to avoid velocity spikes
                                         if (r.weight && prevRec.weight) velWeight.push({ x: ageM, y: (r.weight - prevRec.weight) / monthsDiff });
                                         if (r.height && prevRec.height) velHeight.push({ x: ageM, y: (r.height - prevRec.height) / monthsDiff });
                                         if (r.head_circumference && prevRec.head_circumference) velHead.push({ x: ageM, y: (r.head_circumference - prevRec.head_circumference) / monthsDiff });
@@ -7081,11 +7101,31 @@
                                         c.parentElement.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#94a3b8;text-align:center;padding:2rem;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p style="margin:1rem 0 0;font-size:0.85rem;line-height:1.5;">' + label + ' velocity requires <strong>at least 2 measurements</strong> recorded on different dates.</p></div>';
                                     }
                                 };
-                                if (velWeight.length >= 2) plotChart('vel-weight-chart', 'line', 'Weight Velocity', 'Gain (kg/mo)', 'Age (months)', velWeight, [], '#6366f1', true);
+                                
+                                const whoVelWeight = []; const whoVelHeight = []; const whoVelHead = [];
+                                if (whoPoints) {
+                                    const calcWhoVel = (dataObj, outArr) => {
+                                        if (!dataObj) return;
+                                        let prevAge = null, prevMedian = null;
+                                        Object.keys(dataObj).sort((a,b)=>parseFloat(a)-parseFloat(b)).forEach(age => {
+                                            const currAge = parseFloat(age);
+                                            const currMedian = dataObj[age].median;
+                                            if (prevAge !== null && currAge > prevAge) {
+                                                outArr.push({ x: currAge, y: (currMedian - prevMedian) / (currAge - prevAge) });
+                                            }
+                                            prevAge = currAge; prevMedian = currMedian;
+                                        });
+                                    };
+                                    calcWhoVel(whoPoints.weight_for_age[gender], whoVelWeight);
+                                    calcWhoVel(whoPoints.height_for_age[gender], whoVelHeight);
+                                    calcWhoVel(whoPoints.head_for_age[gender], whoVelHead);
+                                }
+
+                                if (velWeight.length >= 2) plotChart('vel-weight-chart', 'line', 'Weight Velocity', 'Gain (kg/mo)', 'Age (months)', velWeight, whoVelWeight, '#6366f1', true);
                                 else showVelMsg('vel-weight-chart', 'Weight');
-                                if (velHeight.length >= 2) plotChart('vel-height-chart', 'line', 'Length Velocity', 'Gain (cm/mo)', 'Age (months)', velHeight, [], '#c026d3', true);
+                                if (velHeight.length >= 2) plotChart('vel-height-chart', 'line', 'Length Velocity', 'Gain (cm/mo)', 'Age (months)', velHeight, whoVelHeight, '#c026d3', true);
                                 else showVelMsg('vel-height-chart', 'Length');
-                                if (velHead.length >= 2) plotChart('vel-head-chart', 'line', 'Head Circumference Velocity', 'Gain (cm/mo)', 'Age (months)', velHead, [], '#0ea5e9', true);
+                                if (velHead.length >= 2) plotChart('vel-head-chart', 'line', 'Head Circumference Velocity', 'Gain (cm/mo)', 'Age (months)', velHead, whoVelHead, '#0ea5e9', true);
                                 else showVelMsg('vel-head-chart', 'Head circumference');
 
                                 // Populate dynamic descriptions
@@ -7328,6 +7368,12 @@
     window.openAddChildModal = function (childDataOrEmpty) {
         let childData = childDataOrEmpty;
         const children = window.dashboardData?.children || [];
+        
+        const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
+        if (!childData && children.length >= 1 && !isPremium) {
+            window.showPremiumModal('');
+            return;
+        }
 
         // Remove existing
         const old = document.getElementById('add-child-modal');
@@ -7612,31 +7658,116 @@
     // ══════════════════════════════════════════════════════════════
     // ── Premium Subscription & Trials ──────────────────────────────
     // ══════════════════════════════════════════════════════════════
-    window.showPremiumModal = function () {
+    window.showPremiumModal = function (feature) {
         let existing = document.getElementById('premium-modal');
         if (existing) existing.remove();
+
+        let title = "Upgrade to Premium";
+        let desc = "Unlock unlimited AI reports, personalized plans, and advanced insights for your child's development.";
+        let icon = "⭐";
+        
+        const maxTrials = 3;
+        const trialKey = feature ? 'bs_trial_' + feature : null;
+        let used = trialKey ? parseInt(localStorage.getItem(trialKey) || '0') : 0;
+        
+        // Safeguard to clear corrupted local storage data from previous bug
+        if (used > maxTrials) {
+            used = 0;
+            if (trialKey) localStorage.setItem(trialKey, '0');
+        }
+
+        const windowKey = feature ? 'bs_trial_window_' + feature : null;
+        if (windowKey) {
+            const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (Date.now() - windowStart > sevenDays) {
+                localStorage.setItem(trialKey, '0');
+                localStorage.setItem(windowKey, String(Date.now()));
+                used = 0;
+            }
+        }
+        
+        let left = Math.max(0, maxTrials - used);
+
+        if (feature === 'motor') {
+            title = "Unlock Motor Skills";
+            desc = "Track your child's physical development milestones and generate therapist-ready reports using AI.";
+            icon = "🏃";
+        } else if (feature === 'speech') {
+            title = "Unlock Speech Analysis";
+            desc = "Analyze your child's speech patterns and vocabulary development using advanced AI.";
+            icon = "🗣️";
+        } else if (feature === 'weekly_plan') {
+            title = "Unlock Weekly Plans";
+            desc = "Get personalized, AI-curated weekly activity plans tailored to your child's development needs.";
+            icon = "📅";
+        } else if (feature === 'growth') {
+            title = "Growth Analysis";
+            desc = "Track your child's physical growth percentiles against WHO standards using AI.";
+            icon = "📈";
+        }
+
+
+        
+        // Trial section HTML
+        let trialHtml = '';
+        if (feature === 'motor' || feature === 'speech') {
+            trialHtml = `
+            <div style="border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">
+                <div>
+                    <div style="font-size:0.7rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">ACTIVE TRIAL USAGE</div>
+                    <div style="font-size:1rem;font-weight:700;color:#1e293b;">${left} of ${maxTrials} free trials remaining</div>
+                </div>
+                <div style="background:#e0e7ff;color:#4f46e5;font-size:0.75rem;font-weight:700;padding:0.4rem 0.75rem;border-radius:999px;">7-Day Free Trial</div>
+            </div>
+            `;
+        }
+
+        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 250)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium — 250 EGP/month</button>`;
+        
+        if ((feature === 'motor' || feature === 'speech') && left > 0) {
+            actionHtml += `<button onclick="document.getElementById('premium-modal').remove(); window.incrementTrial('${feature}'); if('${feature}'==='motor') switchView('motor'); else if('${feature}'==='speech') switchView('speech'); else switchView('growth');" style="width:100%;padding:1.1rem;background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">Use Free Trial (${left} left)</button>`;
+        } else {
+             actionHtml += `<button onclick="document.getElementById('premium-modal').remove()" style="width:100%;padding:1rem;background:none;color:#64748b;border:none;font-weight:600;font-size:0.95rem;cursor:pointer;">Maybe Later</button>`;
+        }
 
         const modal = document.createElement('div');
         modal.id = 'premium-modal';
         modal.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.8);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;text-align:center;padding:2.5rem 2rem;">
-                <div style="font-size:3.5rem;margin-bottom:1rem;">⭐</div>
-                <h2 style="font-size:1.75rem;font-weight:800;color:var(--slate-900);margin:0 0 0.5rem;">Upgrade to Premium</h2>
-                <p style="color:var(--slate-500);margin:0 0 2rem;font-size:1rem;">Unlock unlimited AI reports, doctor consultations, and advanced insights.</p>
-                <div style="text-align:left;background:var(--blue-50);padding:1.5rem;border-radius:16px;margin-bottom:2rem;border:1px solid var(--blue-100);">
-                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Unlimited Speech Analysis</span>
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:480px;box-shadow:0 25px 50px rgba(0,0,0,0.3);overflow:hidden;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
+                <div style="background:linear-gradient(135deg, #7c3aed, #4f46e5);padding:2.5rem 2rem;text-align:center;">
+                    <div style="font-size:3rem;margin-bottom:1rem;line-height:1;">${icon}</div>
+                    <h2 style="font-size:1.75rem;font-weight:800;color:#ffffff !important;margin:0 0 0.75rem;">${title}</h2>
+                    <p style="margin:0;font-size:0.95rem;line-height:1.5;opacity:0.9;color:#ffffff !important;">${desc}</p>
+                </div>
+                <div style="padding:2rem;">
+                    <div style="margin-bottom:1.5rem;">
+                        <div style="font-weight:700;color:#1e293b;margin-bottom:1rem;">Premium Benefits:</div>
+                        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span style="color:#475569;font-size:0.95rem;">Unlimited AI motor skills assessment</span>
+                            </div>
+                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span style="color:#475569;font-size:0.95rem;">Automatic WHO/CDC milestone tracking</span>
+                            </div>
+                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span style="color:#475569;font-size:0.95rem;">Downloadable therapist reports (PDF)</span>
+                            </div>
+                            <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" style="margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                <span style="color:#475569;font-size:0.95rem;">Weekly tailored physical activity plans</span>
+                            </div>
+                        </div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Unlimited Motor Skills Tracking</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <span style="color:var(--blue-600);font-size:1.25rem;">✅</span> <span style="font-weight:600;color:var(--slate-700);">Book Doctor Appointments</span>
+                    ${trialHtml}
+                    <div>
+                        ${actionHtml}
                     </div>
                 </div>
-                <button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;font-weight:700;">Upgrade for $29.99/mo</button>
-                <button onclick="document.getElementById('premium-modal').remove()" style="background:none;border:none;color:var(--slate-400);margin-top:1rem;font-weight:600;cursor:pointer;">Maybe Later</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -7646,40 +7777,57 @@
         const isPremium = window.dashboardData && window.dashboardData.subscription && window.dashboardData.subscription.plan_name === 'Premium';
         if (isPremium) return true;
 
-                // Special handling for speech analysis: check actual speech history count
-        if (feature === 'speech') {
-            const child = (window.dashboardData && window.dashboardData.children && window.dashboardData.children[window._selectedChildIndex || 0]) || null;
-            const speechHistoryCount = child && child._speech_history ? child._speech_history.length : 0;
-            if (speechHistoryCount > 3) {
-                window.showPremiumPaywallModal('speech');
+        if (maxTrials === 0) {
+            window.showPremiumModal(feature);
+            return false;
+        }
+
+        const trialKey = 'bs_trial_' + feature;
+        let used = parseInt(localStorage.getItem(trialKey) || '0');
+        
+        const windowKey = 'bs_trial_window_' + feature;
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (Date.now() - windowStart > sevenDays) {
+            // Window expired — reset
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(Date.now()));
+            used = 0;
+        }
+        
+        // Always show the modal for free users unless they've clicked 'Use Free Trial' this session
+        if (window['_access_granted_' + feature]) {
+            if (used >= maxTrials) {
+                window.showPremiumModal(feature);
                 return false;
             }
             return true;
         }
 
-        if (maxTrials === 0) {
-            window.showPremiumModal();
-            return false;
-        }
-
-        const trialKey = 'bs_trial_' + feature;
-        let used = parseInt(localStorage.getItem(trialKey) || '0');
-        if (used >= maxTrials) {
-            window.showPremiumModal();
-            return false;
-        }
-        return true;
+        window.showPremiumModal(feature);
+        return false;
     };
 
-    window.incrementTrial = function (feature) {
-        // Don't increment trial count for speech analysis as we use actual speech history count
-        if (feature === 'speech') {
-            return;
-        }
-
+    window.incrementTrial = function(feature) {
+        window['_access_granted_' + feature] = true;
+        
         const trialKey = 'bs_trial_' + feature;
-        let used = parseInt(localStorage.getItem(trialKey) || '0');
-        localStorage.setItem(trialKey, used + 1);
+        const windowKey = 'bs_trial_window_' + feature;
+        const now = Date.now();
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        
+        // Reset counter if 7-day window has expired
+        if (now - windowStart > sevenDays) {
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(now));
+        }
+        
+        // Don't increment for speech (speech uses actual DB count)
+        if (feature === 'speech') return;
+        
+        const used = parseInt(localStorage.getItem(trialKey) || '0');
+        localStorage.setItem(trialKey, String(used + 1));
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -7811,7 +7959,6 @@
     // ── Book Specialist Modal ──────────────────────────────────────
     // ══════════════════════════════════════════════════════════════
     window.bookSpecialist = function (specId, specName, preDate) {
-        if (!window.checkSubscriptionAccess('appointment', 0)) return;
         let existing = document.getElementById('book-modal');
         if (existing) existing.remove();
 
@@ -7840,22 +7987,52 @@
                         <option value="online">Online (Video Session)</option>
                     </select>
                 </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
-                    <div>
-                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Date</label>
-                        <input type="date" id="bk-date" min="${minDate}" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;">
-                    </div>
-                    <div>
-                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Time</label>
-                        <select id="bk-time" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;">
-                            <option value="09:00">09:00 AM</option>
-                            <option value="10:00">10:00 AM</option>
-                            <option value="11:30">11:30 AM</option>
-                            <option value="13:00">01:00 PM</option>
-                            <option value="15:00">03:00 PM</option>
-                            <option value="16:30">04:30 PM</option>
-                        </select>
-                    </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Available Slots</label>
+                    <select id="bk-slot" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;">
+                        ${(function(){
+                            let slotOptions = '<option value="">No available slots</option>';
+                            if (window._allSpecialists) {
+                                const spec = window._allSpecialists.find(s => s.specialist_id == specId);
+                                if (spec && spec.availability) {
+                                    try {
+                                        const slots = spec.availability.filter(s => s.available);
+                                        if (slots && slots.length > 0) {
+                                            let allOptions = [];
+                                            slots.forEach(s => {
+                                                let currentStr = s.start_time;
+                                                const endStr = s.end_time;
+                                                const dur = parseInt(s.slot_duration) || 30;
+                                                
+                                                while (currentStr < endStr) {
+                                                    // Parse time string to format it nicely (e.g. 09:00 AM)
+                                                    let [h, m] = currentStr.split(':').map(Number);
+                                                    let ampm = h >= 12 ? 'PM' : 'AM';
+                                                    let dispH = h % 12 || 12;
+                                                    let minStr = m < 10 ? '0' + m : m;
+                                                    let formattedTime = `${dispH}:${minStr} ${ampm}`;
+                                                    
+                                                    allOptions.push(`<option value="${s.date}|${currentStr}">${s.label} at ${formattedTime}</option>`);
+                                                    
+                                                    // Add duration
+                                                    m += dur;
+                                                    h += Math.floor(m / 60);
+                                                    m = m % 60;
+                                                    
+                                                    // Format back to string
+                                                    currentStr = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m) + ':00';
+                                                }
+                                            });
+                                            if (allOptions.length > 0) {
+                                                slotOptions = allOptions.join('');
+                                            }
+                                        }
+                                    } catch(e){}
+                                }
+                            }
+                            return slotOptions;
+                        })()}
+                    </select>
                 </div>
                 <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Notes for Specialist (Optional)</label>
@@ -7918,7 +8095,17 @@
         document.body.appendChild(modal);
 
         // Pre-fill date if a slot was pre-selected
-        if (typeof preDate !== 'undefined' && preDate) { var el = document.getElementById('bk-date'); if (el) { el.value = preDate; el.min = preDate; } }
+        if (typeof preDate !== 'undefined' && preDate) { 
+            const el = document.getElementById('bk-slot'); 
+            if (el) { 
+                for (let i = 0; i < el.options.length; i++) {
+                    if (el.options[i].value.startsWith(preDate)) {
+                        el.selectedIndex = i;
+                        break;
+                    }
+                }
+            } 
+        }
 
         window.goToBookingStep1 = function () {
             document.getElementById('bk-step-1').style.display = 'block';
@@ -7927,9 +8114,8 @@
         };
 
         window.goToBookingStep2 = function () {
-            const d = document.getElementById('bk-date').value;
-            const t = document.getElementById('bk-time').value;
-            if (!d || !t) { alert("Please select a valid date and time."); return; }
+            const slotVal = document.getElementById('bk-slot').value;
+            if (!slotVal) { showToast("Please select an available slot.", "error"); return; }
 
             document.getElementById('bk-step-1').style.display = 'none';
             document.getElementById('bk-step-2').style.display = 'block';
@@ -8010,8 +8196,10 @@
             btn.innerHTML = 'Processing...';
 
             const type = document.getElementById('bk-type').value;
-            const date = document.getElementById('bk-date').value;
-            const time = document.getElementById('bk-time').value;
+            const slotVal = document.getElementById('bk-slot').value;
+            const parts = slotVal.split('|');
+            const date = parts[0];
+            const time = parts[1];
             const comment = document.getElementById('bk-comment').value;
             const method = document.querySelector('input[name="bk-payment"]:checked').value;
             const tokenSelect = document.getElementById('bk-token');
@@ -8882,3 +9070,93 @@
         console.error('Dashboard bootstrap error:', e);
     }
 })();
+window.checkMemoryMatchCooldown = async function(childId) {
+    try {
+        const res = await fetch('../../api_activities.php?action=history&child_id=' + childId + '&period=all');
+        const data = await res.json();
+        const allCompleted = (data.activities || []).filter(a => a.is_completed == 1 && a.title === 'Memory Match Explorer');
+        if (allCompleted.length > 0) {
+            allCompleted.sort((a,b) => new Date(b.completed_at) - new Date(a.completed_at));
+            const lastPlayed = new Date(allCompleted[0].completed_at);
+            const daysSince = (new Date() - lastPlayed) / (1000 * 60 * 60 * 24);
+            if (daysSince < 3) {
+                const mmBtn = document.getElementById('memory-match-btn');
+                if (mmBtn) {
+                    const daysLeft = Math.ceil(3 - daysSince);
+                    mmBtn.innerHTML = '⏳ Cooldown (' + daysLeft + ' day' + (daysLeft>1?'s':'') + ')';
+                    mmBtn.style.background = 'linear-gradient(135deg,#cbd5e1,#94a3b8)';
+                    mmBtn.style.color = '#fff';mmBtn.style.fontSize = '1rem';mmBtn.style.padding = '1rem 2rem';
+                    mmBtn.onclick = null;
+                    mmBtn.style.boxShadow = 'none';
+                    mmBtn.style.cursor = 'not-allowed';
+                }
+            }
+        }
+    } catch(e) {}
+};
+
+
+// ── Activity Detail Modal (for Today's Activities & Weekly Plan clicks) ──
+window.openActivityDetailModal = function(title, description, reason, category, bgColor, textColor) {
+    let existing = document.getElementById('activity-detail-modal');
+    if (existing) existing.remove();
+    
+    let timeEstimate = '15-20 mins';
+    if (category.toLowerCase().includes('motor')) timeEstimate = '20-30 mins';
+    if (category.toLowerCase().includes('speech')) timeEstimate = '10-15 mins';
+
+    const modal = document.createElement('div');
+    modal.id = 'activity-detail-modal';
+    modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                <div style="background:linear-gradient(135deg,${bgColor || '#dbeafe'},${textColor ? textColor+'20' : '#ede9fe'});padding:2.5rem 2.5rem 2rem;position:relative;border-bottom:1px solid rgba(0,0,0,0.05);">
+                    <button onclick="document.getElementById('activity-detail-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,0.8);border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;color:#64748b;backdrop-filter:blur(4px);">✕</button>
+                    <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:1rem;">
+                        <div style="width:64px;height:64px;background:#ffffff;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:2rem;box-shadow:0 10px 25px ${textColor ? textColor+'30' : 'rgba(0,0,0,0.1)'};">🎯</div>
+                        <div>
+                            <span style="display:inline-block;padding:0.35rem 0.85rem;background:rgba(255,255,255,0.8);border-radius:20px;font-size:0.8rem;font-weight:800;color:${textColor || '#1e40af'};text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.75rem;box-shadow:0 2px 8px rgba(0,0,0,0.05);">${category || 'Activity'}</span>
+                            <h2 style="margin:0;font-size:1.75rem;font-weight:800;color:#1e293b;line-height:1.3;">${title}</h2>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding:2rem 2.5rem;overflow-y:auto;flex:1;">
+                    <div style="display:flex;gap:1rem;margin-bottom:1.75rem;">
+                        <div style="flex:1;background:#f8fafc;padding:1rem;border-radius:12px;display:flex;align-items:center;gap:0.75rem;border:1px solid #e2e8f0;">
+                            <span style="font-size:1.5rem;">⏱️</span>
+                            <div>
+                                <div style="font-size:0.75rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Duration</div>
+                                <div style="font-size:0.95rem;font-weight:800;color:#1e293b;">${timeEstimate}</div>
+                            </div>
+                        </div>
+                        <div style="flex:1;background:#f8fafc;padding:1rem;border-radius:12px;display:flex;align-items:center;gap:0.75rem;border:1px solid #e2e8f0;">
+                            <span style="font-size:1.5rem;">🧠</span>
+                            <div>
+                                <div style="font-size:0.75rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Focus</div>
+                                <div style="font-size:0.95rem;font-weight:800;color:#1e293b;">Development</div>
+                            </div>
+                        </div>
+                    </div>
+                    ${description ? '<div style="margin-bottom:1.75rem;background:#f8fafc;padding:1.5rem;border-radius:16px;border-left:4px solid #6366f1;"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#334155;margin:0 0 0.75rem;font-size:1.05rem;"><span>📝</span> Description</h4><p style="color:#475569;line-height:1.8;margin:0;font-size:0.95rem;">' + description + '</p></div>' : ''}
+                    ${(() => {
+                        if (reason && reason.includes('Materials:') && reason.includes('Steps:')) {
+                            let parts = reason.split('<br><br>Steps:');
+                            let materialsStr = parts[0].replace('Materials:', '').trim();
+                            let stepsStr = parts[1].trim();
+                            let stepsArray = stepsStr.split('→').map(s => s.trim());
+                            let stepsList = stepsArray.map((s, idx) => '<li style="margin-bottom:1rem;display:flex;gap:1rem;align-items:flex-start;"><span style="background:rgba(99,102,241,0.15);color:#4f46e5;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.85rem;flex-shrink:0;">' + (idx+1) + '</span><span style="padding-top:0.3rem;">' + s + '</span></li>').join('');
+                            return '<div style="background:rgba(16,185,129,0.05);border-radius:16px;padding:1.5rem;border:1px solid rgba(16,185,129,0.15);margin-bottom:1.5rem;"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#059669;margin:0 0 0.75rem;font-size:1.05rem;"><span>📦</span> Materials Needed</h4><p style="color:#047857;line-height:1.6;margin:0;font-size:0.95rem;font-weight:500;">' + materialsStr + '</p></div><div style="background:rgba(99,102,241,0.05);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.15);"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#4f46e5;margin:0 0 1.25rem;font-size:1.05rem;"><span>👟</span> Action Steps</h4><ul style="color:#4338ca;margin:0;padding:0;list-style:none;font-size:0.95rem;line-height:1.6;font-weight:500;">' + stepsList + '</ul></div>';
+                        } else if (reason) {
+                            return '<div style="background:rgba(99,102,241,0.05);border-radius:16px;padding:1.5rem;border:1px solid rgba(99,102,241,0.1);"><h4 style="display:flex;align-items:center;gap:0.5rem;font-weight:800;color:#4f46e5;margin:0 0 0.75rem;font-size:1rem;"><span>✨</span> Why this activity?</h4><p style="color:#4338ca;line-height:1.8;margin:0;font-size:0.95rem;">' + reason + '</p></div>';
+                        }
+                        return '';
+                    })()}
+                </div>
+                <div style="padding:1.5rem 2.5rem;border-top:1px solid #f1f5f9;background:#f8fafc;">
+                    <button onclick="document.getElementById('activity-detail-modal').remove()" style="width:100%;padding:1rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:16px;font-weight:700;font-size:1.05rem;cursor:pointer;transition:all 0.2s;box-shadow:0 10px 20px rgba(99,102,241,0.3);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 24px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 20px rgba(99,102,241,0.3)'">Let\'s Go! 🚀</button>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+};
+    window.showPremiumPaywallModal = function(featureName) { window.showPremiumModal(featureName); };

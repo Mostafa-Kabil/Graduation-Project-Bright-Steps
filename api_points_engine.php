@@ -66,8 +66,16 @@ function awardPoints($connect, $parentId, $childId, $actionName, $points, $reaso
             $connect->prepare("INSERT INTO points_transaction (refrence_id, wallet_id, points_change, transaction_type) VALUES (?, ?, ?, 'deposit')")->execute([$refId, $walletId, $points]);
         }
 
-        // 3. Log to parent_points_tracking
-        $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, ?, ?, ?)")->execute([$parentId, $childId, $actionName, $points, $reason]);
+        // 3. Log to parent_points_history
+        try {
+            $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, ?, ?, ?)")->execute([$parentId, $childId, $actionName, $points, $reason]);
+        } catch (Exception $e) {
+            $connect->exec("CREATE TABLE IF NOT EXISTS `parent_points_history` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY, `parent_id` INT NOT NULL, `child_id` INT DEFAULT NULL,
+                `action` VARCHAR(100) NOT NULL, `points` INT NOT NULL, `reason` TEXT DEFAULT NULL, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )");
+            $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, ?, ?, ?)")->execute([$parentId, $childId, $actionName, $points, $reason]);
+        }
 
         // 4. Get updated balance
         $stmt = $connect->prepare("SELECT total_points FROM points_wallet WHERE child_id = ?");
@@ -99,18 +107,24 @@ switch ($action) {
             exit();
         }
         $limit = min(50, max(5, (int)($_GET['limit'] ?? 20)));
-        $stmt = $connect->prepare("
-            SELECT action, points, reason, created_at
-            FROM parent_points_tracking
-            WHERE parent_id = ? AND child_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-        ");
-        $stmt->bindValue(1, $parentId, PDO::PARAM_INT);
-        $stmt->bindValue(2, $childId, PDO::PARAM_INT);
-        $stmt->bindValue(3, $limit, PDO::PARAM_INT);
-        $stmt->execute();
-        $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $history = [];
+        try {
+            $stmt = $connect->prepare("
+                SELECT action, points, reason, created_at
+                FROM parent_points_history
+                WHERE parent_id = ? AND child_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            ");
+            $stmt->bindValue(1, $parentId, PDO::PARAM_INT);
+            $stmt->bindValue(2, $childId, PDO::PARAM_INT);
+            $stmt->bindValue(3, $limit, PDO::PARAM_INT);
+            $stmt->execute();
+            $history = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            // Table might not exist yet if no points have been awarded
+            $history = [];
+        }
 
         // Also get balance
         $stmt2 = $connect->prepare("SELECT total_points FROM points_wallet WHERE child_id = ? LIMIT 1");
@@ -158,7 +172,7 @@ switch ($action) {
             $connect->prepare("INSERT INTO appointment_tokens (parent_id, child_id, token_code, points_redeemed, discount_amount, status) VALUES (?, ?, ?, ?, 50.00, 'active')")->execute([$parentId, $childId, $tokenCode, $requiredPoints]);
 
             // Log transaction
-            $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Token Redemption', ?, ?)")->execute([$parentId, $childId, -$requiredPoints, "Redeemed $requiredPoints points for free consultation token $tokenCode"]);
+            $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Token Redemption', ?, ?)")->execute([$parentId, $childId, -$requiredPoints, "Redeemed $requiredPoints points for free consultation token $tokenCode"]);
 
             // Get new balance
             $stmt = $connect->prepare("SELECT total_points FROM points_wallet WHERE child_id = ?");
@@ -231,14 +245,14 @@ switch ($action) {
 
             // Log tracking (create table if missing)
             try {
-                $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Offer Redemption', ?, ?)")
+                $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Offer Redemption', ?, ?)")
                     ->execute([$parentId, $childId, -$reqPoints, "Redeemed " . $offer['title']]);
             } catch (Exception $e) {
-                $connect->exec("CREATE TABLE IF NOT EXISTS `parent_points_tracking` (
+                $connect->exec("CREATE TABLE IF NOT EXISTS `parent_points_history` (
                     `id` INT AUTO_INCREMENT PRIMARY KEY, `parent_id` INT NOT NULL, `child_id` INT DEFAULT NULL,
                     `action` VARCHAR(100) NOT NULL, `points` INT NOT NULL, `reason` TEXT DEFAULT NULL, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )");
-                $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Offer Redemption', ?, ?)")
+                $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Offer Redemption', ?, ?)")
                     ->execute([$parentId, $childId, -$reqPoints, "Redeemed " . $offer['title']]);
             }
 
@@ -392,14 +406,14 @@ switch ($action) {
 
             // Log tracking
             try {
-                $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Reward Redemption', ?, ?)")
+                $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Reward Redemption', ?, ?)")
                     ->execute([$parentId, $childId, -$pointsCost, "Redeemed: $offerName"]);
             } catch (Exception $e) {
-                $connect->exec("CREATE TABLE IF NOT EXISTS `parent_points_tracking` (
+                $connect->exec("CREATE TABLE IF NOT EXISTS `parent_points_history` (
                     `id` INT AUTO_INCREMENT PRIMARY KEY, `parent_id` INT NOT NULL, `child_id` INT DEFAULT NULL,
                     `action` VARCHAR(100) NOT NULL, `points` INT NOT NULL, `reason` TEXT DEFAULT NULL, `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )");
-                $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Reward Redemption', ?, ?)")
+                $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Reward Redemption', ?, ?)")
                     ->execute([$parentId, $childId, -$pointsCost, "Redeemed: $offerName"]);
             }
 

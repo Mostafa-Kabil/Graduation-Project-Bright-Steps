@@ -420,15 +420,22 @@ async def generate_behavior_checklist(metrics: ChildMetrics):
         # Get behaviors for age range - 4 Developmental Pillars
         categories = []
 
-        # 🦵 Motor Skills Category (combines gross and fine motor)
+        # ⚡ Gross Motor Category
         gross_behaviors = BEHAVIOR_DATABASE.get("gross_motor", {}).get(age_range, [])
-        fine_behaviors = BEHAVIOR_DATABASE.get("fine_motor", {}).get(age_range, [])
-        motor_behaviors = gross_behaviors + fine_behaviors
         categories.append({
-            "category_name": "🦵 Motor Skills",
-            "category_type": "motor_skills",
-            "category_description": "Physical development including gross motor (walking, running, balance) and fine motor (grasping, drawing, coordination)",
-            "behaviors": [{"behavior_details": b["behavior"], "typical_age": b["typical_age"]} for b in motor_behaviors]
+            "category_name": "⚡ Gross Motor",
+            "category_type": "gross_motor",
+            "category_description": "Physical development involving large muscle movements like walking, running, and balance",
+            "behaviors": [{"behavior_details": b["behavior"], "typical_age": b["typical_age"]} for b in gross_behaviors]
+        })
+
+        # 🤏 Fine Motor Category
+        fine_behaviors = BEHAVIOR_DATABASE.get("fine_motor", {}).get(age_range, [])
+        categories.append({
+            "category_name": "🤏 Fine Motor",
+            "category_type": "fine_motor",
+            "category_description": "Physical development involving small muscle movements like grasping, drawing, and coordination",
+            "behaviors": [{"behavior_details": b["behavior"], "typical_age": b["typical_age"]} for b in fine_behaviors]
         })
 
         # 🧠 Attention Category
@@ -464,7 +471,8 @@ async def generate_behavior_checklist(metrics: ChildMetrics):
             younger_range = get_age_range(max(0, metrics.age_months - 3))
             for cat in categories:
                 type_mapping = {
-                    "🦵 Motor Skills": ["gross_motor", "fine_motor"],
+                    "⚡ Gross Motor": ["gross_motor"],
+                    "🤏 Fine Motor": ["fine_motor"],
                     "🧠 Attention": ["attention"],
                     "💬 Communication": ["communication"],
                     "🤝 Social Skills": ["social_skills"]

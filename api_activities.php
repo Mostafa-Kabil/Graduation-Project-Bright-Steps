@@ -41,7 +41,7 @@ function getEnvValue($key) {
 
 // Curated fallback activities when OpenAI is unavailable
 function getCuratedActivities($ageMonths, $childName) {
-    $ageGroup = $ageMonths < 12 ? 'infant' : ($ageMonths < 24 ? 'toddler' : ($ageMonths < 48 ? 'preschool' : 'school'));
+    $ageGroup = $ageMonths < 12 ? 'infant' : ($ageMonths < 36 ? 'toddler' : ($ageMonths < 60 ? 'preschool' : 'school'));
     
     $activities = [
         'infant' => [
@@ -307,10 +307,18 @@ Return EXACTLY this JSON structure (no markdown, no backticks, just raw JSON):
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
+    {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
+    {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
+    {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"},
     {\"title\": \"...\", \"summary\": \"...\", \"category\": \"...\", \"read_time\": \"...\"}
   ],
   \"real_life_activities\": [
     {\"title\": \"...\", \"description\": \"...\", \"duration\": \"15 min\", \"category\": \"motor|speech|cognitive|social\", \"difficulty\": \"easy|medium|hard\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
+    {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
     {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"},
     {\"title\": \"...\", \"description\": \"...\", \"duration\": \"...\", \"category\": \"...\", \"difficulty\": \"...\", \"materials\": \"...\", \"reason_picked\": \"...\"}
   ],
@@ -322,7 +330,7 @@ Return EXACTLY this JSON structure (no markdown, no backticks, just raw JSON):
 }
 
 Make all recommendations age-appropriate, specific, and actionable. Vary the categories to cover different developmental areas.
-CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a 'reason_picked' field that explicitly explains why you picked it. This explanation MUST accurately mention the child's exact age (e.g., '$ageDisplay') and directly reference their specific conditions, recent milestones, or speech/growth status if available.";
+CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a 'reason_picked' field that explicitly explains why you picked it. This explanation MUST accurately mention the child's exact age (e.g., '$ageDisplay') and directly reference their specific conditions, recent milestones, or speech/growth status if available. We want to generate as many tailored items as possible (up to 8 in articles and 8 in real_life_activities) to fill the parent's dashboard.";
 
         // OpenAI API call
         $ch = curl_init('https://api.openai.com/v1/chat/completions');
@@ -341,7 +349,7 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
                     ['role' => 'user', 'content' => $prompt]
                 ],
                 'temperature' => 0.8,
-                'max_tokens' => 1500
+                'max_tokens' => 4000
             ]),
             CURLOPT_TIMEOUT => 30
         ]);
@@ -448,6 +456,32 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
         if (!$childId) {
             echo json_encode(['error' => 'child_id required']);
             exit();
+        }
+
+        // 3-Day Game Cooldown check
+        if ($category === 'website_game') {
+            $stmtGame = $connect->prepare(
+                "SELECT completed_at FROM child_activities 
+                 WHERE child_id = ? AND category = 'website_game' AND is_completed = 1 
+                 ORDER BY completed_at DESC LIMIT 1"
+            );
+            $stmtGame->execute([$childId]);
+            $lastGame = $stmtGame->fetch(PDO::FETCH_ASSOC);
+            if ($lastGame) {
+                $lastTime = strtotime($lastGame['completed_at']);
+                $cooldownEnd = $lastTime + (3 * 24 * 60 * 60); // 3 days in seconds
+                if (time() < $cooldownEnd) {
+                    $nextAvailable = date('M d, Y H:i:s', $cooldownEnd);
+                    $daysLeft = ceil(($cooldownEnd - time()) / (24 * 60 * 60));
+                    echo json_encode([
+                        'error' => "Game cooldown active. You can play again in $daysLeft days.",
+                        'cooldown' => true,
+                        'next_available' => $nextAvailable,
+                        'message' => "You can play again for points in $daysLeft days."
+                    ]);
+                    exit();
+                }
+            }
         }
 
         try {

@@ -24,9 +24,17 @@ if %ERRORLEVEL% neq 0 (
     pip install fastapi uvicorn openai-whisper torch
 )
 
+REM Kill any existing process on port 8002
+echo Checking for existing processes on port 8002...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8002 ^| findstr LISTENING') do (
+    echo Found process %%a on port 8002, killing it...
+    taskkill /PID %%a /F >nul 2>&1
+)
+timeout /t 2 /nobreak >nul
+
 REM Start the server
-echo Starting server on http://localhost:8000
+echo Starting server on http://localhost:8002
 echo Press Ctrl+C to stop
 echo.
 
-python -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app:app --host 0.0.0.0 --port 8002

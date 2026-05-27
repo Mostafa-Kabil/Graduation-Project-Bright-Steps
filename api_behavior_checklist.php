@@ -219,7 +219,7 @@ switch ($action) {
             $aiUnavailable = $aiResponse['ai_unavailable'] ?? false;
 
             // Get categories and behaviors from database (AI-generated or existing)
-            $stmt = $connect->prepare("SELECT * FROM behavior_category ORDER BY category_type, category_name");
+            $stmt = $connect->prepare("SELECT * FROM behavior_category WHERE LOWER(category_name) LIKE '%attention%' OR LOWER(category_name) LIKE '%communication%' OR LOWER(category_name) LIKE '%social%' OR LOWER(category_name) LIKE '%motor%' ORDER BY category_type, category_name");
             $stmt->execute();
             $dbCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -227,6 +227,7 @@ switch ($action) {
                 SELECT b.*, bc.category_name, bc.category_type, bc.category_description
                 FROM behavior b
                 INNER JOIN behavior_category bc ON b.category_id = bc.category_id
+                WHERE LOWER(bc.category_name) LIKE '%attention%' OR LOWER(bc.category_name) LIKE '%communication%' OR LOWER(bc.category_name) LIKE '%social%' OR LOWER(bc.category_name) LIKE '%motor%'
                 ORDER BY bc.category_type, bc.category_name, b.behavior_details
             ");
             $stmt->execute();
@@ -258,6 +259,7 @@ switch ($action) {
                     SELECT b.*, bc.category_name, bc.category_type, bc.category_description
                     FROM behavior b
                     INNER JOIN behavior_category bc ON b.category_id = bc.category_id
+                    WHERE LOWER(bc.category_name) LIKE '%attention%' OR LOWER(bc.category_name) LIKE '%communication%' OR LOWER(bc.category_name) LIKE '%social%' OR LOWER(bc.category_name) LIKE '%motor%'
                     ORDER BY bc.category_type, bc.category_name, b.behavior_details
                 ");
                 $stmt->execute();

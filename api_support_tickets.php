@@ -16,9 +16,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $input['action'] ?? '';
 
     if ($action === 'create_ticket') {
-        $subject = trim($input['subject'] ?? '');
+        $topic = $input['priority'] ?? 'Other';
+        $priority = 'medium'; // Default priority since the DB enum requires it
+        $subject = "[$topic] " . trim($input['subject'] ?? '');
         $message = trim($input['message'] ?? '');
-        $priority = $input['priority'] ?? 'medium';
 
         if (empty($subject) || empty($message)) {
             echo json_encode(['success' => false, 'error' => 'Subject and message are required.']);

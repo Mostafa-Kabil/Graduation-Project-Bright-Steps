@@ -49,7 +49,7 @@ function renderDoctorTopBar() {
                     </div>
                 </div>
             </div>
-            <div id="topbar-avatar" onclick="navigateToView('settings')" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #0d9488, #0891b2); color:white; display:flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; font-size:0.9rem;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+            <div id="topbar-avatar" class="notranslate" onclick="navigateToView('settings')" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #0d9488, #0891b2); color:white; display:flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; font-size:0.9rem;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                 \${initial}
             </div>
         </div>
