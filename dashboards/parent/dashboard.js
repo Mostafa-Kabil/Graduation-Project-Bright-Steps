@@ -437,7 +437,7 @@
 
         if (type === 'premium_subscription') {
             // Fetch price from dashboardData or API
-            total = (window.dashboardData || {}).subscription?.price || '24.99';
+            total = (window.dashboardData || {}).subscription?.price || '250';
         } else if (type === 'appointment') {
             targetName = 'Doctor Consultation';
             // Use the specialist fee if provided
@@ -457,7 +457,7 @@
 
                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:2rem;display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-weight:600;color:var(--slate-600);">Total Amount:</span>
-                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">$${total}</span>
+                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">${total} EGP</span>
                     </div>
 
                     <div class="payment-form" style="display:flex;flex-direction:column;gap:1rem;">
@@ -6158,8 +6158,9 @@
         const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
         const settings = d.user_settings || {};
         const isDark = (settings.theme === 'dark') || document.documentElement.getAttribute('data-theme') === 'dark';
-        const lang = settings.language || localStorage.getItem('language') || 'en';
         const sub = d.subscription || {};
+        const expiredPremium = sub.expired_premium;
+        const expiresAt = sub.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : null;
 
         return `
         <div class="dashboard-content">
@@ -6309,7 +6310,12 @@
                             <div class="settings-row">
                                 <div>
                                     <h4 class="settings-row-title">Current Plan: <span style="color:var(--blue-600);font-weight:700;">${sub.plan_name || 'Free'}</span></h4>
-                                    <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? '$' + sub.price + '/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
+                                    <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? sub.price + ' EGP/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
+                                    <div style="font-size:0.8rem;color:#64748b;margin-top:0.25rem;">
+                                        ${expiresAt ? `Expires: ${expiresAt}` : ''}
+                                        ${expiredPremium ? '<span style="color:#ef4444;font-weight:700;margin-left:0.5rem;">⚠️ Subscription Expired</span>' : ''}
+                                    </div>
+                                    ${expiredPremium ? `<button class="btn btn-gradient btn-sm" style="margin-top:0.75rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);" onclick="window.showPaymentModal('Premium', 250)">🔄 Renew Subscription — 250 EGP/month</button>` : ''}
                                 </div>
                                 <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../pricing.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
                             </div>
@@ -7646,7 +7652,7 @@
             `;
         }
 
-        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium</button>`;
+        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 250)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium — 250 EGP/month</button>`;
         
         if ((feature === 'motor' || feature === 'speech' || feature === 'growth') && left > 0) {
             actionHtml += `<button onclick="document.getElementById('premium-modal').remove(); window.incrementTrial('${feature}'); if('${feature}'==='motor') switchView('motor'); else if('${feature}'==='speech') switchView('speech'); else switchView('growth');" style="width:100%;padding:1.1rem;background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">Use Free Trial (${left} left)</button>`;

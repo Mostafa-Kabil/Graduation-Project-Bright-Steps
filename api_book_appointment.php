@@ -49,6 +49,35 @@ if ($type === 'online' && $paymentMethod === 'Cash') {
     exit();
 }
 
+// 1. Validate date is not in the past
+$bookingDT = new DateTime($scheduledAt);
+$now = new DateTime();
+if ($bookingDT <= $now) {
+    echo json_encode(['error' => 'Cannot book appointments in the past.']);
+    exit();
+}
+
+// 2. Check for existing booking at that exact slot (within 30 min window)
+$scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+$conflictStmt = $connect->prepare("
+    SELECT COUNT(*) FROM appointment 
+    WHERE specialist_id = ? 
+      AND scheduled_at = ? 
+      AND status NOT IN ('Cancelled')
+");
+$conflictStmt->execute([$specialistId, $scheduledDateTime]);
+if ((int)$conflictStmt->fetchColumn() > 0) {
+    echo json_encode(['error' => 'This time slot is already booked. Please choose another time.']);
+    exit();
+}
+
+// 3. Validate the chosen time aligns to a 30-minute boundary
+$mins = (int)$bookingDT->format('i');
+if ($mins !== 0 && $mins !== 30) {
+    echo json_encode(['error' => 'Please select a valid 30-minute time slot.']);
+    exit();
+}
+
 // Validate child_id if provided
 if ($childId) {
     $childCheckStmt = $connect->prepare("SELECT child_id FROM child WHERE child_id = ? AND parent_id = ?");
@@ -107,10 +136,10 @@ try {
     }
 
     // 2. Create Appointment
-    $scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+    // $scheduledDateTime is already formatted above
 
-    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, 'Scheduled', ?, ?, ?)");
-    $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
+    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at, child_id) VALUES (?, ?, ?, 'Pending', ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime, $childId]);
     $appointmentId = $connect->lastInsertId();
 
 

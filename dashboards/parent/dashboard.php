@@ -27,7 +27,12 @@ $dashboardData = [
 if ($parentId) {
     // Subscription
     try {
-        $sql = "SELECT s.plan_name, s.price, s.plan_period
+        // Ensure parent_subscription has created_at
+        try {
+            $connect->exec("ALTER TABLE parent_subscription ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+        } catch (Exception $e) { /* ignore */ }
+
+        $sql = "SELECT s.plan_name, s.price, s.plan_period, ps.created_at AS subscribed_at
                 FROM parent_subscription ps
                 INNER JOIN subscription s ON ps.subscription_id = s.subscription_id
                 WHERE ps.parent_id = :parent_id LIMIT 1";
@@ -36,6 +41,21 @@ if ($parentId) {
         $plan = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($plan) {
             $planname = $plan['plan_name'];
+
+            // Calculate expiry: subscribed_at + 30 days
+            $subscribedAt = strtotime($plan['subscribed_at'] ?? 'now');
+            $expiresAt = $subscribedAt + (30 * 86400);
+            $isExpired = time() > $expiresAt;
+
+            $plan['expires_at'] = date('Y-m-d H:i:s', $expiresAt);
+            $plan['is_expired'] = $isExpired;
+
+            // If expired, downgrade to Free in memory (don't change DB, just show as Free)
+            if ($isExpired && $plan['plan_name'] === 'Premium') {
+                $planname = 'Free';
+                $plan['plan_name'] = 'Free';
+                $plan['expired_premium'] = true; // flag to show re-subscription UI
+            }
             $dashboardData['subscription'] = $plan;
         }
     } catch (Exception $e) { /* subscription query failed gracefully */ }

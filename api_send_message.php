@@ -20,6 +20,18 @@ if (!$receiverId || (!$content && empty($_FILES['attachment']))) {
     exit();
 }
 
+// Guard: verify appointment exists
+$stmtCheck = $connect->prepare("
+    SELECT 1 FROM appointment 
+    WHERE ((parent_id = ? AND specialist_id = ?) OR (parent_id = ? AND specialist_id = ?))
+      AND status IN ('Scheduled', 'Completed') LIMIT 1
+");
+$stmtCheck->execute([$senderId, $receiverId, $receiverId, $senderId]);
+if (!$stmtCheck->fetch()) {
+    echo json_encode(['error' => 'Messaging is only available after your appointment is confirmed by the specialist.']);
+    exit();
+}
+
 $filePath = null;
 
 // Handle file upload

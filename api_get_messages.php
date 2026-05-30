@@ -64,6 +64,18 @@ if (!$otherUserId) {
     exit();
 }
 
+// Guard: verify appointment exists
+$stmtCheck = $connect->prepare("
+    SELECT 1 FROM appointment 
+    WHERE ((parent_id = ? AND specialist_id = ?) OR (parent_id = ? AND specialist_id = ?))
+      AND status IN ('Scheduled', 'Completed') LIMIT 1
+");
+$stmtCheck->execute([$userId, $otherUserId, $otherUserId, $userId]);
+if (!$stmtCheck->fetch()) {
+    echo json_encode(['error' => 'Messaging is only available after your appointment is confirmed by the specialist.']);
+    exit();
+}
+
 try {
     // Uses the newly created idx_msg_thread index if child_id is provided
     $query = "
