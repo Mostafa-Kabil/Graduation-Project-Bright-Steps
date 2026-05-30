@@ -67,9 +67,17 @@ function protectDashboard() {
 
 // ── Contact & Support Popup ─────────────────────────────────────────
 function showSupportPopup() {
+    // Close mobile sidebar if open
+    if (typeof toggleDashboardSidebar === 'function' && document.querySelector('.dashboard-sidebar.sidebar-open')) {
+        toggleDashboardSidebar();
+    }
+
     // Determine API path relative to current URL
     const isRoot = window.location.pathname.endsWith('/') || window.location.pathname.endsWith('.php') && !window.location.pathname.includes('/dashboards/');
     const apiPath = isRoot ? 'api_support_tickets.php' : '../../api_support_tickets.php';
+
+    const existing = document.querySelector('.support-modal-overlay');
+    if (existing) existing.remove();
 
     const overlay = document.createElement('div');
     overlay.className = 'support-modal-overlay';
@@ -90,7 +98,7 @@ function showSupportPopup() {
             <!-- Header decoration -->
             <div style="position:absolute; top:0; left:0; right:0; height:6px; background: linear-gradient(90deg, #4f46e5, #ec4899);"></div>
             
-            <button onclick="this.closest('.support-modal-overlay').remove()" style="
+            <button onclick="this.closest('.support-modal-overlay').remove(); document.body.style.overflow='auto';" style="
                 position: absolute; top: 1.25rem; right: 1.25rem; background: none; border: none; 
                 font-size: 1.5rem; color: var(--text-secondary, #64748b); cursor: pointer; transition: color 0.2s;
             " onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'">×</button>
@@ -118,16 +126,15 @@ function showSupportPopup() {
                 </div>
                 
                 <div style="margin-bottom: 1rem;">
-                    <label style="display:block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 500; color: var(--text-primary, #334155);">Priority</label>
-                    <select id="ticket-priority" style="
-                        width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border-color, #e2e8f0); 
-                        border-radius: 10px; font-size: 0.95rem; background: var(--bg-primary, #f8fafc); 
-                        color: var(--text-primary, #1e293b); transition: border-color 0.2s; box-sizing: border-box;
-                    ">
-                        <option value="low">Low (General Question)</option>
-                        <option value="medium" selected>Medium (Issue/Bug)</option>
-                        <option value="high">High (Urgent Problem)</option>
-                    </select>
+                    <label style="display:block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 500; color: var(--text-primary, #334155);">Topic</label>
+                    <input type="hidden" id="ticket-priority" value="Technical Issue">
+                    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                        <button type="button" onclick="window.setTicketPriority('Billing', this)" class="priority-btn" style="flex:1 1 calc(33% - 0.5rem); padding:0.75rem 0.5rem; border:1px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; font-size:0.85rem; color:#64748b; transition:all 0.2s;">Billing</button>
+                        <button type="button" onclick="window.setTicketPriority('Technical Issue', this)" class="priority-btn active" style="flex:1 1 calc(33% - 0.5rem); padding:0.75rem 0.5rem; border:1px solid #3b82f6; border-radius:10px; background:#eff6ff; cursor:pointer; font-size:0.85rem; color:#2563eb; font-weight:600; transition:all 0.2s;">Technical Issue</button>
+                        <button type="button" onclick="window.setTicketPriority('Feedback', this)" class="priority-btn" style="flex:1 1 calc(33% - 0.5rem); padding:0.75rem 0.5rem; border:1px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; font-size:0.85rem; color:#64748b; transition:all 0.2s;">Feedback</button>
+                        <button type="button" onclick="window.setTicketPriority('Content Question', this)" class="priority-btn" style="flex:1 1 calc(50% - 0.5rem); padding:0.75rem 0.5rem; border:1px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; font-size:0.85rem; color:#64748b; transition:all 0.2s;">Content Question</button>
+                        <button type="button" onclick="window.setTicketPriority('Other', this)" class="priority-btn" style="flex:1 1 calc(50% - 0.5rem); padding:0.75rem 0.5rem; border:1px solid #e2e8f0; border-radius:10px; background:#fff; cursor:pointer; font-size:0.85rem; color:#64748b; transition:all 0.2s;">Other</button>
+                    </div>
                 </div>
                 
                 <div style="margin-bottom: 1.5rem;">
@@ -152,6 +159,25 @@ function showSupportPopup() {
     `;
     
     document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    
+    if(!window.setTicketPriority) {
+        window.setTicketPriority = function(val, el) {
+            document.getElementById('ticket-priority').value = val;
+            document.querySelectorAll('.priority-btn').forEach(b => {
+                b.style.border = '1px solid #e2e8f0';
+                b.style.background = '#fff';
+                b.style.color = '#64748b';
+                b.style.fontWeight = 'normal';
+            });
+            let color = val === 'high' ? '#ef4444' : (val === 'medium' ? '#3b82f6' : (val === 'low' ? '#10b981' : '#8b5cf6'));
+            let bg = val === 'high' ? '#fef2f2' : (val === 'medium' ? '#eff6ff' : (val === 'low' ? '#ecfdf5' : '#f5f3ff'));
+            el.style.border = `1px solid ${color}`;
+            el.style.background = bg;
+            el.style.color = color;
+            el.style.fontWeight = '600';
+        };
+    }
     
     // Trigger animations
     requestAnimationFrame(() => {
@@ -189,7 +215,7 @@ async function submitSupportTicket(apiPath) {
                 const overlay = document.querySelector('.support-modal-overlay');
                 if (overlay) {
                     overlay.style.opacity = '0';
-                    setTimeout(() => overlay.remove(), 300);
+                    setTimeout(() => { overlay.remove(); document.body.style.overflow='auto'; }, 300);
                 }
             }, 2000);
         } else {

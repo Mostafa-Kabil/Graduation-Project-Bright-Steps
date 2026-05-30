@@ -30,18 +30,18 @@ if (!$ageMonths || $ageMonths <= 0) {
 $ageMonths = max(12, min(72, $ageMonths));
 
 // Check if Python server is running, if not start it
-function isPythonServerRunning($port = 8000) {
+function isPythonServerRunning($port = 8002) {
     $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
     if ($fp) { fclose($fp); return true; }
     return false;
 }
 
-if (!isPythonServerRunning(8000)) {
+if (!isPythonServerRunning(8002)) {
     $scriptDir = realpath(__DIR__ . '/APIs/Speech Analysis');
     if ($scriptDir) {
-        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8000 > NUL 2> NUL', 'r'));
+        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8002 > NUL 2> NUL', 'r'));
         $maxWait = 20;
-        while (!isPythonServerRunning(8000) && $maxWait > 0) {
+        while (!isPythonServerRunning(8002) && $maxWait > 0) {
             usleep(500000);
             $maxWait--;
         }
@@ -49,7 +49,7 @@ if (!isPythonServerRunning(8000)) {
 }
 
 // Call Python API to generate age-appropriate words
-$ch = curl_init('http://127.0.0.1:8000/generate-words');
+$ch = curl_init('http://127.0.0.1:8002/generate-words');
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => ['age' => $ageMonths],

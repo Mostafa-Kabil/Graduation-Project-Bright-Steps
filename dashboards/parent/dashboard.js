@@ -44,7 +44,11 @@
         loadNotifCount();
 
         // Streak check-in
-        streakCheckIn();
+        const todayKey = 'bs_streak_checkin_' + new Date().toDateString();
+        if (!sessionStorage.getItem(todayKey)) {
+            sessionStorage.setItem(todayKey, '1');
+            streakCheckIn();
+        }
 
         // Startup: trigger retrospective badge check for current child
         const startChild = (window.dashboardData || {}).children || [];
@@ -223,9 +227,11 @@
                 if (el) el.textContent = data.current_streak || 0;
                 // Show new badge notifications
                 if (data.new_badges && data.new_badges.length > 0) {
-                    data.new_badges.forEach(b => showBadgeToast(b));
+                    const existingNames = (child.badges || []).map(b => b.name);
+                    const trulyNew = data.new_badges.filter(bName => !existingNames.includes(bName));
+                    trulyNew.forEach(b => showBadgeToast(b));
                     if (!child.badges) child.badges = [];
-                    data.new_badges.forEach(bName => {
+                    trulyNew.forEach(bName => {
                         if (!child.badges.find(b => b.name === bName)) {
                             child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
                         }
@@ -411,8 +417,9 @@
             try {
                 const res = await fetch(`../../api_speech_history.php?child_id=${child.child_id}`);
                 const data = await res.json();
-                const count = (data.analyses || []).length;
-                localStorage.setItem('bs_trial_speech', count);
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                const recentCount = (data.analyses || []).filter(a => new Date(a.sent_at) > sevenDaysAgo).length;
+                localStorage.setItem('bs_trial_speech', recentCount);
             } catch (e) {}
         }
 
@@ -587,6 +594,11 @@
         contentContainer.innerHTML = viewFunction();
 
         // Post-render hooks
+        if (viewId === 'settings') {
+            setTimeout(() => {
+                if (typeof loadInvoiceHistory === 'function') loadInvoiceHistory();
+            }, 150);
+        }
         if (viewId === 'home' || !viewId) {
             loadHomeActivities();
             // Auto-load checklist so Weekly Plan works
@@ -611,6 +623,7 @@
     }
 
     // Load home activities from API
+    window.loadHomeActivities = loadHomeActivities;
     async function loadHomeActivities() {
         // Trigger daily notifications in the background
         fetch('../../api_trigger_daily.php').catch(e => console.error(e));
@@ -1302,6 +1315,10 @@
                             ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(124,58,237,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_speech') || '0'}/3 Free Trials Used</span>` : ''}
                         </h1>
                         <p class="dashboard-subtitle">Track ${child ? child.first_name + "'s" : ''} vocabulary and pronunciation progress</p>
+                    <p style="font-size:0.8rem;color:var(--slate-500);margin-top:0.25rem;display:flex;align-items:center;gap:0.4rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 1 0 20 14.5 14.5 0 0 1 0-20"/><path d="M2 12h20"/></svg>
+                        Supports <strong>English 🇬🇧</strong> and <strong>Arabic 🇪🇬</strong>
+                    </p>
                     </div>
                     <button class="btn btn-gradient" onclick="openSpeechModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -2073,7 +2090,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🧠 Attention</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
                             </div>
-                            <span id="alert-attention" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-attention"></span>
                         </div>
                         <div style="background:rgba(245,158,11,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2094,7 +2113,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">💬 Communication</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Speech & expression</p>
                             </div>
-                            <span id="alert-communication" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-communication"></span>
                         </div>
                         <div style="background:rgba(59,130,246,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2115,7 +2136,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🤝 Social Skills</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Interaction & play</p>
                             </div>
-                            <span id="alert-social" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-social"></span>
                         </div>
                         <div style="background:rgba(16,185,129,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2136,7 +2159,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🦵 Gross Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Large movements</p>
                             </div>
-                            <span id="alert-motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-motor"></span>
                         </div>
                         <div style="background:rgba(102,126,234,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2157,7 +2182,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">✋ Fine Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Hand precision</p>
                             </div>
-                            <span id="alert-fine_motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-fine_motor"></span>
                         </div>
                         <div style="background:rgba(236,72,153,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="fine_motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ec4899,#f43f5e);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2189,23 +2216,23 @@
                             📊 Milestone Progress
                         </h3>
                         <div style="display:flex;align-items:flex-end;gap:0.75rem;height:200px;padding:1rem 0;">
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Attention</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Communication</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Social</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Motor</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-fine_motor" style="width:100%;background:linear-gradient(180deg,#ec4899,#f43f5e);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Fine Motor</span>
                             </div>
@@ -2222,24 +2249,6 @@
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
                                 🏆 Milestone Journey
                             </h3>
-                        </div>
-                        <div id="milestone-journey-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
-                            <div style="text-align:center;padding:1rem;background:rgba(245,158,11,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🌟</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Steps</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(59,130,246,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Words</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(16,185,129,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Social Play</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(102,126,234,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🎯</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Focus Master</div>
-                            </div>
                         </div>
                         <div id="badges-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;"></div>
                     </div>
@@ -2757,7 +2766,18 @@
             const status = getTrafficLightStatus(percent);
             const alertEl = document.getElementById(`alert-${pillar}`);
             if (alertEl) {
-                alertEl.innerHTML = `${status.icon} <span style="font-size:0.7rem;margin-left:0.25rem;color:${status.color};font-weight:600;">${status.label}</span>`;
+                alertEl.style.display = 'inline-flex';
+                alertEl.style.flexDirection = 'row';
+                alertEl.style.alignItems = 'center';
+                alertEl.style.justifyContent = 'center';
+                alertEl.style.gap = '0.35rem';
+                alertEl.style.padding = '0.3rem 0.65rem';
+                alertEl.style.borderRadius = '20px';
+                alertEl.style.background = `${status.color}15`;
+                alertEl.style.color = status.color;
+                alertEl.style.flexShrink = '0';
+                
+                alertEl.innerHTML = `<span style="font-size:0.5rem; line-height:1;">●</span><span style="font-size:0.65rem; font-weight:700; white-space:nowrap; line-height:1;">${status.label}</span>`;
                 alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
             }
         });
@@ -2843,7 +2863,7 @@
             fine_motor: stats.fine_motor.achieved
         };
 
-        let earnedBadges = [];
+        let allBadgesHTML = '';
         badgeDefinitions.forEach(badge => {
             let earned = false;
             if (badge.pillar === 'all') {
@@ -2851,30 +2871,27 @@
             } else {
                 earned = pillarAchievements[badge.pillar] >= badge.threshold;
             }
+            
             if (earned) {
-                earnedBadges.push(badge);
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:12px;animation:pulse 2s infinite;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.05);" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;font-weight:700;color:var(--text-color,#1e293b);">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:#f59e0b;margin-top:2px;font-weight:bold;">✅ Achieved!</div>
+                </div>`;
+            } else {
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:var(--surface-light,#fff);border-radius:12px;opacity:0.6;border:1px dashed var(--slate-300,#cbd5e1);" title="Requires ${badge.threshold} milestones in ${badge.pillar}">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;filter:grayscale(100%);opacity:0.7;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;color:var(--slate-500,#64748b);font-weight:500;">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:var(--slate-400,#94a3b8);margin-top:2px;">🔒 ${badge.threshold} needed</div>
+                </div>`;
             }
         });
 
-        // Render badges with unlock animation
-        badgesContainer.innerHTML = earnedBadges.map(badge => `
-            <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:10px;animation:pulse 2s infinite;cursor:pointer;" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
-                <div style="font-size:1.5rem;">${badge.icon}</div>
-                <div style="font-size:0.65rem;color:var(--slate-600,#475569);font-weight:600;">${badge.name}</div>
-            </div>
-        `).join('');
-
-        // Show locked badges for milestones not yet earned
-        const lockedBadges = badgeDefinitions.filter(b => !earnedBadges.find(eb => eb.id === b.id));
-        if (lockedBadges.length > 0 && earnedBadges.length < badgeDefinitions.length) {
-            badgesContainer.innerHTML += lockedBadges.map(badge => `
-                <div style="text-align:center;padding:0.75rem;background:rgba(148,163,184,0.1);border-radius:10px;opacity:0.5;filter:grayscale(100%);">
-                    <div style="font-size:1.5rem;filter:grayscale(100%);">${badge.icon}</div>
-                    <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);font-weight:600;">${badge.name}</div>
-                    <div style="font-size:0.55rem;color:var(--slate-500,#64748b);margin-top:0.25rem;">🔒 ${badge.threshold} needed</div>
-                </div>
-            `).join('');
-        }
+        // Set grid layout to fit more nicely
+        badgesContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(110px, 1fr))';
+        badgesContainer.innerHTML = allBadgesHTML;
     }
 
     // Generate Weekly Activities based on lowest scoring pillar (with shuffle) - 5 pillars
@@ -2992,7 +3009,7 @@
 
         // Show toast indicating which pillar was targeted
         const pillarNames = { attention: 'Attention', communication: 'Communication', social: 'Social Skills', motor: 'Motor Skills' };
-        showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
+        if (fromUserClick) showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
     }
 
     // Generate Advanced Doctor Report (Comprehensive PDF-ready)
@@ -3032,11 +3049,14 @@
                 stats[pillar].total++;
                 if (b.is_exhibited) {
                     stats[pillar].achieved++;
-                    stats[pillar].behaviors.push({
-                        name: b.behavior_details,
-                        frequency: b.frequency,
-                        severity: b.severity
-                    });
+                    // Avoid duplicates in the list
+                    if (!stats[pillar].behaviors.some(x => x.name === b.behavior_details)) {
+                        stats[pillar].behaviors.push({
+                            name: b.behavior_details,
+                            frequency: b.frequency,
+                            severity: b.severity
+                        });
+                    }
                 }
             });
         });
@@ -3067,7 +3087,49 @@
 
         // Build comprehensive report HTML
         const reportContent = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <style>
+                @media print {
+                    body > *:not(#doctor-report-modal) { display: none !important; }
+                    
+                    #doctor-report-modal { 
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        width: 100% !important;
+                        height: auto !important;
+                    }
+                    
+                    #doctor-report-modal .doctor-report-modal-inner {
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        height: auto !important;
+                    }
+
+                    #doctor-report-modal .doctor-report-modal-inner > div { 
+                        display: block !important;
+                        max-height: none !important; 
+                        width: 100% !important; 
+                        max-width: none !important; 
+                        box-shadow: none !important; 
+                        border-radius: 0 !important; 
+                        overflow: visible !important;
+                        height: auto !important;
+                    }
+                    
+                    .report-scrollable { 
+                        max-height: none !important; 
+                        overflow: visible !important; 
+                        padding: 0 !important; 
+                        height: auto !important;
+                    }
+                    
+                    .report-footer { display: none !important; }
+                }
+            </style>
+            <div class="doctor-report-modal-inner" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('doctor-report-modal').remove()">
                 <div style="background:#ffffff;border-radius:24px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;">
                     <!-- Report Header -->
                     <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:2rem;color:#fff;">
@@ -3107,7 +3169,7 @@
                     </div>
 
                     <!-- Scrollable Content -->
-                    <div style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
+                    <div class="report-scrollable" style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
                         <!-- Executive Summary -->
                         <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem;">
                             <h3 style="margin:0 0 0.5rem;font-size:1rem;font-weight:700;color:#0369a1;display:flex;align-items:center;gap:0.5rem;">
@@ -3129,17 +3191,18 @@
                                 const status = getTrafficLightStatus(percent);
                                 const expected = expectations[pillar] || 0;
                                 const vsExpected = data.achieved >= expected ? '✓ Age-appropriate' : `⚠ ${expected - data.achieved} below expectation`;
-                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵' };
-                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea' };
+                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵', fine_motor: '✍️' };
+                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea', fine_motor: '#d946ef' };
+                                let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
                                 return `
                                     <div style="padding:1.25rem;background:#f8fafc;border-radius:16px;border:1px solid #e2e8f0;">
                                         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                                            <span style="font-size:1.25rem;">${pillarIcons[pillar]}</span>
-                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillar}</span>
+                                            <span style="font-size:1.25rem;">${pillarIcons[pillar] || '📋'}</span>
+                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillarName}</span>
                                             <span style="margin-left:auto;font-size:1.25rem;">${status.icon}</span>
                                         </div>
                                         <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;margin-bottom:0.5rem;">
-                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]},${pillarColors[pillar]}88);height:100%;width:${percent}%;border-radius:8px;"></div>
+                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]||'#cbd5e1'},${pillarColors[pillar]||'#cbd5e1'}88);height:100%;width:${percent}%;border-radius:8px;"></div>
                                         </div>
                                         <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#64748b;margin-bottom:0.5rem;">
                                             <span>${data.achieved}/${data.total} skills observed</span>
@@ -3150,8 +3213,7 @@
                                             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed #e2e8f0;">
                                                 <div style="font-size:0.7rem;color:#94a3b8;margin-bottom:0.25rem;">Observed behaviors:</div>
                                                 <ul style="margin:0;padding-left:1rem;font-size:0.75rem;color:#475569;line-height:1.5;">
-                                                    ${data.behaviors.slice(0, 4).map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
-                                                    ${data.behaviors.length > 4 ? `<li>+${data.behaviors.length - 4} more...</li>` : ''}
+                                                    ${data.behaviors.map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
                                                 </ul>
                                             </div>
                                         ` : ''}
@@ -3192,7 +3254,7 @@
                     </div>
 
                     <!-- Footer Actions -->
-                    <div style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+                    <div class="report-footer" style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
                         <div style="font-size:0.8rem;color:#64748b;">
                             Generated by Bright Steps Developmental Tracking
                         </div>
@@ -3353,13 +3415,13 @@
         ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
             // Progress is based on age-appropriate expectation, not just total behaviors in checklist
-            const percent = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+            const percent = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
             const countEl   = document.getElementById(`${pillar}-count`);
             const totalEl2  = document.getElementById(`${pillar}-total`);
             const percentEl = document.getElementById(`${pillar}-percent`);
             const progressEl= document.getElementById(`${pillar}-progress`);
             if (countEl)    countEl.textContent   = s.achieved;
-            if (totalEl2)   totalEl2.textContent  = s.expected; // Show expected milestones for age
+            if (totalEl2)   totalEl2.textContent  = s.total; // Show expected milestones for age
             if (percentEl)  percentEl.textContent = percent + '%';
             if (progressEl) progressEl.style.width = percent + '%';
         });
@@ -3374,7 +3436,7 @@
                 if (bar) {
                     const s = stats[pillar];
                     // Calculate percentage based on age expectation
-                    const pct = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+                    const pct = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
                     const displayPct = Math.max(pct, 8); // Minimum 8% for visibility
                     bar.style.height = displayPct + '%';
                     bar.setAttribute('data-pillar', pillar);
@@ -3463,76 +3525,80 @@
         const messages = [];
         const analysisPoints = [];
 
-        // AI Analysis per pillar - using stats.expected (age-appropriate benchmark)
-        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+        // AI Analysis per pillar
+        ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
-            if (!s || s.expected === 0) return;
+            if (!s || s.total === 0) return;
 
-            // Calculate percentage based on age expectation
-            const pct = Math.round((s.achieved / s.expected) * 100);
+            // Calculate percentage based on checklist total
+            const pct = Math.round((s.achieved / s.total) * 100);
             const status = getTrafficLightStatus(pct);
-            const expectation = ageExpectations[pillar][ageRange];
+            const expectation = ageExpectations[pillar] && ageExpectations[pillar][ageRange] ? ageExpectations[pillar][ageRange] : {description: 'steady progress expected'};
+
+            let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
 
             // Generate AI analysis based on actual data patterns
             if (status.icon === '🟢') {
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #10b981;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#10b981;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(16,185,129,0.3);">✓</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.expected} age-expected skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.total} targeted skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
                 </div>`);
-                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.expected} age-expected skills` });
+                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.total} targeted skills` });
             } else if (status.icon === '🟡') {
-                const gap = s.expected - s.achieved;
+                const gap = s.total - s.achieved;
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #f59e0b;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#f59e0b;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(245,158,11,0.3);">⚠</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.expected} age-expected skills. ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend targeted play activities.</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.total} targeted skills. ${gap > 0 ? gap + ' skills still emerging.' : ''} Recommend targeted play activities.</div>
                 </div>`);
-                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} skills below age expectation; focus area identified` });
+                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} targeted skills emerging; focus area identified` });
             } else {
-                const gap = s.expected - s.achieved;
+                const gap = s.total - s.achieved;
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #ef4444;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(239,68,68,0.3);">✕</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.expected} age-expected skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.total} targeted skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
                 </div>`);
                 analysisPoints.push({ pillar, status: 'concern', detail: `Significant gap (${gap} skills); early intervention may benefit` });
             }
         });
 
-        // Overall AI synthesis - based on age expectations
-        let totalExpected = 0;
+        // Overall AI synthesis
+        let totalTarget = 0;
         let totalAchieved = 0;
         Object.values(stats).forEach(s => {
-            if (s && s.expected) {
-                totalExpected += s.expected;
+            if (s && s.total) {
+                totalTarget += s.total;
                 totalAchieved += s.achieved;
             }
         });
-        const overallPercent = totalExpected > 0 ? Math.round((totalAchieved / totalExpected) * 100) : 0;
+        const overallPercent = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
 
         const strengths = analysisPoints.filter(p => p.status === 'strength');
         const concerns = analysisPoints.filter(p => p.status === 'concern');
         const developing = analysisPoints.filter(p => p.status === 'developing');
 
+        const formatPillarName = (p) => p === 'fine_motor' ? 'Fine Motor' : p.charAt(0).toUpperCase() + p.slice(1);
+        
         let aiSummary = '';
         if (strengths.length >= 3) {
-            aiSummary = `${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
+            aiSummary = `${name} is meeting or exceeding expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
         } else if (concerns.length === 0) {
-            aiSummary = `${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
+            aiSummary = `${name} is progressing well overall (${overallPercent}% of targeted skills). Focus on ${developing.map(d => formatPillarName(d.pillar)).join(' & ')} for continued growth.`;
         } else if (concerns.length <= 1) {
-            aiSummary = `${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
+            aiSummary = `${name} shows ${overallPercent}% of targeted development. ${concerns[0] ? formatPillarName(concerns[0].pillar) : 'one area'} identified as focus area. Early enrichment recommended.`;
         } else {
-            aiSummary = `Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
+            aiSummary = `Multiple domains (${concerns.map(c => formatPillarName(c.pillar)).join(', ')}) show delays relative to expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
         }
 
         // Combine server feedback with AI analysis
@@ -3557,7 +3623,7 @@
 
         // Add specific recommendations
         if (concerns.length > 0 || developing.length > 0) {
-            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${a.pillar.charAt(0).toUpperCase() + a.pillar.slice(1)}</span>`);
+            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${formatPillarName(a.pillar)}</span>`);
             finalText += `<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;padding-top:1.5rem;border-top:1px dashed rgba(255,255,255,0.2);">
                 <strong style="font-size:0.95rem;opacity:0.9;">Priority Focus:</strong>
                 ${focusAreas.join('')}
@@ -4245,7 +4311,7 @@
                         <h1 class="dashboard-title" style="margin-bottom:0.25rem;">Activity Center 🎨</h1>
                         <p class="dashboard-subtitle" style="margin:0;">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
-                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('' + childParam + '')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('${childParam}')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                 </div>
 
                 <!-- Featured Game Banner -->
@@ -5207,7 +5273,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#6C63FF;border-color:#6C63FF;" onclick="openShareReportModal('full-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5225,7 +5291,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
                              <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#22c55e;border-color:#22c55e;" onclick="openShareReportModal('growth-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5244,7 +5310,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Vocabulary, clarity & full transcripts</p>
                              <span class="badge" style="background:#f3e8ff;color:#9333ea;margin-bottom: 1rem;">Speech Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#9333ea;border-color:#9333ea;" onclick="openShareReportModal('speech-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -6335,11 +6401,11 @@
                                     <p class="settings-row-sub">View past payments and download invoices</p>
                                 </div>
                                 <div class="settings-row-action">
-                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()">Load Invoice History</button>
+                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()" id="invoice-refresh-btn">🔄 Refresh</button>
                                 </div>
                             </div>
                             <div id="invoice-history-container" style="margin-top:1.5rem;">
-                                <div style="text-align:center;color:#64748b;font-style:italic;padding:2rem;">Click 'Load Invoice History' to view your payment records</div>
+                                <div style="text-align:center;color:#64748b;padding:2rem;">Loading...</div>
                             </div>
                         </div>
                     </div>
@@ -7615,6 +7681,17 @@
             used = 0;
             if (trialKey) localStorage.setItem(trialKey, '0');
         }
+
+        const windowKey = feature ? 'bs_trial_window_' + feature : null;
+        if (windowKey) {
+            const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (Date.now() - windowStart > sevenDays) {
+                localStorage.setItem(trialKey, '0');
+                localStorage.setItem(windowKey, String(Date.now()));
+                used = 0;
+            }
+        }
         
         let left = Math.max(0, maxTrials - used);
 
@@ -7640,7 +7717,7 @@
         
         // Trial section HTML
         let trialHtml = '';
-        if (feature === 'motor' || feature === 'speech' || feature === 'growth') {
+        if (feature === 'motor' || feature === 'speech') {
             trialHtml = `
             <div style="border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">
                 <div>
@@ -7654,7 +7731,7 @@
 
         let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 250)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium — 250 EGP/month</button>`;
         
-        if ((feature === 'motor' || feature === 'speech' || feature === 'growth') && left > 0) {
+        if ((feature === 'motor' || feature === 'speech') && left > 0) {
             actionHtml += `<button onclick="document.getElementById('premium-modal').remove(); window.incrementTrial('${feature}'); if('${feature}'==='motor') switchView('motor'); else if('${feature}'==='speech') switchView('speech'); else switchView('growth');" style="width:100%;padding:1.1rem;background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">Use Free Trial (${left} left)</button>`;
         } else {
              actionHtml += `<button onclick="document.getElementById('premium-modal').remove()" style="width:100%;padding:1rem;background:none;color:#64748b;border:none;font-weight:600;font-size:0.95rem;cursor:pointer;">Maybe Later</button>`;
@@ -7714,6 +7791,16 @@
         const trialKey = 'bs_trial_' + feature;
         let used = parseInt(localStorage.getItem(trialKey) || '0');
         
+        const windowKey = 'bs_trial_window_' + feature;
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (Date.now() - windowStart > sevenDays) {
+            // Window expired — reset
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(Date.now()));
+            used = 0;
+        }
+        
         // Always show the modal for free users unless they've clicked 'Use Free Trial' this session
         if (window['_access_granted_' + feature]) {
             if (used >= maxTrials) {
@@ -7727,17 +7814,26 @@
         return false;
     };
 
-    window.incrementTrial = function (feature) {
+    window.incrementTrial = function(feature) {
         window['_access_granted_' + feature] = true;
         
-        // Don't increment trial count for speech analysis as we use actual speech history count
-        if (feature === 'speech') {
-            return;
-        }
-
         const trialKey = 'bs_trial_' + feature;
-        let used = parseInt(localStorage.getItem(trialKey) || '0');
-        localStorage.setItem(trialKey, used + 1);
+        const windowKey = 'bs_trial_window_' + feature;
+        const now = Date.now();
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        
+        // Reset counter if 7-day window has expired
+        if (now - windowStart > sevenDays) {
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(now));
+        }
+        
+        // Don't increment for speech (speech uses actual DB count)
+        if (feature === 'speech') return;
+        
+        const used = parseInt(localStorage.getItem(trialKey) || '0');
+        localStorage.setItem(trialKey, String(used + 1));
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -8481,11 +8577,11 @@
     // ── Messages View (Specialist + Community) ──────────────────
     // ══════════════════════════════════════════════════════════════
     window.getMessagesView = function () {
-        // Check if parent has any approved appointments
+        // Check if parent has any active appointments (confirmed/completed/approved)
         const d = window.dashboardData || {};
         let hasApprovedAppt = false;
         if (d.parent && d.parent.appointments) {
-            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed');
+            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed' || a.status === 'confirmed');
         }
 
         if (!hasApprovedAppt) {
@@ -8513,7 +8609,7 @@
             <h1 class="dashboard-title">Messages</h1>
             <p class="dashboard-subtitle">Communicate with your specialists</p>
         </div></div>
-        <div style="display:flex;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;height:550px;background:#fff;">
+        <div style="display:flex;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;height:600px;background:#fff;">
             <!-- Conversation List -->
             <div style="width:320px;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0;">
                 <div style="padding:1rem;border-bottom:1px solid #f1f5f9;">
@@ -8523,16 +8619,30 @@
             </div>
             <!-- Chat Window -->
             <div style="flex:1;display:flex;flex-direction:column;">
-                <div id="parent-chat-header" style="padding:1rem 1.5rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:1rem;">
+                <div id="parent-chat-header" style="padding:0.85rem 1.25rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:0.85rem;">
                     <div id="pch-avatar" style="width:2.75rem;height:2.75rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.9rem;flex-shrink:0;">SA</div>
                     <div style="flex:1;"><div id="pch-name" style="font-weight:700;font-size:0.95rem;color:#1e293b;">Dr. Sarah Ahmed</div><div id="pch-detail" style="font-size:0.8rem;color:#94a3b8;">Pediatric Specialist</div></div>
+                    <button id="pch-reminder-btn" onclick="sendParentReminder()" title="Send meeting reminder" style="display:none;padding:0.4rem 0.85rem;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:600;white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">📅 Reminder</button>
                 </div>
-                <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:0.75rem;background:#f8fafc;"></div>
+                <!-- Appointment Info Bar -->
+                <div id="parent-appt-bar" style="display:none;padding:0.6rem 1.25rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-bottom:1px solid #c7d2fe;"></div>
+                <!-- In-chat search -->
+                <div id="parent-chat-search-bar" style="display:none;padding:0.5rem 1rem;border-bottom:1px solid #f1f5f9;background:#fafbfc;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="parent-chat-search-input" placeholder="Search in conversation..." style="flex:1;padding:0.4rem 0.6rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.8rem;outline:none;" oninput="filterParentMessages(this.value)">
+                        <button onclick="toggleParentChatSearch()" style="border:none;background:none;cursor:pointer;color:#94a3b8;font-size:1rem;padding:0.2rem;">✕</button>
+                    </div>
+                </div>
+                <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:0.6rem;background:#f8fafc;"></div>
                 <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;">
-                    <button onclick="document.getElementById('parentChatFile').click()" style="width:40px;height:40px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color=\'#6366f1\'" onmouseout="this.style.color=\'#94a3b8\'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <button onclick="document.getElementById('parentChatFile').click()" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                     </button>
                     <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
+                    <button onclick="toggleParentChatSearch()" title="Search messages" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </button>
                     <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
                     <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -8565,29 +8675,52 @@
                 return;
             }
 
+            window._parentConversationsCache = data.conversations;
             var html = '';
             data.conversations.forEach(c => {
                 var lastMsg = c.last_message || '';
                 var preview = lastMsg.length > 35 ? lastMsg.substring(0, 35) + '...' : lastMsg;
+                if (!preview) preview = 'No messages yet';
                 var isActive = c.partner_id == window._parentCurrentChat;
                 var initials = (c.partner_first_name.charAt(0) + c.partner_last_name.charAt(0)).toUpperCase();
                 var gradient = 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+                var unread = parseInt(c.unread_count) || 0;
                 
-                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ', \'' + c.partner_first_name + ' ' + c.partner_last_name + '\', \'' + (c.specialization || 'Specialist') + '\', \'' + initials + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
+                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ')" style="padding:0.85rem 1.15rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
                     + '<div style="width:2.5rem;height:2.5rem;background:' + gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initials + '</div>'
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.partner_first_name + ' ' + c.partner_last_name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + (c.last_message_time ? formatRelativeDate(c.last_message_time) : '') + '</span></div>'
-                    + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
+                    + '<div style="display:flex;justify-content:space-between;align-items:center;"><p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + preview + '</p>' + (unread > 0 ? '<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.65rem;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px;margin-left:6px;">' + unread + '</span>' : '') + '</div></div></div>';
             });
             list.innerHTML = html;
         } catch(e) {}
     };
 
-    window.selectParentConvo = async function (partnerId, name, detail, initials) {
+    window.selectParentConvo = async function (partnerId) {
         window._parentCurrentChat = partnerId;
         
-        var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
-        var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = name;
-        var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = detail;
+        // Find conversation data from cache
+        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == partnerId);
+        if (conv) {
+            var initials = (conv.partner_first_name.charAt(0) + conv.partner_last_name.charAt(0)).toUpperCase();
+            var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
+            var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = conv.partner_first_name + ' ' + conv.partner_last_name;
+            var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = conv.specialization || 'Specialist';
+
+            // Show appointment info bar
+            var apptBar = document.getElementById('parent-appt-bar');
+            if (apptBar && conv.appointment_id) {
+                var aptDate = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                var aptTime = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+                var aptType = (conv.appointment_type || '').charAt(0).toUpperCase() + (conv.appointment_type || '').slice(1);
+                var statusColor = conv.appointment_status === 'confirmed' ? '#10b981' : (conv.appointment_status === 'completed' ? '#6366f1' : '#f59e0b');
+                apptBar.style.display = 'flex';
+                apptBar.innerHTML = '<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;width:100%;"><span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;font-weight:600;color:#4338ca;">📅 ' + aptDate + '</span><span style="font-size:0.75rem;color:#6366f1;font-weight:500;">⏰ ' + aptTime + '</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:6px;background:' + statusColor + '18;color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + conv.appointment_status + '</span><span style="font-size:0.7rem;color:#64748b;margin-left:auto;">' + aptType + (conv.clinic_name ? ' · ' + conv.clinic_name : '') + '</span></div>';
+            }
+
+            // Show reminder button
+            var reminderBtn = document.getElementById('pch-reminder-btn');
+            if (reminderBtn) reminderBtn.style.display = 'inline-flex';
+        }
         
         renderParentConvoList(); // Update active state
         loadParentChatMessages();
@@ -8615,22 +8748,49 @@
                     data.messages.forEach(function (msg) {
                         var isMine = msg.sender_id != window._parentCurrentChat; // If not from partner, it's mine
                         var timeStr = new Date(msg.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        var senderName = isMine ? 'You' : (msg.sender_first_name || '');
                         
-                        let contentHtml = '<div>' + (msg.content || '') + '</div>';
+                        // Build content HTML
+                        let contentHtml = '';
                         
-                        if (msg.meeting_link) {
-                            contentHtml += `<div style="margin-top:0.5rem;"><a href="${msg.meeting_link}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Join Meeting</a></div>`;
+                        // Detect Google Meet links in content
+                        var msgText = msg.content || '';
+                        var meetRegex = /(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/gi;
+                        var hasMeetInContent = meetRegex.test(msgText);
+                        
+                        // Render text (replace meet links with card below)
+                        var cleanText = msgText.replace(meetRegex, '').trim();
+                        if (cleanText) {
+                            contentHtml += '<div>' + cleanText + '</div>';
+                        }
+                        
+                        // Google Meet card (from meeting_link column or detected in content)
+                        var meetUrl = msg.meeting_link || (hasMeetInContent ? msgText.match(/(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/i)[0] : null);
+                        if (meetUrl) {
+                            if (!/^https?:\/\//i.test(meetUrl)) meetUrl = 'https://' + meetUrl;
+                            contentHtml += '<a href="' + meetUrl + '" target="_blank" style="display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;padding:0.6rem 0.85rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f0fdf4') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#bbf7d0') + ';border-radius:10px;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.1)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+                                + '<div style="width:32px;height:32px;background:linear-gradient(135deg,#34d399,#10b981);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>'
+                                + '<div><div style="font-size:0.8rem;font-weight:700;color:' + (isMine ? '#fff' : '#059669') + ';">Google Meet</div><div style="font-size:0.7rem;color:' + (isMine ? 'rgba(255,255,255,0.75)' : '#6b7280') + ';">Click to join meeting</div></div></a>';
                         }
                         
                         if (msg.file_path) {
-                            contentHtml += `<div style="margin-top:0.5rem;"><a href="../../${msg.file_path}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);">📎 View Attachment</a></div>`;
+                            contentHtml += '<div style="margin-top:0.5rem;"><a href="../../' + msg.file_path + '" target="_blank" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.65rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f1f5f9') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#e2e8f0') + ';border-radius:8px;text-decoration:none;font-weight:600;font-size:0.78rem;color:' + (isMine ? '#fff' : '#6366f1') + ';">📎 Attachment</a></div>';
                         }
 
-                        html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
-                            + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
+                        // Read status checkmarks
+                        var checkmark = '';
+                        if (isMine) {
+                            checkmark = msg.is_read == 1
+                                ? '<span style="color:rgba(255,255,255,0.85);font-size:0.65rem;margin-left:4px;" title="Read">✓✓</span>'
+                                : '<span style="color:rgba(255,255,255,0.5);font-size:0.65rem;margin-left:4px;" title="Sent">✓</span>';
+                        }
+
+                        html += '<div class="parent-msg-bubble" style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
+                            + '<div style="max-width:75%;padding:0.65rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
                             + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
+                            + '<div style="font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;color:' + (isMine ? 'rgba(255,255,255,0.8)' : '#6366f1') + ';">' + senderName + '</div>'
                             + contentHtml
-                            + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + timeStr + '</div>'
+                            + '<div style="font-size:0.65rem;margin-top:0.3rem;display:flex;align-items:center;justify-content:flex-end;' + (isMine ? 'color:rgba(255,255,255,0.7);' : 'color:#94a3b8;') + '">' + timeStr + checkmark + '</div>'
                             + '</div></div>';
                     });
                 }
@@ -8665,6 +8825,12 @@
         
         if (!text && !file) return;
         
+        // Client-side Zoom/Teams rejection
+        if (text && (/zoom\.(us|com)/i.test(text) || /teams\.(microsoft|live)\.com/i.test(text))) {
+            alert('Only Google Meet links are allowed. Zoom and Teams links are not permitted.');
+            return;
+        }
+        
         const fd = new FormData();
         fd.append('receiver_id', window._parentCurrentChat);
         if (text) fd.append('content', text);
@@ -8676,9 +8842,14 @@
         }
         
         try {
-            await fetch('../../api_send_message.php', { method: 'POST', body: fd });
-            loadParentChatMessages();
-            renderParentConvoList();
+            const res = await fetch('../../api_send_message.php', { method: 'POST', body: fd });
+            const result = await res.json();
+            if (result.error) {
+                alert(result.error);
+            } else {
+                loadParentChatMessages();
+                renderParentConvoList();
+            }
         } catch(e) {
             alert('Failed to send message.');
         }
@@ -8688,6 +8859,49 @@
         var items = document.querySelectorAll('#parent-convo-list > div');
         q = q.toLowerCase();
         items.forEach(function (item) { var name = item.textContent.toLowerCase(); item.style.display = name.includes(q) ? '' : 'none'; });
+    };
+
+    window.toggleParentChatSearch = function() {
+        var bar = document.getElementById('parent-chat-search-bar');
+        if (!bar) return;
+        if (bar.style.display === 'none' || !bar.style.display) {
+            bar.style.display = 'block';
+            var inp = document.getElementById('parent-chat-search-input');
+            if (inp) { inp.value = ''; inp.focus(); }
+        } else {
+            bar.style.display = 'none';
+            // Reset filter
+            filterParentMessages('');
+        }
+    };
+
+    window.filterParentMessages = function(q) {
+        var bubbles = document.querySelectorAll('#parent-chat-messages .parent-msg-bubble');
+        q = q.toLowerCase();
+        bubbles.forEach(function(b) {
+            var text = b.textContent.toLowerCase();
+            b.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+    };
+
+    window.sendParentReminder = async function() {
+        if (!window._parentCurrentChat) return;
+        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == window._parentCurrentChat);
+        if (!conv || !conv.appointment_scheduled_at) {
+            alert('No appointment data available.');
+            return;
+        }
+        var aptDate = new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        var aptTime = new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        var reminderText = '📅 Appointment Reminder: Our ' + (conv.appointment_type || 'appointment') + ' is scheduled for ' + aptDate + ' at ' + aptTime + (conv.clinic_name ? ' at ' + conv.clinic_name : '') + '. Looking forward to it!';
+        
+        var input = document.getElementById('parent-chat-input');
+        if (input) {
+            input.value = reminderText;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+            input.focus();
+        }
     };
 
     window.loadMessages = function () {

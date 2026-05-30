@@ -79,22 +79,33 @@ if ($action === 'book' && $method === 'POST') {
         $appointmentId = $db->lastInsertId();
 
         // Create notification for parent
-        $stmt = $db->prepare("
+        $stmtParent = $db->prepare("
             INSERT INTO notifications (user_id, title, message, type)
             VALUES (:user_id, :title, :message, 'appointment_confirmed')
         ");
-        $stmt->execute([
+        $stmtParent->execute([
             ':user_id' => $authUser['user_id'],
             ':title'   => 'Appointment Booked',
             ':message' => 'Your appointment has been scheduled for ' . $input['scheduled_at']
         ]);
 
-        // Create notification for doctor
-        $stmt->execute([
-            ':user_id' => intval($input['specialist_id']),
-            ':title'   => 'New Appointment',
-            ':message' => 'A new appointment has been booked for ' . $input['scheduled_at']
-        ]);
+        // Create notification for doctor (if enabled in settings)
+        $stmtSet = $db->prepare("SELECT push_notifications FROM user_settings WHERE user_id = ? LIMIT 1");
+        $stmtSet->execute([intval($input['specialist_id'])]);
+        $doctorSettings = $stmtSet->fetch(PDO::FETCH_ASSOC);
+        $shouldNotifyDoctor = !$doctorSettings || ($doctorSettings['push_notifications'] ?? 1);
+
+        if ($shouldNotifyDoctor) {
+            $stmtDoctor = $db->prepare("
+                INSERT INTO notifications (user_id, title, message, type)
+                VALUES (:user_id, :title, :message, 'new_appointment')
+            ");
+            $stmtDoctor->execute([
+                ':user_id' => intval($input['specialist_id']),
+                ':title'   => 'New Appointment',
+                ':message' => 'A new appointment has been booked for ' . $input['scheduled_at']
+            ]);
+        }
 
         $db->commit();
 

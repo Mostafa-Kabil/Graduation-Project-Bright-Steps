@@ -129,6 +129,31 @@ switch ($action) {
             $certificatePath = 'uploads/certificates/' . $uniqueName;
         }
 
+        // If certifications is empty, fetch from specialist table
+        if (empty($certifications)) {
+            try {
+                $specQuery = $connect->prepare("SELECT certifications FROM specialist WHERE specialist_id = ? LIMIT 1");
+                $specQuery->execute([$specialistId]);
+                $certifications = trim($specQuery->fetchColumn() ?: '');
+            } catch (Exception $e) {}
+        }
+
+        // If certificatePath is empty, fetch certificate_of_experience filename from specialist table
+        if (empty($certificatePath)) {
+            try {
+                $specQuery = $connect->prepare("SELECT certificate_of_experience FROM specialist WHERE specialist_id = ? LIMIT 1");
+                $specQuery->execute([$specialistId]);
+                $dbCertFile = trim($specQuery->fetchColumn() ?: '');
+                if (!empty($dbCertFile)) {
+                    if (strpos($dbCertFile, 'uploads/') === 0) {
+                        $certificatePath = $dbCertFile;
+                    } else {
+                        $certificatePath = 'uploads/certificates/' . $dbCertFile;
+                    }
+                }
+            } catch (Exception $e) {}
+        }
+
         try {
             // 1. Check if already onboarded — prevent duplicates
             $checkStmt = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = ? LIMIT 1");
@@ -158,18 +183,27 @@ switch ($action) {
 
             // 3. Update the specialist table with the new info (optional)
             try {
+                // Ensure certifications column exists
+                try {
+                    $connect->exec("ALTER TABLE `specialist` ADD COLUMN `certifications` VARCHAR(255) DEFAULT NULL");
+                } catch (Exception $e) {}
+
+                $uniqueFileName = $certificatePath ? basename($certificatePath) : null;
+
                 $updateStmt = $connect->prepare("
-                    INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience)
-                    SELECT user_id, 0, first_name, last_name, ?, ?, ?
+                    INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience, certifications)
+                    SELECT user_id, 0, first_name, last_name, ?, ?, ?, ?
                     FROM users WHERE user_id = ?
                     ON DUPLICATE KEY UPDATE 
                     specialization = VALUES(specialization),
                     experience_years = VALUES(experience_years),
-                    certificate_of_experience = VALUES(certificate_of_experience)
+                    certificate_of_experience = VALUES(certificate_of_experience),
+                    certifications = VALUES(certifications)
                 ");
                 $updateStmt->execute([
                     $specialization,
                     $experienceYears,
+                    $uniqueFileName,
                     $certifications,
                     $specialistId
                 ]);

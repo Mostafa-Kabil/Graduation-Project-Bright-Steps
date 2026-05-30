@@ -15,8 +15,8 @@ if (!isset($_SESSION['id'])) {
 
 $action = $_GET['action'] ?? 'check';
 
-// Check if Python server is running on port 8000
-function isPythonServerRunning($port = 8000) {
+// Check if Python server is running on port 8002
+function isPythonServerRunning($port = 8002) {
     $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.5);
     if ($fp) {
         fclose($fp);
@@ -31,7 +31,7 @@ function startPythonServer() {
     if (!$scriptDir) return false;
 
     // Check if server is already running
-    if (isPythonServerRunning(8000)) {
+    if (isPythonServerRunning(8002)) {
         return true;
     }
 
@@ -42,22 +42,22 @@ function startPythonServer() {
         pclose(popen('start /B "' . $scriptDir . '" "' . $batFile . '"', 'r'));
     } else {
         // Fallback: try direct Python command
-        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8000 --host 0.0.0.0 > NUL 2> NUL', 'r'));
+        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8002 --host 0.0.0.0 > NUL 2> NUL', 'r'));
     }
 
     // Wait up to 15 seconds for server to start
     $maxWait = 30;
-    while (!isPythonServerRunning(8000) && $maxWait > 0) {
+    while (!isPythonServerRunning(8002) && $maxWait > 0) {
         usleep(500000); // 0.5 second
         $maxWait--;
     }
 
-    return isPythonServerRunning(8000);
+    return isPythonServerRunning(8002);
 }
 
 switch ($action) {
     case 'check':
-        $isRunning = isPythonServerRunning(8000);
+        $isRunning = isPythonServerRunning(8002);
         echo json_encode([
             'success' => true,
             'running' => $isRunning,

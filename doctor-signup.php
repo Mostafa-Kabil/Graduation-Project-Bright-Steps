@@ -6,6 +6,8 @@ include 'validation.php';
 
 $fname = $lname = $email = $phone = $specialty = $license = $clinic = '';
 $fnameErr = $lnameErr = $emailErr = $phoneErr = $passErr = $specialtyErr = $licenseErr = $clinicErr = $termsErr = '';
+$certifications = '';
+$certificationsErr = $certificateErr = '';
 $formValid = true;
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
@@ -76,6 +78,40 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $clinic = validate_input($_POST["clinic"]);
     }
 
+    if (empty($_POST["certifications"])) {
+        $certificationsErr = "Certifications are required (e.g. MD, FAAP)";
+        $formValid = false;
+    } else {
+        $certifications = validate_input($_POST["certifications"]);
+    }
+
+    // Handle Certificate File Upload
+    $certificatePath = null;
+    $uniqueFileName = null;
+    if (!isset($_FILES['certificate']) || $_FILES['certificate']['error'] === UPLOAD_ERR_NO_FILE) {
+        $certificateErr = "Certificate document is required";
+        $formValid = false;
+    } else {
+        $file = $_FILES['certificate'];
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            $certificateErr = "File upload failed";
+            $formValid = false;
+        } else {
+            $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+            $allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+            $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $mime = mime_content_type($file['tmp_name']);
+            
+            if (!in_array($ext, $allowedExts) || !in_array($mime, $allowedTypes)) {
+                $certificateErr = "Only JPG, PNG, and PDF files are allowed";
+                $formValid = false;
+            } elseif ($file['size'] > 5 * 1024 * 1024) {
+                $certificateErr = "File size must be less than 5MB";
+                $formValid = false;
+            }
+        }
+    }
+
     if (empty($_POST["password"]) || !validatepassword($_POST["password"])) {
         $passErr = "Password must be at least 8 characters";
         $formValid = false;
@@ -104,11 +140,42 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $clinicRow = $stmtClinic->fetch(PDO::FETCH_ASSOC);
         if ($clinicRow) {
             $clinicId = $clinicRow['clinic_id'];
+        } else {
+            // Dynamically register the clinic if it doesn't exist yet
+            $stmtAdmin = $connect->query("SELECT admin_id FROM admin LIMIT 1");
+            $adminRow = $stmtAdmin->fetch(PDO::FETCH_ASSOC);
+            $adminId = $adminRow ? intval($adminRow['admin_id']) : 16;
+
+            $stmtInsertClinic = $connect->prepare("INSERT INTO clinic (admin_id, clinic_name, location) VALUES (?, ?, 'Unknown Location')");
+            $stmtInsertClinic->execute([$adminId, $clinic]);
+            $clinicId = $connect->lastInsertId();
         }
 
         // Always insert into specialist table so admin can see and verify
-        $stmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, certificate_of_experience) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$newUserId, $clinicId, $fname, $lname, $specialty, $license]);
+        // Handle file move first
+        $certUploadDir = __DIR__ . '/uploads/certificates/';
+        if (!is_dir($certUploadDir)) {
+            mkdir($certUploadDir, 0755, true);
+        }
+        $file = $_FILES['certificate'];
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $uniqueFileName = 'cert_' . $newUserId . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $destPath = $certUploadDir . $uniqueFileName;
+        
+        if (move_uploaded_file($file['tmp_name'], $destPath)) {
+            $certificatePath = 'uploads/certificates/' . $uniqueFileName;
+        }
+
+        // Dynamically alter the specialist table if needed to support certifications and license_number
+        try {
+            $connect->exec("ALTER TABLE `specialist` ADD COLUMN `certifications` VARCHAR(255) DEFAULT NULL");
+        } catch (Exception $e) {}
+        try {
+            $connect->exec("ALTER TABLE `specialist` ADD COLUMN `license_number` VARCHAR(100) DEFAULT NULL");
+        } catch (Exception $e) {}
+
+        $stmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, certificate_of_experience, certifications, license_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$newUserId, $clinicId, $fname, $lname, $specialty, $uniqueFileName, $certifications, $license]);
 
         $_SESSION['signup_success'] = true;
         header("Location: doctor-signup.php");
@@ -150,6 +217,77 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
             text-align: center;
             font-weight: bold;
         }
+
+        /* ── Cert Upload exactly like Doctor Settings ── */
+        .ds-cert-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .ds-cert-row .form-input {
+            flex: 1;
+            margin-bottom: 0 !important; /* prevent default margins */
+        }
+        
+        .ds-cert-upload-btn {
+            width: 2.75rem;
+            height: 2.75rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--green-400, #4ade80);
+            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.06), rgba(6, 182, 212, 0.06));
+            color: var(--green-500, #22c55e);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            padding: 0;
+        }
+        
+        .ds-cert-upload-btn:hover {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(6, 182, 212, 0.15));
+            border-color: var(--green-500, #22c55e);
+            transform: scale(1.05);
+        }
+        
+        .ds-cert-upload-btn svg {
+            width: 1.25rem;
+            height: 1.25rem;
+            stroke: var(--green-500, #22c55e);
+        }
+        
+        .ds-cert-file-info {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.82rem;
+            color: var(--green-600, #16a34a);
+            margin-top: 0.4rem;
+            font-weight: 500;
+        }
+        
+        .ds-cert-file-info svg {
+            stroke: var(--green-600, #16a34a);
+            flex-shrink: 0;
+        }
+
+        /* Dark mode overrides */
+        [data-theme="dark"] .ds-cert-upload-btn {
+            border-color: var(--green-600, #16a34a);
+            background: rgba(34, 197, 94, 0.08);
+        }
+        [data-theme="dark"] .ds-cert-upload-btn:hover {
+            background: rgba(34, 197, 94, 0.15);
+        }
+        [data-theme="dark"] .ds-cert-file-info {
+            color: var(--green-400, #4ade80);
+        }
+        [data-theme="dark"] .ds-cert-file-info svg {
+            stroke: var(--green-400, #4ade80);
+        }
     </style>
 </head>
 
@@ -189,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                     </script>
                 <?php endif; ?>
 
-                <form id="doctor-signup-form" class="auth-form" novalidate method="post"
+                <form id="doctor-signup-form" class="auth-form" novalidate method="post" enctype="multipart/form-data"
                     action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]) ?>">
                     <div class="form-row">
                         <div class="form-group">
@@ -239,6 +377,33 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                             value="<?= htmlspecialchars($license) ?>">
                         <div class="error">
                             <?= $licenseErr ?>
+                        </div>
+                    </div>
+
+                    <!-- Single Hybrid Certification Field exactly like Doctor Settings -->
+                    <div class="form-group">
+                        <label class="form-label" for="certifications">Certifications & Certificate <span style="color:#ef4444;">*</span></label>
+                        <div class="ds-cert-row">
+                            <input type="text" name="certifications" id="certifications"
+                                class="form-input <?= !empty($certificationsErr) || !empty($certificateErr) ? 'input-error' : '' ?>" 
+                                placeholder="e.g. MD, FAAP, Board Certified"
+                                value="<?= htmlspecialchars($certifications) ?>">
+                            <button type="button" class="ds-cert-upload-btn" onclick="document.getElementById('certificate').click()" title="Upload Certificate Document">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                            </button>
+                            <input type="file" name="certificate" id="certificate" accept=".jpg,.jpeg,.png,.pdf" onchange="handleFileSelect(this)" style="display:none">
+                        </div>
+                        <div id="file-preview-name" class="ds-cert-file-info">
+                            <?php if (isset($_FILES['certificate']) && $_FILES['certificate']['error'] === UPLOAD_ERR_OK && !empty($_FILES['certificate']['name'])): ?>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.9rem;height:0.9rem;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                <?= htmlspecialchars($_FILES['certificate']['name']) ?>
+                            <?php endif; ?>
+                        </div>
+                        <div class="error" id="upload-error">
+                            <?= !empty($certificationsErr) ? $certificationsErr : (!empty($certificateErr) ? $certificateErr : '') ?>
                         </div>
                     </div>
 
@@ -367,6 +532,37 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
     <script src="scripts/navigation.js?v=8"></script>
     <script src="scripts/password-strength.js?v=8"></script>
     <script>
+        function handleFileSelect(input) {
+            const preview = document.getElementById('file-preview-name');
+            const errEl = document.getElementById('upload-error');
+            if (errEl) errEl.textContent = '';
+            
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+                const allowedExts = ['.jpg', '.jpeg', '.png', '.pdf'];
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                
+                if (!allowedTypes.includes(file.type) && !allowedExts.includes(ext)) {
+                    if (errEl) errEl.textContent = 'Invalid file type. Only JPG, PNG, and PDF are allowed.';
+                    input.value = '';
+                    preview.textContent = '';
+                    return;
+                }
+                
+                if (file.size > 5 * 1024 * 1024) {
+                    if (errEl) errEl.textContent = 'File is too large. Maximum size is 5MB.';
+                    input.value = '';
+                    preview.textContent = '';
+                    return;
+                }
+                
+                preview.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:0.9rem;height:0.9rem;vertical-align:-2px;margin-right:4px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ' + file.name;
+            } else {
+                preview.textContent = '';
+            }
+        }
+
         function togglePassword(btn) {
             const wrapper = btn.closest('.password-input-wrapper');
             const input = wrapper.querySelector('input');

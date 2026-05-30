@@ -125,8 +125,8 @@ try {
     $status = ($amountPost <= 0) ? 'Paid' : (($paymentMethod === 'Credit Card') ? 'Paid' : 'Pending');
 
     // 1. Create Payment Record
-    $stmt = $connect->prepare("INSERT INTO payment (amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
+    $stmt = $connect->prepare("INSERT INTO payment (parent_id, amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
     $paymentId = $connect->lastInsertId();
 
     // Mark token as used if applied
@@ -163,6 +163,23 @@ try {
     }
     $stmtN = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
     $stmtN->execute([$parentId, $title, $message]);
+
+    // Notify the specialist/doctor about the new booking
+    try {
+        require_once __DIR__ . '/includes/doctor_notifications.php';
+        $parentStmt = $connect->prepare("SELECT first_name, last_name FROM users WHERE user_id = ?");
+        $parentStmt->execute([$parentId]);
+        $parentRow = $parentStmt->fetch(PDO::FETCH_ASSOC);
+        $parentName = trim(($parentRow['first_name'] ?? '') . ' ' . ($parentRow['last_name'] ?? ''));
+        $drTitle = 'New Appointment' . ($childName ? $childName : '');
+        $drMessage = ($parentName ? "{$parentName} booked " : 'A parent booked ')
+            . ($type === 'onsite' ? 'an on-site visit' : 'an online session')
+            . ' for ' . date('M j, Y g:i A', strtotime($scheduledDateTime)) . '.';
+        $doctorUserId = doctor_user_id_from_specialist($connect, $specialistId);
+        if ($doctorUserId) {
+            doctor_notify($connect, $doctorUserId, 'new_appointment', $drTitle, $drMessage);
+        }
+    } catch (Exception $e) { /* non-critical */ }
 
     $connect->commit();
     echo json_encode([

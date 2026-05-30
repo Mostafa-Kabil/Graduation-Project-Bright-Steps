@@ -80,6 +80,12 @@ switch ($action) {
             echo json_encode(['error' => 'specialist_id is required']);
             exit();
         }
+        $tableCheck = $connect->query("SHOW TABLES LIKE 'specialist_reviews'");
+        if ($tableCheck->rowCount() == 0) {
+            echo json_encode(['specialist_id' => $specialistId, 'reviews' => []]);
+            exit();
+        }
+
         $stmt = $connect->prepare(
             "SELECT sr.rating, sr.comment, sr.created_at, p.first_name, p.last_name " .
             "FROM specialist_reviews sr " .

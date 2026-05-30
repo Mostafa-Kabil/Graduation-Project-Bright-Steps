@@ -7,18 +7,22 @@ session_start();
 include 'connection.php';
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['id']) && !isset($_GET['clinic_id'])) {
+if (!isset($_SESSION['id']) && !isset($_GET['clinic_id']) && !isset($_GET['user_id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'Not authenticated']);
     exit();
 }
 
 $userId = $_SESSION['id'] ?? null;
+if (isset($_GET['user_id'])) {
+    $userId = (int)$_GET['user_id'];
+}
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 switch ($action) {
 
     // ── Get notifications ────────────────────────────────────────
+    case 'get':
     case 'list':
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
         $isClinic = (isset($_SESSION['role']) && $_SESSION['role'] === 'clinic');
@@ -41,6 +45,12 @@ switch ($action) {
             $stmt->bindValue(2, $limit, PDO::PARAM_INT);
             $stmt->execute();
             $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($notifications as &$n) {
+                if (!isset($n['notification_id']) && isset($n['id'])) {
+                    $n['notification_id'] = $n['id'];
+                }
+            }
+            unset($n);
 
             // Unread count
             $stmt2 = $connect->prepare(
@@ -65,7 +75,7 @@ switch ($action) {
 
         if ($notifId) {
             $stmt = $connect->prepare(
-                "UPDATE notifications SET is_read = 1 WHERE notification_id = ? AND $whereClause"
+                "UPDATE notifications SET is_read = 1 WHERE id = ? AND $whereClause"
             );
             $stmt->execute([$notifId, $userId]);
         } else {
@@ -134,7 +144,7 @@ switch ($action) {
 
         if ($notifId) {
             $stmt = $connect->prepare(
-                "DELETE FROM notifications WHERE notification_id = ? AND $whereClause"
+                "DELETE FROM notifications WHERE id = ? AND $whereClause"
             );
             $stmt->execute([$notifId, $userId]);
         }

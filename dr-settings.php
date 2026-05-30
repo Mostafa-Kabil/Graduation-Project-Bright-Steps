@@ -1,9 +1,28 @@
-﻿<?php
+<?php
 // ══════════════════════════════════════════════════════
 // Doctor Settings — PHP Backend
 // ══════════════════════════════════════════════════════
 session_start();
 require_once 'connection.php';
+
+function clean_bio_value($bio) {
+    if (empty($bio)) return '';
+    $trimmed = trim($bio);
+    $lower = strtolower($trimmed);
+    $placeholders = [
+        'write a short bio about your practice and expertise...',
+        'write a short bio about your practice...',
+        'write a short bio...',
+        'enter your bio here...',
+        'placeholder',
+        'bio description goes here',
+        'write a short bio about your practice'
+    ];
+    if (in_array($lower, $placeholders)) {
+        return '';
+    }
+    return $trimmed;
+}
 
 // Session-based doctor ID (set by doctor-login.php)
 $doctor_id   = intval($_SESSION['id'] ?? 1);  // fallback to 1 for dev
@@ -17,13 +36,26 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
 
     // ── GET: Load profile ──────────────────────────────
     if ($method === 'GET' && $action === 'get_profile') {
+        $hasCert = false;
+        try {
+            $colCheck = $connect->query("SHOW COLUMNS FROM `specialist` LIKE 'certifications'");
+            if ($colCheck->fetch()) {
+                $hasCert = true;
+            }
+        } catch (Exception $e) {}
+
+        $certSel = $hasCert ? "s.certifications" : "NULL AS certifications";
+
         $stmt = $connect->prepare("
-            SELECT u.user_id, u.first_name, u.last_name, u.email, u.status,
-                   s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
-                   c.clinic_name, c.location AS clinic_location
+            SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone, u.status,
+                   s.specialization, s.experience_years, s.certificate_of_experience, {$certSel}, s.clinic_id,
+                   c.clinic_name, c.location AS clinic_location,
+                   ob.bio, ob.certificate_path, ob.working_days, ob.consultation_types,
+                   ob.start_time, ob.end_time, ob.focus_areas, ob.goals
             FROM users u
-            INNER JOIN specialist s ON u.user_id = s.specialist_id
-            INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+            LEFT JOIN specialist s ON u.user_id = s.specialist_id
+            LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+            LEFT JOIN doctor_onboarding ob ON u.user_id = ob.doctor_id
             WHERE u.user_id = :uid
         ");
         $stmt->execute([':uid' => $doctor_id]);
@@ -33,6 +65,20 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
             echo json_encode(['success' => false, 'error' => 'Profile not found']);
             exit;
         }
+
+        // Resolve certifications value
+        $certVal = '';
+        if ($hasCert && !empty($profile['certifications'])) {
+            $certVal = $profile['certifications'];
+        } else {
+            $coe = $profile['certificate_of_experience'] ?? '';
+            if (!empty($coe) && strpos($coe, 'cert_') !== 0) {
+                $certVal = $coe;
+            }
+        }
+        $profile['certificate_of_experience'] = $certVal;
+
+        $profile['bio'] = clean_bio_value($profile['bio'] ?? '');
 
         // Load availability slots
         $stmt2 = $connect->prepare("
@@ -83,22 +129,41 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
 
         $connect->beginTransaction();
         try {
-            $connect->prepare("
-                UPDATE users SET first_name = :fn, last_name = :ln, email = :email
-                WHERE user_id = :uid
-            ")->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
-
-            $bio  = trim($input['bio'] ?? '');
             $phone = trim($input['phone'] ?? '');
+            $bio   = trim($input['bio'] ?? '');
+
+            $connect->prepare("
+                UPDATE users SET first_name = :fn, last_name = :ln, email = :email, phone = :phone
+                WHERE user_id = :uid
+            ")->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':phone' => $phone, ':uid' => $doctor_id]);
+
+            // Ensure certifications column exists on specialist
+            try {
+                $connect->exec("ALTER TABLE `specialist` ADD COLUMN `certifications` VARCHAR(255) DEFAULT NULL");
+            } catch (Exception $e) {}
 
             $connect->prepare("
                 UPDATE specialist SET
                     first_name = :fn, last_name = :ln,
                     specialization = :spec,
                     experience_years = :exp,
-                    certificate_of_experience = :cert
+                    certifications = :cert
                 WHERE specialist_id = :sid
             ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+
+            // Ensure doctor_onboarding row exists and save bio
+            $connect->prepare("
+                INSERT INTO doctor_onboarding (doctor_id, specialization, certifications)
+                VALUES (:did, :spec, '')
+                ON DUPLICATE KEY UPDATE doctor_id = doctor_id
+            ")->execute([':did' => $doctor_id, ':spec' => $spec]);
+
+            // Store bio in a dedicated column
+            try {
+                $connect->exec("ALTER TABLE doctor_onboarding ADD COLUMN bio TEXT DEFAULT NULL AFTER goals");
+            } catch (Exception $e) { /* column already exists */ }
+            $connect->prepare("UPDATE doctor_onboarding SET bio = :bio WHERE doctor_id = :did")
+                    ->execute([':bio' => $bio, ':did' => $doctor_id]);
 
             $connect->commit();
 
@@ -192,6 +257,95 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         exit;
     }
 
+    // ── POST: Save focus areas & goals ─────────────────
+    if ($method === 'POST' && $action === 'save_focus_goals') {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $focus_areas = isset($input['focus_areas']) ? json_encode($input['focus_areas']) : '[]';
+        $goals = isset($input['goals']) ? json_encode($input['goals']) : '[]';
+
+        try {
+            // Ensure doctor_onboarding row exists
+            $check = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = ? LIMIT 1");
+            $check->execute([$doctor_id]);
+            if (!$check->fetch()) {
+                $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, specialization) VALUES (?, ?)")
+                        ->execute([$doctor_id, $_SESSION['specialization'] ?? '']);
+            }
+
+            $connect->prepare("UPDATE doctor_onboarding SET focus_areas = :fa, goals = :g WHERE doctor_id = :did")
+                    ->execute([':fa' => $focus_areas, ':g' => $goals, ':did' => $doctor_id]);
+
+            echo json_encode(['success' => true, 'message' => 'Focus areas & goals saved successfully']);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'Failed to save']);
+        }
+        exit;
+    }
+
+    // ── POST: Upload certificate ──────────────────────
+    if ($method === 'POST' && $action === 'upload_certificate') {
+        if (!isset($_FILES['certificate']) || $_FILES['certificate']['error'] === UPLOAD_ERR_NO_FILE) {
+            echo json_encode(['success' => false, 'error' => 'No file uploaded']);
+            exit;
+        }
+
+        $file = $_FILES['certificate'];
+        $maxSize = 5 * 1024 * 1024;
+        $allowedExts = ['jpg', 'jpeg', 'png', 'pdf'];
+        $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            echo json_encode(['success' => false, 'error' => 'Upload error occurred']);
+            exit;
+        }
+        if ($file['size'] > $maxSize) {
+            echo json_encode(['success' => false, 'error' => 'File too large. Max 5MB.']);
+            exit;
+        }
+
+        $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+        $mime = mime_content_type($file['tmp_name']);
+        if (!in_array($ext, $allowedExts) || !in_array($mime, $allowedMimes)) {
+            echo json_encode(['success' => false, 'error' => 'Invalid file type. Only JPG, PNG, PDF allowed.']);
+            exit;
+        }
+
+        $uploadDir = __DIR__ . '/uploads/certificates/';
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+
+        $uniqueName = 'cert_' . $doctor_id . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $destPath = $uploadDir . $uniqueName;
+
+        if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+            echo json_encode(['success' => false, 'error' => 'Failed to save file']);
+            exit;
+        }
+
+        $relativePath = 'uploads/certificates/' . $uniqueName;
+
+        try {
+            // Add certificate_path column if missing
+            try {
+                $connect->exec("ALTER TABLE doctor_onboarding ADD COLUMN certificate_path VARCHAR(500) DEFAULT NULL AFTER certifications");
+            } catch (Exception $e) { /* already exists */ }
+
+            $check = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = ? LIMIT 1");
+            $check->execute([$doctor_id]);
+            if (!$check->fetch()) {
+                $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, specialization, certificate_path) VALUES (?, ?, ?)")
+                        ->execute([$doctor_id, $_SESSION['specialization'] ?? '', $relativePath]);
+            } else {
+                $connect->prepare("UPDATE doctor_onboarding SET certificate_path = :cp WHERE doctor_id = :did")
+                        ->execute([':cp' => $relativePath, ':did' => $doctor_id]);
+            }
+
+            echo json_encode(['success' => true, 'message' => 'Certificate uploaded', 'path' => $relativePath, 'filename' => $uniqueName]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'Failed to update database']);
+        }
+        exit;
+    }
+
     echo json_encode(['success' => false, 'error' => 'Unknown action']);
     exit;
 }
@@ -200,25 +354,67 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
 $doctor = null;
 $onboarding = null;
 try {
+    $hasCert = false;
+    try {
+        $colCheck = $connect->query("SHOW COLUMNS FROM `specialist` LIKE 'certifications'");
+        if ($colCheck->fetch()) {
+            $hasCert = true;
+        }
+    } catch (Exception $e) {}
+
+    $certSel = $hasCert ? "s.certifications" : "NULL AS certifications";
+
     $stmt = $connect->prepare("
-        SELECT u.first_name, u.last_name, u.email,
-               s.specialization, s.experience_years, s.certificate_of_experience,
+        SELECT u.first_name, u.last_name, u.email, u.phone,
+               s.specialization, s.experience_years, s.certificate_of_experience, {$certSel},
                c.clinic_name, c.location AS clinic_location
         FROM users u
-        INNER JOIN specialist s ON u.user_id = s.specialist_id
-        INNER JOIN clinic c ON s.clinic_id = c.clinic_id
+        LEFT JOIN specialist s ON u.user_id = s.specialist_id
+        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
         WHERE u.user_id = :uid
     ");
     $stmt->execute([':uid' => $doctor_id]);
     $doctor = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    if ($doctor) {
+        // Resolve certifications value
+        $certVal = '';
+        if ($hasCert && !empty($doctor['certifications'])) {
+            $certVal = $doctor['certifications'];
+        } else {
+            $coe = $doctor['certificate_of_experience'] ?? '';
+            if (!empty($coe) && strpos($coe, 'cert_') !== 0) {
+                $certVal = $coe;
+            }
+        }
+        $doctor['certificate_of_experience'] = $certVal;
+    }
+
     // Also load onboarding preferences
     $obStmt = $connect->prepare("SELECT * FROM doctor_onboarding WHERE doctor_id = :did LIMIT 1");
     $obStmt->execute([':did' => $doctor_id]);
     $onboarding = $obStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Also load user settings
+    $settingsStmt = $connect->prepare("SELECT * FROM user_settings WHERE user_id = :uid LIMIT 1");
+    $settingsStmt->execute([':uid' => $doctor_id]);
+    $settings = $settingsStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$settings) {
+        $connect->prepare("INSERT IGNORE INTO user_settings (user_id) VALUES (:uid)")->execute([':uid' => $doctor_id]);
+        $settings = [
+            'push_notifications' => 1,
+            'email_notifications' => 1,
+            'appointment_reminders' => 1
+        ];
+    }
 } catch (Exception $e) {
     $doctor = null;
     $onboarding = null;
+    $settings = [
+        'push_notifications' => 1,
+        'email_notifications' => 1,
+        'appointment_reminders' => 1
+    ];
 }
 $dr_name     = $doctor ? htmlspecialchars($doctor['first_name'] . ' ' . $doctor['last_name']) : 'Dr. User';
 $dr_spec     = $doctor ? htmlspecialchars($doctor['specialization'] ?? 'Specialist') : 'Specialist';
@@ -231,6 +427,8 @@ $ob_end_time          = $onboarding ? substr($onboarding['end_time'] ?? '17:00:0
 $ob_consultation_types = $onboarding ? json_decode($onboarding['consultation_types'] ?? '[]', true) : ['Online', 'On-site'];
 $ob_focus_areas       = $onboarding ? json_decode($onboarding['focus_areas'] ?? '[]', true) : [];
 $ob_goals             = $onboarding ? json_decode($onboarding['goals'] ?? '[]', true) : [];
+$ob_bio               = clean_bio_value($onboarding ? ($onboarding['bio'] ?? '') : '');
+$ob_certificate_path  = $onboarding ? ($onboarding['certificate_path'] ?? '') : '';
 
 // Specialization options for dropdown
 $spec_options = [
@@ -404,7 +602,7 @@ $current_spec = $doctor['specialization'] ?? '';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('push_notifications', this.checked ? 1 : 0)" <?php echo ($settings['push_notifications'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -414,7 +612,7 @@ $current_spec = $doctor['specialization'] ?? '';
                                     <div class="settings-item-description">Weekly progress reports via email</div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('email_notifications', this.checked ? 1 : 0)" <?php echo ($settings['email_notifications'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -425,7 +623,7 @@ $current_spec = $doctor['specialization'] ?? '';
                                     </div>
                                 </div>
                                 <label class="toggle-switch">
-                                    <input type="checkbox" checked>
+                                    <input type="checkbox" onchange="updateSetting('appointment_reminders', this.checked ? 1 : 0)" <?php echo ($settings['appointment_reminders'] ?? 1) ? 'checked' : ''; ?>>
                                     <span class="toggle-slider"></span>
                                 </label>
                             </div>
@@ -604,10 +802,40 @@ $current_spec = $doctor['specialization'] ?? '';
                                         value="<?php echo $doctor ? htmlspecialchars($doctor['certificate_of_experience'] ?? '') : ''; ?>"
                                         placeholder="e.g. MD, FAAP, Board Certified">
                                 </div>
+                                <!-- Certificate File Upload/Display -->
                                 <div class="dr-form-group full-width">
-                                    <label class="dr-form-label" for="dr-bio">Bio </label>
+                                    <label class="dr-form-label">Certificate Document</label>
+                                    <div class="dr-cert-upload-area" id="cert-upload-area">
+                                        <?php if (!empty($ob_certificate_path)): ?>
+                                        <div class="dr-cert-current" id="cert-current-file">
+                                            <div class="dr-cert-file-badge">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                                    <polyline points="14 2 14 8 20 8"/>
+                                                </svg>
+                                                <span><?php echo htmlspecialchars(basename($ob_certificate_path)); ?></span>
+                                                <a href="<?php echo htmlspecialchars($ob_certificate_path); ?>" target="_blank" class="dr-cert-view-link" title="View certificate">View</a>
+                                            </div>
+                                        </div>
+                                        <?php endif; ?>
+                                        <div class="dr-cert-upload-row">
+                                            <button type="button" class="dr-cert-replace-btn" onclick="document.getElementById('cert-file-input').click()">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                                    <polyline points="17 8 12 3 7 8"/>
+                                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                                </svg>
+                                                <?php echo !empty($ob_certificate_path) ? 'Replace Certificate' : 'Upload Certificate'; ?>
+                                            </button>
+                                            <span id="cert-upload-status" class="dr-cert-upload-status"></span>
+                                            <input type="file" id="cert-file-input" accept=".jpg,.jpeg,.png,.pdf" style="display:none;" onchange="handleCertUpload(this)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="dr-form-group full-width">
+                                    <label class="dr-form-label" for="dr-bio">Bio</label>
                                     <textarea id="dr-bio" class="dr-form-input dr-form-textarea"
-                                        placeholder="Write a short bio about your practice and expertise..."></textarea>
+                                        placeholder="Write a short bio about your practice and expertise..."><?php echo htmlspecialchars($ob_bio); ?></textarea>
                                 </div>
                             </div>
                         </div>
@@ -718,17 +946,74 @@ $current_spec = $doctor['specialization'] ?? '';
                                 </div>
                             </div>
 
-                            <?php if (!empty($ob_focus_areas)): ?>
-                            <!-- Focus Areas (from onboarding, display-only) -->
-                            <label class="dr-form-label" style="margin-top:1.5rem;margin-bottom:0.5rem;display:block;">Focus Areas</label>
-                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
-                                <?php foreach ($ob_focus_areas as $area): ?>
-                                <span style="background:#6366f115;color:#6366f1;border:1px solid #6366f130;border-radius:20px;padding:0.25rem 0.75rem;font-size:0.8rem;font-weight:600;">
-                                    <?php echo htmlspecialchars($area); ?>
-                                </span>
+                        </div>
+
+                        <!-- Section 5: Focus Areas (Editable) -->
+                        <div class="dr-form-section">
+                            <div class="dr-form-section-header">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                                    <line x1="9" y1="9" x2="9.01" y2="9"/>
+                                    <line x1="15" y1="9" x2="15.01" y2="9"/>
+                                </svg>
+                                <h3 class="dr-form-section-title">Focus Areas</h3>
+                            </div>
+                            <p style="font-size:0.8rem;color:var(--slate-500);margin-bottom:1rem;">Select the developmental areas you specialize in</p>
+                            <div class="dr-focus-grid" id="focus-areas-grid">
+                                <?php
+                                $all_focus = [
+                                    'Speech & Language Delays' => '🗣️',
+                                    'Motor Development' => '🏃',
+                                    'Cognitive Development' => '🧠',
+                                    'Behavioral Issues' => '💡',
+                                    'Social-Emotional' => '🤝',
+                                    'Growth & Nutrition' => '📈',
+                                ];
+                                foreach ($all_focus as $area => $icon):
+                                    $isSelected = in_array($area, $ob_focus_areas ?? []);
+                                ?>
+                                <div class="dr-focus-card <?php echo $isSelected ? 'selected' : ''; ?>"
+                                     onclick="toggleFocusCard(this)"
+                                     data-value="<?php echo htmlspecialchars($area); ?>">
+                                    <span class="dr-focus-icon"><?php echo $icon; ?></span>
+                                    <span class="dr-focus-label"><?php echo htmlspecialchars($area); ?></span>
+                                </div>
                                 <?php endforeach; ?>
                             </div>
-                            <?php endif; ?>
+                        </div>
+
+                        <!-- Section 6: Goals (Editable) -->
+                        <div class="dr-form-section">
+                            <div class="dr-form-section-header">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                                <h3 class="dr-form-section-title">Your Goals</h3>
+                            </div>
+                            <p style="font-size:0.8rem;color:var(--slate-500);margin-bottom:1rem;">What do you want to achieve with Bright Steps?</p>
+                            <div class="dr-focus-grid" id="goals-grid">
+                                <?php
+                                $all_goals = [
+                                    'Monitor Patient Progress' => '📊',
+                                    'Communicate with Parents' => '💬',
+                                    'Write & Share Reports' => '📝',
+                                    'Manage Appointments' => '📅',
+                                    'Review AI Insights' => '🤖',
+                                    'Grow My Practice' => '🌟',
+                                ];
+                                foreach ($all_goals as $goal => $icon):
+                                    $isSelected = in_array($goal, $ob_goals ?? []);
+                                ?>
+                                <div class="dr-focus-card <?php echo $isSelected ? 'selected' : ''; ?>"
+                                     onclick="toggleGoalCard(this)"
+                                     data-value="<?php echo htmlspecialchars($goal); ?>">
+                                    <span class="dr-focus-icon"><?php echo $icon; ?></span>
+                                    <span class="dr-focus-label"><?php echo htmlspecialchars($goal); ?></span>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
                         </div>
 
                         <!-- Form Actions -->
@@ -814,6 +1099,91 @@ $current_spec = $doctor['specialization'] ?? '';
             }
         }
 
+        // ── Focus Areas & Goals Card Toggle ──
+        function toggleFocusCard(el) {
+            el.classList.toggle('selected');
+        }
+        function toggleGoalCard(el) {
+            el.classList.toggle('selected');
+        }
+
+        // Gather selected focus areas
+        function getSelectedFocusAreas() {
+            const items = [];
+            document.querySelectorAll('#focus-areas-grid .dr-focus-card.selected').forEach(card => {
+                items.push(card.getAttribute('data-value'));
+            });
+            return items;
+        }
+
+        // Gather selected goals
+        function getSelectedGoals() {
+            const items = [];
+            document.querySelectorAll('#goals-grid .dr-focus-card.selected').forEach(card => {
+                items.push(card.getAttribute('data-value'));
+            });
+            return items;
+        }
+
+        // ── Certificate Upload Handler ──
+        function handleCertUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const status = document.getElementById('cert-upload-status');
+            const maxSize = 5 * 1024 * 1024;
+            const allowedExts = ['.jpg', '.jpeg', '.png', '.pdf'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (!allowedExts.includes(ext)) {
+                showToast('Invalid file type. Only JPG, PNG, PDF allowed.', 'error');
+                input.value = '';
+                return;
+            }
+            if (file.size > maxSize) {
+                showToast('File too large. Maximum 5MB.', 'error');
+                input.value = '';
+                return;
+            }
+
+            status.textContent = 'Uploading...';
+            status.style.color = 'var(--blue-500)';
+
+            const fd = new FormData();
+            fd.append('certificate', file);
+
+            fetch('dr-settings.php?ajax=1&action=upload_certificate', {
+                method: 'POST',
+                body: fd
+            }).then(r => r.json()).then(res => {
+                if (res.success) {
+                    status.textContent = '✓ ' + res.filename;
+                    status.style.color = 'var(--green-600)';
+                    showToast('Certificate uploaded!', 'success');
+                    // Update the current file display
+                    const currentDiv = document.getElementById('cert-current-file');
+                    if (currentDiv) {
+                        currentDiv.querySelector('span').textContent = res.filename;
+                        currentDiv.querySelector('a').href = res.path;
+                    } else {
+                        const area = document.getElementById('cert-upload-area');
+                        const newDiv = document.createElement('div');
+                        newDiv.className = 'dr-cert-current';
+                        newDiv.id = 'cert-current-file';
+                        newDiv.innerHTML = '<div class="dr-cert-file-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1rem;height:1rem;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>' + res.filename + '</span><a href="' + res.path + '" target="_blank" class="dr-cert-view-link" title="View certificate">View</a></div>';
+                        area.insertBefore(newDiv, area.firstChild);
+                    }
+                } else {
+                    status.textContent = '✗ ' + (res.error || 'Upload failed');
+                    status.style.color = 'var(--red-500)';
+                    showToast(res.error || 'Upload failed', 'error');
+                }
+            }).catch(() => {
+                status.textContent = '✗ Network error';
+                status.style.color = 'var(--red-500)';
+                showToast('Connection error', 'error');
+            });
+        }
+
         // ── Form Validation & Submission ──
         document.getElementById('dr-profile-form').addEventListener('submit', function (e) {
             e.preventDefault();
@@ -822,6 +1192,8 @@ $current_spec = $doctor['specialization'] ?? '';
             const first_name = nameParts[0] || '';
             const last_name  = nameParts.slice(1).join(' ') || '';
             const email        = document.getElementById('dr-email').value.trim();
+            const phone        = document.getElementById('dr-phone').value.trim();
+            const bio          = document.getElementById('dr-bio').value.trim();
             const specialtySelect = document.getElementById('dr-specialty').value;
             const specialtyOther  = document.getElementById('dr-specialty-other').value.trim();
             const experience = parseInt(document.getElementById('dr-experience').value || 0);
@@ -847,7 +1219,6 @@ $current_spec = $doctor['specialization'] ?? '';
                 if (newPw.length < 6) { showToast('New password must be at least 6 characters', 'error'); return; }
                 if (newPw !== confirmPw) { showToast('Passwords do not match', 'error'); return; }
 
-                // Change password first
                 fetch('dr-settings.php?ajax=1&action=change_password', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -859,12 +1230,12 @@ $current_spec = $doctor['specialization'] ?? '';
                 }).catch(() => showToast('Connection error', 'error'));
             }
 
-            // Save profile
+            // Save profile (now includes phone + bio)
             fetch('dr-settings.php?ajax=1&action=save_profile', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    first_name, last_name, email,
+                    first_name, last_name, email, phone, bio,
                     specialization: finalSpec,
                     experience_years: experience,
                     certificate_of_experience: cert
@@ -874,24 +1245,44 @@ $current_spec = $doctor['specialization'] ?? '';
                 else showToast(res.error || 'Save failed', 'error');
             }).catch(() => showToast('Connection error', 'error'));
 
-            // Save availability slots
+            // Save availability slots (FIXED: use numeric values directly)
             const selectedDays = [];
-            const dayMap = { 'sat':6,'sun':0,'mon':1,'tue':2,'wed':3,'thu':4,'fri':5 };
             document.querySelectorAll('input[name="working-days"]:checked').forEach(cb => {
-                const d = dayMap[cb.value.substring(0,3)];
-                if (d !== undefined) selectedDays.push(d);
+                selectedDays.push(parseInt(cb.value));
             });
             const startTime = document.getElementById('dr-start-time').value;
             const endTime   = document.getElementById('dr-end-time').value;
+            // Gather consultation types
+            const consultTypes = [];
+            document.querySelectorAll('input[name="consult-type"]:checked').forEach(cb => {
+                consultTypes.push(cb.value);
+            });
             if (selectedDays.length > 0 && startTime && endTime) {
                 fetch('dr-settings.php?ajax=1&action=save_slots', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ days: selectedDays, start_time: startTime, end_time: endTime, slot_duration: 30 })
+                    body: JSON.stringify({
+                        days: selectedDays,
+                        start_time: startTime,
+                        end_time: endTime,
+                        slot_duration: 30,
+                        consultation_types: consultTypes
+                    })
                 }).then(r => r.json()).then(res => {
                     if (!res.success) showToast(res.error || 'Failed to save availability', 'error');
                 });
             }
+
+            // Save focus areas & goals
+            const focusAreas = getSelectedFocusAreas();
+            const goals = getSelectedGoals();
+            fetch('dr-settings.php?ajax=1&action=save_focus_goals', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ focus_areas: focusAreas, goals: goals })
+            }).then(r => r.json()).then(res => {
+                if (!res.success) showToast(res.error || 'Failed to save focus & goals', 'error');
+            }).catch(() => {});
         });
 
         // ── Toast Notification ──
@@ -911,6 +1302,20 @@ $current_spec = $doctor['specialization'] ?? '';
             toast.className = 'dr-toast ' + type;
             setTimeout(function () { toast.classList.add('show'); }, 50);
             setTimeout(function () { toast.classList.remove('show'); }, 3500);
+        }
+
+        function updateSetting(key, value) {
+            fetch('api_settings.php?action=update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [key]: value })
+            }).then(r => r.json()).then(res => {
+                if (res.success) {
+                    showToast('Setting updated!', 'success');
+                } else {
+                    showToast(res.error || 'Failed to update setting', 'error');
+                }
+            }).catch(() => showToast('Connection error', 'error'));
         }
 
         // ── Specialty "Other" Toggle ──

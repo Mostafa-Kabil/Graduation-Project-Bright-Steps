@@ -2,11 +2,17 @@ import os
 import sys
 import re
 import statistics
+import glob
 
-# ── Inject FFmpeg bin directory into PATH so Whisper's internal subprocess
-#    calls (whisper/audio.py: load_audio) can locate ffmpeg.exe ──────────────
-_FFMPEG_BIN = r"C:\Users\Dell\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.0.1-full_build\bin"
-os.environ["PATH"] = _FFMPEG_BIN + os.pathsep + os.environ.get("PATH", "")
+# ── Dynamically find FFmpeg bin directory ──────────────────────────────
+winget_packages = os.path.expanduser(r"~\AppData\Local\Microsoft\WinGet\Packages")
+ffmpeg_bins = glob.glob(os.path.join(winget_packages, "Gyan.FFmpeg*", "**", "bin"), recursive=True)
+
+if ffmpeg_bins:
+    _FFMPEG_BIN = ffmpeg_bins[0]
+    os.environ["PATH"] = _FFMPEG_BIN + os.pathsep + os.environ.get("PATH", "")
+else:
+    _FFMPEG_BIN = ""
 
 import whisper
 import torch
@@ -35,7 +41,19 @@ FFMPEG_EXE = os.path.join(_FFMPEG_BIN, "ffmpeg.exe")
 app = FastAPI()
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-model = whisper.load_model("tiny.en", device=DEVICE)
+model = whisper.load_model("turbo", device=DEVICE)
+
+
+def get_syllable_count(w: str) -> int:
+    """Get syllable count for a word, supporting English (via textstat) and Arabic."""
+    # Check if word contains Arabic characters
+    if re.search(r'[\u0600-\u06FF]', w):
+        # Fallback syllable count for Arabic: length divided by 2, minimum of 1
+        return max(1, len(w) // 2)
+    try:
+        return textstat.syllable_count(w)
+    except Exception:
+        return max(1, len(w) // 3)
 
 
 def convert_to_wav(input_path: str, output_path: str):
@@ -116,7 +134,7 @@ def analyze_word_complexity(transcript: str) -> dict:
     """
     Analyze word-level complexity using syllable counts and word length.
     """
-    words = re.findall(r'\b[a-zA-Z]+\b', transcript.lower())
+    words = re.findall(r'\b[a-zA-Z\u0600-\u06FF]+\b', transcript.lower())
 
     if not words:
         return {
@@ -129,12 +147,12 @@ def analyze_word_complexity(transcript: str) -> dict:
     # Calculate average word length
     avg_word_length = statistics.mean(len(w) for w in words)
 
-    # Count syllables using textstat
-    total_syllables = sum(textstat.syllable_count(w) for w in words)
+    # Count syllables using custom helper
+    total_syllables = sum(get_syllable_count(w) for w in words)
     avg_syllables = total_syllables / len(words) if words else 0
 
     # Count polysyllabic words (3+ syllables) - these indicate advanced vocabulary
-    polysyllabic_count = sum(1 for w in words if textstat.syllable_count(w) >= 3)
+    polysyllabic_count = sum(1 for w in words if get_syllable_count(w) >= 3)
 
     # Complexity score based on syllable average
     if avg_syllables < 1.2:
@@ -167,14 +185,37 @@ def calculate_readability_scores(transcript: str) -> dict:
             'overall_readability_score': 0
         }
 
-    # Flesch Reading Ease (higher = easier to read)
-    fre = textstat.flesch_reading_ease(transcript)
+    is_arabic = bool(re.search(r'[\u0600-\u06FF]', transcript))
 
-    # Flesch-Kincaid Grade Level
-    fkg = textstat.flesch_kincaid_grade(transcript)
-
-    # Automated Readability Index
-    ari = textstat.automated_readability_index(transcript)
+    if is_arabic:
+        # Custom simplified metrics for Arabic speech
+        words = re.findall(r'\b[\u0600-\u06FF]+\b', transcript)
+        avg_word_len = statistics.mean(len(w) for w in words) if words else 0
+        # Estimate grade level based on word length
+        if avg_word_len < 3:
+            fkg = 0.5
+            fre = 90
+            ari = 0.5
+        elif avg_word_len < 5:
+            fkg = 2.0
+            fre = 75
+            ari = 2.0
+        else:
+            fkg = 4.5
+            fre = 55
+            ari = 4.5
+    else:
+        try:
+            # Flesch Reading Ease (higher = easier to read)
+            fre = textstat.flesch_reading_ease(transcript)
+            # Flesch-Kincaid Grade Level
+            fkg = textstat.flesch_kincaid_grade(transcript)
+            # Automated Readability Index
+            ari = textstat.automated_readability_index(transcript)
+        except Exception:
+            fre = 75
+            fkg = 2.0
+            ari = 2.0
 
     # Normalize to 0-1 score (adapted for children's speech)
     # For children, lower grade levels are expected
@@ -195,6 +236,7 @@ def calculate_readability_scores(transcript: str) -> dict:
         'automated_readability_index': round(ari, 2),
         'overall_readability_score': readability_score
     }
+
 
 
 def generate_developmental_feedback(

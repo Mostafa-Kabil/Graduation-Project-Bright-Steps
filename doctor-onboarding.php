@@ -4,6 +4,17 @@ if (!isset($_SESSION['id']) || ($_SESSION['role'] !== 'doctor' && $_SESSION['rol
     header('Location: login.php');
     exit();
 }
+include 'connection.php';
+$doctorId = intval($_SESSION['id']);
+$specialistId = intval($_SESSION['specialist_id'] ?? $_SESSION['id']);
+
+$specialty = '';
+try {
+    $stmt = $connect->prepare("SELECT specialization FROM specialist WHERE specialist_id = ? LIMIT 1");
+    $stmt->execute([$specialistId]);
+    $specialty = $stmt->fetchColumn() ?: '';
+} catch (Exception $e) {}
+
 $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['lname'] ?? ''));
 ?>
 <!DOCTYPE html>
@@ -428,35 +439,23 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
                         <label class="form-label">Specialization</label>
                         <select id="dr_specialization" class="form-input" required>
                             <option value="">Select your specialty</option>
-                            <option value="pediatrician">Pediatrician</option>
-                            <option value="child-psychiatrist">Child Psychiatrist</option>
-                            <option value="developmental-pediatrician">Developmental Pediatrician</option>
-                            <option value="neurologist">Pediatric Neurologist</option>
-                            <option value="speech-therapist">Speech-Language Pathologist</option>
-                            <option value="occupational-therapist">Occupational Therapist</option>
-                            <option value="behavioral-therapist">Behavioral Therapist</option>
-                            <option value="psychologist">Child Psychologist</option>
-                            <option value="other">Other</option>
+                            <option value="pediatrician" <?php echo $specialty === 'pediatrician' ? 'selected' : ''; ?>>Pediatrician</option>
+                            <option value="child-psychiatrist" <?php echo $specialty === 'child-psychiatrist' ? 'selected' : ''; ?>>Child Psychiatrist</option>
+                            <option value="developmental-pediatrician" <?php echo $specialty === 'developmental-pediatrician' ? 'selected' : ''; ?>>Developmental Pediatrician</option>
+                            <option value="neurologist" <?php echo $specialty === 'neurologist' ? 'selected' : ''; ?>>Pediatric Neurologist</option>
+                            <option value="speech-therapist" <?php echo $specialty === 'speech-therapist' ? 'selected' : ''; ?>>Speech-Language Pathologist</option>
+                            <option value="occupational-therapist" <?php echo $specialty === 'occupational-therapist' ? 'selected' : ''; ?>>Occupational Therapist</option>
+                            <option value="behavioral-therapist" <?php echo $specialty === 'behavioral-therapist' ? 'selected' : ''; ?>>Behavioral Therapist</option>
+                            <option value="psychologist" <?php echo $specialty === 'psychologist' ? 'selected' : ''; ?>>Child Psychologist</option>
+                            <option value="other" <?php echo (!empty($specialty) && !in_array($specialty, ['pediatrician', 'child-psychiatrist', 'developmental-pediatrician', 'neurologist', 'speech-therapist', 'occupational-therapist', 'behavioral-therapist', 'psychologist'])) ? 'selected' : ''; ?>>Other</option>
                         </select>
-                        <input type="text" id="dr_specialization_other" class="form-input" placeholder="Please specify your specialty" style="display:none; margin-top: 0.5rem;">
+                        <input type="text" id="dr_specialization_other" class="form-input" placeholder="Please specify your specialty" 
+                            style="<?php echo (!empty($specialty) && !in_array($specialty, ['pediatrician', 'child-psychiatrist', 'developmental-pediatrician', 'neurologist', 'speech-therapist', 'occupational-therapist', 'behavioral-therapist', 'psychologist'])) ? 'display:block;' : 'display:none;'; ?> margin-top: 0.5rem;"
+                            value="<?php echo (!empty($specialty) && !in_array($specialty, ['pediatrician', 'child-psychiatrist', 'developmental-pediatrician', 'neurologist', 'speech-therapist', 'occupational-therapist', 'behavioral-therapist', 'psychologist'])) ? htmlspecialchars($specialty) : ''; ?>">
                     </div>
-                    <div class="form-row" style="margin-top: 1rem;">
-                        <div class="form-group">
-                            <label class="form-label">Years of Experience</label>
-                            <input type="number" id="dr_experience" class="form-input" placeholder="e.g. 5" min="0" max="60" required>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Certifications <span style="color:#ef4444;">*</span></label>
-                            <div style="display:flex;gap:0.5rem;align-items:center;">
-                                <input type="text" id="dr_certifications" class="form-input" placeholder="e.g. MD, FAAP" style="flex:1;">
-                                <button type="button" onclick="document.getElementById('dr_certificate').click()" title="Upload certificate document" style="width:2.5rem;height:2.5rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:2px dashed #0ea5e9;border-radius:10px;background:rgba(14,165,233,0.05);color:#0ea5e9;cursor:pointer;transition:all .2s;">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.1rem;height:1.1rem;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                                </button>
-                                <input type="file" id="dr_certificate" accept=".jpg,.jpeg,.png,.pdf" onchange="handleFileSelect(this)" style="display:none">
-                            </div>
-                            <div id="file-preview-name" style="margin-top:0.4rem;font-size:0.8rem;color:#0ea5e9;font-weight:500;"></div>
-                            <div class="upload-error" id="upload-error" style="color:#ef4444;font-size:0.78rem;margin-top:0.5rem;display:none;"></div>
-                        </div>
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label class="form-label">Years of Experience</label>
+                        <input type="number" id="dr_experience" class="form-input" placeholder="e.g. 5" min="0" max="60" required>
                     </div>
                     <div class="wizard-buttons">
                         <div></div>
@@ -704,18 +703,9 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
                 const specOther = document.getElementById('dr_specialization_other');
                 formData.specialization = specSelect.value === 'other' ? specOther.value.trim() : specSelect.value;
                 formData.experience_years = parseInt(document.getElementById('dr_experience').value) || 0;
-                formData.certifications = document.getElementById('dr_certifications').value.trim();
 
                 if (!formData.specialization) {
                     alert('Please select your specialization.');
-                    return;
-                }
-
-                // Certificate is required
-                if (!formData.certificateFile) {
-                    const errEl = document.getElementById('upload-error');
-                    errEl.textContent = 'Please upload your certificate as proof of qualification.';
-                    errEl.classList.add('visible');
                     return;
                 }
             }

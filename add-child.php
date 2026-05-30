@@ -4,6 +4,25 @@ if (!isset($_SESSION['email']) || $_SESSION['role'] !== 'parent') {
     header("Location: login.php");
     exit();
 }
+include 'connection.php';
+
+$parentId = $_SESSION['id'] ?? null;
+
+$childCount = $connect->prepare("SELECT COUNT(*) FROM child WHERE parent_id = ?");
+$childCount->execute([$parentId]);
+$count = $childCount->fetchColumn();
+
+$isPremium = false;
+$subStmt = $connect->prepare("SELECT s.plan_name FROM parent_subscription ps JOIN subscription s ON ps.subscription_id = s.subscription_id WHERE ps.parent_id = ?");
+$subStmt->execute([$parentId]);
+$subPlan = $subStmt->fetchColumn();
+$isPremium = ($subPlan === 'Premium');
+
+if ($count >= 1 && !$isPremium) {
+    header("Location: dashboards/parent/dashboard.php?premium_required=1");
+    exit();
+}
+
 $isSetup = isset($_GET['setup']) ? true : false;
 ?>
 <!DOCTYPE html>
