@@ -976,6 +976,9 @@ function renderAppointmentsList(appointments) {
         const typeLabel = a.type === 'online' ? 'Online' : 'On-site';
         const initials = (a.parent_first_name?.charAt(0) || '') + (a.parent_last_name?.charAt(0) || '');
         const isActive = status !== 'completed' && status !== 'cancelled';
+        const childNameSafe = (a.children_names || '').split(',')[0].replace(/'/g, "\\'");
+        const parentNameSafe = parentName.replace(/'/g, "\\'");
+        
         html += `<div class="patient-row">
             <div class="patient-avatar">${initials}</div>
             <div class="patient-info"><div class="patient-name">${parentName}</div>
@@ -984,10 +987,11 @@ function renderAppointmentsList(appointments) {
             <div class="patient-last-update">${dateStr}${timeStr ? ' at ' + timeStr : ''}</div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                 ${a.type === 'online' && a.meeting_link && isActive ? `<button class="btn btn-sm btn-join-meeting" onclick="joinMeeting('${a.meeting_link}')">Join Meeting</button>` : ''}
-                ${status === 'scheduled' ? `<button class="btn btn-sm btn-gradient" onclick="updateAppointmentStatus(${a.appointment_id},'confirmed')">Confirm</button>` : ''}
-                ${isActive ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
+                ${(status.toLowerCase() === 'pending' || status.toLowerCase() === 'pending reschedule') ? `<div style="display:flex;gap:0.75rem;width:100%;margin-top:0.5rem;"><button onclick="doctorApproveAppointment(${a.appointment_id})" style="flex:1;padding:0.65rem 1rem;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:0.875rem;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">✅ Approve</button><button onclick="doctorRejectAppointment(${a.appointment_id})" style="flex:1;padding:0.65rem 1rem;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:0.875rem;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">❌ Reject</button></div>` : ''}
+                ${status.toLowerCase() === 'scheduled' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
+                ${status.toLowerCase() === 'completed' ? `<div style="width:100%;margin-top:0.5rem;"><button onclick="openWriteReportModal(${a.appointment_id}, \`${(a.report||'').replace(/`/g, "'")}\`, \`${a.next_visit_recommendation||''}\`)" style="width:100%;padding:0.65rem 1rem;background:${(a.report && a.report.trim() !== '') ? 'linear-gradient(135deg,#8b5cf6,#7c3aed)' : 'linear-gradient(135deg,#6366f1,#4f46e5)'};color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:0.875rem;">📝 ${(a.report && a.report.trim() !== '') ? 'Edit Report' : 'Write Report'}</button></div>` : ''}
                 ${isActive ? `<button class="btn btn-sm btn-outline" style="color:var(--red-500);border-color:var(--red-500);" onclick="cancelAppointment(${a.appointment_id})">Cancel</button>` : ''}
-                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${a.parent_id}, '${parentName}')">Chat</button>
+                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${a.parent_id}, '${parentNameSafe}')">Chat</button>
             </div></div>`;
     });
     container.innerHTML = html;
@@ -2053,3 +2057,139 @@ function renderAppointmentPieChart(completed, upcoming, cancelled) {
     });
 }
 
+
+async function doctorApproveAppointment(appointmentId) {
+    if (!confirm('Approve this appointment? The parent will be notified and messaging will be unlocked.')) return;
+    try {
+        const res = await fetch('api_manage_appointment_status.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ appointment_id: appointmentId, action: 'approve' })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('✅ Appointment approved! Parent has been notified.', 'success');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast(data.error || 'Failed to approve appointment.', 'error');
+        }
+    } catch (e) {
+        showToast('Network error. Please try again.', 'error');
+    }
+}
+
+async function doctorRejectAppointment(appointmentId) {
+    const reason = prompt('Reason for rejecting (optional — will be sent to parent):') ?? '';
+    try {
+        const res = await fetch('api_manage_appointment_status.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ appointment_id: appointmentId, action: 'reject', reason: reason })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Appointment rejected. Parent has been notified.', 'info');
+            setTimeout(() => location.reload(), 1200);
+        } else {
+            showToast(data.error || 'Failed to reject appointment.', 'error');
+        }
+    } catch (e) {
+        showToast('Network error. Please try again.', 'error');
+    }
+}
+
+function openWriteReportModal(appointmentId, existingReport, existingNextVisit) {
+    let existing = document.getElementById('write-report-modal');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'write-report-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:520px;box-shadow:0 24px 64px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+            <h3 style="margin:0;font-size:1.25rem;font-weight:700;color:#0f172a;">📝 Child Session Report</h3>
+            <button onclick="document.getElementById('write-report-modal').remove()" 
+                    style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#64748b;">✕</button>
+        </div>
+        <div style="margin-bottom:1.25rem;">
+            <label style="display:block;font-size:0.875rem;font-weight:600;color:#374151;margin-bottom:0.5rem;">
+                Session Notes & Observations
+            </label>
+            <textarea id="report-text" rows="6" placeholder="Describe the child's progress, areas of improvement, exercises performed, and any observations..."
+                style="width:100%;padding:0.75rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.95rem;
+                       font-family:inherit;resize:vertical;outline:none;box-sizing:border-box;
+                       transition:border-color 0.2s;" 
+                onfocus="this.style.borderColor='#6366f1'" 
+                onblur="this.style.borderColor='#e2e8f0'">${existingReport}</textarea>
+        </div>
+        <div style="margin-bottom:1.5rem;">
+            <label style="display:block;font-size:0.875rem;font-weight:600;color:#374151;margin-bottom:0.5rem;">
+                📅 Recommended Next Visit Date (optional)
+            </label>
+            <input type="date" id="report-next-visit" value="${existingNextVisit}"
+                   min="${new Date().toISOString().split('T')[0]}"
+                style="width:100%;padding:0.75rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;
+                       font-size:0.95rem;outline:none;box-sizing:border-box;transition:border-color 0.2s;"
+                onfocus="this.style.borderColor='#6366f1'" 
+                onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <div style="display:flex;gap:0.75rem;">
+            <button onclick="document.getElementById('write-report-modal').remove()" 
+                    style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;">
+                Cancel
+            </button>
+            <button id="save-report-btn" onclick="submitReport(${appointmentId})"
+                    style="flex:2;padding:0.75rem;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;
+                           border:none;border-radius:12px;font-weight:600;cursor:pointer;font-size:0.95rem;">
+                💾 Save Report
+            </button>
+        </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function submitReport(appointmentId) {
+    const reportText = document.getElementById('report-text').value.trim();
+    const nextVisit  = document.getElementById('report-next-visit').value;
+    const btn        = document.getElementById('save-report-btn');
+    if (!reportText) { alert('Please write the session report before saving.'); return; }
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    try {
+        const res = await fetch('api_appointment_report.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                appointment_id: appointmentId,
+                report_text:    reportText,
+                next_visit_date: nextVisit || null
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('write-report-modal').innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(8px);z-index:9999;
+                        display:flex;align-items:center;justify-content:center;">
+                <div style="background:#fff;border-radius:20px;padding:2.5rem;text-align:center;max-width:380px;">
+                    <div style="font-size:3rem;margin-bottom:1rem;">✅</div>
+                    <h3 style="margin:0 0 0.5rem;color:#0f172a;">Report Saved!</h3>
+                    <p style="color:#64748b;margin:0 0 1.5rem;">The parent has been notified.</p>
+                    <button onclick="document.getElementById('write-report-modal').remove();location.reload();"
+                            style="padding:0.75rem 2rem;background:linear-gradient(135deg,#6366f1,#4f46e5);
+                                   color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">
+                        Done
+                    </button>
+                </div>
+            </div>`;
+        } else {
+            alert(data.error || 'Failed to save report.');
+            btn.textContent = '💾 Save Report';
+            btn.disabled = false;
+        }
+    } catch (e) {
+        alert('Network error. Please try again.');
+        btn.textContent = '💾 Save Report';
+        btn.disabled = false;
+    }
+}

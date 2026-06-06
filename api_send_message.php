@@ -14,6 +14,7 @@ $receiverId = $_POST['receiver_id'] ?? null;
 $childId = $_POST['child_id'] ?? null;
 $content = trim($_POST['content'] ?? '');
 $content = $content !== '' ? $content : null;
+$messageType = $_POST['message_type'] ?? 'text'; // 'text' | 'child_report'
 
 if (!$receiverId || (!$content && empty($_FILES['attachment']))) {
     echo json_encode(['error' => 'Receiver ID and either content or attachment are required']);
@@ -111,20 +112,40 @@ if ($content !== null) {
 }
 
 try {
-    $stmt = $connect->prepare("
-        INSERT INTO message (sender_id, receiver_id, child_id, appointment_id, meeting_link, content, file_path) 
-        VALUES (:sender, :receiver, :child, :appointment, :meeting_link, :content, :file)
-    ");
-    
-    $stmt->execute([
-        ':sender' => $senderId,
-        ':receiver' => $receiverId,
-        ':child' => $childId ?: null,
-        ':appointment' => $appointmentId,
-        ':meeting_link' => $meetingLink,
-        ':content' => $content,
-        ':file' => $filePath
-    ]);
+    // Check if message_type column exists
+    $hasTypeCol = false;
+    try { $connect->query("SELECT message_type FROM message LIMIT 1"); $hasTypeCol = true; } catch(Exception $e) {}
+
+    if ($hasTypeCol) {
+        $stmt = $connect->prepare("
+            INSERT INTO message (sender_id, receiver_id, child_id, appointment_id, meeting_link, content, file_path, message_type) 
+            VALUES (:sender, :receiver, :child, :appointment, :meeting_link, :content, :file, :mtype)
+        ");
+        $stmt->execute([
+            ':sender' => $senderId,
+            ':receiver' => $receiverId,
+            ':child' => $childId ?: null,
+            ':appointment' => $appointmentId,
+            ':meeting_link' => $meetingLink,
+            ':content' => $content,
+            ':file' => $filePath,
+            ':mtype' => $messageType
+        ]);
+    } else {
+        $stmt = $connect->prepare("
+            INSERT INTO message (sender_id, receiver_id, child_id, appointment_id, meeting_link, content, file_path) 
+            VALUES (:sender, :receiver, :child, :appointment, :meeting_link, :content, :file)
+        ");
+        $stmt->execute([
+            ':sender' => $senderId,
+            ':receiver' => $receiverId,
+            ':child' => $childId ?: null,
+            ':appointment' => $appointmentId,
+            ':meeting_link' => $meetingLink,
+            ':content' => $content,
+            ':file' => $filePath
+        ]);
+    }
     
     $messageId = $connect->lastInsertId();
 

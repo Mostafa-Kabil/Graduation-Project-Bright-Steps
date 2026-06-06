@@ -4977,10 +4977,16 @@
                                 bio +
 
                                 '<div class="doctor-pills-row">' +
-                                    '<div class="doctor-pill doctor-pill-loc">' +
-                                        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
-                                        (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
-                                    '</div>' +
+                                    (s.clinic_id ? 
+                                        '<a href="../../clinic-profile.php?id=' + s.clinic_id + '" class="doctor-pill doctor-pill-loc" style="text-decoration:none;">' +
+                                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+                                            (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                        '</a>' :
+                                        '<div class="doctor-pill doctor-pill-loc">' +
+                                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+                                            (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                        '</div>'
+                                    ) +
                                     '<div class="doctor-pill doctor-pill-fee">' +
                                         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
                                         fee +
@@ -4999,7 +5005,7 @@
 
                         '<!-- Footer Actions -->' +
                         '<div class="doctor-card-footer">' +
-                            '<button class="btn-doctor-profile" onclick="viewDoctorInfo(' + s.specialist_id + ')">' +
+                            '<button class="btn-doctor-profile" onclick="window.location.href = \'../../specialist-profile.php?id=' + s.specialist_id + '\'">' +
                                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>' +
                                 'View Profile' +
                             '</button>' +
@@ -5027,12 +5033,27 @@
                     statusText = 'Pending Doctor Approval';
                 }
 
+                let timelineHtml = '<div style="display:flex;align-items:center;gap:0.25rem;margin-bottom:0.75rem;">';
+                const states = [
+                    { label: 'Pending', active: a.status === 'Pending' || a.status === 'Scheduled' || a.status === 'Completed' },
+                    { label: 'Scheduled', active: a.status === 'Scheduled' || a.status === 'Completed' },
+                    { label: 'Completed', active: a.status === 'Completed' }
+                ];
+                states.forEach((s, i) => {
+                    const color = s.active ? '#3b82f6' : '#e2e8f0';
+                    timelineHtml += `<div style="flex:1;height:4px;background:${color};border-radius:2px;"></div>`;
+                });
+                timelineHtml += '</div>';
+
                 let actionsHtml = '<div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">';
                 if (a.status === 'Scheduled') {
                     actionsHtml += '<button onclick="window.rescheduleAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">Reschedule</button>';
                     actionsHtml += '<button onclick="window.cancelAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1; color:var(--red-500); border-color:var(--red-200);">Cancel</button>';
-                } else if (a.status === 'Completed') {
-                    actionsHtml += '<button onclick="window.reviewDoctor(' + a.appointment_id + ', ' + a.specialist_id + ', \'' + a.doc_fname + ' ' + a.doc_lname + '\')" class="btn btn-gradient" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">⭐ Review</button>';
+                } else if (a.status === 'Completed' || a.status === 'completed') {
+                    if (a.report && a.report.trim() !== '') {
+                        actionsHtml += `<button onclick="window.viewAppointmentReport(${a.appointment_id}, \`${(a.report||'').replace(/`/g,"'")}\`, \`${a.doc_fname} ${a.doc_lname}\`, '${a.next_visit_recommendation||''}')" class="btn btn-outline btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;margin-bottom:0.5rem;font-size:0.7rem;padding:0.35rem 0.5rem;flex:1;">📄 View Report</button>`;
+                    }
+                    actionsHtml += `<button onclick="window.reviewDoctor(${a.appointment_id}, ${a.specialist_id}, '${a.doc_fname} ${a.doc_lname}', ${a.clinic_id || 0}, ${a.type === 'onsite' ? 'true' : 'false'})" class="btn btn-gradient" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">⭐ Review</button>`;
                 }
                 actionsHtml += '</div>';
 
@@ -5042,6 +5063,7 @@
                             '<span class="badge ' + statusCls + '" style="font-size:0.7rem;">' + statusText + '</span>' +
                             '<span class="appt-sidebar-type" style="font-size:0.75rem; color:var(--slate-500);">' + (a.type === 'onsite' ? '📍 Clinic' : '💻 Online') + '</span>' +
                         '</div>' +
+                        timelineHtml +
                         '<div class="appt-sidebar-body" style="display:flex; gap:1rem;">' +
                             '<div class="appt-sidebar-cal" style="text-align:center; min-width:45px;">' +
                                 '<div class="appt-cal-month" style="font-size:0.75rem; font-weight:700; color:var(--red-500); text-transform:uppercase;">' + dt.toLocaleDateString('en-US', { month: 'short' }) + '</div>' +
@@ -5131,105 +5153,7 @@
 
 
     window.viewDoctorInfo = function (specialistId) {
-        if (!window._allSpecialists) return;
-        const s = window._allSpecialists.find(x => x.specialist_id == specialistId);
-        if (!s) return;
-
-        let existing = document.getElementById('act-modal');
-        if (existing) existing.remove();
-
-        const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.first_name)}+${encodeURIComponent(s.last_name)}&background=random`;
-
-        const modal = document.createElement('div');
-        modal.id = 'act-modal';
-        modal.innerHTML = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-                <div style="background:#ffffff;border-radius:16px;width:100%;max-width:750px;display:flex;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out; position:relative; max-height:90vh;">
-                    <button onclick="document.getElementById('act-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:#f1f5f9;border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#64748b;font-weight:bold;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
-                    
-                    <div style="width:250px;background:#f8fafc;padding:2.5rem 2rem;display:flex;flex-direction:column;align-items:center;border-right:1px solid #e2e8f0;overflow-y:auto;">
-                        <img src="${avatar}" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);margin-bottom:1.5rem;" />
-                        <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0 0 0.25rem;text-align:center;">Dr. ${s.first_name} ${s.last_name}</h2>
-                        <p style="color:var(--blue-600);font-weight:600;font-size:0.9rem;margin:0 0 1.25rem;text-align:center;">${s.specialization || 'Specialist'}</p>
-                        <div style="display:flex;align-items:center;gap:0.35rem;background:#fff;padding:0.5rem 1rem;border-radius:20px;border:1px solid #e2e8f0;font-size:0.9rem;font-weight:700;color:var(--slate-700);box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                            <span style="color:#eab308;font-size:1.1rem;">★</span> ${s.rating || 'New'} Rating
-                        </div>
-                    </div>
-                    
-                    <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;overflow-y:auto;">
-                        <div style="flex:1;">
-                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1.5rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Doctor Information</h4>
-
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
-                                <div>
-                                    <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Experience</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.1rem;">${s.experience_years || 0} Years</div>
-                                </div>
-                                <div>
-                                    <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Consultation Fee</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.1rem;">${s.consultation_fee || '200'} EGP</div>
-                                </div>
-                                <div style="grid-column:1/-1;">
-                                    <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Clinic Location</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.05rem;display:flex;align-items:flex-start;gap:0.5rem;">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" style="margin-top:2px;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                        ${s.clinic_name}, ${s.location}
-                                    </div>
-                                </div>
-                            </div>
-
-                            ${s.bio ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Biography</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.bio + '</p>' : ''}
-
-                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Next Available Slots</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
-                    const startTime = slot.start_time ? slot.start_time.substring(0, 5) : '';
-                    const endTime = slot.end_time ? slot.end_time.substring(0, 5) : '';
-                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>' + slot.label + '</span><span>' + startTime + ' to ' + endTime + '</span></div>';
-                }).join('') + '</div>' : ''}
-
-                            ${s.certificate_of_experience ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Education & Certifications</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.certificate_of_experience + '</p>' : ''}
-
-                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Consultation Tags</h4>
-                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;">
-                                ${s.consultation_types ? s.consultation_types.split(',').map(tag => '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">' + tag.trim() + '</span>').join('') : '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">On-site</span>'}
-                            </div>
-
-                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Patient Reviews</h4>
-                            <div id="doctor-reviews-container" style="max-height: 150px; overflow-y: auto; margin-bottom: 1.5rem; padding-right: 0.5rem;">
-                                <div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">Loading reviews...</div>
-                            </div>
-                        </div>
-                        
-                        <button onclick="document.getElementById('act-modal').remove(); bookSpecialist(${s.specialist_id}, 'Dr. ${s.first_name} ${s.last_name}')" class="btn btn-gradient" style="width:100%;padding:1.1rem;font-size:1.1rem;font-weight:700;border-radius:12px;box-shadow:0 10px 15px -3px rgba(37,99,235,0.3);transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 15px 20px -3px rgba(37,99,235,0.4)';" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 15px -3px rgba(37,99,235,0.3)';">
-                            Book Appointment Now
-                        </button>
-                    </div>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-
-        fetch('../../api_doctor_review.php?action=list&specialist_id=' + specialistId)
-            .then(r => r.json())
-            .then(data => {
-                const container = document.getElementById('doctor-reviews-container');
-                if (!container) return;
-                if (data.reviews && data.reviews.length > 0) {
-                    container.innerHTML = data.reviews.map(r => 
-                        '<div style="background:#f8fafc; border-radius:12px; padding:1rem; margin-bottom:0.75rem;">' +
-                            '<div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">' +
-                                '<span style="font-weight:700; font-size:0.9rem; color:var(--slate-800);">' + r.first_name + ' ' + (r.last_name||'')[0] + '.</span>' +
-                                '<span style="color:#eab308; font-size:0.9rem;">' + '★'.repeat(r.rating) + '☆'.repeat(5-r.rating) + '</span>' +
-                            '</div>' +
-                            (r.comment ? '<p style="margin:0; font-size:0.85rem; color:var(--slate-600);">' + r.comment + '</p>' : '') +
-                        '</div>'
-                    ).join('');
-                } else {
-                    container.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">No reviews yet.</div>';
-                }
-            })
-            .catch(() => {
-                const container = document.getElementById('doctor-reviews-container');
-                if(container) container.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">Failed to load reviews.</div>';
-            });
+        window.location.href = '../../specialist-profile.php?id=' + specialistId;
     };
 
     function getReportsView() {
@@ -7938,27 +7862,197 @@
         .catch(console.error);
     };
 
-    window.reviewDoctor = function(appointmentId, specialistId, docName) {
-        const rating = prompt('Rate ' + docName + ' from 1 to 5:');
-        if (!rating || rating < 1 || rating > 5) { alert('Invalid rating.'); return; }
-        
-        const comment = prompt('Leave a comment (optional):') || '';
-        
-        fetch('../../api_doctor_review.php?action=submit', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ appointment_id: appointmentId, specialist_id: specialistId, rating: parseInt(rating), comment: comment })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert('Review submitted! Thank you.');
-                location.reload();
-            } else {
-                alert(data.error || 'Failed to submit review.');
-            }
-        })
-        .catch(console.error);
+    window.viewAppointmentReport = function(appointmentId, reportText, doctorName, nextVisit) {
+        let existing = document.getElementById('view-report-modal');
+        if (existing) existing.remove();
+        const nextVisitHtml = nextVisit 
+            ? `<div style="margin-top:1.25rem;padding:1rem;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:12px;border-left:4px solid #3b82f6;"><div style="font-size:0.8rem;font-weight:600;color:#1d4ed8;margin-bottom:0.25rem;">📅 RECOMMENDED NEXT VISIT</div><div style="font-size:1rem;font-weight:700;color:#1e40af;">${new Date(nextVisit).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>`
+            : '';
+        const modal = document.createElement('div');
+        modal.id = 'view-report-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        modal.innerHTML = `
+        <div style="background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:520px;box-shadow:0 24px 64px rgba(0,0,0,0.25);max-height:85vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+                <div>
+                    <h3 style="margin:0 0 0.25rem;font-size:1.2rem;font-weight:700;color:#0f172a;">📄 Session Report</h3>
+                    <p style="margin:0;font-size:0.85rem;color:#64748b;">By ${doctorName}</p>
+                </div>
+                <button onclick="document.getElementById('view-report-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#64748b;">✕</button>
+            </div>
+            <div style="background:#f8fafc;border-radius:12px;padding:1.25rem;border:1px solid #e2e8f0;font-size:0.95rem;line-height:1.7;color:#374151;white-space:pre-wrap;">${reportText || 'No report content available.'}</div>
+            ${nextVisitHtml}
+            <div style="margin-top:1.5rem;display:flex;gap:0.75rem;">
+                <button onclick="document.getElementById('view-report-modal').remove()" style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;">Close</button>
+                <button onclick="window.open('../../api_export_pdf.php?type=specialist-report&appointment_id=${appointmentId}','_blank')" style="flex:1;padding:0.75rem;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">📥 Export PDF</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    };
+
+    window.skipClinicReview = function() {
+        const m = document.getElementById('review-modal');
+        if (m) m.remove();
+        window.showReviewThankYou();
+    };
+
+    window.showReviewThankYou = function() {
+        const t = document.createElement('div');
+        t.style.cssText = 'position:fixed;bottom:2rem;right:2rem;z-index:99999;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:1rem 1.5rem;border-radius:12px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.2);';
+        t.innerHTML = '🎉 Thank you for your review!';
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3500);
+    };
+
+    window.submitClinicReview = async function(appointmentId, clinicId) {
+        const rating  = parseInt(document.getElementById('clinic-rev-rating').value);
+        const comment = document.getElementById('clinic-rev-comment').value.trim();
+        const btn     = document.getElementById('submit-clinic-rev-btn');
+        if (rating < 1) { alert('Please select a star rating for the clinic.'); return; }
+        btn.textContent = 'Submitting...';
+        btn.disabled = true;
+        try {
+            const res = await fetch('../../api_clinic_review.php?action=submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appointment_id: appointmentId, clinic_id: clinicId, rating, comment })
+            });
+            const data = await res.json();
+            const m = document.getElementById('review-modal');
+            if (m) m.remove();
+            window.showReviewThankYou();
+        } catch (e) {
+            const m = document.getElementById('review-modal');
+            if (m) m.remove();
+            window.showReviewThankYou();
+        }
+    };
+
+    window.reviewDoctor = function(appointmentId, specialistId, docName, clinicId=0, isOnsite=false) {
+        let existing = document.getElementById('review-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'review-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;padding:2rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+                        <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0;">Rate Your Visit</h2>
+                        <button onclick="document.getElementById('review-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);">&times;</button>
+                    </div>
+                    <p style="color:var(--slate-500);margin-bottom:1.5rem;font-size:0.9rem;">How was your experience with ${docName}?</p>
+                    
+                    <div style="margin-bottom:1.5rem;text-align:center;">
+                        <div id="star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:var(--slate-300);cursor:pointer;">
+                            <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                        </div>
+                        <input type="hidden" id="rev-rating" value="0">
+                    </div>
+                    
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Comment (Optional)</label>
+                        <textarea id="rev-comment" rows="3" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;font-family:inherit;" placeholder="Share your thoughts..."></textarea>
+                    </div>
+
+                    <button id="submit-rev-btn" class="btn btn-gradient" style="width:100%;padding:1rem;">Submit Review</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const stars = document.querySelectorAll('#star-rating span');
+        const ratingInput = document.getElementById('rev-rating');
+        stars.forEach(s => {
+            s.addEventListener('click', () => {
+                const val = parseInt(s.getAttribute('data-val'));
+                ratingInput.value = val;
+                stars.forEach((st, i) => {
+                    st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)';
+                });
+            });
+            s.addEventListener('mouseover', () => {
+                const val = parseInt(s.getAttribute('data-val'));
+                stars.forEach((st, i) => {
+                    st.style.color = i < val ? '#fcd34d' : 'var(--slate-300)';
+                });
+            });
+            s.addEventListener('mouseout', () => {
+                const val = parseInt(ratingInput.value);
+                stars.forEach((st, i) => {
+                    st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)';
+                });
+            });
+        });
+
+        document.getElementById('submit-rev-btn').addEventListener('click', () => {
+            const rating = parseInt(ratingInput.value);
+            if (rating < 1 || rating > 5) { alert('Please select a star rating.'); return; }
+            const comment = document.getElementById('rev-comment').value;
+
+            document.getElementById('submit-rev-btn').disabled = true;
+            document.getElementById('submit-rev-btn').innerHTML = 'Submitting...';
+
+            fetch('../../api_doctor_review.php?action=submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ appointment_id: appointmentId, specialist_id: specialistId, rating: rating, comment: comment })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (isOnsite && clinicId) {
+                        document.getElementById('review-modal').innerHTML = `
+                        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;">
+                            <div style="background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:440px;box-shadow:0 24px 64px rgba(0,0,0,0.25);">
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                                    <div style="width:32px;height:32px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;">✓</div>
+                                    <div style="width:32px;height:32px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;font-weight:700;">2</div>
+                                    <p style="margin:0;font-size:0.85rem;color:#64748b;">Step 2 of 2 — Rate the Clinic</p>
+                                </div>
+                                <h3 style="margin:0.75rem 0 0.25rem;font-size:1.2rem;font-weight:700;color:#0f172a;">🏥 How was the clinic?</h3>
+                                <p style="margin:0 0 1.25rem;font-size:0.875rem;color:#64748b;">Share your experience with the facility, staff, and environment.</p>
+                                <div id="clinic-star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:#d1d5db;cursor:pointer;margin-bottom:1rem;">
+                                    <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                                </div>
+                                <input type="hidden" id="clinic-rev-rating" value="0">
+                                <textarea id="clinic-rev-comment" rows="3" placeholder="Clean facility? Friendly staff? Easy to find? (optional)" style="width:100%;padding:0.75rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-family:inherit;font-size:0.9rem;resize:none;outline:none;box-sizing:border-box;margin-bottom:1rem;transition:border-color 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+                                <div style="display:flex;gap:0.75rem;">
+                                    <button onclick="window.skipClinicReview()" style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;font-size:0.875rem;">Skip</button>
+                                    <button id="submit-clinic-rev-btn" onclick="window.submitClinicReview(${appointmentId}, ${clinicId})" style="flex:2;padding:0.75rem;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">Submit Clinic Review</button>
+                                </div>
+                            </div>
+                        </div>`;
+                        
+                        const clinicStars = document.querySelectorAll('#clinic-star-rating span');
+                        const clinicRatingInput = document.getElementById('clinic-rev-rating');
+                        clinicStars.forEach(s => {
+                            s.addEventListener('click', () => {
+                                const val = parseInt(s.dataset.val);
+                                clinicRatingInput.value = val;
+                                clinicStars.forEach((st, i) => { st.style.color = i < val ? '#f59e0b' : '#d1d5db'; });
+                            });
+                            s.addEventListener('mouseover', () => {
+                                const val = parseInt(s.dataset.val);
+                                clinicStars.forEach((st, i) => { st.style.color = i < val ? '#fbbf24' : '#d1d5db'; });
+                            });
+                            s.addEventListener('mouseout', () => {
+                                const current = parseInt(clinicRatingInput.value);
+                                clinicStars.forEach((st, i) => { st.style.color = i < current ? '#f59e0b' : '#d1d5db'; });
+                            });
+                        });
+                    } else {
+                        window.showReviewThankYou();
+                    }
+                } else {
+                    alert(data.error || 'Failed to submit review.');
+                    document.getElementById('submit-rev-btn').disabled = false;
+                    document.getElementById('submit-rev-btn').innerHTML = 'Submit Review';
+                }
+            })
+            .catch(console.error);
+        });
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -7987,6 +8081,22 @@
             
             <div id="bk-step-1" style="padding:2rem;">
                 <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Child</label>
+                    <select id="bk-child" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
+                        ${(function(){
+                            let opts = '';
+                            if (window.dashboardData && window.dashboardData.children && window.dashboardData.children.length > 0) {
+                                window.dashboardData.children.forEach(c => {
+                                    opts += `<option value="${c.child_id}">${c.first_name} ${c.last_name}</option>`;
+                                });
+                            } else {
+                                opts = '<option value="">No children found</option>';
+                            }
+                            return opts;
+                        })()}
+                    </select>
+                </div>
+                <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Consultation Type</label>
                     <select id="bk-type" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
                         <option value="onsite">On-site (Clinic Visit)</option>
@@ -7994,51 +8104,15 @@
                     </select>
                 </div>
                 <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Date</label>
+                    <input type="date" id="bk-date" min="${minDate}" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;" onchange="window.fetchSlots(${specId})">
+                </div>
+                <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Available Slots</label>
-                    <select id="bk-slot" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;">
-                        ${(function(){
-                            let slotOptions = '<option value="">No available slots</option>';
-                            if (window._allSpecialists) {
-                                const spec = window._allSpecialists.find(s => s.specialist_id == specId);
-                                if (spec && spec.availability) {
-                                    try {
-                                        const slots = spec.availability.filter(s => s.available);
-                                        if (slots && slots.length > 0) {
-                                            let allOptions = [];
-                                            slots.forEach(s => {
-                                                let currentStr = s.start_time;
-                                                const endStr = s.end_time;
-                                                const dur = parseInt(s.slot_duration) || 30;
-                                                
-                                                while (currentStr < endStr) {
-                                                    // Parse time string to format it nicely (e.g. 09:00 AM)
-                                                    let [h, m] = currentStr.split(':').map(Number);
-                                                    let ampm = h >= 12 ? 'PM' : 'AM';
-                                                    let dispH = h % 12 || 12;
-                                                    let minStr = m < 10 ? '0' + m : m;
-                                                    let formattedTime = `${dispH}:${minStr} ${ampm}`;
-                                                    
-                                                    allOptions.push(`<option value="${s.date}|${currentStr}">${s.label} at ${formattedTime}</option>`);
-                                                    
-                                                    // Add duration
-                                                    m += dur;
-                                                    h += Math.floor(m / 60);
-                                                    m = m % 60;
-                                                    
-                                                    // Format back to string
-                                                    currentStr = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m) + ':00';
-                                                }
-                                            });
-                                            if (allOptions.length > 0) {
-                                                slotOptions = allOptions.join('');
-                                            }
-                                        }
-                                    } catch(e){}
-                                }
-                            }
-                            return slotOptions;
-                        })()}
-                    </select>
+                    <div id="bk-slot-grid" style="display:grid;grid-template-columns:repeat(3, 1fr);gap:0.5rem;">
+                        <div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">Select a date to view slots</div>
+                    </div>
+                    <input type="hidden" id="bk-slot" value="">
                 </div>
                 <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Notes for Specialist (Optional)</label>
@@ -8068,14 +8142,14 @@
 
                 <div style="margin-bottom:2rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Payment Method</label>
-                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;">
+                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;document.getElementById('credit-card-form').style.display='block';">
                         <input type="radio" name="bk-payment" value="Credit Card" checked style="margin-right:1rem;accent-color:var(--blue-600);">
                         <div>
                             <div style="font-weight:600;color:var(--blue-900);">Credit Card</div>
                             <div style="font-size:0.75rem;color:var(--blue-600);">Pay securely online</div>
                         </div>
                     </label>
-                    <label id="bk-cash-label" style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;opacity:1;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';}">
+                    <label id="bk-cash-label" style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;opacity:1;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';document.getElementById('credit-card-form').style.display='none';}">
                         <input type="radio" name="bk-payment" value="Cash" id="bk-cash-input" style="margin-right:1rem;accent-color:var(--blue-600);">
                         <div>
                             <div style="font-weight:600;color:var(--slate-800);">Cash at Clinic</div>
@@ -8085,16 +8159,56 @@
                     <div id="bk-cash-warning" style="display:none;margin-top:0.5rem;padding:0.75rem 1rem;background:var(--orange-50);border:1px solid var(--orange-200);border-radius:8px;font-size:0.8rem;color:var(--orange-800);">
                         ⚠️ Cash payment is not available for online appointments. Please select Credit Card.
                     </div>
+                    
+                    <div id="credit-card-form" style="margin-top:1.5rem;padding:1.5rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
+                        <div style="font-weight:700;color:var(--slate-800);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Card Details
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Cardholder Name</label>
+                            <input type="text" id="cc-name" placeholder="Name on card" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Card Number</label>
+                            <input type="text" id="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(.{4})/g, '$1 ').trim();" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                        </div>
+                        <div style="display:flex;gap:1rem;">
+                            <div style="flex:1;">
+                                <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Expiry Date</label>
+                                <input type="text" id="cc-expiry" placeholder="MM/YY" maxlength="5" oninput="if(this.value.length===2&&!this.value.includes('/')){this.value+='/';}" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">CVV</label>
+                                <input type="text" id="cc-cvv" placeholder="123" maxlength="4" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;">Confirm & Pay $50.00</button>
             </div>
             
-            <div id="bk-step-3" style="padding:3rem 2rem;display:none;text-align:center;">
-                <div style="width:4rem;height:4rem;background:#dcfce7;color:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1.5rem;">✓</div>
-                <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Booking Confirmed!</h2>
-                <p style="color:var(--slate-500);margin-bottom:2rem;">Your appointment has been successfully scheduled. We will send you a reminder beforehand.</p>
-                <button onclick="document.getElementById('book-modal').remove();fetchDashboardData();" class="btn btn-gradient" style="width:100%;">Done</button>
+            <div id="bk-step-3" style="padding:2.5rem 2rem;display:none;text-align:center;">
+                <div style="width:5rem;height:5rem;background:linear-gradient(135deg,#dcfce7,#bbf7d0);color:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin:0 auto 1.5rem;box-shadow:0 8px 20px rgba(22,163,74,0.2);">✓</div>
+                <h2 style="font-size:1.5rem;font-weight:800;color:#0f172a;margin-bottom:0.5rem;">Appointment Submitted!</h2>
+                <p style="color:#64748b;margin-bottom:1.5rem;line-height:1.6;">Your appointment request has been sent to the specialist. You'll be notified once it's confirmed.</p>
+                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <span style="font-size:1.5rem;">⏳</span>
+                        <div>
+                            <div style="font-weight:700;color:#92400e;font-size:0.9rem;">Pending Specialist Approval</div>
+                            <div style="color:#78350f;font-size:0.8rem;margin-top:0.15rem;">Messaging will unlock once the specialist confirms your appointment.</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">
+                    <div style="width:28px;height:4px;background:#3b82f6;border-radius:2px;"></div>
+                    <div style="width:28px;height:4px;background:#d1d5db;border-radius:2px;"></div>
+                    <div style="width:28px;height:4px;background:#d1d5db;border-radius:2px;"></div>
+                    <div style="width:28px;height:4px;background:#d1d5db;border-radius:2px;"></div>
+                    <div style="font-size:0.7rem;color:#64748b;margin-left:0.5rem;">Step 1/4</div>
+                </div>
+                <button onclick="document.getElementById('book-modal').remove();fetchDashboardData();" class="btn btn-gradient" style="width:100%;padding:1rem;">Done</button>
             </div>
         </div>
     </div>`;
@@ -8119,9 +8233,66 @@
             document.getElementById('bk-step-3').style.display = 'none';
         };
 
+        window.fetchSlots = async function(sid) {
+            const dateVal = document.getElementById('bk-date').value;
+            const grid = document.getElementById('bk-slot-grid');
+            const slotInput = document.getElementById('bk-slot');
+            slotInput.value = '';
+            
+            if (!dateVal) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">Select a date to view slots</div>';
+                return;
+            }
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">⏳ Loading available slots...</div>';
+            
+            try {
+                // Use correct api/ subfolder path
+                const res = await fetch(`../../api/api_get_specialist_slots.php?specialist_id=${sid}&date=${dateVal}`);
+                const data = await res.json();
+                
+                if (!data.success) {
+                    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">${data.message || 'No slots available on this date'}</div>`;
+                    return;
+                }
+
+                if (data.slots && data.slots.length > 0) {
+                    grid.innerHTML = data.slots.map(s => {
+                        if (s.past) {
+                            return `<button disabled style="padding:0.6rem 0.5rem;border:1.5px solid #e2e8f0;border-radius:8px;background:#f1f5f9;cursor:not-allowed;font-size:0.8rem;color:#94a3b8;">${s.label}</button>`;
+                        }
+                        if (s.booked) {
+                            return `<button disabled style="padding:0.6rem 0.5rem;border:1.5px solid #fecdd3;border-radius:8px;background:#fff1f2;cursor:not-allowed;font-size:0.8rem;color:#f87171;text-decoration:line-through;">${s.label}<br><span style="font-size:0.65rem;">Booked</span></button>`;
+                        }
+                        // Available slot — store date|time in hidden input
+                        return `<button class="slot-btn" onclick="window.selectSlot(this, '${dateVal}|${s.time}')" style="padding:0.6rem 0.5rem;border:1.5px solid #bfdbfe;border-radius:8px;background:#fff;cursor:pointer;font-size:0.8rem;color:#1e40af;transition:all 0.2s;font-weight:600;">${s.label}<br><span style="font-size:0.65rem;color:#60a5fa;">30 min</span></button>`;
+                    }).join('');
+                } else {
+                    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">No available slots on this date</div>';
+                }
+            } catch (e) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#ef4444;font-size:0.85rem;padding:1rem;">Failed to load slots. Please try again.</div>';
+            }
+        };
+
+        window.selectSlot = function(btn, val) {
+            const btns = document.querySelectorAll('#bk-slot-grid .slot-btn');
+            btns.forEach(b => {
+                b.style.borderColor = 'var(--slate-200)';
+                b.style.background = '#fff';
+                b.style.color = 'var(--slate-700)';
+            });
+            btn.style.borderColor = 'var(--blue-500)';
+            btn.style.background = 'var(--blue-50)';
+            btn.style.color = 'var(--blue-700)';
+            document.getElementById('bk-slot').value = val;
+        };
+
         window.goToBookingStep2 = function () {
+            const childVal = document.getElementById('bk-child').value;
+            if (!childVal) { alert("Please select a child profile."); return; }
+
             const slotVal = document.getElementById('bk-slot').value;
-            if (!slotVal) { showToast("Please select an available slot.", "error"); return; }
+            if (!slotVal) { alert("Please select an available slot."); return; }
 
             document.getElementById('bk-step-1').style.display = 'none';
             document.getElementById('bk-step-2').style.display = 'block';
@@ -8197,6 +8368,17 @@
 
         window.submitBooking = async function (sid) {
             const btn = document.getElementById('bk-submit-btn');
+            const method = document.querySelector('input[name="bk-payment"]:checked').value;
+            
+            // Validate credit card mock form
+            if (method === 'Credit Card') {
+                const ccNum = document.getElementById('cc-number').value.replace(/\s+/g, '');
+                if (ccNum.length !== 16) { alert('Please enter a valid 16-digit card number.'); return; }
+                if (document.getElementById('cc-name').value.trim() === '') { alert('Please enter cardholder name.'); return; }
+                if (document.getElementById('cc-expiry').value.length < 5) { alert('Please enter valid expiry date (MM/YY).'); return; }
+                if (document.getElementById('cc-cvv').value.length < 3) { alert('Please enter valid CVV.'); return; }
+            }
+
             btn.disabled = true;
             const origText = btn.innerHTML;
             btn.innerHTML = 'Processing...';
@@ -8207,7 +8389,6 @@
             const date = parts[0];
             const time = parts[1];
             const comment = document.getElementById('bk-comment').value;
-            const method = document.querySelector('input[name="bk-payment"]:checked').value;
             const tokenSelect = document.getElementById('bk-token');
             const tokenId = tokenSelect.value || null;
 
@@ -8222,11 +8403,8 @@
                 fd.append('comment', comment);
                 if (tokenId) fd.append('token_id', tokenId);
 
-                const children = (window.dashboardData || {}).children || [];
-                const child = children[window._selectedChildIndex || 0];
-                if (child && child.child_id) {
-                    fd.append('child_id', child.child_id);
-                }
+                const childId = document.getElementById('bk-child').value;
+                if (childId) fd.append('child_id', childId);
 
                 const res = await fetch('../../api_book_appointment.php', { method: 'POST', body: fd });
                 const data = await res.json();
@@ -8635,17 +8813,22 @@
                     </div>
                 </div>
                 <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:0.6rem;background:#f8fafc;"></div>
-                <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;">
-                    <button onclick="document.getElementById('parentChatFile').click()" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                    </button>
-                    <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
-                    <button onclick="toggleParentChatSearch()" title="Search messages" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    </button>
-                    <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
-                    <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;flex-direction:column;">
+                    <div style="display:flex;gap:0.5rem;align-items:flex-end;width:100%;">
+                        <button onclick="document.getElementById('parentChatFile').click()" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'" title="Attach file">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </button>
+                        <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
+                        <button onclick="toggleParentChatSearch()" title="Search messages" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </button>
+                        <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+                        <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                    <button onclick="window.openChildReportSend()" style="align-self:flex-start;margin-left:44px;padding:0.35rem 0.85rem;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;cursor:pointer;font-size:0.78rem;color:#6366f1;font-weight:600;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s;" onmouseover="this.style.borderColor='#6366f1';this.style.background='#eef2ff'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
+                        📎 Send Child Report
                     </button>
                 </div>
             </div>
@@ -8773,6 +8956,23 @@
                                 + '<div><div style="font-size:0.8rem;font-weight:700;color:' + (isMine ? '#fff' : '#059669') + ';">Google Meet</div><div style="font-size:0.7rem;color:' + (isMine ? 'rgba(255,255,255,0.75)' : '#6b7280') + ';">Click to join meeting</div></div></a>';
                         }
                         
+                        // child_report message type rendering
+                        if (msg.message_type === 'child_report') {
+                            html += `<div style="display:flex;${isMine ? 'justify-content:flex-end;' : ''}">
+                                <div style="max-width:85%;padding:1rem 1.25rem;border-radius:14px;background:${isMine ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : '#fff'};border:1px solid ${isMine ? 'transparent' : '#e0e7ff'};color:${isMine ? '#fff' : '#1e293b'};">
+                                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                                        <div style="width:40px;height:40px;background:${isMine ? 'rgba(255,255,255,0.2)' : '#eef2ff'};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">📄</div>
+                                        <div>
+                                            <div style="font-weight:700;font-size:0.9rem;">Child Report Shared</div>
+                                            <div style="font-size:0.75rem;opacity:0.8;margin-top:0.1rem;">${msg.content || 'A child report was shared'}</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-size:0.65rem;margin-top:0.6rem;text-align:right;opacity:0.7;">${timeStr}</div>
+                                </div>
+                            </div>`;
+                            return;
+                        }
+
                         if (msg.file_path) {
                             contentHtml += '<div style="margin-top:0.5rem;"><a href="../../' + msg.file_path + '" target="_blank" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.65rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f1f5f9') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#e2e8f0') + ';border-radius:8px;text-decoration:none;font-weight:600;font-size:0.78rem;color:' + (isMine ? '#fff' : '#6366f1') + ';">📎 Attachment</a></div>';
                         }

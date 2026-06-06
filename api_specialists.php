@@ -58,6 +58,7 @@ try {
             s.last_name,
             s.specialization,
             s.experience_years,
+            s.clinic_id,
             {$certificationsCol},
             {$ctypesCol},
             {$feeCol},

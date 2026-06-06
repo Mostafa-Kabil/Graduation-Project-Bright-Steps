@@ -32,14 +32,11 @@ if ($parentId) {
 
     // Subscription
     try {
-<<<<<<< HEAD
         // Ensure parent_subscription has created_at
         try {
             $connect->exec("ALTER TABLE parent_subscription ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
         } catch (Exception $e) { /* ignore */ }
 
-=======
->>>>>>> c6c63367441a1a3bc16b41c1969603b936ca730e
         $sql = "SELECT s.plan_name, s.price, s.plan_period, ps.created_at AS subscribed_at
                 FROM parent_subscription ps
                 INNER JOIN subscription s ON ps.subscription_id = s.subscription_id
@@ -49,36 +46,21 @@ if ($parentId) {
         $plan = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($plan) {
             $planname = $plan['plan_name'];
-<<<<<<< HEAD
-
-=======
             
->>>>>>> c6c63367441a1a3bc16b41c1969603b936ca730e
             // Calculate expiry: subscribed_at + 30 days
             $subscribedAt = strtotime($plan['subscribed_at'] ?? 'now');
             $expiresAt = $subscribedAt + (30 * 86400);
             $isExpired = time() > $expiresAt;
-<<<<<<< HEAD
-
-            $plan['expires_at'] = date('Y-m-d H:i:s', $expiresAt);
-            $plan['is_expired'] = $isExpired;
-
-            // If expired, downgrade to Free in memory (don't change DB, just show as Free)
-=======
             $plan['expires_at'] = date('Y-m-d H:i:s', $expiresAt);
             $plan['is_expired'] = $isExpired;
             
             // If expired, downgrade to Free in memory
->>>>>>> c6c63367441a1a3bc16b41c1969603b936ca730e
             if ($isExpired && $plan['plan_name'] === 'Premium') {
                 $planname = 'Free';
                 $plan['plan_name'] = 'Free';
                 $plan['expired_premium'] = true; // flag to show re-subscription UI
             }
-<<<<<<< HEAD
-=======
             
->>>>>>> c6c63367441a1a3bc16b41c1969603b936ca730e
             $dashboardData['subscription'] = $plan;
         }
     } catch (Exception $e) { /* subscription query failed gracefully */ }
@@ -180,9 +162,9 @@ if ($parentId) {
 
     // Appointments
     try {
-        $sql = "SELECT a.appointment_id, a.specialist_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
+        $sql = "SELECT a.appointment_id, a.specialist_id, a.status, a.type, a.scheduled_at, a.report, a.comment, a.next_visit_recommendation,
                        s.first_name AS doc_fname, s.last_name AS doc_lname, s.specialization,
-                       c.clinic_name, c.location AS clinic_location
+                       c.clinic_id, c.clinic_name, c.location AS clinic_location
                 FROM appointment a
                 INNER JOIN specialist s ON a.specialist_id = s.specialist_id
                 INNER JOIN clinic c ON s.clinic_id = c.clinic_id

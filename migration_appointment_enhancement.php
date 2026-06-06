@@ -1,65 +1,71 @@
 <?php
-// migration_appointment_enhancement.php
-// Run once via browser: http://localhost/grad/Graduation-Project-Bright-Steps/migration_appointment_enhancement.php
 require_once 'connection.php';
 $changes = [];
 
-$migrations = [
-    // Specialist extra fields
-    "ALTER TABLE specialist ADD COLUMN IF NOT EXISTS patient_age_group VARCHAR(100) NULL",
-    "ALTER TABLE specialist ADD COLUMN IF NOT EXISTS therapy_approaches TEXT NULL",
-    "ALTER TABLE specialist ADD COLUMN IF NOT EXISTS focus_areas TEXT NULL",
-    "ALTER TABLE specialist ADD COLUMN IF NOT EXISTS description TEXT NULL",
-    
-    // Clinic extra fields
-    "ALTER TABLE clinic ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500) NULL",
-    "ALTER TABLE clinic ADD COLUMN IF NOT EXISTS description TEXT NULL",
-    "ALTER TABLE clinic ADD COLUMN IF NOT EXISTS bio TEXT NULL",
-    
-    // Appointment extra fields
-    "ALTER TABLE appointment ADD COLUMN IF NOT EXISTS next_visit_recommendation DATE NULL",
-    "ALTER TABLE appointment ADD COLUMN IF NOT EXISTS child_id INT NULL",
-    
-    // Message type
-    "ALTER TABLE message ADD COLUMN IF NOT EXISTS message_type VARCHAR(50) DEFAULT 'text'",
-    
-    // Specialist reviews - appointment_id linkage
-    "ALTER TABLE specialist_reviews ADD COLUMN IF NOT EXISTS appointment_id INT NULL",
-    "ALTER TABLE specialist_reviews ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-    
-    // Clinic reviews table
-    "CREATE TABLE IF NOT EXISTS clinic_reviews (
-        review_id INT AUTO_INCREMENT PRIMARY KEY,
-        clinic_id INT NOT NULL,
-        parent_id INT NOT NULL,
-        appointment_id INT NOT NULL,
-        rating TINYINT NOT NULL,
-        comment TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_clinic_review (appointment_id)
-    )"
-];
-
-foreach ($migrations as $sql) {
+// Helper to run ALTER TABLE gracefully
+function alterTableAdd($connect, $table, $column, $definition, &$changes) {
     try {
-        $connect->exec($sql);
-        $changes[] = ['sql' => substr($sql, 0, 80) . '...', 'status' => '✅ OK'];
-    } catch (Exception $e) {
-        $changes[] = ['sql' => substr($sql, 0, 80) . '...', 'status' => '⚠️ ' . $e->getMessage()];
+        $connect->exec("ALTER TABLE `$table` ADD COLUMN `$column` $definition");
+        $changes[] = ['sql' => "ALTER TABLE `$table` ADD COLUMN `$column` $definition", 'status' => '✅ Added'];
+    } catch (PDOException $e) {
+        // SQLSTATE 42S21 is 'Duplicate column name'
+        if ($e->getCode() == '42S21' || strpos($e->getMessage(), 'Duplicate column name') !== false) {
+            $changes[] = ['sql' => "ALTER TABLE `$table` ADD COLUMN `$column` $definition", 'status' => '✅ Exists (Skipped)'];
+        } else {
+            $changes[] = ['sql' => "ALTER TABLE `$table` ADD COLUMN `$column` $definition", 'status' => '⚠️ Error: ' . $e->getMessage()];
+        }
     }
 }
 
-// Check if unique key exists for specialist_reviews, if not add it.
+// 1. Specialist extra fields
+alterTableAdd($connect, 'specialist', 'patient_age_group', 'VARCHAR(100) NULL', $changes);
+alterTableAdd($connect, 'specialist', 'therapy_approaches', 'TEXT NULL', $changes);
+alterTableAdd($connect, 'specialist', 'focus_areas', 'TEXT NULL', $changes);
+alterTableAdd($connect, 'specialist', 'description', 'TEXT NULL', $changes);
+alterTableAdd($connect, 'specialist', 'bio', 'TEXT NULL', $changes);
+alterTableAdd($connect, 'specialist', 'consultation_types', "VARCHAR(255) DEFAULT 'online,onsite'", $changes);
+
+// 2. Clinic extra fields
+alterTableAdd($connect, 'clinic', 'logo_url', 'VARCHAR(500) NULL', $changes);
+alterTableAdd($connect, 'clinic', 'description', 'TEXT NULL', $changes);
+alterTableAdd($connect, 'clinic', 'bio', 'TEXT NULL', $changes);
+
+// 3. Appointment extra fields
+alterTableAdd($connect, 'appointment', 'next_visit_recommendation', 'DATE NULL', $changes);
+alterTableAdd($connect, 'appointment', 'child_id', 'INT NULL', $changes);
+
+// 4. Message type
+alterTableAdd($connect, 'message', 'message_type', "VARCHAR(50) DEFAULT 'text'", $changes);
+
+// 5. Specialist reviews linkage
+alterTableAdd($connect, 'specialist_reviews', 'appointment_id', 'INT NULL', $changes);
+alterTableAdd($connect, 'specialist_reviews', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP', $changes);
+
+// Add Unique Key for appointment_id on specialist_reviews gracefully
 try {
-    $checkKey = $connect->query("SHOW INDEX FROM specialist_reviews WHERE Key_name = 'uq_spec_review'");
-    if ($checkKey->rowCount() == 0) {
-        $connect->exec("ALTER TABLE specialist_reviews ADD UNIQUE KEY IF NOT EXISTS uq_spec_review (appointment_id)");
-        $changes[] = ['sql' => 'ALTER TABLE specialist_reviews ADD UNIQUE KEY uq_spec_review...', 'status' => '✅ OK'];
-    }
+    $connect->exec("ALTER TABLE specialist_reviews ADD UNIQUE KEY uq_spec_review (appointment_id)");
+    $changes[] = ['sql' => 'ALTER TABLE specialist_reviews ADD UNIQUE KEY uq_spec_review (appointment_id)', 'status' => '✅ Added'];
 } catch (Exception $e) {
-    $changes[] = ['sql' => 'Check/Add uq_spec_review...', 'status' => '⚠️ ' . $e->getMessage()];
+    $changes[] = ['sql' => 'ALTER TABLE specialist_reviews ADD UNIQUE KEY uq_spec_review (appointment_id)', 'status' => '✅ Exists (Skipped)'];
 }
 
+// 6. Clinic reviews table
+$sql_clinic = "CREATE TABLE IF NOT EXISTS clinic_reviews (
+    review_id INT AUTO_INCREMENT PRIMARY KEY,
+    clinic_id INT NOT NULL,
+    parent_id INT NOT NULL,
+    appointment_id INT NOT NULL,
+    rating TINYINT NOT NULL,
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_clinic_review (appointment_id)
+)";
+try {
+    $connect->exec($sql_clinic);
+    $changes[] = ['sql' => 'CREATE TABLE IF NOT EXISTS clinic_reviews...', 'status' => '✅ OK'];
+} catch (Exception $e) {
+    $changes[] = ['sql' => 'CREATE TABLE IF NOT EXISTS clinic_reviews...', 'status' => '⚠️ Error: ' . $e->getMessage()];
+}
 
 echo '<pre>' . json_encode($changes, JSON_PRETTY_PRINT) . '</pre>';
 ?>
