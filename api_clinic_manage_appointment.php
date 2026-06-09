@@ -37,12 +37,13 @@ try {
         throw new Exception("Appointment not found.");
     }
 
-    // Resolve clinic_id for current user
-    $clinicStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE admin_id = ?");
-    $clinicStmt->execute([$_SESSION['id']]);
-    $currentClinicId = $clinicStmt->fetchColumn();
+    // Resolve clinic_id for current user (robust lookup)
+    $clinic_id = null;
+    $cIdStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_id = ? OR admin_id = ? LIMIT 1");
+    $cIdStmt->execute([$_SESSION['id'], $_SESSION['id']]);
+    $currentClinicId = $cIdStmt->fetchColumn();
 
-    if ($appointment['clinic_id'] != $currentClinicId) {
+    if (!$currentClinicId || $appointment['clinic_id'] != $currentClinicId) {
         throw new Exception("Access denied for this appointment.");
     }
 
@@ -58,8 +59,15 @@ try {
             $notificationMessage = "Your appointment request for " . date('M j, Y g:i A', strtotime($appointment['scheduled_at'])) . " has been confirmed by the clinic.";
             break;
 
+        case 'accepted':
+            $stmt = $connect->prepare("UPDATE appointment SET status = 'Accepted' WHERE appointment_id = ?");
+            $stmt->execute([$appointmentId]);
+            $notificationTitle = "Appointment Accepted";
+            $notificationMessage = "Your appointment request for " . date('M j, Y g:i A', strtotime($appointment['scheduled_at'])) . " has been accepted by the clinic.";
+            break;
+
         case 'cancel':
-            $stmt = $connect->prepare("UPDATE appointment SET status = 'Cancelled' WHERE appointment_id = ?");
+            $stmt = $connect->prepare("UPDATE appointment SET status = 'Cancelled', cancelled_by = 'clinic' WHERE appointment_id = ?");
             $stmt->execute([$appointmentId]);
             $notificationTitle = "Appointment Cancelled";
             $notificationMessage = "Your appointment on " . date('M j, Y g:i A', strtotime($appointment['scheduled_at'])) . " has been cancelled by the clinic.";
@@ -68,6 +76,10 @@ try {
         case 'reschedule':
             $newDate = $input['new_date'] ?? '';
             if (!$newDate) throw new Exception("New date is required for rescheduling.");
+
+            if (strtotime($newDate) < time()) {
+                throw new Exception("Rescheduled date and time cannot be in the past.");
+            }
 
             $stmt = $connect->prepare("UPDATE appointment SET scheduled_at = ?, status = 'Scheduled' WHERE appointment_id = ?");
             $stmt->execute([$newDate, $appointmentId]);

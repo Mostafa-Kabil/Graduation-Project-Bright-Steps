@@ -25,6 +25,48 @@ if (!$childId || !$specialistId || !$scheduledAt) {
     exit();
 }
 
+if (strtotime($scheduledAt) < time()) {
+    echo json_encode(['error' => 'Appointment date and time cannot be in the past.']);
+    exit();
+}
+
+// 1. Prevent double booking for the same specialist at the same time
+$scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+$checkStmt = $connect->prepare("SELECT COUNT(*) FROM appointment WHERE specialist_id = ? AND scheduled_at = ? AND status NOT IN ('cancelled', 'Rejected')");
+$checkStmt->execute([$specialistId, $scheduledDateTime]);
+if ($checkStmt->fetchColumn() > 0) {
+    echo json_encode(['error' => 'This time slot is already booked for this specialist. Please choose another time.']);
+    exit();
+}
+
+// 2. Validate Certification File Upload (Mandatory / Must)
+if (!isset($_FILES['certification_pdf']) || $_FILES['certification_pdf']['error'] !== UPLOAD_ERR_OK) {
+    echo json_encode(['error' => 'Certification PDF document is required. Please upload a PDF certification.']);
+    exit();
+}
+
+$fileTmpPath = $_FILES['certification_pdf']['tmp_name'];
+$fileName = $_FILES['certification_pdf']['name'];
+$fileExtension = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+
+if ($fileExtension !== 'pdf') {
+    echo json_encode(['error' => 'Only PDF files are allowed for the certification document.']);
+    exit();
+}
+
+$uploadFileDir = 'uploads/appointment_certifications/';
+if (!is_dir($uploadFileDir)) {
+    mkdir($uploadFileDir, 0777, true);
+}
+
+$newFileName = md5(time() . $fileName) . '.pdf';
+$certificationPath = $uploadFileDir . $newFileName;
+
+if (!move_uploaded_file($fileTmpPath, $certificationPath)) {
+    echo json_encode(['error' => 'Failed to save the uploaded certification file.']);
+    exit();
+}
+
 try {
     // Resolve parent_id from child_id
     $pStmt = $connect->prepare("SELECT parent_id FROM child WHERE child_id = ?");
@@ -44,10 +86,8 @@ try {
     $paymentId = $connect->lastInsertId();
 
     // 2. Create Appointment
-    $scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
-
-    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, ?, 'Scheduled', ?, ?, ?)");
-    $stmt->execute([$parentId, $childId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
+    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, payment_id, specialist_id, status, type, comment, scheduled_at, certification_path) VALUES (?, ?, ?, ?, 'Scheduled', ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $childId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime, $certificationPath]);
 
     // 3. Create Notification for the parent
     $title = "New Appointment Scheduled by Clinic";
@@ -68,8 +108,8 @@ try {
             
             // Retry the insert
             $connect->beginTransaction();
-            $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, ?, 'Scheduled', ?, ?, ?)");
-            $stmt->execute([$parentId, $childId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
+            $stmt = $connect->prepare("INSERT INTO appointment (parent_id, child_id, payment_id, specialist_id, status, type, comment, scheduled_at, certification_path) VALUES (?, ?, ?, ?, 'Scheduled', ?, ?, ?, ?)");
+            $stmt->execute([$parentId, $childId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime, $certificationPath]);
             $connect->commit();
             
             echo json_encode(['success' => true, 'info' => 'Database self-healed and appointment booked.']);
@@ -84,3 +124,4 @@ try {
     http_response_code(500);
     echo json_encode(['error' => $e->getMessage()]);
 }
+?>

@@ -159,6 +159,20 @@ $planname = $stmt->fetchColumn() ?: 'Free';
     <script src="scripts/theme-toggle.js?v=8"></script>
     <script src="scripts/navigation.js?v=8"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const scheduledInput = document.getElementById('scheduled_at');
+            if (scheduledInput) {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                
+                scheduledInput.min = `${year}-${month}-${day}T${hours}:${minutes}`;
+            }
+        });
+
         async function bookAppointment(e) {
             e.preventDefault();
             const btn = document.getElementById('submit-btn');
@@ -167,6 +181,14 @@ $planname = $stmt->fetchColumn() ?: 'Free';
 
             alertSuccess.style.display = 'none';
             alertError.style.display = 'none';
+
+            const scheduledAt = document.getElementById('scheduled_at').value;
+            if (scheduledAt && new Date(scheduledAt) < new Date()) {
+                alertError.textContent = 'Appointment date and time cannot be in the past.';
+                alertError.style.display = 'block';
+                return;
+            }
+
             btn.disabled = true;
             btn.textContent = 'Processing...';
 

@@ -41,7 +41,7 @@ try {
     }
 
     $connect->beginTransaction();
-    $update = $connect->prepare("UPDATE appointment SET status = 'Cancelled' WHERE appointment_id = ?");
+    $update = $connect->prepare("UPDATE appointment SET status = 'Cancelled', cancelled_by = 'patient' WHERE appointment_id = ?");
     $update->execute([$appointmentId]);
 
     // Notification to parent

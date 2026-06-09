@@ -14,6 +14,7 @@ $input = json_decode(file_get_contents('php://input'), true);
 $childName = $input['child_name'] ?? '';
 $parentName = $input['parent_name'] ?? '';
 $parentEmail = $input['parent_email'] ?? '';
+$parentPassword = $input['parent_password'] ?? '';
 $specialistId = $input['specialist_id'] ?? null;
 
 if (!$childName || !$parentName || !$parentEmail) {
@@ -37,13 +38,18 @@ try {
     $userId = $userStmt->fetchColumn();
 
     if (!$userId) {
+        if (empty($parentPassword)) {
+            throw new Exception("A password is required to create a new parent profile.");
+        }
+        
         // Create new parent user
         $nameParts = explode(' ', $parentName, 2);
         $fname = $nameParts[0];
         $lname = $nameParts[1] ?? '';
         
-        $insertUser = $connect->prepare("INSERT INTO users (first_name, last_name, email, role, status) VALUES (?, ?, ?, 'parent', 'active')");
-        $insertUser->execute([$fname, $lname, $parentEmail]);
+        $hashedPassword = password_hash($parentPassword, PASSWORD_DEFAULT);
+        $insertUser = $connect->prepare("INSERT INTO users (first_name, last_name, email, password, role, status) VALUES (?, ?, ?, ?, 'parent', 'active')");
+        $insertUser->execute([$fname, $lname, $parentEmail, $hashedPassword]);
         $userId = $connect->lastInsertId();
     }
 

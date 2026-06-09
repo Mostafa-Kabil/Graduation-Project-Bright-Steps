@@ -25,6 +25,7 @@ if ($mStmt->fetchColumn() === '1') {
     <link rel="stylesheet" href="../../styles/dashboard.css">
     <link rel="stylesheet" href="../../styles/doctor.css">
     <link rel="stylesheet" href="../../styles/clinic.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>

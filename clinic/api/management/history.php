@@ -115,15 +115,17 @@ try {
         $stmt5 = $db->prepare("
             SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.comment, a.report,
                    u.first_name AS doctor_first_name, u.last_name AS doctor_last_name,
-                   s.specialization, c2.clinic_name
+                   s.specialization, c2.clinic_name,
+                   pay.method AS payment_method, pay.status AS payment_status
             FROM appointment a
             INNER JOIN specialist s ON a.specialist_id = s.specialist_id
             INNER JOIN users u ON s.specialist_id = u.user_id
             INNER JOIN clinic c2 ON s.clinic_id = c2.clinic_id
-            WHERE a.parent_id = :parent_id
+            LEFT JOIN payment pay ON a.payment_id = pay.payment_id
+            WHERE a.child_id = :child_id
             ORDER BY a.scheduled_at DESC
         ");
-        $stmt5->execute([':parent_id' => $child['parent_id']]);
+        $stmt5->execute([':child_id' => $child['child_id']]);
         $appointments = $stmt5->fetchAll();
 
         json_success([

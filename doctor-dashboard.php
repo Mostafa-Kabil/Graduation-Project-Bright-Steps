@@ -20,6 +20,10 @@ if (!$isAjax) {
         header('Location: doctor-login.php');
         exit;
     }
+    if (isset($_SESSION['is_first_login']) && $_SESSION['is_first_login'] === 1) {
+        header('Location: doctor-first-login.php');
+        exit;
+    }
 }
 
 // Session-derived variables for the HTML view

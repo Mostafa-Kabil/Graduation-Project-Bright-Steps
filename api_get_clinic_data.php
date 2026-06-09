@@ -52,7 +52,11 @@ try {
 
     // 2. Fetch Specialists for this clinic
     $specStmt = $connect->prepare("
-        SELECT s.specialist_id, s.first_name, s.last_name, s.specialization, s.experience_years, u.email
+        SELECT 
+            s.specialist_id, s.first_name, s.last_name, s.specialization, s.experience_years, 
+            s.certification_text, s.certification_pdf, s.location, u.email, u.created_at AS joined_at,
+            (SELECT COUNT(DISTINCT child_id) FROM appointment a WHERE a.specialist_id = s.specialist_id) as patients_count,
+            (SELECT IFNULL(AVG(rating), 0) FROM feedback f WHERE f.specialist_id = s.specialist_id) as rating
         FROM specialist s
         LEFT JOIN users u ON s.specialist_id = u.user_id
         WHERE s.clinic_id = ?
@@ -61,37 +65,122 @@ try {
     $specialists = $specStmt->fetchAll(PDO::FETCH_ASSOC);
 
     // 3. Fetch Patients that have appointments with this clinic's specialists
+    // 3. Fetch Patients and their LATEST appointment details
     $childStmt = $connect->prepare("
-        SELECT DISTINCT c.child_id, c.first_name, c.last_name, 
-               u.first_name as parent_fname, u.last_name as parent_lname
+        SELECT c.child_id, c.first_name, c.last_name, 
+               u.first_name as parent_fname, u.last_name as parent_lname,
+               a.status as apt_status, a.scheduled_at as last_visit,
+               a.comment as cancel_reason,
+               pay.method as payment_method,
+               s.first_name as spec_fname, s.last_name as spec_lname
         FROM child c
         JOIN users u ON c.parent_id = u.user_id
         JOIN appointment a ON a.child_id = c.child_id
         JOIN specialist s ON a.specialist_id = s.specialist_id
+        LEFT JOIN payment pay ON a.payment_id = pay.payment_id
         WHERE s.clinic_id = ?
-        LIMIT 100
+        ORDER BY a.scheduled_at DESC
     ");
     $childStmt->execute([$clinic_id]);
-    $patients = $childStmt->fetchAll(PDO::FETCH_ASSOC);
+    $rawPatients = $childStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Keep only the most recent appointment per child
+    $patients = [];
+    $seenChildren = [];
+    foreach ($rawPatients as $p) {
+        if (!isset($seenChildren[$p['child_id']])) {
+            $seenChildren[$p['child_id']] = true;
+            $patients[] = $p;
+        }
+    }
 
     // Fallback removed to ensure only clinic's patients are shown
 
-    // 4. Fetch Stats (Appointments & Revenue)
+    // 4. Fetch Stats (Enhanced for Revenue Dashboard)
     $statsStmt = $connect->prepare("
         SELECT 
             COUNT(a.appointment_id) as total_appointments,
             SUM(CASE WHEN DATE(a.scheduled_at) = CURDATE() THEN 1 ELSE 0 END) as today_appointments,
-            SUM(CASE WHEN a.status = 'completed' THEN 1 ELSE 0 END) as completed_appointments,
-            SUM(CASE WHEN a.status = 'scheduled' THEN 1 ELSE 0 END) as pending_appointments
+            SUM(CASE WHEN LOWER(a.status) = 'completed' THEN 1 ELSE 0 END) as completed_appointments,
+            SUM(CASE WHEN LOWER(a.status) = 'accepted' THEN 1 ELSE 0 END) as accepted_appointments,
+            SUM(CASE WHEN LOWER(a.status) = 'cancelled' THEN 1 ELSE 0 END) as cancelled_appointments,
+            SUM(CASE WHEN LOWER(a.status) IN ('scheduled', 'pending') THEN 1 ELSE 0 END) as pending_appointments,
+            SUM(CASE WHEN (LOWER(a.status) = 'completed' OR LOWER(p.status) = 'paid') THEN p.amount_post_discount ELSE 0 END) as total_revenue,
+            SUM(CASE WHEN (LOWER(a.status) = 'completed' OR LOWER(p.status) = 'paid') AND LOWER(p.method) LIKE '%cash%' THEN p.amount_post_discount ELSE 0 END) as cash_revenue,
+            SUM(CASE WHEN (LOWER(a.status) = 'completed' OR LOWER(p.status) = 'paid') AND LOWER(p.method) NOT LIKE '%cash%' THEN p.amount_post_discount ELSE 0 END) as credit_revenue,
+            COUNT(DISTINCT a.child_id) as total_patients
         FROM appointment a
         JOIN specialist s ON a.specialist_id = s.specialist_id
+        LEFT JOIN payment p ON a.payment_id = p.payment_id
         WHERE s.clinic_id = ?
     ");
     $statsStmt->execute([$clinic_id]);
     $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
 
-    // Calculate revenue (mock: $50 per completed appointment)
-    $revenue = ($stats['completed_appointments'] ?: 0) * 50;
+    // 4b. Fetch Revenue Breakdown — ONLY rows with an actual payment amount
+    $breakdownStmt = $connect->prepare("
+        SELECT a.scheduled_at as date, s.first_name as spec_fname, s.last_name as spec_lname,
+               p.amount_post_discount as amount, p.method, a.status, p.status as payment_status
+        FROM appointment a
+        JOIN specialist s ON a.specialist_id = s.specialist_id
+        JOIN payment p ON a.payment_id = p.payment_id
+        WHERE s.clinic_id = ?
+          AND p.amount_post_discount IS NOT NULL
+          AND p.amount_post_discount > 0
+        ORDER BY a.scheduled_at DESC
+        LIMIT 50
+    ");
+    $breakdownStmt->execute([$clinic_id]);
+    $revenue_breakdown = $breakdownStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 4c. Fetch Chart Data — ONLY days with actual revenue
+    $chartStmt = $connect->prepare("
+        SELECT DATE(a.scheduled_at) as day, 
+               SUM(CASE WHEN LOWER(p.method) LIKE '%cash%' THEN p.amount_post_discount ELSE 0 END) as cash,
+               SUM(CASE WHEN LOWER(p.method) NOT LIKE '%cash%' THEN p.amount_post_discount ELSE 0 END) as credit
+        FROM appointment a
+        JOIN specialist s ON a.specialist_id = s.specialist_id
+        JOIN payment p ON a.payment_id = p.payment_id
+        WHERE s.clinic_id = ?
+          AND p.amount_post_discount IS NOT NULL
+          AND p.amount_post_discount > 0
+          AND a.scheduled_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        GROUP BY DATE(a.scheduled_at)
+        HAVING (cash + credit) > 0
+        ORDER BY day ASC
+    ");
+    $chartStmt->execute([$clinic_id]);
+    $revenue_chart = $chartStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 4d. Pending Revenue: appointments that are accepted/scheduled but not yet paid
+    $pendingRevStmt = $connect->prepare("
+        SELECT IFNULL(SUM(p.amount_post_discount), 0) as pending_revenue,
+               COUNT(a.appointment_id) as transaction_count
+        FROM appointment a
+        JOIN specialist s ON a.specialist_id = s.specialist_id
+        JOIN payment p ON a.payment_id = p.payment_id
+        WHERE s.clinic_id = ?
+          AND LOWER(p.status) IN ('pending', 'unpaid')
+          AND LOWER(a.status) IN ('accepted', 'scheduled', 'pending')
+    ");
+    $pendingRevStmt->execute([$clinic_id]);
+    $pendingRevRow = $pendingRevStmt->fetch(PDO::FETCH_ASSOC);
+    $pending_revenue = (float)($pendingRevRow['pending_revenue'] ?? 0);
+    $transaction_count = (int)($pendingRevRow['transaction_count'] ?? 0);
+
+    // Also count total paid transactions
+    $txCountStmt = $connect->prepare("
+        SELECT COUNT(DISTINCT p.payment_id) as paid_count
+        FROM appointment a
+        JOIN specialist s ON a.specialist_id = s.specialist_id
+        JOIN payment p ON a.payment_id = p.payment_id
+        WHERE s.clinic_id = ?
+          AND p.amount_post_discount > 0
+    ");
+    $txCountStmt->execute([$clinic_id]);
+    $paid_count = (int)($txCountStmt->fetchColumn() ?? 0);
+
+    $revenue = (float)($stats['total_revenue'] ?? 0);
 
     // 5. Fetch Reviews/Feedback from parents about this clinic's specialists
     $reviews = [];
@@ -127,23 +216,23 @@ try {
         $avgReviewRating = round($totalRating / $reviewCount, 1);
     }
 
-    // 6. Fetch Notifications for this clinic (both clinic_id and user_id based)
+    // 6. Fetch Notifications for this clinic (user_id based)
     $notifications = [];
     $unreadCount = 0;
     try {
         $notifStmt = $connect->prepare("
             SELECT * FROM notifications 
-            WHERE clinic_id = ? OR user_id = ?
+            WHERE user_id = ?
             ORDER BY created_at DESC 
             LIMIT 20
         ");
-        $notifStmt->execute([$clinic_id, $clinic_id]);
+        $notifStmt->execute([$clinic_id]);
         $notifications = $notifStmt->fetchAll(PDO::FETCH_ASSOC);
 
         $unreadStmt = $connect->prepare("
-            SELECT COUNT(*) FROM notifications WHERE (clinic_id = ? OR user_id = ?) AND is_read = 0
+            SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0
         ");
-        $unreadStmt->execute([$clinic_id, $clinic_id]);
+        $unreadStmt->execute([$clinic_id]);
         $unreadCount = (int)$unreadStmt->fetchColumn();
     } catch (Exception $e) {
         $notifications = [];
@@ -155,13 +244,22 @@ try {
         "specialists" => $specialists,
         "patients" => $patients,
         "stats" => [
+            "total_patients" => (int)($stats['total_patients'] ?? 0),
             "total_appointments" => (int)($stats['total_appointments'] ?? 0),
             "today_appointments" => (int)($stats['today_appointments'] ?? 0),
             "completed_appointments" => (int)($stats['completed_appointments'] ?? 0),
+            "accepted_appointments" => (int)($stats['accepted_appointments'] ?? 0),
+            "cancelled_appointments" => (int)($stats['cancelled_appointments'] ?? 0),
             "pending_appointments" => (int)($stats['pending_appointments'] ?? 0),
             "revenue" => $revenue,
-            "avg_rating" => $clinic['rating'] ? (float)$clinic['rating'] : ($avgReviewRating > 0 ? $avgReviewRating : 0)
+            "cash_revenue" => (float)($stats['cash_revenue'] ?? 0),
+            "credit_revenue" => (float)($stats['credit_revenue'] ?? 0),
+            "pending_revenue" => $pending_revenue,
+            "transaction_count" => $paid_count,
+            "avg_rating" => $avgReviewRating > 0 ? $avgReviewRating : 0.0
         ],
+        "revenue_breakdown" => $revenue_breakdown,
+        "revenue_chart" => $revenue_chart,
         "reviews" => $reviews,
         "review_stats" => [
             "count" => $reviewCount,

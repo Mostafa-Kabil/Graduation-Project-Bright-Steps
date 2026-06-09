@@ -43,6 +43,20 @@ if (!$specialistId || !$scheduledAt) {
     exit();
 }
 
+if (strtotime($scheduledAt) < time()) {
+    echo json_encode(['error' => 'Appointment date and time cannot be in the past.']);
+    exit();
+}
+
+// Prevent double booking for the same specialist at the same time
+$scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+$checkStmt = $connect->prepare("SELECT COUNT(*) FROM appointment WHERE specialist_id = ? AND scheduled_at = ? AND status NOT IN ('cancelled', 'Rejected')");
+$checkStmt->execute([$specialistId, $scheduledDateTime]);
+if ($checkStmt->fetchColumn() > 0) {
+    echo json_encode(['error' => 'This time slot is already booked for this specialist. Please choose another time.']);
+    exit();
+}
+
 // Disable cash payment for online appointments
 if ($type === 'online' && $paymentMethod === 'Cash') {
     echo json_encode(['error' => 'Cash payment is not available for online appointments. Please select Credit Card.']);

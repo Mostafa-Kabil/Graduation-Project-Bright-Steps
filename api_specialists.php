@@ -92,6 +92,29 @@ try {
         $slotMap = [];
     }
 
+    // ── Fetch booked appointments for the next 3 days ──────────────
+    $todayStr = date('Y-m-d');
+    $maxDateStr = date('Y-m-d', strtotime('+3 days'));
+    $bookingsMap = [];
+    try {
+        $apptStmt = $connect->prepare("
+            SELECT specialist_id, scheduled_at 
+            FROM appointment 
+            WHERE status NOT IN ('cancelled', 'Rejected')
+              AND DATE(scheduled_at) >= ? 
+              AND DATE(scheduled_at) <= ?
+        ");
+        $apptStmt->execute([$todayStr, $maxDateStr]);
+        $allBookings = $apptStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($allBookings as $b) {
+            $sid = (int)$b['specialist_id'];
+            $formattedDT = date('Y-m-d H:i:s', strtotime($b['scheduled_at']));
+            $bookingsMap[$sid][] = $formattedDT;
+        }
+    } catch (Exception $e) {
+        // Safe skip if query fails
+    }
+
     // ── Build next-3-days availability for each specialist ─────────
     $today = new DateTime();
 
@@ -124,6 +147,7 @@ try {
         }
 
         $sp['availability']       = $availability;
+        $sp['booked_appointments'] = $bookingsMap[$sid] ?? [];
         $sp['experience_years']   = (int)($sp['experience_years'] ?? 0);
         $sp['rating']             = $sp['rating'] !== null ? (float)$sp['rating'] : null;
         $sp['consultation_fee']   = (float)($sp['consultation_fee'] ?? 200.00);

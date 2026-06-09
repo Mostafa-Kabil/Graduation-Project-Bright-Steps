@@ -7901,6 +7901,8 @@
                                 if (spec && spec.availability) {
                                     try {
                                         const slots = spec.availability.filter(s => s.available);
+                                        // Get booked appointment datetimes (format: "YYYY-MM-DD HH:MM:SS")
+                                        const bookedAppts = spec.booked_appointments || [];
                                         if (slots && slots.length > 0) {
                                             let allOptions = [];
                                             slots.forEach(s => {
@@ -7909,22 +7911,29 @@
                                                 const dur = parseInt(s.slot_duration) || 30;
                                                 
                                                 while (currentStr < endStr) {
-                                                    // Parse time string to format it nicely (e.g. 09:00 AM)
-                                                    let [h, m] = currentStr.split(':').map(Number);
-                                                    let ampm = h >= 12 ? 'PM' : 'AM';
-                                                    let dispH = h % 12 || 12;
-                                                    let minStr = m < 10 ? '0' + m : m;
-                                                    let formattedTime = `${dispH}:${minStr} ${ampm}`;
+                                                    // Check if this slot is already booked
+                                                    const slotTimeShort = currentStr.substring(0,5); // HH:MM
+                                                    const isBooked = bookedAppts.some(b => {
+                                                        // b format: "YYYY-MM-DD HH:MM:SS"
+                                                        return b.startsWith(s.date) && b.includes(' ' + slotTimeShort);
+                                                    });
+
+                                                    if (!isBooked) {
+                                                        // Parse time string to format it nicely (e.g. 09:00 AM)
+                                                        let [h, m] = currentStr.split(':').map(Number);
+                                                        let ampm = h >= 12 ? 'PM' : 'AM';
+                                                        let dispH = h % 12 || 12;
+                                                        let minStr = m < 10 ? '0' + m : m;
+                                                        let formattedTime = `${dispH}:${minStr} ${ampm}`;
+                                                        allOptions.push(`<option value="${s.date}|${currentStr}">${s.label} at ${formattedTime}</option>`);
+                                                    }
                                                     
-                                                    allOptions.push(`<option value="${s.date}|${currentStr}">${s.label} at ${formattedTime}</option>`);
-                                                    
-                                                    // Add duration
-                                                    m += dur;
-                                                    h += Math.floor(m / 60);
-                                                    m = m % 60;
-                                                    
-                                                    // Format back to string
-                                                    currentStr = (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m) + ':00';
+                                                    // Advance by slot duration
+                                                    let [h2, m2] = currentStr.split(':').map(Number);
+                                                    m2 += dur;
+                                                    h2 += Math.floor(m2 / 60);
+                                                    m2 = m2 % 60;
+                                                    currentStr = (h2 < 10 ? '0' + h2 : h2) + ':' + (m2 < 10 ? '0' + m2 : m2) + ':00';
                                                 }
                                             });
                                             if (allOptions.length > 0) {

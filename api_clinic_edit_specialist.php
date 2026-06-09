@@ -22,13 +22,34 @@ $last_name = trim($_POST['last_name'] ?? '');
 $email = trim($_POST['email'] ?? '');
 $specialization = trim($_POST['specialization'] ?? '');
 $experience = intval($_POST['experience'] ?? 0);
+$certification_text = trim($_POST['certification_text'] ?? '');
+$location = trim($_POST['location'] ?? '');
 
-if (!$specialist_id || !$first_name || !$email || !$specialization) {
+if (!$specialist_id || !$first_name || !$specialization) {
     echo json_encode(["success" => false, "error" => "Missing required fields."]);
     exit;
 }
 
 try {
+    // Process PDF upload if provided
+    $certification_pdf = null;
+    if (isset($_FILES['certification_pdf']) && $_FILES['certification_pdf']['error'] === UPLOAD_ERR_OK) {
+        $fileTmpPath = $_FILES['certification_pdf']['tmp_name'];
+        $fileName = $_FILES['certification_pdf']['name'];
+        $fileNameCmps = explode(".", $fileName);
+        $fileExtension = strtolower(end($fileNameCmps));
+        
+        if ($fileExtension === 'pdf') {
+            $uploadFileDir = 'uploads/certifications/';
+            if (!is_dir($uploadFileDir)) mkdir($uploadFileDir, 0777, true);
+            $newFileName = md5(time() . $fileName) . '.' . $fileExtension;
+            $dest_path = $uploadFileDir . $newFileName;
+            if (move_uploaded_file($fileTmpPath, $dest_path)) {
+                $certification_pdf = $dest_path;
+            }
+        }
+    }
+    
     // Resolve clinic_id
     $clinic_id = null;
     $cStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_id = ? LIMIT 1");
@@ -56,43 +77,30 @@ try {
         exit;
     }
 
-    // Check if email is being changed and if it's already taken by someone else
-    $emailCheckStmt = $connect->prepare("SELECT user_id FROM users WHERE email = ? AND user_id != ?");
-    $emailCheckStmt->execute([$email, $specialist_id]);
-    if ($emailCheckStmt->fetch()) {
-        echo json_encode(["success" => false, "error" => "Email is already in use by another account."]);
-        exit;
-    }
-
     $connect->beginTransaction();
 
     // Update specialist table
-    $specStmt = $connect->prepare("
-        UPDATE specialist 
-        SET first_name = ?, last_name = ?, specialization = ?, experience_years = ? 
-        WHERE specialist_id = ? AND clinic_id = ?
-    ");
-    $specStmt->execute([$first_name, $last_name, $specialization, $experience, $specialist_id, $clinic_id]);
-
-    // Update users table
-    // We update password only if provided
-    $password = $_POST['password'] ?? '';
-    if (!empty($password)) {
-        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-        $userStmt = $connect->prepare("
-            UPDATE users 
-            SET first_name = ?, last_name = ?, email = ?, password = ? 
-            WHERE user_id = ? AND role = 'doctor'
-        ");
-        $userStmt->execute([$first_name, $last_name, $email, $hashed_password, $specialist_id]);
-    } else {
-        $userStmt = $connect->prepare("
-            UPDATE users 
-            SET first_name = ?, last_name = ?, email = ? 
-            WHERE user_id = ? AND role = 'doctor'
-        ");
-        $userStmt->execute([$first_name, $last_name, $email, $specialist_id]);
+    $updateFields = "first_name = ?, last_name = ?, specialization = ?, experience_years = ?, certification_text = ?, location = ?";
+    $params = [$first_name, $last_name, $specialization, $experience, $certification_text, $location];
+    
+    if ($certification_pdf) {
+        $updateFields .= ", certification_pdf = ?";
+        $params[] = $certification_pdf;
     }
+    
+    $params[] = $specialist_id;
+    $params[] = $clinic_id;
+    
+    $specStmt = $connect->prepare("UPDATE specialist SET $updateFields WHERE specialist_id = ? AND clinic_id = ?");
+    $specStmt->execute($params);
+
+    // Update users table (first_name and last_name only)
+    $userStmt = $connect->prepare("
+        UPDATE users 
+        SET first_name = ?, last_name = ? 
+        WHERE user_id = ? AND role = 'doctor'
+    ");
+    $userStmt->execute([$first_name, $last_name, $specialist_id]);
 
     $connect->commit();
     echo json_encode(["success" => true]);

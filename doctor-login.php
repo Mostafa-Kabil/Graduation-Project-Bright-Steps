@@ -43,6 +43,12 @@ if (isset($_POST['login'])) {
                     $_SESSION['specialist_id'] = $user['specialist_id'] ?? null;
                     $_SESSION['specialization'] = $user['specialization'] ?? '';
                     $_SESSION['clinic_id'] = $user['clinic_id'] ?? null;
+                    $_SESSION['is_first_login'] = intval($user['is_first_login'] ?? 0);
+
+                    if ($_SESSION['is_first_login'] === 1) {
+                        header("Location: doctor-first-login.php");
+                        exit;
+                    }
 
                     header("Location: doctor-dashboard.php");
                     exit;

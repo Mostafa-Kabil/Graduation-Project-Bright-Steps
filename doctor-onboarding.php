@@ -4,6 +4,11 @@ if (!isset($_SESSION['id']) || ($_SESSION['role'] !== 'doctor' && $_SESSION['rol
     header('Location: login.php');
     exit();
 }
+// Redirect specialists who haven't configured credentials yet
+if (isset($_SESSION['is_first_login']) && $_SESSION['is_first_login'] === 1) {
+    header('Location: doctor-first-login.php');
+    exit;
+}
 $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['lname'] ?? ''));
 ?>
 <!DOCTYPE html>
