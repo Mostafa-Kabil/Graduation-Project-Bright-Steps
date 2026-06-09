@@ -67,7 +67,23 @@ switch ($action) {
                 $stmt = $connect->prepare("UPDATE child SET first_name=?, last_name=?, gender=?, birth_day=?, birth_month=?, birth_year=? WHERE child_id=? AND parent_id=?");
                 $stmt->execute([$fname, $lname, $gender, $birthDay, $birthMonth, $birthYear, $childId, $parentId]);
             } else {
-                // Insert new child
+                // Check subscription for child limit
+                $subStmt = $connect->prepare("SELECT plan_name FROM subscription WHERE user_id = ? ORDER BY subscription_id DESC LIMIT 1");
+                $subStmt->execute([$parentId]);
+                $sub = $subStmt->fetch(PDO::FETCH_ASSOC);
+                $isPremium = ($sub && $sub['plan_name'] === 'Premium');
+
+                if (!$isPremium) {
+                    $countStmt = $connect->prepare("SELECT COUNT(*) FROM child WHERE parent_id = ?");
+                    $countStmt->execute([$parentId]);
+                    $childCount = (int)$countStmt->fetchColumn();
+                    if ($childCount >= 1) {
+                        $connect->rollBack();
+                        echo json_encode(['error' => 'Free members can only add 1 child. Upgrade to Premium to add more children.']);
+                        exit;
+                    }
+                }
+
                 $ssn = 'BS-' . strtoupper(bin2hex(random_bytes(5)));
                 $stmt = $connect->prepare("INSERT INTO child (ssn, parent_id, first_name, last_name, birth_day, birth_month, birth_year, gender) VALUES (?,?,?,?,?,?,?,?)");
                 $stmt->execute([$ssn, $parentId, $fname, $lname, $birthDay, $birthMonth, $birthYear, $gender]);

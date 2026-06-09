@@ -179,14 +179,14 @@ if ($method === 'POST') {
             $childName = ($childInfo['first_name'] ?? '') . ' ' . ($childInfo['last_name'] ?? '');
             $parentName = ($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['lname'] ?? '');
 
-            $connect->prepare("
-                INSERT INTO notifications (user_id, type, title, message) 
-                VALUES (?, 'system', ?, ?)
-            ")->execute([
-                $doctor_id,
+            require_once __DIR__ . '/includes/doctor_notifications.php';
+            doctor_notify(
+                $connect,
+                (int) $doctor_id,
+                'report_shared',
                 'New Report Shared',
                 "Parent {$parentName} has shared a {$report_type} report for child {$childName}."
-            ]);
+            );
         } catch (Exception $e) { /* notification failure is non-critical */ }
 
         echo json_encode([

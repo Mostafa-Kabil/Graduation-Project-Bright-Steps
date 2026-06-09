@@ -62,17 +62,14 @@ try {
     $docStmt->execute([$appointmentId]);
     $specId = $docStmt->fetchColumn();
     if ($specId) {
-        $docUserStmt = $connect->prepare("SELECT user_id FROM specialist WHERE specialist_id = ?");
-        $docUserStmt->execute([$specId]);
-        $docUserId = $docUserStmt->fetchColumn();
-        if ($docUserId) {
-            $notifDoc = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
-            $notifDoc->execute([
-                $docUserId,
-                'Reschedule Request',
-                "Parent {$parentId} requested to reschedule appointment #{$appointmentId} to {$newDateTime}."
-            ]);
-        }
+        require_once __DIR__ . '/includes/doctor_notifications.php';
+        doctor_notify(
+            $connect,
+            (int) $specId,
+            'new_appointment',
+            'Reschedule Request',
+            "A parent requested to reschedule appointment #{$appointmentId} to {$newDateTime}."
+        );
     }
 
     $connect->commit();

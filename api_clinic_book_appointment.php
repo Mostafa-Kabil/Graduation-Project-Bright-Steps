@@ -95,6 +95,20 @@ try {
     $stmtN = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
     $stmtN->execute([$parentId, $title, $message]);
 
+    try {
+        require_once __DIR__ . '/includes/doctor_notifications.php';
+        $doctorUserId = doctor_user_id_from_specialist($connect, $specialistId);
+        if ($doctorUserId) {
+            doctor_notify(
+                $connect,
+                $doctorUserId,
+                'new_appointment',
+                'New Appointment Scheduled',
+                'The clinic scheduled an appointment for ' . date('M j, Y g:i A', strtotime($scheduledDateTime)) . '.'
+            );
+        }
+    } catch (Exception $e) { /* non-critical */ }
+
     $connect->commit();
     echo json_encode(['success' => true]);
 

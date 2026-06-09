@@ -1,0 +1,337 @@
+﻿diff --git a/dashboards/parent/dashboard.js b/dashboards/parent/dashboard.js
+index 3a0c34d..aa49e30 100644
+--- a/dashboards/parent/dashboard.js
++++ b/dashboards/parent/dashboard.js
+@@ -143,7 +143,7 @@
+                         View All Notifications
+                     </div>
+                 </div>
+-                <div class="topbar-avatar" onclick="switchView('settings')" title="Settings">
++                <div class="topbar-avatar notranslate" onclick="switchView('settings')" title="Settings">
+                     ${initials}
+                 </div>
+             </div>
+@@ -1286,7 +1286,7 @@
+         return `<div class="dashboard-content">
+                 <div class="dashboard-header-section">
+                     <div>
+-                        <h1 class="dashboard-title">Speech Analysis</h1>
++                        <h1 class="dashboard-title">${window.t ? window.t('Speech Analysis') : 'Speech Analysis'}</h1>
+                         <p class="dashboard-subtitle">Track ${child ? child.first_name + "'s" : ''} vocabulary and pronunciation progress</p>
+                     </div>
+                     <button class="btn btn-gradient" onclick="openSpeechModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;">
+@@ -1302,15 +1302,15 @@
+                     <p id="insight-text" style="margin-bottom:1.25rem;color:rgba(255,255,255,0.9);font-size:0.95rem;line-height:1.5;">Loading latest analysis...</p>
+                     <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+                         <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;backdrop-filter:blur(6px);">
+-                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Unique Words</span>
++                            <span style="display:block;font-size:0.7rem;opacity:0.7;">${window.t ? window.t('Unique Words') : 'Unique Words'}</span>
+                             <span id="insight-words" style="font-size:1.35rem;font-weight:800;">ΓÇô</span>
+                         </div>
+                         <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;">
+-                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Expected (WHO)</span>
++                            <span style="display:block;font-size:0.7rem;opacity:0.7;">${window.t ? window.t('Expected (WHO)') : 'Expected (WHO)'}</span>
+                             <span style="font-size:1.35rem;font-weight:800;">${expectedVocab}+</span>
+                         </div>
+                         <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;">
+-                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Status</span>
++                            <span style="display:block;font-size:0.7rem;opacity:0.7;">${window.t ? window.t('Status') : 'Status'}</span>
+                             <span id="insight-status" style="font-size:1.1rem;font-weight:700;">ΓÇô</span>
+                         </div>
+                     </div>
+@@ -1319,18 +1319,18 @@
+                 <!-- Charts Grid -->
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem;">
+                     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
+-                        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">≡ƒôê Vocabulary Progress</h4></div>
++                        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">≡ƒôê ${window.t ? window.t('Vocabulary Progress') : 'Vocabulary Progress'}</h4></div>
+                         <div style="padding:1rem 1.25rem;height:220px;" id="speech-vocab-chart-wrap"><canvas id="speech-vocab-chart"></canvas></div>
+                         <div style="padding:0 1.25rem 1rem;"><p id="desc-vocab-progress" style="font-size:0.8rem;color:#64748b;line-height:1.5;margin:0;">Vocabulary progress will appear after multiple recordings.</p></div>
+                     </div>
+                     <div style="background:#fff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
+-                        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">≡ƒÄ» Clarity Score Trend</h4></div>
++                        <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #f1f5f9;"><h4 style="margin:0;font-weight:700;font-size:0.95rem;color:#1e293b;">≡ƒÄ» ${window.t ? window.t('Clarity Score Trend') : 'Clarity Score Trend'}</h4></div>
+                         <div style="padding:1rem 1.25rem;height:220px;" id="speech-clarity-chart-wrap"><canvas id="speech-clarity-chart"></canvas></div>
+                         <div style="padding:0 1.25rem 1rem;"><p id="desc-clarity-progress" style="font-size:0.8rem;color:#64748b;line-height:1.5;margin:0;">Clarity scores show how clearly your child pronounces words.</p></div>
+                     </div>
+                 </div>
+ 
+-                <h3 style="font-weight:700;font-size:1.1rem;color:#1e293b;margin-bottom:1rem;">Recent Recordings</h3>
++                <h3 style="font-weight:700;font-size:1.1rem;color:#1e293b;margin-bottom:1rem;">${window.t ? window.t('Recent Recordings') : 'Recent Recordings'}</h3>
+                 <div id="speech-history-list">
+                     <div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">Loading recordings...</div>
+                 </div>
+@@ -1375,9 +1375,9 @@
+             const modeBadge = (mode, matchScore) => {
+                 if (mode === 'read_compare') {
+                     const scoreColor = matchScore >= 80 ? '#22c55e' : matchScore >= 50 ? '#f59e0b' : '#ef4444';
+-                    return `<span style="background:#16a34a20;color:#16a34a;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.7rem;font-weight:600;display:flex;align-items:center;gap:0.25rem;">≡ƒôû Read & Compare${matchScore != null ? `<span style="background:${scoreColor}20;color:${scoreColor};padding:0.1rem 0.4rem;border-radius:999px;margin-left:0.25rem;">${Math.round(matchScore)}%</span>` : ''}</span>`;
++                    return `<span style="background:#16a34a20;color:#16a34a;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.7rem;font-weight:600;display:flex;align-items:center;gap:0.25rem;">${window.t ? window.t('Read & Compare') : 'Read & Compare'}${matchScore != null ? `<span style="background:${scoreColor}20;color:${scoreColor};padding:0.1rem 0.4rem;border-radius:999px;margin-left:0.25rem;">${Math.round(matchScore)}%</span>` : ''}</span>`;
+                 }
+-                return '<span style="background:#7c3aed20;color:#7c3aed;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.7rem;font-weight:600;">≡ƒÄñ Free Talk</span>';
++                return `<span style="background:#7c3aed20;color:#7c3aed;padding:0.2rem 0.6rem;border-radius:999px;font-size:0.7rem;font-weight:600;">${window.t ? window.t('Free Talk') : 'Free Talk'}</span>`;
+             };
+ 
+             container.innerHTML = entries.map(e => {
+@@ -1395,9 +1395,9 @@
+                 const isCompare = e.mode === 'read_compare';
+                 const matchScoreVal = matchScore !== null && matchScore !== undefined ? Math.round(matchScore) : null;
+                 const modeMetrics = isCompare && matchScoreVal != null
+-                    ? `<span>≡ƒÄ» Match: <strong style="color:${matchScoreVal >= 80 ? '#22c55e' : matchScoreVal >= 50 ? '#f59e0b' : '#ef4444'}">${matchScoreVal}%</strong></span>
+-                       ${e.word_hits ? `<span>Γ£ô <strong>${e.word_hits.length}</strong> words hit</span>` : ''}`
+-                    : `<span>≡ƒôè Avg sent: <strong>${e.avg_sentence_length || 'ΓÇô'}</strong></span>`;
++                    ? `<span>≡ƒÄ» ${window.t ? window.t('Match') : 'Match'}: <strong style="color:${matchScoreVal >= 80 ? '#22c55e' : matchScoreVal >= 50 ? '#f59e0b' : '#ef4444'}">${matchScoreVal}%</strong></span>
++                       ${e.word_hits ? `<span>Γ£ô <strong>${e.word_hits.length}</strong> ${window.t ? window.t('words hit') : 'words hit'}</span>` : ''}`
++                    : `<span>≡ƒôè ${window.t ? window.t('Avg sent') : 'Avg sent'}: <strong>${e.avg_sentence_length || 'ΓÇô'}</strong></span>`;
+ 
+                 return `<div class="dashboard-card" style="display:flex;align-items:flex-start;padding:1.5rem;gap:1.5rem;margin-bottom:0.75rem;border-left:4px solid ${sColor};transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.1)'" onmouseout="this.style.transform='';this.style.boxShadow='none'">
+                     <div style="width:3.5rem;height:3.5rem;background:${e.mode === 'read_compare' ? 'linear-gradient(135deg,#dcfce7,#86efac)' : 'linear-gradient(135deg,#ede9fe,#c4b5fd)'};border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;box-shadow:0 4px 8px rgba(0,0,0,0.1);">
+@@ -1412,13 +1412,13 @@
+                         </div>
+                         <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.75rem;font-style:italic;line-height:1.5;">"${transcript}"</p>
+                         <div style="display:flex;gap:1.25rem;font-size:0.8rem;color:var(--slate-400);flex-wrap:wrap;">
+-                            <span style="background:#f1f5f9;padding:0.25rem 0.6rem;border-radius:6px;">≡ƒôû <strong style="color:#1e293b;">${words}</strong> words</span>
++                            <span style="background:#f1f5f9;padding:0.25rem 0.6rem;border-radius:6px;">≡ƒôû <strong style="color:#1e293b;">${words}</strong> ${window.t ? window.t('words') : 'words'}</span>
+                             <span style="background:#f1f5f9;padding:0.25rem 0.6rem;border-radius:6px;">≡ƒöè <strong style="color:#1e293b;">${clarify}</strong></span>
+                             ${modeMetrics}
+                         </div>
+                     </div>
+                     <button onclick="openSpeechDetailModal(decodeURIComponent('${entryJson}'))" style="flex-shrink:0;padding:0.6rem 1.2rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:10px;font-size:0.8rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+-                        View Details
++                        ${window.t ? window.t('View Details') : 'View Details'}
+                     </button>
+                 </div>`;
+             }).join('');
+@@ -1438,14 +1438,14 @@
+                     <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+                         <div style="width:3rem;height:3rem;background:linear-gradient(135deg,#ede9fe,#c4b5fd);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">≡ƒÄñ</div>
+                         <div>
+-                            <h4 style="margin:0;font-weight:700;">Latest Speech Analysis</h4>
++                            <h4 style="margin:0;font-weight:700;">${window.t ? window.t('Latest Speech Analysis') : 'Latest Speech Analysis'}</h4>
+                             <span style="font-size:0.8rem;color:#64748b;">${speechData.sent_at ? new Date(speechData.sent_at).toLocaleDateString() : 'Recent'}</span>
+                         </div>
+                     </div>
+                     <p style="color:var(--slate-600);font-style:italic;margin-bottom:0.75rem;">"${speechData.transcript || 'No transcript'}"</p>
+                     <div style="display:flex;gap:1rem;font-size:0.85rem;">
+-                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">≡ƒôû <strong>${Math.round(speechData.vocabulary_score)}</strong> words</span>
+-                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">≡ƒöè <strong>${Math.round(speechData.clarify_score * 100)}%</strong> clarity</span>
++                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">≡ƒôû <strong>${Math.round(speechData.vocabulary_score)}</strong> ${window.t ? window.t('words') : 'words'}</span>
++                        <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">≡ƒöè <strong>${Math.round(speechData.clarify_score * 100)}%</strong> ${window.t ? window.t('clarity') : 'clarity'}</span>
+                         <span style="background:#f1f5f9;padding:0.4rem 0.8rem;border-radius:8px;">≡ƒôè ${speechData.feedback || 'ΓÇô'}</span>
+                     </div>
+                 </div>`;
+@@ -1467,7 +1467,11 @@
+         var reversed = entries.slice().reverse();
+         var labels = reversed.map(function (e, i) { return 'Rec ' + (i + 1); });
+         var vocabData = reversed.map(function (e) { return e.vocabulary_score ? Math.round(e.vocabulary_score) : 0; });
+-        var clarityData = reversed.map(function (e) { return e.clarify_score ? Math.round(e.clarify_score * 100) : 0; });
++        var clarityData = reversed.map(function (e) { 
++            if (e.mode === 'read_compare' && e.match_score != null) return Math.round(e.match_score);
++            if (e.overall_development_score != null) return Math.round(e.overall_development_score);
++            return e.clarify_score ? Math.round(e.clarify_score * 100) : 0; 
++        });
+ 
+         // Vocab chart
+         var vocabEl = document.getElementById('speech-vocab-chart');
+@@ -1501,8 +1505,8 @@
+                 var first = vocabData[0], last = vocabData[vocabData.length - 1];
+                 var change = last - first;
+                 descEl.textContent = change >= 0
+-                    ? 'Vocabulary has grown by ' + change + ' words across ' + vocabData.length + ' recordings. Great progress!'
+-                    : 'Tracking ' + vocabData.length + ' recordings. Keep practicing for consistent improvement.';
++                    ? (window.t ? window.t('Vocabulary has grown by') : 'Vocabulary has grown by') + ' ' + change + ' ' + (window.t ? window.t('words across') : 'words across') + ' ' + vocabData.length + ' ' + (window.t ? window.t('recordings. Great progress!') : 'recordings. Great progress!')
++                    : (window.t ? window.t('Tracking') : 'Tracking') + ' ' + vocabData.length + ' ' + (window.t ? window.t('recordings. Keep practicing for consistent improvement.') : 'recordings. Keep practicing for consistent improvement.');
+             }
+         }
+ 
+@@ -1530,7 +1534,7 @@
+             var clarDescEl = document.getElementById('desc-clarity-progress');
+             if (clarDescEl && clarityData.length > 0) {
+                 var avg = Math.round(clarityData.reduce(function (a, b) { return a + b; }, 0) / clarityData.length);
+-                clarDescEl.textContent = 'Average clarity score is ' + avg + '%. ' + (avg >= 80 ? 'Excellent pronunciation quality!' : avg >= 50 ? 'Good clarity with room for improvement.' : 'Keep practicing for clearer speech.');
++                clarDescEl.textContent = (window.t ? window.t('Average clarity score is') : 'Average clarity score is') + ' ' + avg + '%. ' + (avg >= 80 ? (window.t ? window.t('Excellent pronunciation quality!') : 'Excellent pronunciation quality!') : avg >= 50 ? (window.t ? window.t('Good clarity with room for improvement.') : 'Good clarity with room for improvement.') : (window.t ? window.t('Keep practicing for clearer speech.') : 'Keep practicing for clearer speech.'));
+             }
+         }
+     }
+@@ -1568,19 +1572,19 @@
+         modal.id = 'speech-modal';
+         modal.innerHTML = `<div id="speech-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target.id==='speech-modal-overlay')document.getElementById('speech-modal').remove()">
+             <div style="background:var(--surface-light,#fff);border-radius:22px;padding:1.5rem;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,0.3);">
+-                <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:0.25rem;text-align:center;">≡ƒÄÖ∩╕Å New Speech Recording</h2>
++                <h2 style="font-size:1.4rem;font-weight:800;margin-bottom:0.25rem;text-align:center;">≡ƒÄÖ∩╕Å ${window.t ? window.t('New Speech Recording') : 'New Speech Recording'}</h2>
+                 <p style="text-align:center;color:#64748b;font-size:0.875rem;margin-bottom:1.5rem;">Choose how you want to record ${childName}'s speech</p>
+ 
+                 <!-- Mode Cards -->
+                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+                     <div id="mode-card-free" onclick="selectSpeechMode('free_talk')" style="cursor:pointer;border:2.5px solid #7c3aed;background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:14px;padding:1.2rem;text-align:center;transition:transform .15s;">
+                         <div style="font-size:2rem;margin-bottom:0.4rem;">≡ƒÄñ</div>
+-                        <div style="font-weight:700;font-size:0.95rem;color:#4c1d95;">Free Talk</div>
++                        <div style="font-weight:700;font-size:0.95rem;color:#4c1d95;">${window.t ? window.t('Free Talk') : 'Free Talk'}</div>
+                         <div style="font-size:0.75rem;color:#6d28d9;margin-top:0.25rem;">Child speaks freely</div>
+                     </div>
+                     <div id="mode-card-compare" onclick="selectSpeechMode('read_compare')" style="cursor:pointer;border:2.5px solid #e2e8f0;background:#f8fafc;border-radius:14px;padding:1.2rem;text-align:center;transition:transform .15s;">
+                         <div style="font-size:2rem;margin-bottom:0.4rem;">≡ƒôû</div>
+-                        <div style="font-weight:700;font-size:0.95rem;color:#334155;">Read & Compare</div>
++                        <div style="font-weight:700;font-size:0.95rem;color:#334155;">${window.t ? window.t('Read & Compare') : 'Read & Compare'}</div>
+                         <div style="font-size:0.75rem;color:#64748b;margin-top:0.25rem;">Read age-matched words</div>
+                     </div>
+                 </div>
+@@ -1594,20 +1598,20 @@
+                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;margin-bottom:1rem;">
+                         <label style="display:flex;gap:0.5rem;align-items:flex-start;cursor:pointer;font-size:0.8rem;color:#475569;">
+                             <input type="checkbox" class="parental-consent-checkbox" style="margin-top:2px;flex-shrink:0;">
+-                            <span>I give consent for my child's voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking. <a href="../../privacy.php" target="_blank" style="color:#7c3aed;text-decoration:underline;">Learn more</a></span>
++                            <span>${window.t ? window.t('I give consent for my child\'s voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking.') : 'I give consent for my child\'s voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking.'} <a href="../../privacy.php" target="_blank" style="color:#7c3aed;text-decoration:underline;">Learn more</a></span>
+                         </label>
+                     </div>
+ 
+-                    <button onclick="submitSpeechRecording('${childId}','free_talk','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">≡ƒö¼ Analyze Speech</button>
++                    <button onclick="submitSpeechRecording('${childId}','free_talk','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">≡ƒö¼ ${window.t ? window.t('Analyze Speech') : 'Analyze Speech'}</button>
+                 </div>
+ 
+                 <!-- Read & Compare panel -->
+                 <div id="panel-read_compare" style="display:none;">
+                     <div style="background:#f0fdf4;border:1.5px solid #bbf7d0;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+-                            <div style="font-size:0.8rem;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px;">≡ƒôï Age-matched words (${ageWordData.label})</div>
++                            <div style="font-size:0.8rem;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:0.5px;">≡ƒôï ${window.t ? window.t('Age-matched words') : 'Age-matched words'} (${ageWordData.label})</div>
+                             <button onclick="regenerateWords(${childId},${ageMonths})" style="background:none;border:1px solid #16a34a;color:#16a34a;border-radius:6px;padding:0.25rem 0.5rem;font-size:0.7rem;cursor:pointer;display:flex;align-items:center;gap:0.25rem;">
+-                                <span>≡ƒöä</span> Regenerate
++                                <span>≡ƒöä</span> ${window.t ? window.t('Regenerate') : 'Regenerate'}
+                             </button>
+                         </div>
+                         <div id="guided-words-container" style="margin-bottom:0.5rem;">${wordPills}</div>
+@@ -1619,11 +1623,11 @@
+                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:0.75rem;margin-bottom:1rem;">
+                         <label style="display:flex;gap:0.5rem;align-items:flex-start;cursor:pointer;font-size:0.8rem;color:#475569;">
+                             <input type="checkbox" class="parental-consent-checkbox" style="margin-top:2px;flex-shrink:0;">
+-                            <span>I give consent for my child's voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking. <a href="../../privacy.php" target="_blank" style="color:#7c3aed;text-decoration:underline;">Learn more</a></span>
++                            <span>${window.t ? window.t('I give consent for my child\'s voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking.') : 'I give consent for my child\'s voice recording to be processed for speech analysis purposes. This data is stored privately and used only for developmental tracking.'} <a href="../../privacy.php" target="_blank" style="color:#7c3aed;text-decoration:underline;">Learn more</a></span>
+                         </label>
+                     </div>
+ 
+-                    <button onclick="submitSpeechRecording('${childId}','read_compare','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#16a34a,#059669);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">≡ƒö¼ Compare & Analyze</button>
++                    <button onclick="submitSpeechRecording('${childId}','read_compare','')" id="speech-submit-btn" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#16a34a,#059669);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;">≡ƒö¼ ${window.t ? window.t('Compare & Analyze') : 'Compare & Analyze'}</button>
+                 </div>
+ 
+                 <div id="speech-progress" style="margin-top:0.75rem;font-size:0.875rem;text-align:center;"></div>
+@@ -1822,6 +1826,21 @@
+         const clarityScore = entry.clarify_score ? Math.round(entry.clarify_score * 100) : 0;
+         const overallScore = entry.overall_development_score ? Math.round(entry.overall_development_score) : 0;
+ 
++        let clarityMeaning = window.t ? window.t('Developing clear speech patterns.') : 'Developing clear speech patterns.';
++        if (clarityScore >= 100) clarityMeaning = window.t ? window.t('Very clear pronunciation, aligning perfectly with milestones.') : 'Very clear pronunciation, aligning perfectly with milestones.';
++        else if (clarityScore >= 75) clarityMeaning = window.t ? window.t('Good clarity, typical for this developmental stage.') : 'Good clarity, typical for this developmental stage.';
++
++        let vocabMeaning = window.t ? window.t('Still building core vocabulary.') : 'Still building core vocabulary.';
++        if (entry.status && (entry.status.includes('Within') || entry.status.includes('Above'))) {
++            vocabMeaning = window.t ? window.t('Vocabulary size is right on track or advanced for their age!') : 'Vocabulary size is right on track or advanced for their age!';
++        }
++
++        // Overall score interpretation
++        let overallMeaning = window.t ? window.t('Continuing to develop speech skills.') : 'Continuing to develop speech skills.';
++        if (overallScore >= 80) overallMeaning = window.t ? window.t('Excellent overall speech development!') : 'Excellent overall speech development!';
++        else if (overallScore >= 60) overallMeaning = window.t ? window.t('Good progress across all areas.') : 'Good progress across all areas.';
++        else if (overallScore >= 40) overallMeaning = window.t ? window.t('Making steady progress with practice.') : 'Making steady progress with practice.';
++
+         // Parse developmental feedback JSON if available
+         let feedback = null;
+         try {
+@@ -2152,6 +2171,14 @@
+                     </div>
+                 </div>
+ 
++                <!-- Open Checklist Button Below Cards for visibility -->
++                <div style="display:flex;justify-content:center;margin-bottom:2rem;">
++                    <button class="btn btn-gradient" onclick="openBehaviorChecklistModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;box-shadow:0 10px 25px rgba(108,99,255,0.4);padding:0.75rem 2rem;font-size:1.05rem;">
++                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
++                        Fill Out Checklist
++                    </button>
++                </div>
++
+                 <!-- Statistics Section with Radar Chart -->
+                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1.5rem;margin-bottom:1.5rem;">
+                     <!-- 4-Pillar Radar Chart -->
+@@ -2797,13 +2824,17 @@
+         const pillars = ['attention', 'communication', 'social', 'motor', 'fine_motor'];
+         pillars.forEach(pillar => {
+             const s = stats[pillar];
+-            // Use expected (age-appropriate) as denominator, not total checklist items
+-            const percent = s.expected > 0 ? Math.round((s.achieved / s.expected) * 100) : 0;
+-            const status = getTrafficLightStatus(percent);
++            const hasData = s && s.expected > 0;
++            const percent = hasData ? Math.round((s.achieved / s.expected) * 100) : 0;
++            const status = hasData ? getTrafficLightStatus(percent) : { icon: 'ΓÜ¬', color: '#94a3b8', label: window.t ? window.t('No data yet') : 'No data yet' };
+             const alertEl = document.getElementById(`alert-${pillar}`);
+             if (alertEl) {
+-                alertEl.innerHTML = `${status.icon} <span style="font-size:0.7rem;margin-left:0.25rem;color:${status.color};font-weight:600;">${status.label}</span>`;
+-                alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
++                alertEl.innerHTML = `<div style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;">
++                    <span style="font-size:1.1rem;">${status.icon}</span>
++                    <span style="font-size:0.65rem;color:${status.color};font-weight:600;text-align:right;max-width:70px;word-wrap:break-word;">${status.label}</span>
++                </div>`;
++                alertEl.style.fontSize = "unset";
++                alertEl.title = hasData ? `${status.label} (${percent}% of age-expected milestones)` : status.label;
+             }
+         });
+     }
+@@ -7066,14 +7097,30 @@
+                             };
+ 
+                             setTimeout(() => {
+-                                plotChart('who-weight-chart', 'line', 'Weight-for-Age', 'Weight (kg)', 'Age (months)', weightDataObj, mapWho(whoPoints.weight_for_age[gender]), '#6C63FF', false);
+-                                plotChart('who-height-chart', 'line', 'Length/Height-for-Age', 'Height (cm)', 'Age (months)', heightDataObj, mapWho(whoPoints.height_for_age[gender]), '#ec4899', false);
++                                plotChart('who-weight-chart', 'line', window.t ? window.t('Weight-for-Age') : 'Weight-for-Age', window.t ? window.t('Weight (kg)') : 'Weight (kg)', window.t ? window.t('Age (months)') : 'Age (months)', weightDataObj, mapWho(whoPoints.weight_for_age[gender]), '#6C63FF', false);
++                                plotChart('who-height-chart', 'line', window.t ? window.t('Length/Height-for-Age') : 'Length/Height-for-Age', window.t ? window.t('Height (cm)') : 'Height (cm)', window.t ? window.t('Age (months)') : 'Age (months)', heightDataObj, mapWho(whoPoints.height_for_age[gender]), '#ec4899', false);
+                                 plotChart('who-wl-chart', 'line', 'Weight-for-Length', 'Weight (kg)', 'Length (cm)', wlDataObj, mapWho(whoPoints.weight_for_length[gender]), '#14b8a6', false);
+                                 // BMI Gauge Scale
+                                 renderBMIGauge(bmiDataObj, dChild.first_name, ageYears, ageRemMonths);
+                                 plotChart('who-head-chart', 'line', 'Head Circumference-for-Age', 'Head Circ. (cm)', 'Age (months)', headDataObj, mapWho(whoPoints.head_for_age[gender]), '#8b5cf6', false);
+ 
+                                 plotChart('motor-chart', 'bar', 'Motor Development Milestones', 'Score', 'Age (months)', motorDataObj, [], '#10b981', true);
++                                
++                                function getExpectedVel(type, age) {
++                                    if (type === 'weight') {
++                                        if (age <= 3) return 0.8; if (age <= 6) return 0.5; if (age <= 9) return 0.4;
++                                        if (age <= 12) return 0.3; if (age <= 24) return 0.2; return 0.15;
++                                    }
++                                    if (type === 'length') {
++                                        if (age <= 3) return 3.5; if (age <= 6) return 2.0; if (age <= 9) return 1.5;
++                                        if (age <= 12) return 1.2; return 0.8;
++                                    }
++                                    if (type === 'head') {
++                                        if (age <= 3) return 2.0; if (age <= 6) return 1.0; return 0.5;
++                                    }
++                                    return null;
++                                }
++
+                                 // Velocity charts: only render if 2+ data points, else show message
+                                 var showVelMsg = function (canvasId, label) {
+                                     var c = document.getElementById(canvasId);
+@@ -7081,12 +7128,20 @@
+                                         c.parentElement.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#94a3b8;text-align:center;padding:2rem;"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p style="margin:1rem 0 0;font-size:0.85rem;line-height:1.5;">' + label + ' velocity requires <strong>at least 2 measurements</strong> recorded on different dates.</p></div>';
+                                     }
+                                 };
+-                                if (velWeight.length >= 2) plotChart('vel-weight-chart', 'line', 'Weight Velocity', 'Gain (kg/mo)', 'Age (months)', velWeight, [], '#6366f1', true);
+-                                else showVelMsg('vel-weight-chart', 'Weight');
+-                                if (velHeight.length >= 2) plotChart('vel-height-chart', 'line', 'Length Velocity', 'Gain (cm/mo)', 'Age (months)', velHeight, [], '#c026d3', true);
+-                                else showVelMsg('vel-height-chart', 'Length');
+-                                if (velHead.length >= 2) plotChart('vel-head-chart', 'line', 'Head Circumference Velocity', 'Gain (cm/mo)', 'Age (months)', velHead, [], '#0ea5e9', true);
+-                                else showVelMsg('vel-head-chart', 'Head circumference');
++                                if (velWeight.length >= 2) {
++                                    const whoVelWeight = velWeight.map(p => ({ x: p.x, y: getExpectedVel('weight', p.x) }));
++                                    plotChart('vel-weight-chart', 'line', 'Weight Velocity', 'Gain (kg/mo)', 'Age (months)', velWeight, whoVelWeight, '#6366f1', true);
++                                } else showVelMsg('vel-weight-chart', 'Weight');
++                                
++                                if (velHeight.length >= 2) {
++                                    const whoVelHeight = velHeight.map(p => ({ x: p.x, y: getExpectedVel('length', p.x) }));
++                                    plotChart('vel-height-chart', 'line', 'Length Velocity', 'Gain (cm/mo)', 'Age (months)', velHeight, whoVelHeight, '#c026d3', true);
++                                } else showVelMsg('vel-height-chart', 'Length');
++                                
++                                if (velHead.length >= 2) {
++                                    const whoVelHead = velHead.map(p => ({ x: p.x, y: getExpectedVel('head', p.x) }));
++                                    plotChart('vel-head-chart', 'line', 'Head Circumference Velocity', 'Gain (cm/mo)', 'Age (months)', velHead, whoVelHead, '#0ea5e9', true);
++                                } else showVelMsg('vel-head-chart', 'Head circumference');
+ 
+                                 // Populate dynamic descriptions
+                                 var cn = dChild.first_name;

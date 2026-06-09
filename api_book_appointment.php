@@ -63,6 +63,35 @@ if ($type === 'online' && $paymentMethod === 'Cash') {
     exit();
 }
 
+// 1. Validate date is not in the past
+$bookingDT = new DateTime($scheduledAt);
+$now = new DateTime();
+if ($bookingDT <= $now) {
+    echo json_encode(['error' => 'Cannot book appointments in the past.']);
+    exit();
+}
+
+// 2. Check for existing booking at that exact slot (within 30 min window)
+$scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+$conflictStmt = $connect->prepare("
+    SELECT COUNT(*) FROM appointment 
+    WHERE specialist_id = ? 
+      AND scheduled_at = ? 
+      AND status NOT IN ('Cancelled')
+");
+$conflictStmt->execute([$specialistId, $scheduledDateTime]);
+if ((int)$conflictStmt->fetchColumn() > 0) {
+    echo json_encode(['error' => 'This time slot is already booked. Please choose another time.']);
+    exit();
+}
+
+// 3. Validate the chosen time aligns to a 30-minute boundary
+$mins = (int)$bookingDT->format('i');
+if ($mins !== 0 && $mins !== 30) {
+    echo json_encode(['error' => 'Please select a valid 30-minute time slot.']);
+    exit();
+}
+
 // Validate child_id if provided
 if ($childId) {
     $childCheckStmt = $connect->prepare("SELECT child_id FROM child WHERE child_id = ? AND parent_id = ?");
@@ -110,8 +139,8 @@ try {
     $status = ($amountPost <= 0) ? 'Paid' : (($paymentMethod === 'Credit Card') ? 'Paid' : 'Pending');
 
     // 1. Create Payment Record
-    $stmt = $connect->prepare("INSERT INTO payment (amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?)");
-    $stmt->execute([$amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
+    $stmt = $connect->prepare("INSERT INTO payment (parent_id, amount_pre_discount, amount_post_discount, discount_rate, method, status) VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $amountPre, $amountPost, $discountRate, $tokenUsed ? 'Token' : $paymentMethod, $status]);
     $paymentId = $connect->lastInsertId();
 
     // Mark token as used if applied
@@ -121,10 +150,10 @@ try {
     }
 
     // 2. Create Appointment
-    $scheduledDateTime = date('Y-m-d H:i:s', strtotime($scheduledAt));
+    // $scheduledDateTime is already formatted above
 
-    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at) VALUES (?, ?, ?, 'Scheduled', ?, ?, ?)");
-    $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime]);
+    $stmt = $connect->prepare("INSERT INTO appointment (parent_id, payment_id, specialist_id, status, type, comment, scheduled_at, child_id) VALUES (?, ?, ?, 'Pending', ?, ?, ?, ?)");
+    $stmt->execute([$parentId, $paymentId, $specialistId, $type, $comment, $scheduledDateTime, $childId]);
     $appointmentId = $connect->lastInsertId();
 
 
@@ -148,6 +177,23 @@ try {
     }
     $stmtN = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
     $stmtN->execute([$parentId, $title, $message]);
+
+    // Notify the specialist/doctor about the new booking
+    try {
+        require_once __DIR__ . '/includes/doctor_notifications.php';
+        $parentStmt = $connect->prepare("SELECT first_name, last_name FROM users WHERE user_id = ?");
+        $parentStmt->execute([$parentId]);
+        $parentRow = $parentStmt->fetch(PDO::FETCH_ASSOC);
+        $parentName = trim(($parentRow['first_name'] ?? '') . ' ' . ($parentRow['last_name'] ?? ''));
+        $drTitle = 'New Appointment' . ($childName ? $childName : '');
+        $drMessage = ($parentName ? "{$parentName} booked " : 'A parent booked ')
+            . ($type === 'onsite' ? 'an on-site visit' : 'an online session')
+            . ' for ' . date('M j, Y g:i A', strtotime($scheduledDateTime)) . '.';
+        $doctorUserId = doctor_user_id_from_specialist($connect, $specialistId);
+        if ($doctorUserId) {
+            doctor_notify($connect, $doctorUserId, 'new_appointment', $drTitle, $drMessage);
+        }
+    } catch (Exception $e) { /* non-critical */ }
 
     $connect->commit();
     echo json_encode([

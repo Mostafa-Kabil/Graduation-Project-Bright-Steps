@@ -28,25 +28,56 @@ function switchDsTab(tab, btn) {
 }
 
 function getDsPreferencesHTML() {
+    let ageGroups = ['6m-1y', '1y-3y', '3y-5y'];
+    try {
+        const stored = localStorage.getItem(`dr_age_groups_${SPECIALIST_ID}`);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            let migrated = [];
+            parsed.forEach(val => {
+                if (val === '6m-1y' || val === '1y-3y' || val === '3y-5y') {
+                    migrated.push(val);
+                } else if (val === 'infant' || val === 'newborn') {
+                    if (!migrated.includes('6m-1y')) migrated.push('6m-1y');
+                } else if (val === 'toddler') {
+                    if (!migrated.includes('1y-3y')) migrated.push('1y-3y');
+                } else if (val === 'preschool') {
+                    if (!migrated.includes('3y-5y')) migrated.push('3y-5y');
+                }
+            });
+            if (migrated.length > 0) {
+                ageGroups = migrated;
+            }
+        }
+    } catch(e) {}
+
+    let therapyApproaches = ['aba', 'play-therapy', 'speech-therapy', 'occupational', 'sensory', 'family-therapy'];
+    try {
+        const stored = localStorage.getItem(`dr_therapy_approaches_${SPECIALIST_ID}`);
+        if (stored) therapyApproaches = JSON.parse(stored);
+    } catch(e) {}
+
+    const hasAge = val => ageGroups.includes(val) ? 'checked' : '';
+    const hasTherapy = val => therapyApproaches.includes(val) ? 'checked' : '';
+
     return `<div class="ds-card">
-        <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><div><h3>Patient Age Groups</h3><p>Select the age groups you specialize in</p></div></div>
+        <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><div><h3>Patient Age Groups</h3><p>Select the age groups you specialize in (6 months to 5 years old)</p></div></div>
         <div class="ds-card-body"><div class="ds-chip-grid" id="ds-age-groups">
-            <label class="ds-chip"><input type="checkbox" value="newborn" checked><span>Newborn (0-1m)</span></label>
-            <label class="ds-chip"><input type="checkbox" value="infant" checked><span>Infant (1-12m)</span></label>
-            <label class="ds-chip"><input type="checkbox" value="toddler" checked><span>Toddler (1-3y)</span></label>
-            <label class="ds-chip"><input type="checkbox" value="preschool"><span>Preschool (3-5y)</span></label>
+            <label class="ds-chip"><input type="checkbox" value="6m-1y" ${hasAge('6m-1y')} onchange="syncTherapyApproaches()"><span>6m – 1y</span></label>
+            <label class="ds-chip"><input type="checkbox" value="1y-3y" ${hasAge('1y-3y')} onchange="syncTherapyApproaches()"><span>1y – 3y</span></label>
+            <label class="ds-chip"><input type="checkbox" value="3y-5y" ${hasAge('3y-5y')} onchange="syncTherapyApproaches()"><span>3y – 5y</span></label>
         </div></div></div>
         <div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/></svg><div><h3>Therapy Approaches</h3><p>Methods and techniques you practice</p></div></div>
         <div class="ds-card-body"><div class="ds-chip-grid" id="ds-therapy-approaches">
-            <label class="ds-chip"><input type="checkbox" value="aba" checked><span>ABA Therapy</span></label>
-            <label class="ds-chip"><input type="checkbox" value="cbt"><span>CBT</span></label>
-            <label class="ds-chip"><input type="checkbox" value="play-therapy" checked><span>Play Therapy</span></label>
-            <label class="ds-chip"><input type="checkbox" value="speech-therapy"><span>Speech Therapy</span></label>
-            <label class="ds-chip"><input type="checkbox" value="occupational"><span>Occupational Therapy</span></label>
-            <label class="ds-chip"><input type="checkbox" value="sensory"><span>Sensory Integration</span></label>
-            <label class="ds-chip"><input type="checkbox" value="family-therapy"><span>Family Therapy</span></label>
-            <label class="ds-chip"><input type="checkbox" value="group-therapy"><span>Group Therapy</span></label>
+            <label class="ds-chip"><input type="checkbox" value="aba" ${hasTherapy('aba')}><span>ABA Therapy</span></label>
+            <label class="ds-chip"><input type="checkbox" value="cbt" ${hasTherapy('cbt')}><span>CBT</span></label>
+            <label class="ds-chip"><input type="checkbox" value="play-therapy" ${hasTherapy('play-therapy')}><span>Play Therapy</span></label>
+            <label class="ds-chip"><input type="checkbox" value="speech-therapy" ${hasTherapy('speech-therapy')}><span>Speech Therapy</span></label>
+            <label class="ds-chip"><input type="checkbox" value="occupational" ${hasTherapy('occupational')}><span>Occupational Therapy</span></label>
+            <label class="ds-chip"><input type="checkbox" value="sensory" ${hasTherapy('sensory')}><span>Sensory Integration</span></label>
+            <label class="ds-chip"><input type="checkbox" value="family-therapy" ${hasTherapy('family-therapy')}><span>Family Therapy</span></label>
+            <label class="ds-chip"><input type="checkbox" value="group-therapy" ${hasTherapy('group-therapy')}><span>Group Therapy</span></label>
         </div></div></div>
         <div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><div><h3>Session Preferences</h3><p>Configure your default consultation settings</p></div></div>
@@ -88,23 +119,24 @@ function getDsPreferencesHTML() {
 }
 
 function getDsNotificationsHTML() {
-    const prefs = JSON.parse(localStorage.getItem(`dr_notif_prefs_${SPECIALIST_ID}`) || '{"new_appointment":true,"new_message":true,"report_shared":true}');
+    const prefs = JSON.parse(localStorage.getItem(`dr_notif_prefs_${SPECIALIST_ID}`) || '{"new_appointment":true,"new_message":true,"report_shared":true,"appointment_reminder":true}');
     return `<div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><div><h3>Notification Preferences</h3><p>Control how and when you receive alerts</p></div></div>
         <div class="ds-card-body"><div class="ds-toggle-list">
-            <div class="ds-toggle-row"><div><strong>New Appointment</strong><p>Alert when a parent books an appointment</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-app" ${prefs.new_appointment ? 'checked' : ''}><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>New Message</strong><p>Alert when a parent sends a message</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-msg" ${prefs.new_message ? 'checked' : ''}><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>Report Shared</strong><p>Alert when a parent shares a child report</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-rep" ${prefs.report_shared ? 'checked' : ''}><span></span></label></div>
-            <div class="ds-toggle-row"><div><strong>Appointment Reminders</strong><p>Get notified 30 min before appointments</p></div><label class="ds-switch"><input type="checkbox" checked disabled><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>New Appointment</strong><p>Alert when a parent books an appointment</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-app" ${prefs.new_appointment !== false ? 'checked' : ''}><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>New Message</strong><p>Alert when a parent sends a message</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-msg" ${prefs.new_message !== false ? 'checked' : ''}><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>Report Shared</strong><p>Alert when a parent shares a child report</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-rep" ${prefs.report_shared !== false ? 'checked' : ''}><span></span></label></div>
+            <div class="ds-toggle-row"><div><strong>Appointment Reminder</strong><p>Get notified 30 min before appointments</p></div><label class="ds-switch"><input type="checkbox" id="ds-notif-reminder" ${prefs.appointment_reminder !== false ? 'checked' : ''}><span></span></label></div>
         </div></div></div>
         <div class="ds-actions"><button class="btn btn-gradient" onclick="dsSaveNotificationPrefs()">Save Preferences</button></div>`;
 }
 
 function dsSaveNotificationPrefs() {
     const prefs = {
-        new_appointment: document.getElementById('ds-notif-app')?.checked || false,
-        new_message: document.getElementById('ds-notif-msg')?.checked || false,
-        report_shared: document.getElementById('ds-notif-rep')?.checked || false
+        new_appointment: document.getElementById('ds-notif-app')?.checked ?? true,
+        new_message: document.getElementById('ds-notif-msg')?.checked ?? true,
+        report_shared: document.getElementById('ds-notif-rep')?.checked ?? true,
+        appointment_reminder: document.getElementById('ds-notif-reminder')?.checked ?? true
     };
     localStorage.setItem(`dr_notif_prefs_${SPECIALIST_ID}`, JSON.stringify(prefs));
     showToast('Notification preferences saved!','success');
@@ -146,6 +178,7 @@ function dsChangePassword() {
 
 function initSettingsPageNew() {
     loadDsProfile();
+    syncTherapyApproaches();
 }
 
 function loadDsProfile() {
@@ -324,6 +357,16 @@ function dsSavePreferences() {
     if (mode === 'both' || mode === 'online') consultTypes.push('online');
     if (mode === 'both' || mode === 'onsite') consultTypes.push('onsite');
 
+    // Save Patient Age Groups
+    const ageGroups = [];
+    document.querySelectorAll('#ds-age-groups input[type="checkbox"]:checked').forEach(cb => ageGroups.push(cb.value));
+    localStorage.setItem(`dr_age_groups_${SPECIALIST_ID}`, JSON.stringify(ageGroups));
+
+    // Save Therapy Approaches
+    const therapyApproaches = [];
+    document.querySelectorAll('#ds-therapy-approaches input[type="checkbox"]:checked').forEach(cb => therapyApproaches.push(cb.value));
+    localStorage.setItem(`dr_therapy_approaches_${SPECIALIST_ID}`, JSON.stringify(therapyApproaches));
+
     if (days.length > 0 && st && et) {
         fetch('doctor-dashboard.php?ajax=1&section=settings', {
             method:'POST', headers:{'Content-Type':'application/json'},
@@ -335,4 +378,40 @@ function dsSavePreferences() {
     } else {
         showToast('Preferences saved!','success');
     }
+}
+
+function syncTherapyApproaches() {
+    const selectedAgeGroups = [];
+    document.querySelectorAll('#ds-age-groups input[type="checkbox"]:checked').forEach(cb => {
+        selectedAgeGroups.push(cb.value);
+    });
+
+    const suitability = {
+        'aba': ['1y-3y', '3y-5y'],
+        'cbt': ['3y-5y'],
+        'play-therapy': ['1y-3y', '3y-5y'],
+        'speech-therapy': ['6m-1y', '1y-3y', '3y-5y'],
+        'occupational': ['6m-1y', '1y-3y', '3y-5y'],
+        'sensory': ['6m-1y', '1y-3y', '3y-5y'],
+        'family-therapy': ['6m-1y', '1y-3y', '3y-5y'],
+        'group-therapy': ['3y-5y']
+    };
+
+    document.querySelectorAll('#ds-therapy-approaches .ds-chip').forEach(chip => {
+        const input = chip.querySelector('input');
+        const therapyValue = input.value;
+        const suitableAges = suitability[therapyValue] || [];
+        
+        // A therapy is suitable if any of the selected age groups is in its suitability list
+        const isSuitable = suitableAges.some(age => selectedAgeGroups.includes(age));
+        
+        if (isSuitable) {
+            chip.classList.remove('disabled');
+            input.disabled = false;
+        } else {
+            chip.classList.add('disabled');
+            input.disabled = true;
+            input.checked = false; // Uncheck since it's not suitable anymore
+        }
+    });
 }

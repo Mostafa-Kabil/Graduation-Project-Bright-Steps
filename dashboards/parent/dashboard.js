@@ -44,7 +44,11 @@
         loadNotifCount();
 
         // Streak check-in
-        streakCheckIn();
+        const todayKey = 'bs_streak_checkin_' + new Date().toDateString();
+        if (!sessionStorage.getItem(todayKey)) {
+            sessionStorage.setItem(todayKey, '1');
+            streakCheckIn();
+        }
 
         // Startup: trigger retrospective badge check for current child
         const startChild = (window.dashboardData || {}).children || [];
@@ -223,9 +227,11 @@
                 if (el) el.textContent = data.current_streak || 0;
                 // Show new badge notifications
                 if (data.new_badges && data.new_badges.length > 0) {
-                    data.new_badges.forEach(b => showBadgeToast(b));
+                    const existingNames = (child.badges || []).map(b => b.name);
+                    const trulyNew = data.new_badges.filter(bName => !existingNames.includes(bName));
+                    trulyNew.forEach(b => showBadgeToast(b));
                     if (!child.badges) child.badges = [];
-                    data.new_badges.forEach(bName => {
+                    trulyNew.forEach(bName => {
                         if (!child.badges.find(b => b.name === bName)) {
                             child.badges.push({ name: bName, redeemed_at: new Date().toISOString() });
                         }
@@ -411,8 +417,9 @@
             try {
                 const res = await fetch(`../../api_speech_history.php?child_id=${child.child_id}`);
                 const data = await res.json();
-                const count = (data.analyses || []).length;
-                localStorage.setItem('bs_trial_speech', count);
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                const recentCount = (data.analyses || []).filter(a => new Date(a.sent_at) > sevenDaysAgo).length;
+                localStorage.setItem('bs_trial_speech', recentCount);
             } catch (e) {}
         }
 
@@ -437,7 +444,7 @@
 
         if (type === 'premium_subscription') {
             // Fetch price from dashboardData or API
-            total = (window.dashboardData || {}).subscription?.price || '24.99';
+            total = (window.dashboardData || {}).subscription?.price || '250';
         } else if (type === 'appointment') {
             targetName = 'Doctor Consultation';
             // Use the specialist fee if provided
@@ -457,7 +464,7 @@
 
                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;padding:1.25rem;margin-bottom:2rem;display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-weight:600;color:var(--slate-600);">Total Amount:</span>
-                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">$${total}</span>
+                        <span style="font-size:1.5rem;font-weight:800;color:var(--slate-900);">${total} EGP</span>
                     </div>
 
                     <div class="payment-form" style="display:flex;flex-direction:column;gap:1rem;">
@@ -587,6 +594,11 @@
         contentContainer.innerHTML = viewFunction();
 
         // Post-render hooks
+        if (viewId === 'settings') {
+            setTimeout(() => {
+                if (typeof loadInvoiceHistory === 'function') loadInvoiceHistory();
+            }, 150);
+        }
         if (viewId === 'home' || !viewId) {
             loadHomeActivities();
             // Auto-load checklist so Weekly Plan works
@@ -611,6 +623,7 @@
     }
 
     // Load home activities from API
+    window.loadHomeActivities = loadHomeActivities;
     async function loadHomeActivities() {
         // Trigger daily notifications in the background
         fetch('../../api_trigger_daily.php').catch(e => console.error(e));
@@ -1302,6 +1315,10 @@
                             ${(!window.dashboardData || !window.dashboardData.subscription || window.dashboardData.subscription.plan_name !== 'Premium') ? `<span style="font-size:0.75rem;padding:0.35rem 0.85rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:white;border-radius:999px;font-weight:700;letter-spacing:0.5px;box-shadow:0 2px 8px rgba(124,58,237,0.3);border:1px solid rgba(255,255,255,0.2);display:inline-flex;align-items:center;gap:0.35rem;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>${localStorage.getItem('bs_trial_speech') || '0'}/3 Free Trials Used</span>` : ''}
                         </h1>
                         <p class="dashboard-subtitle">Track ${child ? child.first_name + "'s" : ''} vocabulary and pronunciation progress</p>
+                    <p style="font-size:0.8rem;color:var(--slate-500);margin-top:0.25rem;display:flex;align-items:center;gap:0.4rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 1 0 20 14.5 14.5 0 0 1 0-20"/><path d="M2 12h20"/></svg>
+                        Supports <strong>English 🇬🇧</strong> and <strong>Arabic 🇪🇬</strong>
+                    </p>
                     </div>
                     <button class="btn btn-gradient" onclick="openSpeechModal(${childId})" style="display:flex;align-items:center;gap:0.5rem;">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -2073,7 +2090,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🧠 Attention</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Focus & engagement</p>
                             </div>
-                            <span id="alert-attention" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-attention"></span>
                         </div>
                         <div style="background:rgba(245,158,11,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="attention-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2094,7 +2113,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">💬 Communication</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Speech & expression</p>
                             </div>
-                            <span id="alert-communication" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-communication"></span>
                         </div>
                         <div style="background:rgba(59,130,246,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="communication-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2115,7 +2136,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🤝 Social Skills</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Interaction & play</p>
                             </div>
-                            <span id="alert-social" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-social"></span>
                         </div>
                         <div style="background:rgba(16,185,129,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="social-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#10b981,#06b6d4);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2136,7 +2159,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">🦵 Gross Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Large movements</p>
                             </div>
-                            <span id="alert-motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-motor"></span>
                         </div>
                         <div style="background:rgba(102,126,234,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2157,7 +2182,9 @@
                                 <h3 style="margin:0;font-size:0.85rem;color:var(--text-color,#1e293b);font-weight:700;">✋ Fine Motor</h3>
                                 <p style="margin:0;font-size:0.65rem;color:var(--slate-500,#64748b);">Hand precision</p>
                             </div>
-                            <span id="alert-fine_motor" style="margin-left:auto;font-size:1.1rem;" title="Status">⚪</span>
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; margin-bottom:0.25rem; margin-right:-6px;">
+                            <span id="alert-fine_motor"></span>
                         </div>
                         <div style="background:rgba(236,72,153,0.15);border-radius:8px;height:6px;margin-bottom:0.35rem;overflow:hidden;">
                             <div id="fine_motor-progress" style="width:0%;height:100%;background:linear-gradient(90deg,#ec4899,#f43f5e);border-radius:8px;transition:width 0.5s ease;"></div>
@@ -2189,23 +2216,23 @@
                             📊 Milestone Progress
                         </h3>
                         <div style="display:flex;align-items:flex-end;gap:0.75rem;height:200px;padding:1rem 0;">
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-attention" style="width:100%;background:linear-gradient(180deg,#f59e0b,#ef4444);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Attention</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-communication" style="width:100%;background:linear-gradient(180deg,#3b82f6,#8b5cf6);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Communication</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-social" style="width:100%;background:linear-gradient(180deg,#10b981,#06b6d4);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Social</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-motor" style="width:100%;background:linear-gradient(180deg,#667eea,#764ba2);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Motor</span>
                             </div>
-                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+                            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5rem;height:100%;justify-content:flex-end;">
                                 <div id="bar-fine_motor" style="width:100%;background:linear-gradient(180deg,#ec4899,#f43f5e);border-radius:8px 8px 0 0;transition:height 0.5s ease;height:5%;min-height:5px;"></div>
                                 <span style="font-size:0.65rem;color:var(--slate-500,#64748b);text-align:center;font-weight:600;">Fine Motor</span>
                             </div>
@@ -2222,24 +2249,6 @@
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
                                 🏆 Milestone Journey
                             </h3>
-                        </div>
-                        <div id="milestone-journey-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;">
-                            <div style="text-align:center;padding:1rem;background:rgba(245,158,11,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🌟</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Steps</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(59,130,246,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">💬</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">First Words</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(16,185,129,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🤝</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Social Play</div>
-                            </div>
-                            <div style="text-align:center;padding:1rem;background:rgba(102,126,234,0.1);border-radius:12px;opacity:0.5;">
-                                <div style="font-size:1.75rem;margin-bottom:0.25rem;">🎯</div>
-                                <div style="font-size:0.7rem;color:var(--slate-500,#64748b);">Focus Master</div>
-                            </div>
                         </div>
                         <div id="badges-container" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;"></div>
                     </div>
@@ -2757,7 +2766,18 @@
             const status = getTrafficLightStatus(percent);
             const alertEl = document.getElementById(`alert-${pillar}`);
             if (alertEl) {
-                alertEl.innerHTML = `${status.icon} <span style="font-size:0.7rem;margin-left:0.25rem;color:${status.color};font-weight:600;">${status.label}</span>`;
+                alertEl.style.display = 'inline-flex';
+                alertEl.style.flexDirection = 'row';
+                alertEl.style.alignItems = 'center';
+                alertEl.style.justifyContent = 'center';
+                alertEl.style.gap = '0.35rem';
+                alertEl.style.padding = '0.3rem 0.65rem';
+                alertEl.style.borderRadius = '20px';
+                alertEl.style.background = `${status.color}15`;
+                alertEl.style.color = status.color;
+                alertEl.style.flexShrink = '0';
+                
+                alertEl.innerHTML = `<span style="font-size:0.5rem; line-height:1;">●</span><span style="font-size:0.65rem; font-weight:700; white-space:nowrap; line-height:1;">${status.label}</span>`;
                 alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
             }
         });
@@ -2843,7 +2863,7 @@
             fine_motor: stats.fine_motor.achieved
         };
 
-        let earnedBadges = [];
+        let allBadgesHTML = '';
         badgeDefinitions.forEach(badge => {
             let earned = false;
             if (badge.pillar === 'all') {
@@ -2851,30 +2871,27 @@
             } else {
                 earned = pillarAchievements[badge.pillar] >= badge.threshold;
             }
+            
             if (earned) {
-                earnedBadges.push(badge);
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:12px;animation:pulse 2s infinite;cursor:pointer;box-shadow:0 4px 6px rgba(0,0,0,0.05);" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;font-weight:700;color:var(--text-color,#1e293b);">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:#f59e0b;margin-top:2px;font-weight:bold;">✅ Achieved!</div>
+                </div>`;
+            } else {
+                allBadgesHTML += `
+                <div style="text-align:center;padding:0.75rem;background:var(--surface-light,#fff);border-radius:12px;opacity:0.6;border:1px dashed var(--slate-300,#cbd5e1);" title="Requires ${badge.threshold} milestones in ${badge.pillar}">
+                    <div style="font-size:1.75rem;margin-bottom:0.25rem;filter:grayscale(100%);opacity:0.7;">${badge.icon}</div>
+                    <div style="font-size:0.7rem;color:var(--slate-500,#64748b);font-weight:500;">${badge.name}</div>
+                    <div style="font-size:0.55rem;color:var(--slate-400,#94a3b8);margin-top:2px;">🔒 ${badge.threshold} needed</div>
+                </div>`;
             }
         });
 
-        // Render badges with unlock animation
-        badgesContainer.innerHTML = earnedBadges.map(badge => `
-            <div style="text-align:center;padding:0.75rem;background:rgba(245,158,11,0.15);border-radius:10px;animation:pulse 2s infinite;cursor:pointer;" title="${badge.name}: Achieved ${badge.threshold}+ milestones">
-                <div style="font-size:1.5rem;">${badge.icon}</div>
-                <div style="font-size:0.65rem;color:var(--slate-600,#475569);font-weight:600;">${badge.name}</div>
-            </div>
-        `).join('');
-
-        // Show locked badges for milestones not yet earned
-        const lockedBadges = badgeDefinitions.filter(b => !earnedBadges.find(eb => eb.id === b.id));
-        if (lockedBadges.length > 0 && earnedBadges.length < badgeDefinitions.length) {
-            badgesContainer.innerHTML += lockedBadges.map(badge => `
-                <div style="text-align:center;padding:0.75rem;background:rgba(148,163,184,0.1);border-radius:10px;opacity:0.5;filter:grayscale(100%);">
-                    <div style="font-size:1.5rem;filter:grayscale(100%);">${badge.icon}</div>
-                    <div style="font-size:0.65rem;color:var(--slate-400,#94a3b8);font-weight:600;">${badge.name}</div>
-                    <div style="font-size:0.55rem;color:var(--slate-500,#64748b);margin-top:0.25rem;">🔒 ${badge.threshold} needed</div>
-                </div>
-            `).join('');
-        }
+        // Set grid layout to fit more nicely
+        badgesContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(110px, 1fr))';
+        badgesContainer.innerHTML = allBadgesHTML;
     }
 
     // Generate Weekly Activities based on lowest scoring pillar (with shuffle) - 5 pillars
@@ -2992,7 +3009,7 @@
 
         // Show toast indicating which pillar was targeted
         const pillarNames = { attention: 'Attention', communication: 'Communication', social: 'Social Skills', motor: 'Motor Skills' };
-        showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
+        if (fromUserClick) showBadgeToast(`📅 New activities for ${pillarNames[weakestPillar]}!`);
     }
 
     // Generate Advanced Doctor Report (Comprehensive PDF-ready)
@@ -3032,11 +3049,14 @@
                 stats[pillar].total++;
                 if (b.is_exhibited) {
                     stats[pillar].achieved++;
-                    stats[pillar].behaviors.push({
-                        name: b.behavior_details,
-                        frequency: b.frequency,
-                        severity: b.severity
-                    });
+                    // Avoid duplicates in the list
+                    if (!stats[pillar].behaviors.some(x => x.name === b.behavior_details)) {
+                        stats[pillar].behaviors.push({
+                            name: b.behavior_details,
+                            frequency: b.frequency,
+                            severity: b.severity
+                        });
+                    }
                 }
             });
         });
@@ -3067,7 +3087,49 @@
 
         // Build comprehensive report HTML
         const reportContent = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+            <style>
+                @media print {
+                    body > *:not(#doctor-report-modal) { display: none !important; }
+                    
+                    #doctor-report-modal { 
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        width: 100% !important;
+                        height: auto !important;
+                    }
+                    
+                    #doctor-report-modal .doctor-report-modal-inner {
+                        position: static !important; 
+                        display: block !important; 
+                        padding: 0 !important; 
+                        background: transparent !important; 
+                        height: auto !important;
+                    }
+
+                    #doctor-report-modal .doctor-report-modal-inner > div { 
+                        display: block !important;
+                        max-height: none !important; 
+                        width: 100% !important; 
+                        max-width: none !important; 
+                        box-shadow: none !important; 
+                        border-radius: 0 !important; 
+                        overflow: visible !important;
+                        height: auto !important;
+                    }
+                    
+                    .report-scrollable { 
+                        max-height: none !important; 
+                        overflow: visible !important; 
+                        padding: 0 !important; 
+                        height: auto !important;
+                    }
+                    
+                    .report-footer { display: none !important; }
+                }
+            </style>
+            <div class="doctor-report-modal-inner" style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('doctor-report-modal').remove()">
                 <div style="background:#ffffff;border-radius:24px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;">
                     <!-- Report Header -->
                     <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:2rem;color:#fff;">
@@ -3107,7 +3169,7 @@
                     </div>
 
                     <!-- Scrollable Content -->
-                    <div style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
+                    <div class="report-scrollable" style="padding:1.5rem;overflow-y:auto;flex:1;max-height:50vh;">
                         <!-- Executive Summary -->
                         <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:16px;padding:1.25rem;margin-bottom:1.5rem;">
                             <h3 style="margin:0 0 0.5rem;font-size:1rem;font-weight:700;color:#0369a1;display:flex;align-items:center;gap:0.5rem;">
@@ -3129,17 +3191,18 @@
                                 const status = getTrafficLightStatus(percent);
                                 const expected = expectations[pillar] || 0;
                                 const vsExpected = data.achieved >= expected ? '✓ Age-appropriate' : `⚠ ${expected - data.achieved} below expectation`;
-                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵' };
-                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea' };
+                                const pillarIcons = { attention: '🧠', communication: '💬', social: '🤝', motor: '🦵', fine_motor: '✍️' };
+                                const pillarColors = { attention: '#f59e0b', communication: '#3b82f6', social: '#10b981', motor: '#667eea', fine_motor: '#d946ef' };
+                                let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
                                 return `
                                     <div style="padding:1.25rem;background:#f8fafc;border-radius:16px;border:1px solid #e2e8f0;">
                                         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                                            <span style="font-size:1.25rem;">${pillarIcons[pillar]}</span>
-                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillar}</span>
+                                            <span style="font-size:1.25rem;">${pillarIcons[pillar] || '📋'}</span>
+                                            <span style="font-weight:700;text-transform:capitalize;color:#1e293b;">${pillarName}</span>
                                             <span style="margin-left:auto;font-size:1.25rem;">${status.icon}</span>
                                         </div>
                                         <div style="background:#e2e8f0;border-radius:8px;height:8px;overflow:hidden;margin-bottom:0.5rem;">
-                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]},${pillarColors[pillar]}88);height:100%;width:${percent}%;border-radius:8px;"></div>
+                                            <div style="background:linear-gradient(90deg,${pillarColors[pillar]||'#cbd5e1'},${pillarColors[pillar]||'#cbd5e1'}88);height:100%;width:${percent}%;border-radius:8px;"></div>
                                         </div>
                                         <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#64748b;margin-bottom:0.5rem;">
                                             <span>${data.achieved}/${data.total} skills observed</span>
@@ -3150,8 +3213,7 @@
                                             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed #e2e8f0;">
                                                 <div style="font-size:0.7rem;color:#94a3b8;margin-bottom:0.25rem;">Observed behaviors:</div>
                                                 <ul style="margin:0;padding-left:1rem;font-size:0.75rem;color:#475569;line-height:1.5;">
-                                                    ${data.behaviors.slice(0, 4).map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
-                                                    ${data.behaviors.length > 4 ? `<li>+${data.behaviors.length - 4} more...</li>` : ''}
+                                                    ${data.behaviors.map(b => `<li>${b.name}${b.frequency ? ' (' + b.frequency + ')' : ''}</li>`).join('')}
                                                 </ul>
                                             </div>
                                         ` : ''}
@@ -3192,7 +3254,7 @@
                     </div>
 
                     <!-- Footer Actions -->
-                    <div style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
+                    <div class="report-footer" style="padding:1rem 1.5rem;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;">
                         <div style="font-size:0.8rem;color:#64748b;">
                             Generated by Bright Steps Developmental Tracking
                         </div>
@@ -3353,13 +3415,13 @@
         ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
             // Progress is based on age-appropriate expectation, not just total behaviors in checklist
-            const percent = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+            const percent = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
             const countEl   = document.getElementById(`${pillar}-count`);
             const totalEl2  = document.getElementById(`${pillar}-total`);
             const percentEl = document.getElementById(`${pillar}-percent`);
             const progressEl= document.getElementById(`${pillar}-progress`);
             if (countEl)    countEl.textContent   = s.achieved;
-            if (totalEl2)   totalEl2.textContent  = s.expected; // Show expected milestones for age
+            if (totalEl2)   totalEl2.textContent  = s.total; // Show expected milestones for age
             if (percentEl)  percentEl.textContent = percent + '%';
             if (progressEl) progressEl.style.width = percent + '%';
         });
@@ -3374,7 +3436,7 @@
                 if (bar) {
                     const s = stats[pillar];
                     // Calculate percentage based on age expectation
-                    const pct = s.expected > 0 ? Math.min(Math.round((s.achieved / s.expected) * 100), 100) : 0;
+                    const pct = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
                     const displayPct = Math.max(pct, 8); // Minimum 8% for visibility
                     bar.style.height = displayPct + '%';
                     bar.setAttribute('data-pillar', pillar);
@@ -3463,76 +3525,80 @@
         const messages = [];
         const analysisPoints = [];
 
-        // AI Analysis per pillar - using stats.expected (age-appropriate benchmark)
-        ['attention', 'communication', 'social', 'motor'].forEach(pillar => {
+        // AI Analysis per pillar
+        ['attention', 'communication', 'social', 'motor', 'fine_motor'].forEach(pillar => {
             const s = stats[pillar];
-            if (!s || s.expected === 0) return;
+            if (!s || s.total === 0) return;
 
-            // Calculate percentage based on age expectation
-            const pct = Math.round((s.achieved / s.expected) * 100);
+            // Calculate percentage based on checklist total
+            const pct = Math.round((s.achieved / s.total) * 100);
             const status = getTrafficLightStatus(pct);
-            const expectation = ageExpectations[pillar][ageRange];
+            const expectation = ageExpectations[pillar] && ageExpectations[pillar][ageRange] ? ageExpectations[pillar][ageRange] : {description: 'steady progress expected'};
+
+            let pillarName = pillar.charAt(0).toUpperCase() + pillar.slice(1).replace('_', ' ');
 
             // Generate AI analysis based on actual data patterns
             if (status.icon === '🟢') {
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #10b981;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#10b981;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(16,185,129,0.3);">✓</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.expected} age-expected skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} demonstrates ${s.achieved}/${s.total} targeted skills. ${expectation ? expectation.description + '.' : 'Healthy progress.'}</div>
                 </div>`);
-                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.expected} age-expected skills` });
+                analysisPoints.push({ pillar, status: 'strength', detail: `Mastered ${s.achieved}/${s.total} targeted skills` });
             } else if (status.icon === '🟡') {
-                const gap = s.expected - s.achieved;
+                const gap = s.total - s.achieved;
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #f59e0b;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#f59e0b;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(245,158,11,0.3);">⚠</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.expected} age-expected skills. ${gap > 0 ? gap + ' skills emerging.' : ''} Recommend targeted play activities.</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} shows ${s.achieved}/${s.total} targeted skills. ${gap > 0 ? gap + ' skills still emerging.' : ''} Recommend targeted play activities.</div>
                 </div>`);
-                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} skills below age expectation; focus area identified` });
+                analysisPoints.push({ pillar, status: 'developing', detail: `${gap} targeted skills emerging; focus area identified` });
             } else {
-                const gap = s.expected - s.achieved;
+                const gap = s.total - s.achieved;
                 messages.push(`<div style="background:rgba(255,255,255,0.1);border-radius:12px;padding:1.25rem;border-left:4px solid #ef4444;backdrop-filter:blur(4px);box-shadow:0 4px 12px rgba(0,0,0,0.05);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                     <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
                         <span style="background:#ef4444;color:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.8rem;box-shadow:0 2px 4px rgba(239,68,68,0.3);">✕</span>
-                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillar.charAt(0).toUpperCase() + pillar.slice(1)}</strong>
+                        <strong style="font-size:1.05rem;color:#fff;letter-spacing:0.3px;">${pillarName}</strong>
                         <span style="background:rgba(255,255,255,0.2);padding:0.2rem 0.6rem;border-radius:99px;font-size:0.75rem;font-weight:700;margin-left:auto;border:1px solid rgba(255,255,255,0.3);">${pct}%</span>
                     </div>
-                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.expected} age-expected skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
+                    <div style="font-size:0.9rem;opacity:0.9;line-height:1.5;">${name} has ${s.achieved}/${s.total} targeted skills. ${gap} skills below expectation. Suggest daily structured activities.</div>
                 </div>`);
                 analysisPoints.push({ pillar, status: 'concern', detail: `Significant gap (${gap} skills); early intervention may benefit` });
             }
         });
 
-        // Overall AI synthesis - based on age expectations
-        let totalExpected = 0;
+        // Overall AI synthesis
+        let totalTarget = 0;
         let totalAchieved = 0;
         Object.values(stats).forEach(s => {
-            if (s && s.expected) {
-                totalExpected += s.expected;
+            if (s && s.total) {
+                totalTarget += s.total;
                 totalAchieved += s.achieved;
             }
         });
-        const overallPercent = totalExpected > 0 ? Math.round((totalAchieved / totalExpected) * 100) : 0;
+        const overallPercent = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
 
         const strengths = analysisPoints.filter(p => p.status === 'strength');
         const concerns = analysisPoints.filter(p => p.status === 'concern');
         const developing = analysisPoints.filter(p => p.status === 'developing');
 
+        const formatPillarName = (p) => p === 'fine_motor' ? 'Fine Motor' : p.charAt(0).toUpperCase() + p.slice(1);
+        
         let aiSummary = '';
         if (strengths.length >= 3) {
-            aiSummary = `${name} is meeting or exceeding age expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
+            aiSummary = `${name} is meeting or exceeding expectations across ${strengths.length}/${strengths.length + developing.length + concerns.length} domains. Continue current enrichment activities.`;
         } else if (concerns.length === 0) {
-            aiSummary = `${name} is progressing well overall (${overallPercent}% of age-expected skills). Focus on ${developing.map(d => d.pillar).join(' & ')} for continued growth.`;
+            aiSummary = `${name} is progressing well overall (${overallPercent}% of targeted skills). Focus on ${developing.map(d => formatPillarName(d.pillar)).join(' & ')} for continued growth.`;
         } else if (concerns.length <= 1) {
-            aiSummary = `${name} shows ${overallPercent}% of age-expected development. ${concerns[0]?.pillar || 'one area'} identified as focus area. Early enrichment recommended.`;
+            aiSummary = `${name} shows ${overallPercent}% of targeted development. ${concerns[0] ? formatPillarName(concerns[0].pillar) : 'one area'} identified as focus area. Early enrichment recommended.`;
         } else {
-            aiSummary = `Multiple domains (${concerns.map(c => c.pillar).join(', ')}) show delays relative to age expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
+            aiSummary = `Multiple domains (${concerns.map(c => formatPillarName(c.pillar)).join(', ')}) show delays relative to expectations. Recommend: developmental pediatrician consultation + structured daily activities.`;
         }
 
         // Combine server feedback with AI analysis
@@ -3557,7 +3623,7 @@
 
         // Add specific recommendations
         if (concerns.length > 0 || developing.length > 0) {
-            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${a.pillar.charAt(0).toUpperCase() + a.pillar.slice(1)}</span>`);
+            const focusAreas = [...concerns, ...developing].map(a => `<span style="background:rgba(255,255,255,0.25);padding:0.35rem 0.85rem;border-radius:99px;font-size:0.8rem;font-weight:700;display:inline-flex;align-items:center;gap:0.35rem;border:1px solid rgba(255,255,255,0.3);box-shadow:0 2px 8px rgba(0,0,0,0.1);">🎯 ${formatPillarName(a.pillar)}</span>`);
             finalText += `<div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1.5rem;padding-top:1.5rem;border-top:1px dashed rgba(255,255,255,0.2);">
                 <strong style="font-size:0.95rem;opacity:0.9;">Priority Focus:</strong>
                 ${focusAreas.join('')}
@@ -4245,7 +4311,7 @@
                         <h1 class="dashboard-title" style="margin-bottom:0.25rem;">Activity Center 🎨</h1>
                         <p class="dashboard-subtitle" style="margin:0;">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
-                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('' + childParam + '')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('${childParam}')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                 </div>
 
                 <!-- Featured Game Banner -->
@@ -4911,10 +4977,16 @@
                                 bio +
 
                                 '<div class="doctor-pills-row">' +
-                                    '<div class="doctor-pill doctor-pill-loc">' +
-                                        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
-                                        (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
-                                    '</div>' +
+                                    (s.clinic_id ? 
+                                        '<a href="../../clinic-profile.php?id=' + s.clinic_id + '" class="doctor-pill doctor-pill-loc" style="text-decoration:none;">' +
+                                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+                                            (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                        '</a>' :
+                                        '<div class="doctor-pill doctor-pill-loc">' +
+                                            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
+                                            (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                        '</div>'
+                                    ) +
                                     '<div class="doctor-pill doctor-pill-fee">' +
                                         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
                                         fee +
@@ -4933,7 +5005,7 @@
 
                         '<!-- Footer Actions -->' +
                         '<div class="doctor-card-footer">' +
-                            '<button class="btn-doctor-profile" onclick="viewDoctorInfo(' + s.specialist_id + ')">' +
+                            '<button class="btn-doctor-profile" onclick="window.location.href = \'../../specialist-profile.php?id=' + s.specialist_id + '\'">' +
                                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>' +
                                 'View Profile' +
                             '</button>' +
@@ -4961,12 +5033,27 @@
                     statusText = 'Pending Doctor Approval';
                 }
 
+                let timelineHtml = '<div style="display:flex;align-items:center;gap:0.25rem;margin-bottom:0.75rem;">';
+                const states = [
+                    { label: 'Pending', active: a.status === 'Pending' || a.status === 'Scheduled' || a.status === 'Completed' },
+                    { label: 'Scheduled', active: a.status === 'Scheduled' || a.status === 'Completed' },
+                    { label: 'Completed', active: a.status === 'Completed' }
+                ];
+                states.forEach((s, i) => {
+                    const color = s.active ? '#3b82f6' : '#e2e8f0';
+                    timelineHtml += `<div style="flex:1;height:4px;background:${color};border-radius:2px;"></div>`;
+                });
+                timelineHtml += '</div>';
+
                 let actionsHtml = '<div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">';
                 if (a.status === 'Scheduled') {
                     actionsHtml += '<button onclick="window.rescheduleAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">Reschedule</button>';
                     actionsHtml += '<button onclick="window.cancelAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1; color:var(--red-500); border-color:var(--red-200);">Cancel</button>';
-                } else if (a.status === 'Completed') {
-                    actionsHtml += '<button onclick="window.reviewDoctor(' + a.appointment_id + ', ' + a.specialist_id + ', \'' + a.doc_fname + ' ' + a.doc_lname + '\')" class="btn btn-gradient" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">⭐ Review</button>';
+                } else if (a.status === 'Completed' || a.status === 'completed') {
+                    if (a.report && a.report.trim() !== '') {
+                        actionsHtml += `<button onclick="window.viewAppointmentReport(${a.appointment_id}, \`${(a.report||'').replace(/`/g,"'")}\`, \`${a.doc_fname} ${a.doc_lname}\`, '${a.next_visit_recommendation||''}')" class="btn btn-outline btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;margin-bottom:0.5rem;font-size:0.7rem;padding:0.35rem 0.5rem;flex:1;">📄 View Report</button>`;
+                    }
+                    actionsHtml += `<button onclick="window.reviewDoctor(${a.appointment_id}, ${a.specialist_id}, '${a.doc_fname} ${a.doc_lname}', ${a.clinic_id || 0}, ${a.type === 'onsite' ? 'true' : 'false'})" class="btn btn-gradient" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">⭐ Review</button>`;
                 }
                 actionsHtml += '</div>';
 
@@ -4976,6 +5063,7 @@
                             '<span class="badge ' + statusCls + '" style="font-size:0.7rem;">' + statusText + '</span>' +
                             '<span class="appt-sidebar-type" style="font-size:0.75rem; color:var(--slate-500);">' + (a.type === 'onsite' ? '📍 Clinic' : '💻 Online') + '</span>' +
                         '</div>' +
+                        timelineHtml +
                         '<div class="appt-sidebar-body" style="display:flex; gap:1rem;">' +
                             '<div class="appt-sidebar-cal" style="text-align:center; min-width:45px;">' +
                                 '<div class="appt-cal-month" style="font-size:0.75rem; font-weight:700; color:var(--red-500); text-transform:uppercase;">' + dt.toLocaleDateString('en-US', { month: 'short' }) + '</div>' +
@@ -5065,105 +5153,7 @@
 
 
     window.viewDoctorInfo = function (specialistId) {
-        if (!window._allSpecialists) return;
-        const s = window._allSpecialists.find(x => x.specialist_id == specialistId);
-        if (!s) return;
-
-        let existing = document.getElementById('act-modal');
-        if (existing) existing.remove();
-
-        const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.first_name)}+${encodeURIComponent(s.last_name)}&background=random`;
-
-        const modal = document.createElement('div');
-        modal.id = 'act-modal';
-        modal.innerHTML = `
-            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-                <div style="background:#ffffff;border-radius:16px;width:100%;max-width:750px;display:flex;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out; position:relative; max-height:90vh;">
-                    <button onclick="document.getElementById('act-modal').remove()" style="position:absolute;top:1rem;right:1rem;background:#f1f5f9;border:none;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#64748b;font-weight:bold;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
-                    
-                    <div style="width:250px;background:#f8fafc;padding:2.5rem 2rem;display:flex;flex-direction:column;align-items:center;border-right:1px solid #e2e8f0;overflow-y:auto;">
-                        <img src="${avatar}" style="width:120px;height:120px;border-radius:50%;object-fit:cover;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);margin-bottom:1.5rem;" />
-                        <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0 0 0.25rem;text-align:center;">Dr. ${s.first_name} ${s.last_name}</h2>
-                        <p style="color:var(--blue-600);font-weight:600;font-size:0.9rem;margin:0 0 1.25rem;text-align:center;">${s.specialization || 'Specialist'}</p>
-                        <div style="display:flex;align-items:center;gap:0.35rem;background:#fff;padding:0.5rem 1rem;border-radius:20px;border:1px solid #e2e8f0;font-size:0.9rem;font-weight:700;color:var(--slate-700);box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-                            <span style="color:#eab308;font-size:1.1rem;">★</span> ${s.rating || 'New'} Rating
-                        </div>
-                    </div>
-                    
-                    <div style="flex:1;padding:2.5rem;display:flex;flex-direction:column;background:#ffffff;overflow-y:auto;">
-                        <div style="flex:1;">
-                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1.5rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Doctor Information</h4>
-
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem;">
-                                <div>
-                                    <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Experience</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.1rem;">${s.experience_years || 0} Years</div>
-                                </div>
-                                <div>
-                                    <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Consultation Fee</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.1rem;">${s.consultation_fee || '200'} EGP</div>
-                                </div>
-                                <div style="grid-column:1/-1;">
-                                    <div style="font-size:0.8rem;color:var(--slate-500);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">Clinic Location</div>
-                                    <div style="font-weight:700;color:var(--slate-800);font-size:1.05rem;display:flex;align-items:flex-start;gap:0.5rem;">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" style="margin-top:2px;flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                        ${s.clinic_name}, ${s.location}
-                                    </div>
-                                </div>
-                            </div>
-
-                            ${s.bio ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Biography</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.bio + '</p>' : ''}
-
-                            ${s.availability && s.availability.length > 0 ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Next Available Slots</h4><div style="background:#f8fafc;border-radius:12px;padding:1.5rem;">' + s.availability.map(slot => {
-                    const startTime = slot.start_time ? slot.start_time.substring(0, 5) : '';
-                    const endTime = slot.end_time ? slot.end_time.substring(0, 5) : '';
-                    return '<div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;padding:0.75rem;background:#fff;border-radius:8px;"><span>' + slot.label + '</span><span>' + startTime + ' to ' + endTime + '</span></div>';
-                }).join('') + '</div>' : ''}
-
-                            ${s.certificate_of_experience ? '<h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Education & Certifications</h4><p style="color:var(--slate-600);line-height:1.6;">' + s.certificate_of_experience + '</p>' : ''}
-
-                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Consultation Tags</h4>
-                            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.5rem;">
-                                ${s.consultation_types ? s.consultation_types.split(',').map(tag => '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">' + tag.trim() + '</span>').join('') : '<span style="background:#e2e8f0;color:var(--slate-700);padding:0.25rem 0.5rem;border-radius:4px;font-size:0.85rem;">On-site</span>'}
-                            </div>
-
-                            <h4 style="font-weight:800;color:var(--slate-800);margin-bottom:1rem;font-size:1.15rem;border-bottom:2px solid #f1f5f9;padding-bottom:0.75rem;">Patient Reviews</h4>
-                            <div id="doctor-reviews-container" style="max-height: 150px; overflow-y: auto; margin-bottom: 1.5rem; padding-right: 0.5rem;">
-                                <div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">Loading reviews...</div>
-                            </div>
-                        </div>
-                        
-                        <button onclick="document.getElementById('act-modal').remove(); bookSpecialist(${s.specialist_id}, 'Dr. ${s.first_name} ${s.last_name}')" class="btn btn-gradient" style="width:100%;padding:1.1rem;font-size:1.1rem;font-weight:700;border-radius:12px;box-shadow:0 10px 15px -3px rgba(37,99,235,0.3);transition:transform 0.2s,box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 15px 20px -3px rgba(37,99,235,0.4)';" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 15px -3px rgba(37,99,235,0.3)';">
-                            Book Appointment Now
-                        </button>
-                    </div>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-
-        fetch('../../api_doctor_review.php?action=list&specialist_id=' + specialistId)
-            .then(r => r.json())
-            .then(data => {
-                const container = document.getElementById('doctor-reviews-container');
-                if (!container) return;
-                if (data.reviews && data.reviews.length > 0) {
-                    container.innerHTML = data.reviews.map(r => 
-                        '<div style="background:#f8fafc; border-radius:12px; padding:1rem; margin-bottom:0.75rem;">' +
-                            '<div style="display:flex; justify-content:space-between; margin-bottom:0.25rem;">' +
-                                '<span style="font-weight:700; font-size:0.9rem; color:var(--slate-800);">' + r.first_name + ' ' + (r.last_name||'')[0] + '.</span>' +
-                                '<span style="color:#eab308; font-size:0.9rem;">' + '★'.repeat(r.rating) + '☆'.repeat(5-r.rating) + '</span>' +
-                            '</div>' +
-                            (r.comment ? '<p style="margin:0; font-size:0.85rem; color:var(--slate-600);">' + r.comment + '</p>' : '') +
-                        '</div>'
-                    ).join('');
-                } else {
-                    container.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">No reviews yet.</div>';
-                }
-            })
-            .catch(() => {
-                const container = document.getElementById('doctor-reviews-container');
-                if(container) container.innerHTML = '<div style="text-align:center; padding:1rem; color:var(--slate-400); font-size:0.9rem;">Failed to load reviews.</div>';
-            });
+        window.location.href = '../../specialist-profile.php?id=' + specialistId;
     };
 
     function getReportsView() {
@@ -5207,7 +5197,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Growth, appointments & complete profile</p>
                             <span class="badge badge-purple" style="margin-bottom: 1rem;">Full Assessment</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=full-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#6C63FF;border-color:#6C63FF;" onclick="openShareReportModal('full-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5225,7 +5215,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Weight, height & head measurements</p>
                              <span class="badge badge-green" style="margin-bottom: 1rem;">Growth Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=growth-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#22c55e;border-color:#22c55e;" onclick="openShareReportModal('growth-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -5244,7 +5234,7 @@
                             <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Vocabulary, clarity & full transcripts</p>
                              <span class="badge" style="background:#f3e8ff;color:#9333ea;margin-bottom: 1rem;">Speech Data</span>
                             <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-                                <button class="btn btn-gradient btn-sm" onclick="window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=speech-report${childParam}','_blank')">📥 Download</button>
                                 <button class="btn btn-outline btn-sm" style="color:#9333ea;border-color:#9333ea;" onclick="openShareReportModal('speech-report', ${childId})">📤 Share</button>
                             </div>
                         </div>
@@ -6158,8 +6148,9 @@
         const childBirth = child ? `${child.birth_year}-${String(child.birth_month).padStart(2, '0')}-${String(child.birth_day).padStart(2, '0')}` : '';
         const settings = d.user_settings || {};
         const isDark = (settings.theme === 'dark') || document.documentElement.getAttribute('data-theme') === 'dark';
-        const lang = settings.language || localStorage.getItem('language') || 'en';
         const sub = d.subscription || {};
+        const expiredPremium = sub.expired_premium;
+        const expiresAt = sub.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : null;
 
         return `
         <div class="dashboard-content">
@@ -6309,7 +6300,12 @@
                             <div class="settings-row">
                                 <div>
                                     <h4 class="settings-row-title">Current Plan: <span style="color:var(--blue-600);font-weight:700;">${sub.plan_name || 'Free'}</span></h4>
-                                    <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? '$' + sub.price + '/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
+                                    <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? sub.price + ' EGP/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
+                                    <div style="font-size:0.8rem;color:#64748b;margin-top:0.25rem;">
+                                        ${expiresAt ? `Expires: ${expiresAt}` : ''}
+                                        ${expiredPremium ? '<span style="color:#ef4444;font-weight:700;margin-left:0.5rem;">⚠️ Subscription Expired</span>' : ''}
+                                    </div>
+                                    ${expiredPremium ? `<button class="btn btn-gradient btn-sm" style="margin-top:0.75rem;background:linear-gradient(135deg,#7c3aed,#4f46e5);" onclick="window.showPaymentModal('Premium', 250)">🔄 Renew Subscription — 250 EGP/month</button>` : ''}
                                 </div>
                                 <button class="btn btn-gradient btn-sm" onclick="window.location.href='../../pricing.php'">${sub.plan_name === 'Premium' ? 'Manage' : 'Upgrade'}</button>
                             </div>
@@ -6329,11 +6325,11 @@
                                     <p class="settings-row-sub">View past payments and download invoices</p>
                                 </div>
                                 <div class="settings-row-action">
-                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()">Load Invoice History</button>
+                                    <button class="btn btn-outline btn-sm" onclick="loadInvoiceHistory()" id="invoice-refresh-btn">🔄 Refresh</button>
                                 </div>
                             </div>
                             <div id="invoice-history-container" style="margin-top:1.5rem;">
-                                <div style="text-align:center;color:#64748b;font-style:italic;padding:2rem;">Click 'Load Invoice History' to view your payment records</div>
+                                <div style="text-align:center;color:#64748b;padding:2rem;">Loading...</div>
                             </div>
                         </div>
                     </div>
@@ -7609,6 +7605,17 @@
             used = 0;
             if (trialKey) localStorage.setItem(trialKey, '0');
         }
+
+        const windowKey = feature ? 'bs_trial_window_' + feature : null;
+        if (windowKey) {
+            const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (Date.now() - windowStart > sevenDays) {
+                localStorage.setItem(trialKey, '0');
+                localStorage.setItem(windowKey, String(Date.now()));
+                used = 0;
+            }
+        }
         
         let left = Math.max(0, maxTrials - used);
 
@@ -7634,7 +7641,7 @@
         
         // Trial section HTML
         let trialHtml = '';
-        if (feature === 'motor' || feature === 'speech' || feature === 'growth') {
+        if (feature === 'motor' || feature === 'speech') {
             trialHtml = `
             <div style="border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;">
                 <div>
@@ -7646,9 +7653,9 @@
             `;
         }
 
-        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 29.99)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium</button>`;
+        let actionHtml = `<button onclick="document.getElementById('premium-modal').remove(); window.showPaymentModal('Premium', 250)" style="width:100%;padding:1.1rem;background:linear-gradient(135deg, #7c3aed, #4f46e5);color:#fff;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;margin-bottom:1rem;box-shadow:0 10px 15px -3px rgba(124,58,237,0.3);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">Upgrade to Premium — 250 EGP/month</button>`;
         
-        if ((feature === 'motor' || feature === 'speech' || feature === 'growth') && left > 0) {
+        if ((feature === 'motor' || feature === 'speech') && left > 0) {
             actionHtml += `<button onclick="document.getElementById('premium-modal').remove(); window.incrementTrial('${feature}'); if('${feature}'==='motor') switchView('motor'); else if('${feature}'==='speech') switchView('speech'); else switchView('growth');" style="width:100%;padding:1.1rem;background:#ffffff;color:#1e293b;border:1px solid #e2e8f0;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">Use Free Trial (${left} left)</button>`;
         } else {
              actionHtml += `<button onclick="document.getElementById('premium-modal').remove()" style="width:100%;padding:1rem;background:none;color:#64748b;border:none;font-weight:600;font-size:0.95rem;cursor:pointer;">Maybe Later</button>`;
@@ -7708,6 +7715,16 @@
         const trialKey = 'bs_trial_' + feature;
         let used = parseInt(localStorage.getItem(trialKey) || '0');
         
+        const windowKey = 'bs_trial_window_' + feature;
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (Date.now() - windowStart > sevenDays) {
+            // Window expired — reset
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(Date.now()));
+            used = 0;
+        }
+        
         // Always show the modal for free users unless they've clicked 'Use Free Trial' this session
         if (window['_access_granted_' + feature]) {
             if (used >= maxTrials) {
@@ -7721,17 +7738,26 @@
         return false;
     };
 
-    window.incrementTrial = function (feature) {
+    window.incrementTrial = function(feature) {
         window['_access_granted_' + feature] = true;
         
-        // Don't increment trial count for speech analysis as we use actual speech history count
-        if (feature === 'speech') {
-            return;
-        }
-
         const trialKey = 'bs_trial_' + feature;
-        let used = parseInt(localStorage.getItem(trialKey) || '0');
-        localStorage.setItem(trialKey, used + 1);
+        const windowKey = 'bs_trial_window_' + feature;
+        const now = Date.now();
+        const windowStart = parseInt(localStorage.getItem(windowKey) || '0');
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        
+        // Reset counter if 7-day window has expired
+        if (now - windowStart > sevenDays) {
+            localStorage.setItem(trialKey, '0');
+            localStorage.setItem(windowKey, String(now));
+        }
+        
+        // Don't increment for speech (speech uses actual DB count)
+        if (feature === 'speech') return;
+        
+        const used = parseInt(localStorage.getItem(trialKey) || '0');
+        localStorage.setItem(trialKey, String(used + 1));
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -7836,27 +7862,197 @@
         .catch(console.error);
     };
 
-    window.reviewDoctor = function(appointmentId, specialistId, docName) {
-        const rating = prompt('Rate ' + docName + ' from 1 to 5:');
-        if (!rating || rating < 1 || rating > 5) { alert('Invalid rating.'); return; }
-        
-        const comment = prompt('Leave a comment (optional):') || '';
-        
-        fetch('../../api_doctor_review.php?action=submit', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ appointment_id: appointmentId, specialist_id: specialistId, rating: parseInt(rating), comment: comment })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert('Review submitted! Thank you.');
-                location.reload();
-            } else {
-                alert(data.error || 'Failed to submit review.');
-            }
-        })
-        .catch(console.error);
+    window.viewAppointmentReport = function(appointmentId, reportText, doctorName, nextVisit) {
+        let existing = document.getElementById('view-report-modal');
+        if (existing) existing.remove();
+        const nextVisitHtml = nextVisit 
+            ? `<div style="margin-top:1.25rem;padding:1rem;background:linear-gradient(135deg,#eff6ff,#dbeafe);border-radius:12px;border-left:4px solid #3b82f6;"><div style="font-size:0.8rem;font-weight:600;color:#1d4ed8;margin-bottom:0.25rem;">📅 RECOMMENDED NEXT VISIT</div><div style="font-size:1rem;font-weight:700;color:#1e40af;">${new Date(nextVisit).toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>`
+            : '';
+        const modal = document.createElement('div');
+        modal.id = 'view-report-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.7);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        modal.innerHTML = `
+        <div style="background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:520px;box-shadow:0 24px 64px rgba(0,0,0,0.25);max-height:85vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+                <div>
+                    <h3 style="margin:0 0 0.25rem;font-size:1.2rem;font-weight:700;color:#0f172a;">📄 Session Report</h3>
+                    <p style="margin:0;font-size:0.85rem;color:#64748b;">By ${doctorName}</p>
+                </div>
+                <button onclick="document.getElementById('view-report-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#64748b;">✕</button>
+            </div>
+            <div style="background:#f8fafc;border-radius:12px;padding:1.25rem;border:1px solid #e2e8f0;font-size:0.95rem;line-height:1.7;color:#374151;white-space:pre-wrap;">${reportText || 'No report content available.'}</div>
+            ${nextVisitHtml}
+            <div style="margin-top:1.5rem;display:flex;gap:0.75rem;">
+                <button onclick="document.getElementById('view-report-modal').remove()" style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;">Close</button>
+                <button onclick="window.open('../../api_export_pdf.php?type=specialist-report&appointment_id=${appointmentId}','_blank')" style="flex:1;padding:0.75rem;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">📥 Export PDF</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    };
+
+    window.skipClinicReview = function() {
+        const m = document.getElementById('review-modal');
+        if (m) m.remove();
+        window.showReviewThankYou();
+    };
+
+    window.showReviewThankYou = function() {
+        const t = document.createElement('div');
+        t.style.cssText = 'position:fixed;bottom:2rem;right:2rem;z-index:99999;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:1rem 1.5rem;border-radius:12px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.2);';
+        t.innerHTML = '🎉 Thank you for your review!';
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3500);
+    };
+
+    window.submitClinicReview = async function(appointmentId, clinicId) {
+        const rating  = parseInt(document.getElementById('clinic-rev-rating').value);
+        const comment = document.getElementById('clinic-rev-comment').value.trim();
+        const btn     = document.getElementById('submit-clinic-rev-btn');
+        if (rating < 1) { alert('Please select a star rating for the clinic.'); return; }
+        btn.textContent = 'Submitting...';
+        btn.disabled = true;
+        try {
+            const res = await fetch('../../api_clinic_review.php?action=submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ appointment_id: appointmentId, clinic_id: clinicId, rating, comment })
+            });
+            const data = await res.json();
+            const m = document.getElementById('review-modal');
+            if (m) m.remove();
+            window.showReviewThankYou();
+        } catch (e) {
+            const m = document.getElementById('review-modal');
+            if (m) m.remove();
+            window.showReviewThankYou();
+        }
+    };
+
+    window.reviewDoctor = function(appointmentId, specialistId, docName, clinicId=0, isOnsite=false) {
+        let existing = document.getElementById('review-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'review-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;padding:2rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+                        <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0;">Rate Your Visit</h2>
+                        <button onclick="document.getElementById('review-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);">&times;</button>
+                    </div>
+                    <p style="color:var(--slate-500);margin-bottom:1.5rem;font-size:0.9rem;">How was your experience with ${docName}?</p>
+                    
+                    <div style="margin-bottom:1.5rem;text-align:center;">
+                        <div id="star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:var(--slate-300);cursor:pointer;">
+                            <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                        </div>
+                        <input type="hidden" id="rev-rating" value="0">
+                    </div>
+                    
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Comment (Optional)</label>
+                        <textarea id="rev-comment" rows="3" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;font-family:inherit;" placeholder="Share your thoughts..."></textarea>
+                    </div>
+
+                    <button id="submit-rev-btn" class="btn btn-gradient" style="width:100%;padding:1rem;">Submit Review</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const stars = document.querySelectorAll('#star-rating span');
+        const ratingInput = document.getElementById('rev-rating');
+        stars.forEach(s => {
+            s.addEventListener('click', () => {
+                const val = parseInt(s.getAttribute('data-val'));
+                ratingInput.value = val;
+                stars.forEach((st, i) => {
+                    st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)';
+                });
+            });
+            s.addEventListener('mouseover', () => {
+                const val = parseInt(s.getAttribute('data-val'));
+                stars.forEach((st, i) => {
+                    st.style.color = i < val ? '#fcd34d' : 'var(--slate-300)';
+                });
+            });
+            s.addEventListener('mouseout', () => {
+                const val = parseInt(ratingInput.value);
+                stars.forEach((st, i) => {
+                    st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)';
+                });
+            });
+        });
+
+        document.getElementById('submit-rev-btn').addEventListener('click', () => {
+            const rating = parseInt(ratingInput.value);
+            if (rating < 1 || rating > 5) { alert('Please select a star rating.'); return; }
+            const comment = document.getElementById('rev-comment').value;
+
+            document.getElementById('submit-rev-btn').disabled = true;
+            document.getElementById('submit-rev-btn').innerHTML = 'Submitting...';
+
+            fetch('../../api_doctor_review.php?action=submit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ appointment_id: appointmentId, specialist_id: specialistId, rating: rating, comment: comment })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (isOnsite && clinicId) {
+                        document.getElementById('review-modal').innerHTML = `
+                        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;">
+                            <div style="background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:440px;box-shadow:0 24px 64px rgba(0,0,0,0.25);">
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                                    <div style="width:32px;height:32px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;">✓</div>
+                                    <div style="width:32px;height:32px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;font-weight:700;">2</div>
+                                    <p style="margin:0;font-size:0.85rem;color:#64748b;">Step 2 of 2 — Rate the Clinic</p>
+                                </div>
+                                <h3 style="margin:0.75rem 0 0.25rem;font-size:1.2rem;font-weight:700;color:#0f172a;">🏥 How was the clinic?</h3>
+                                <p style="margin:0 0 1.25rem;font-size:0.875rem;color:#64748b;">Share your experience with the facility, staff, and environment.</p>
+                                <div id="clinic-star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:#d1d5db;cursor:pointer;margin-bottom:1rem;">
+                                    <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                                </div>
+                                <input type="hidden" id="clinic-rev-rating" value="0">
+                                <textarea id="clinic-rev-comment" rows="3" placeholder="Clean facility? Friendly staff? Easy to find? (optional)" style="width:100%;padding:0.75rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-family:inherit;font-size:0.9rem;resize:none;outline:none;box-sizing:border-box;margin-bottom:1rem;transition:border-color 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
+                                <div style="display:flex;gap:0.75rem;">
+                                    <button onclick="window.skipClinicReview()" style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;font-size:0.875rem;">Skip</button>
+                                    <button id="submit-clinic-rev-btn" onclick="window.submitClinicReview(${appointmentId}, ${clinicId})" style="flex:2;padding:0.75rem;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">Submit Clinic Review</button>
+                                </div>
+                            </div>
+                        </div>`;
+                        
+                        const clinicStars = document.querySelectorAll('#clinic-star-rating span');
+                        const clinicRatingInput = document.getElementById('clinic-rev-rating');
+                        clinicStars.forEach(s => {
+                            s.addEventListener('click', () => {
+                                const val = parseInt(s.dataset.val);
+                                clinicRatingInput.value = val;
+                                clinicStars.forEach((st, i) => { st.style.color = i < val ? '#f59e0b' : '#d1d5db'; });
+                            });
+                            s.addEventListener('mouseover', () => {
+                                const val = parseInt(s.dataset.val);
+                                clinicStars.forEach((st, i) => { st.style.color = i < val ? '#fbbf24' : '#d1d5db'; });
+                            });
+                            s.addEventListener('mouseout', () => {
+                                const current = parseInt(clinicRatingInput.value);
+                                clinicStars.forEach((st, i) => { st.style.color = i < current ? '#f59e0b' : '#d1d5db'; });
+                            });
+                        });
+                    } else {
+                        window.showReviewThankYou();
+                    }
+                } else {
+                    alert(data.error || 'Failed to submit review.');
+                    document.getElementById('submit-rev-btn').disabled = false;
+                    document.getElementById('submit-rev-btn').innerHTML = 'Submit Review';
+                }
+            })
+            .catch(console.error);
+        });
     };
 
     // ══════════════════════════════════════════════════════════════
@@ -7885,6 +8081,22 @@
             
             <div id="bk-step-1" style="padding:2rem;">
                 <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Child</label>
+                    <select id="bk-child" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
+                        ${(function(){
+                            let opts = '';
+                            if (window.dashboardData && window.dashboardData.children && window.dashboardData.children.length > 0) {
+                                window.dashboardData.children.forEach(c => {
+                                    opts += `<option value="${c.child_id}">${c.first_name} ${c.last_name}</option>`;
+                                });
+                            } else {
+                                opts = '<option value="">No children found</option>';
+                            }
+                            return opts;
+                        })()}
+                    </select>
+                </div>
+                <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Consultation Type</label>
                     <select id="bk-type" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
                         <option value="onsite">On-site (Clinic Visit)</option>
@@ -7892,60 +8104,15 @@
                     </select>
                 </div>
                 <div style="margin-bottom:1.5rem;">
+                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Date</label>
+                    <input type="date" id="bk-date" min="${minDate}" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;" onchange="window.fetchSlots(${specId})">
+                </div>
+                <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Available Slots</label>
-                    <select id="bk-slot" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;">
-                        ${(function(){
-                            let slotOptions = '<option value="">No available slots</option>';
-                            if (window._allSpecialists) {
-                                const spec = window._allSpecialists.find(s => s.specialist_id == specId);
-                                if (spec && spec.availability) {
-                                    try {
-                                        const slots = spec.availability.filter(s => s.available);
-                                        // Get booked appointment datetimes (format: "YYYY-MM-DD HH:MM:SS")
-                                        const bookedAppts = spec.booked_appointments || [];
-                                        if (slots && slots.length > 0) {
-                                            let allOptions = [];
-                                            slots.forEach(s => {
-                                                let currentStr = s.start_time;
-                                                const endStr = s.end_time;
-                                                const dur = parseInt(s.slot_duration) || 30;
-                                                
-                                                while (currentStr < endStr) {
-                                                    // Check if this slot is already booked
-                                                    const slotTimeShort = currentStr.substring(0,5); // HH:MM
-                                                    const isBooked = bookedAppts.some(b => {
-                                                        // b format: "YYYY-MM-DD HH:MM:SS"
-                                                        return b.startsWith(s.date) && b.includes(' ' + slotTimeShort);
-                                                    });
-
-                                                    if (!isBooked) {
-                                                        // Parse time string to format it nicely (e.g. 09:00 AM)
-                                                        let [h, m] = currentStr.split(':').map(Number);
-                                                        let ampm = h >= 12 ? 'PM' : 'AM';
-                                                        let dispH = h % 12 || 12;
-                                                        let minStr = m < 10 ? '0' + m : m;
-                                                        let formattedTime = `${dispH}:${minStr} ${ampm}`;
-                                                        allOptions.push(`<option value="${s.date}|${currentStr}">${s.label} at ${formattedTime}</option>`);
-                                                    }
-                                                    
-                                                    // Advance by slot duration
-                                                    let [h2, m2] = currentStr.split(':').map(Number);
-                                                    m2 += dur;
-                                                    h2 += Math.floor(m2 / 60);
-                                                    m2 = m2 % 60;
-                                                    currentStr = (h2 < 10 ? '0' + h2 : h2) + ':' + (m2 < 10 ? '0' + m2 : m2) + ':00';
-                                                }
-                                            });
-                                            if (allOptions.length > 0) {
-                                                slotOptions = allOptions.join('');
-                                            }
-                                        }
-                                    } catch(e){}
-                                }
-                            }
-                            return slotOptions;
-                        })()}
-                    </select>
+                    <div id="bk-slot-grid" style="display:grid;grid-template-columns:repeat(3, 1fr);gap:0.5rem;">
+                        <div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">Select a date to view slots</div>
+                    </div>
+                    <input type="hidden" id="bk-slot" value="">
                 </div>
                 <div style="margin-bottom:1.5rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Notes for Specialist (Optional)</label>
@@ -7975,14 +8142,14 @@
 
                 <div style="margin-bottom:2rem;">
                     <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Payment Method</label>
-                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;">
+                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;document.getElementById('credit-card-form').style.display='block';">
                         <input type="radio" name="bk-payment" value="Credit Card" checked style="margin-right:1rem;accent-color:var(--blue-600);">
                         <div>
                             <div style="font-weight:600;color:var(--blue-900);">Credit Card</div>
                             <div style="font-size:0.75rem;color:var(--blue-600);">Pay securely online</div>
                         </div>
                     </label>
-                    <label id="bk-cash-label" style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;opacity:1;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';}">
+                    <label id="bk-cash-label" style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;opacity:1;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';document.getElementById('credit-card-form').style.display='none';}">
                         <input type="radio" name="bk-payment" value="Cash" id="bk-cash-input" style="margin-right:1rem;accent-color:var(--blue-600);">
                         <div>
                             <div style="font-weight:600;color:var(--slate-800);">Cash at Clinic</div>
@@ -7992,16 +8159,56 @@
                     <div id="bk-cash-warning" style="display:none;margin-top:0.5rem;padding:0.75rem 1rem;background:var(--orange-50);border:1px solid var(--orange-200);border-radius:8px;font-size:0.8rem;color:var(--orange-800);">
                         ⚠️ Cash payment is not available for online appointments. Please select Credit Card.
                     </div>
+                    
+                    <div id="credit-card-form" style="margin-top:1.5rem;padding:1.5rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
+                        <div style="font-weight:700;color:var(--slate-800);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Card Details
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Cardholder Name</label>
+                            <input type="text" id="cc-name" placeholder="Name on card" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                        </div>
+                        <div style="margin-bottom:1rem;">
+                            <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Card Number</label>
+                            <input type="text" id="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(.{4})/g, '$1 ').trim();" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                        </div>
+                        <div style="display:flex;gap:1rem;">
+                            <div style="flex:1;">
+                                <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Expiry Date</label>
+                                <input type="text" id="cc-expiry" placeholder="MM/YY" maxlength="5" oninput="if(this.value.length===2&&!this.value.includes('/')){this.value+='/';}" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">CVV</label>
+                                <input type="text" id="cc-cvv" placeholder="123" maxlength="4" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;">Confirm & Pay $50.00</button>
             </div>
             
-            <div id="bk-step-3" style="padding:3rem 2rem;display:none;text-align:center;">
-                <div style="width:4rem;height:4rem;background:#dcfce7;color:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 1.5rem;">✓</div>
-                <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin-bottom:0.5rem;">Booking Confirmed!</h2>
-                <p style="color:var(--slate-500);margin-bottom:2rem;">Your appointment has been successfully scheduled. We will send you a reminder beforehand.</p>
-                <button onclick="document.getElementById('book-modal').remove();fetchDashboardData();" class="btn btn-gradient" style="width:100%;">Done</button>
+            <div id="bk-step-3" style="padding:2.5rem 2rem;display:none;text-align:center;">
+                <div style="width:5rem;height:5rem;background:linear-gradient(135deg,#dcfce7,#bbf7d0);color:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin:0 auto 1.5rem;box-shadow:0 8px 20px rgba(22,163,74,0.2);">✓</div>
+                <h2 style="font-size:1.5rem;font-weight:800;color:#0f172a;margin-bottom:0.5rem;">Appointment Submitted!</h2>
+                <p style="color:#64748b;margin-bottom:1.5rem;line-height:1.6;">Your appointment request has been sent to the specialist. You'll be notified once it's confirmed.</p>
+                <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:left;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <span style="font-size:1.5rem;">⏳</span>
+                        <div>
+                            <div style="font-weight:700;color:#92400e;font-size:0.9rem;">Pending Specialist Approval</div>
+                            <div style="color:#78350f;font-size:0.8rem;margin-top:0.15rem;">Messaging will unlock once the specialist confirms your appointment.</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">
+                    <div style="width:28px;height:4px;background:#3b82f6;border-radius:2px;"></div>
+                    <div style="width:28px;height:4px;background:#d1d5db;border-radius:2px;"></div>
+                    <div style="width:28px;height:4px;background:#d1d5db;border-radius:2px;"></div>
+                    <div style="width:28px;height:4px;background:#d1d5db;border-radius:2px;"></div>
+                    <div style="font-size:0.7rem;color:#64748b;margin-left:0.5rem;">Step 1/4</div>
+                </div>
+                <button onclick="document.getElementById('book-modal').remove();fetchDashboardData();" class="btn btn-gradient" style="width:100%;padding:1rem;">Done</button>
             </div>
         </div>
     </div>`;
@@ -8026,9 +8233,66 @@
             document.getElementById('bk-step-3').style.display = 'none';
         };
 
+        window.fetchSlots = async function(sid) {
+            const dateVal = document.getElementById('bk-date').value;
+            const grid = document.getElementById('bk-slot-grid');
+            const slotInput = document.getElementById('bk-slot');
+            slotInput.value = '';
+            
+            if (!dateVal) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">Select a date to view slots</div>';
+                return;
+            }
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">⏳ Loading available slots...</div>';
+            
+            try {
+                // Use correct api/ subfolder path
+                const res = await fetch(`../../api/api_get_specialist_slots.php?specialist_id=${sid}&date=${dateVal}`);
+                const data = await res.json();
+                
+                if (!data.success) {
+                    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">${data.message || 'No slots available on this date'}</div>`;
+                    return;
+                }
+
+                if (data.slots && data.slots.length > 0) {
+                    grid.innerHTML = data.slots.map(s => {
+                        if (s.past) {
+                            return `<button disabled style="padding:0.6rem 0.5rem;border:1.5px solid #e2e8f0;border-radius:8px;background:#f1f5f9;cursor:not-allowed;font-size:0.8rem;color:#94a3b8;">${s.label}</button>`;
+                        }
+                        if (s.booked) {
+                            return `<button disabled style="padding:0.6rem 0.5rem;border:1.5px solid #fecdd3;border-radius:8px;background:#fff1f2;cursor:not-allowed;font-size:0.8rem;color:#f87171;text-decoration:line-through;">${s.label}<br><span style="font-size:0.65rem;">Booked</span></button>`;
+                        }
+                        // Available slot — store date|time in hidden input
+                        return `<button class="slot-btn" onclick="window.selectSlot(this, '${dateVal}|${s.time}')" style="padding:0.6rem 0.5rem;border:1.5px solid #bfdbfe;border-radius:8px;background:#fff;cursor:pointer;font-size:0.8rem;color:#1e40af;transition:all 0.2s;font-weight:600;">${s.label}<br><span style="font-size:0.65rem;color:#60a5fa;">30 min</span></button>`;
+                    }).join('');
+                } else {
+                    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">No available slots on this date</div>';
+                }
+            } catch (e) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#ef4444;font-size:0.85rem;padding:1rem;">Failed to load slots. Please try again.</div>';
+            }
+        };
+
+        window.selectSlot = function(btn, val) {
+            const btns = document.querySelectorAll('#bk-slot-grid .slot-btn');
+            btns.forEach(b => {
+                b.style.borderColor = 'var(--slate-200)';
+                b.style.background = '#fff';
+                b.style.color = 'var(--slate-700)';
+            });
+            btn.style.borderColor = 'var(--blue-500)';
+            btn.style.background = 'var(--blue-50)';
+            btn.style.color = 'var(--blue-700)';
+            document.getElementById('bk-slot').value = val;
+        };
+
         window.goToBookingStep2 = function () {
+            const childVal = document.getElementById('bk-child').value;
+            if (!childVal) { alert("Please select a child profile."); return; }
+
             const slotVal = document.getElementById('bk-slot').value;
-            if (!slotVal) { showToast("Please select an available slot.", "error"); return; }
+            if (!slotVal) { alert("Please select an available slot."); return; }
 
             document.getElementById('bk-step-1').style.display = 'none';
             document.getElementById('bk-step-2').style.display = 'block';
@@ -8104,6 +8368,17 @@
 
         window.submitBooking = async function (sid) {
             const btn = document.getElementById('bk-submit-btn');
+            const method = document.querySelector('input[name="bk-payment"]:checked').value;
+            
+            // Validate credit card mock form
+            if (method === 'Credit Card') {
+                const ccNum = document.getElementById('cc-number').value.replace(/\s+/g, '');
+                if (ccNum.length !== 16) { alert('Please enter a valid 16-digit card number.'); return; }
+                if (document.getElementById('cc-name').value.trim() === '') { alert('Please enter cardholder name.'); return; }
+                if (document.getElementById('cc-expiry').value.length < 5) { alert('Please enter valid expiry date (MM/YY).'); return; }
+                if (document.getElementById('cc-cvv').value.length < 3) { alert('Please enter valid CVV.'); return; }
+            }
+
             btn.disabled = true;
             const origText = btn.innerHTML;
             btn.innerHTML = 'Processing...';
@@ -8114,7 +8389,6 @@
             const date = parts[0];
             const time = parts[1];
             const comment = document.getElementById('bk-comment').value;
-            const method = document.querySelector('input[name="bk-payment"]:checked').value;
             const tokenSelect = document.getElementById('bk-token');
             const tokenId = tokenSelect.value || null;
 
@@ -8129,11 +8403,8 @@
                 fd.append('comment', comment);
                 if (tokenId) fd.append('token_id', tokenId);
 
-                const children = (window.dashboardData || {}).children || [];
-                const child = children[window._selectedChildIndex || 0];
-                if (child && child.child_id) {
-                    fd.append('child_id', child.child_id);
-                }
+                const childId = document.getElementById('bk-child').value;
+                if (childId) fd.append('child_id', childId);
 
                 const res = await fetch('../../api_book_appointment.php', { method: 'POST', body: fd });
                 const data = await res.json();
@@ -8484,11 +8755,11 @@
     // ── Messages View (Specialist + Community) ──────────────────
     // ══════════════════════════════════════════════════════════════
     window.getMessagesView = function () {
-        // Check if parent has any approved appointments
+        // Check if parent has any active appointments (confirmed/completed/approved)
         const d = window.dashboardData || {};
         let hasApprovedAppt = false;
         if (d.parent && d.parent.appointments) {
-            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed');
+            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed' || a.status === 'confirmed');
         }
 
         if (!hasApprovedAppt) {
@@ -8516,7 +8787,7 @@
             <h1 class="dashboard-title">Messages</h1>
             <p class="dashboard-subtitle">Communicate with your specialists</p>
         </div></div>
-        <div style="display:flex;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;height:550px;background:#fff;">
+        <div style="display:flex;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;height:600px;background:#fff;">
             <!-- Conversation List -->
             <div style="width:320px;border-right:1px solid #e2e8f0;display:flex;flex-direction:column;flex-shrink:0;">
                 <div style="padding:1rem;border-bottom:1px solid #f1f5f9;">
@@ -8526,19 +8797,38 @@
             </div>
             <!-- Chat Window -->
             <div style="flex:1;display:flex;flex-direction:column;">
-                <div id="parent-chat-header" style="padding:1rem 1.5rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:1rem;">
+                <div id="parent-chat-header" style="padding:0.85rem 1.25rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:0.85rem;">
                     <div id="pch-avatar" style="width:2.75rem;height:2.75rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.9rem;flex-shrink:0;">SA</div>
                     <div style="flex:1;"><div id="pch-name" style="font-weight:700;font-size:0.95rem;color:#1e293b;">Dr. Sarah Ahmed</div><div id="pch-detail" style="font-size:0.8rem;color:#94a3b8;">Pediatric Specialist</div></div>
+                    <button id="pch-reminder-btn" onclick="sendParentReminder()" title="Send meeting reminder" style="display:none;padding:0.4rem 0.85rem;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border-radius:8px;cursor:pointer;font-size:0.75rem;font-weight:600;white-space:nowrap;transition:all 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">📅 Reminder</button>
                 </div>
-                <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.5rem;display:flex;flex-direction:column;gap:0.75rem;background:#f8fafc;"></div>
-                <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;">
-                    <button onclick="document.getElementById('parentChatFile').click()" style="width:40px;height:40px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color=\'#6366f1\'" onmouseout="this.style.color=\'#94a3b8\'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                    </button>
-                    <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
-                    <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
-                    <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <!-- Appointment Info Bar -->
+                <div id="parent-appt-bar" style="display:none;padding:0.6rem 1.25rem;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border-bottom:1px solid #c7d2fe;"></div>
+                <!-- In-chat search -->
+                <div id="parent-chat-search-bar" style="display:none;padding:0.5rem 1rem;border-bottom:1px solid #f1f5f9;background:#fafbfc;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input type="text" id="parent-chat-search-input" placeholder="Search in conversation..." style="flex:1;padding:0.4rem 0.6rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.8rem;outline:none;" oninput="filterParentMessages(this.value)">
+                        <button onclick="toggleParentChatSearch()" style="border:none;background:none;cursor:pointer;color:#94a3b8;font-size:1rem;padding:0.2rem;">✕</button>
+                    </div>
+                </div>
+                <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:0.6rem;background:#f8fafc;"></div>
+                <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;flex-direction:column;">
+                    <div style="display:flex;gap:0.5rem;align-items:flex-end;width:100%;">
+                        <button onclick="document.getElementById('parentChatFile').click()" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'" title="Attach file">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </button>
+                        <input type="file" id="parentChatFile" style="display:none" onchange="handleParentChatFileSelect(event)">
+                        <button onclick="toggleParentChatSearch()" title="Search messages" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </button>
+                        <textarea id="parent-chat-input" rows="1" placeholder="Type your message..." style="flex:1;padding:0.65rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-size:0.875rem;outline:none;resize:none;font-family:inherit;max-height:100px;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendParentMsg()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+                        <button onclick="sendParentMsg()" style="width:40px;height:40px;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                    <button onclick="window.openChildReportSend()" style="align-self:flex-start;margin-left:44px;padding:0.35rem 0.85rem;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;cursor:pointer;font-size:0.78rem;color:#6366f1;font-weight:600;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s;" onmouseover="this.style.borderColor='#6366f1';this.style.background='#eef2ff'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
+                        📎 Send Child Report
                     </button>
                 </div>
             </div>
@@ -8568,29 +8858,52 @@
                 return;
             }
 
+            window._parentConversationsCache = data.conversations;
             var html = '';
             data.conversations.forEach(c => {
                 var lastMsg = c.last_message || '';
                 var preview = lastMsg.length > 35 ? lastMsg.substring(0, 35) + '...' : lastMsg;
+                if (!preview) preview = 'No messages yet';
                 var isActive = c.partner_id == window._parentCurrentChat;
                 var initials = (c.partner_first_name.charAt(0) + c.partner_last_name.charAt(0)).toUpperCase();
                 var gradient = 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+                var unread = parseInt(c.unread_count) || 0;
                 
-                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ', \'' + c.partner_first_name + ' ' + c.partner_last_name + '\', \'' + (c.specialization || 'Specialist') + '\', \'' + initials + '\')" style="padding:1rem 1.25rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
+                html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ')" style="padding:0.85rem 1.15rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
                     + '<div style="width:2.5rem;height:2.5rem;background:' + gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initials + '</div>'
                     + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.partner_first_name + ' ' + c.partner_last_name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + (c.last_message_time ? formatRelativeDate(c.last_message_time) : '') + '</span></div>'
-                    + '<p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + preview + '</p></div></div>';
+                    + '<div style="display:flex;justify-content:space-between;align-items:center;"><p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + preview + '</p>' + (unread > 0 ? '<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.65rem;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px;margin-left:6px;">' + unread + '</span>' : '') + '</div></div></div>';
             });
             list.innerHTML = html;
         } catch(e) {}
     };
 
-    window.selectParentConvo = async function (partnerId, name, detail, initials) {
+    window.selectParentConvo = async function (partnerId) {
         window._parentCurrentChat = partnerId;
         
-        var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
-        var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = name;
-        var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = detail;
+        // Find conversation data from cache
+        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == partnerId);
+        if (conv) {
+            var initials = (conv.partner_first_name.charAt(0) + conv.partner_last_name.charAt(0)).toUpperCase();
+            var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
+            var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = conv.partner_first_name + ' ' + conv.partner_last_name;
+            var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = conv.specialization || 'Specialist';
+
+            // Show appointment info bar
+            var apptBar = document.getElementById('parent-appt-bar');
+            if (apptBar && conv.appointment_id) {
+                var aptDate = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                var aptTime = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+                var aptType = (conv.appointment_type || '').charAt(0).toUpperCase() + (conv.appointment_type || '').slice(1);
+                var statusColor = conv.appointment_status === 'confirmed' ? '#10b981' : (conv.appointment_status === 'completed' ? '#6366f1' : '#f59e0b');
+                apptBar.style.display = 'flex';
+                apptBar.innerHTML = '<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;width:100%;"><span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;font-weight:600;color:#4338ca;">📅 ' + aptDate + '</span><span style="font-size:0.75rem;color:#6366f1;font-weight:500;">⏰ ' + aptTime + '</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:6px;background:' + statusColor + '18;color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + conv.appointment_status + '</span><span style="font-size:0.7rem;color:#64748b;margin-left:auto;">' + aptType + (conv.clinic_name ? ' · ' + conv.clinic_name : '') + '</span></div>';
+            }
+
+            // Show reminder button
+            var reminderBtn = document.getElementById('pch-reminder-btn');
+            if (reminderBtn) reminderBtn.style.display = 'inline-flex';
+        }
         
         renderParentConvoList(); // Update active state
         loadParentChatMessages();
@@ -8618,22 +8931,66 @@
                     data.messages.forEach(function (msg) {
                         var isMine = msg.sender_id != window._parentCurrentChat; // If not from partner, it's mine
                         var timeStr = new Date(msg.sent_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                        var senderName = isMine ? 'You' : (msg.sender_first_name || '');
                         
-                        let contentHtml = '<div>' + (msg.content || '') + '</div>';
+                        // Build content HTML
+                        let contentHtml = '';
                         
-                        if (msg.meeting_link) {
-                            contentHtml += `<div style="margin-top:0.5rem;"><a href="${msg.meeting_link}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Join Meeting</a></div>`;
+                        // Detect Google Meet links in content
+                        var msgText = msg.content || '';
+                        var meetRegex = /(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/gi;
+                        var hasMeetInContent = meetRegex.test(msgText);
+                        
+                        // Render text (replace meet links with card below)
+                        var cleanText = msgText.replace(meetRegex, '').trim();
+                        if (cleanText) {
+                            contentHtml += '<div>' + cleanText + '</div>';
                         }
                         
-                        if (msg.file_path) {
-                            contentHtml += `<div style="margin-top:0.5rem;"><a href="../../${msg.file_path}" target="_blank" style="display:inline-block;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.2);color:${isMine ? '#fff' : 'var(--blue-600)'};border:${isMine ? 'none' : '1px solid var(--blue-200)'};border-radius:8px;text-decoration:none;font-weight:600;font-size:0.8rem;border-color:rgba(0,0,0,0.1);">📎 View Attachment</a></div>`;
+                        // Google Meet card (from meeting_link column or detected in content)
+                        var meetUrl = msg.meeting_link || (hasMeetInContent ? msgText.match(/(https?:\/\/)?meet\.google\.com\/[a-z0-9\-]+/i)[0] : null);
+                        if (meetUrl) {
+                            if (!/^https?:\/\//i.test(meetUrl)) meetUrl = 'https://' + meetUrl;
+                            contentHtml += '<a href="' + meetUrl + '" target="_blank" style="display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;padding:0.6rem 0.85rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f0fdf4') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#bbf7d0') + ';border-radius:10px;text-decoration:none;transition:all 0.2s;" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,0.1)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+                                + '<div style="width:32px;height:32px;background:linear-gradient(135deg,#34d399,#10b981);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>'
+                                + '<div><div style="font-size:0.8rem;font-weight:700;color:' + (isMine ? '#fff' : '#059669') + ';">Google Meet</div><div style="font-size:0.7rem;color:' + (isMine ? 'rgba(255,255,255,0.75)' : '#6b7280') + ';">Click to join meeting</div></div></a>';
+                        }
+                        
+                        // child_report message type rendering
+                        if (msg.message_type === 'child_report') {
+                            html += `<div style="display:flex;${isMine ? 'justify-content:flex-end;' : ''}">
+                                <div style="max-width:85%;padding:1rem 1.25rem;border-radius:14px;background:${isMine ? 'linear-gradient(135deg,#4f46e5,#7c3aed)' : '#fff'};border:1px solid ${isMine ? 'transparent' : '#e0e7ff'};color:${isMine ? '#fff' : '#1e293b'};">
+                                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                                        <div style="width:40px;height:40px;background:${isMine ? 'rgba(255,255,255,0.2)' : '#eef2ff'};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">📄</div>
+                                        <div>
+                                            <div style="font-weight:700;font-size:0.9rem;">Child Report Shared</div>
+                                            <div style="font-size:0.75rem;opacity:0.8;margin-top:0.1rem;">${msg.content || 'A child report was shared'}</div>
+                                        </div>
+                                    </div>
+                                    <div style="font-size:0.65rem;margin-top:0.6rem;text-align:right;opacity:0.7;">${timeStr}</div>
+                                </div>
+                            </div>`;
+                            return;
                         }
 
-                        html += '<div style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
-                            + '<div style="max-width:75%;padding:0.75rem 1rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
+                        if (msg.file_path) {
+                            contentHtml += '<div style="margin-top:0.5rem;"><a href="../../' + msg.file_path + '" target="_blank" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.35rem 0.65rem;background:' + (isMine ? 'rgba(255,255,255,0.15)' : '#f1f5f9') + ';border:1px solid ' + (isMine ? 'rgba(255,255,255,0.2)' : '#e2e8f0') + ';border-radius:8px;text-decoration:none;font-weight:600;font-size:0.78rem;color:' + (isMine ? '#fff' : '#6366f1') + ';">📎 Attachment</a></div>';
+                        }
+
+                        // Read status checkmarks
+                        var checkmark = '';
+                        if (isMine) {
+                            checkmark = msg.is_read == 1
+                                ? '<span style="color:rgba(255,255,255,0.85);font-size:0.65rem;margin-left:4px;" title="Read">✓✓</span>'
+                                : '<span style="color:rgba(255,255,255,0.5);font-size:0.65rem;margin-left:4px;" title="Sent">✓</span>';
+                        }
+
+                        html += '<div class="parent-msg-bubble" style="display:flex;' + (isMine ? 'justify-content:flex-end;' : '') + '">'
+                            + '<div style="max-width:75%;padding:0.65rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.5;'
                             + (isMine ? 'background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-bottom-right-radius:4px;' : 'background:#fff;color:#1e293b;border:1px solid #e2e8f0;border-bottom-left-radius:4px;') + '">'
+                            + '<div style="font-size:0.7rem;font-weight:600;margin-bottom:0.2rem;color:' + (isMine ? 'rgba(255,255,255,0.8)' : '#6366f1') + ';">' + senderName + '</div>'
                             + contentHtml
-                            + '<div style="font-size:0.65rem;margin-top:0.35rem;' + (isMine ? 'color:rgba(255,255,255,0.7);text-align:right;' : 'color:#94a3b8;') + '">' + timeStr + '</div>'
+                            + '<div style="font-size:0.65rem;margin-top:0.3rem;display:flex;align-items:center;justify-content:flex-end;' + (isMine ? 'color:rgba(255,255,255,0.7);' : 'color:#94a3b8;') + '">' + timeStr + checkmark + '</div>'
                             + '</div></div>';
                     });
                 }
@@ -8668,6 +9025,12 @@
         
         if (!text && !file) return;
         
+        // Client-side Zoom/Teams rejection
+        if (text && (/zoom\.(us|com)/i.test(text) || /teams\.(microsoft|live)\.com/i.test(text))) {
+            alert('Only Google Meet links are allowed. Zoom and Teams links are not permitted.');
+            return;
+        }
+        
         const fd = new FormData();
         fd.append('receiver_id', window._parentCurrentChat);
         if (text) fd.append('content', text);
@@ -8679,9 +9042,14 @@
         }
         
         try {
-            await fetch('../../api_send_message.php', { method: 'POST', body: fd });
-            loadParentChatMessages();
-            renderParentConvoList();
+            const res = await fetch('../../api_send_message.php', { method: 'POST', body: fd });
+            const result = await res.json();
+            if (result.error) {
+                alert(result.error);
+            } else {
+                loadParentChatMessages();
+                renderParentConvoList();
+            }
         } catch(e) {
             alert('Failed to send message.');
         }
@@ -8691,6 +9059,49 @@
         var items = document.querySelectorAll('#parent-convo-list > div');
         q = q.toLowerCase();
         items.forEach(function (item) { var name = item.textContent.toLowerCase(); item.style.display = name.includes(q) ? '' : 'none'; });
+    };
+
+    window.toggleParentChatSearch = function() {
+        var bar = document.getElementById('parent-chat-search-bar');
+        if (!bar) return;
+        if (bar.style.display === 'none' || !bar.style.display) {
+            bar.style.display = 'block';
+            var inp = document.getElementById('parent-chat-search-input');
+            if (inp) { inp.value = ''; inp.focus(); }
+        } else {
+            bar.style.display = 'none';
+            // Reset filter
+            filterParentMessages('');
+        }
+    };
+
+    window.filterParentMessages = function(q) {
+        var bubbles = document.querySelectorAll('#parent-chat-messages .parent-msg-bubble');
+        q = q.toLowerCase();
+        bubbles.forEach(function(b) {
+            var text = b.textContent.toLowerCase();
+            b.style.display = (!q || text.includes(q)) ? '' : 'none';
+        });
+    };
+
+    window.sendParentReminder = async function() {
+        if (!window._parentCurrentChat) return;
+        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == window._parentCurrentChat);
+        if (!conv || !conv.appointment_scheduled_at) {
+            alert('No appointment data available.');
+            return;
+        }
+        var aptDate = new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+        var aptTime = new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        var reminderText = '📅 Appointment Reminder: Our ' + (conv.appointment_type || 'appointment') + ' is scheduled for ' + aptDate + ' at ' + aptTime + (conv.clinic_name ? ' at ' + conv.clinic_name : '') + '. Looking forward to it!';
+        
+        var input = document.getElementById('parent-chat-input');
+        if (input) {
+            input.value = reminderText;
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+            input.focus();
+        }
     };
 
     window.loadMessages = function () {

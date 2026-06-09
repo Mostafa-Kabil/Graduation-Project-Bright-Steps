@@ -743,11 +743,11 @@ if ($isAjax) {
             if ($action === 'get_profile') {
                 try {
                     $stmt = $connect->prepare("
-                        SELECT u.user_id, u.first_name, u.last_name, u.email,
+                        SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone,
                                s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
                                COALESCE(c.clinic_name, '') AS clinic_name,
                                COALESCE(c.location, '') AS clinic_location,
-                               o.goals AS bio, o.consultation_types, o.focus_areas
+                               COALESCE(o.bio, '') AS bio, o.consultation_types, o.focus_areas
                         FROM users u
                         LEFT JOIN specialist s ON u.user_id = s.specialist_id
                         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
@@ -764,11 +764,13 @@ if ($isAjax) {
                             'first_name' => $_SESSION['fname'] ?? '',
                             'last_name' => $_SESSION['lname'] ?? '',
                             'email' => $_SESSION['email'] ?? '',
+                            'phone' => $_SESSION['phone'] ?? '',
                             'specialization' => $_SESSION['specialization'] ?? '',
                             'experience_years' => 0,
                             'certificate_of_experience' => '',
                             'clinic_name' => '',
-                            'clinic_location' => ''
+                            'clinic_location' => '',
+                            'bio' => ''
                         ];
                     }
 
@@ -1032,10 +1034,10 @@ if ($isAjax) {
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css?v=8">
     <link rel="stylesheet" href="styles/dashboard.css?v=8">
-    <link rel="stylesheet" href="styles/doctor.css?v=8">
+    <link rel="stylesheet" href="styles/doctor.css?v=12">
     <link rel="stylesheet" href="styles/settings.css?v=8">
     <link rel="stylesheet" href="styles/profile.css?v=8">
-    <link rel="stylesheet" href="styles/dr-settings.css?v=9">
+    <link rel="stylesheet" href="styles/dr-settings.css?v=11">
 </head>
 
 <body>
@@ -1236,8 +1238,8 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=19"></script>
-    <script src="scripts/doctor-settings.js?v=5"></script>
+    <script src="scripts/doctor-dashboard.js?v=23"></script>
+    <script src="scripts/doctor-settings.js?v=7"></script>
 
 </body>
 
