@@ -13,8 +13,8 @@ $planname = 'Free';
 $dashboardData = [
     'parent' => [
         'id' => $parentId,
-        'fname' => $_SESSION['fname'],
-        'lname' => $_SESSION['lname'],
+        'fname' => $_SESSION['fname'] ?? $_SESSION['first_name'] ?? '',
+        'lname' => $_SESSION['lname'] ?? $_SESSION['last_name'] ?? '',
         'email' => $_SESSION['email']
     ],
     'subscription' => ['plan_name' => 'Free', 'price' => '0.00', 'plan_period' => ''],
@@ -32,11 +32,6 @@ if ($parentId) {
 
     // Subscription
     try {
-        // Ensure parent_subscription has created_at
-        try {
-            $connect->exec("ALTER TABLE parent_subscription ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
-        } catch (Exception $e) { /* ignore */ }
-
         $sql = "SELECT s.plan_name, s.price, s.plan_period, ps.created_at AS subscribed_at
                 FROM parent_subscription ps
                 INNER JOIN subscription s ON ps.subscription_id = s.subscription_id
@@ -46,21 +41,21 @@ if ($parentId) {
         $plan = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($plan) {
             $planname = $plan['plan_name'];
-            
+
             // Calculate expiry: subscribed_at + 30 days
             $subscribedAt = strtotime($plan['subscribed_at'] ?? 'now');
             $expiresAt = $subscribedAt + (30 * 86400);
             $isExpired = time() > $expiresAt;
             $plan['expires_at'] = date('Y-m-d H:i:s', $expiresAt);
             $plan['is_expired'] = $isExpired;
-            
-            // If expired, downgrade to Free in memory
+
+            // If expired, downgrade to Free in memory (don't change DB, just show as Free)
             if ($isExpired && $plan['plan_name'] === 'Premium') {
                 $planname = 'Free';
                 $plan['plan_name'] = 'Free';
                 $plan['expired_premium'] = true; // flag to show re-subscription UI
             }
-            
+
             $dashboardData['subscription'] = $plan;
         }
     } catch (Exception $e) { /* subscription query failed gracefully */ }
@@ -162,9 +157,9 @@ if ($parentId) {
 
     // Appointments
     try {
-        $sql = "SELECT a.appointment_id, a.specialist_id, a.status, a.type, a.scheduled_at, a.report, a.comment, a.next_visit_recommendation,
+        $sql = "SELECT a.appointment_id, a.specialist_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
                        s.first_name AS doc_fname, s.last_name AS doc_lname, s.specialization,
-                       c.clinic_id, c.clinic_name, c.location AS clinic_location
+                       c.clinic_name, c.location AS clinic_location
                 FROM appointment a
                 INNER JOIN specialist s ON a.specialist_id = s.specialist_id
                 INNER JOIN clinic c ON s.clinic_id = c.clinic_id
@@ -247,8 +242,8 @@ if ($parentId) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="../../assets/logo.png">
-    <link rel="stylesheet" href="../../styles/globals.css">
-    <link rel="stylesheet" href="dashboard.css?v=2">
+    <link rel="stylesheet" href="../../styles/globals.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="dashboard.css?v=<?= time() ?>">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -273,14 +268,14 @@ if ($parentId) {
                 </a>
                 <div class="user-profile">
                     <?php
-                    $text1 = $_SESSION['fname'];
-                    $fletter = $text1[0];
-                    $text2 = $_SESSION['lname'];
-                    $lletter = $text2[0];
+                    $text1 = $_SESSION['fname'] ?? $_SESSION['first_name'] ?? '';
+                    $fletter = $text1 !== '' ? $text1[0] : '';
+                    $text2 = $_SESSION['lname'] ?? $_SESSION['last_name'] ?? '';
+                    $lletter = $text2 !== '' ? $text2[0] : '';
                     ?>
                     <div class="user-avatar"><?php echo htmlspecialchars($fletter . $lletter); ?></div>
                     <div class="user-info">
-                        <div class="user-name"><?php echo ($_SESSION['fname']) ?> <?php echo ($_SESSION['lname']) ?>
+                        <div class="user-name"><?php echo htmlspecialchars($text1) ?> <?php echo htmlspecialchars($text2) ?>
                         </div>
                         <div class="user-badge-text"><?php echo ($planname) ?> Member</div>
                     </div>
@@ -633,9 +628,9 @@ if ($parentId) {
             window.dashboardData = {parent:{},children:[],appointments:[],streaks:[],badges:[],subscription:{plan_name:'Free'}};
         }
     </script>
-    <script src="../../scripts/theme-toggle.js?v=3"></script>
-    <script src="../../scripts/language-toggle.js?v=5"></script>
-    <script src="../../scripts/navigation.js?v=3"></script>
+    <script src="../../scripts/theme-toggle.js?v=<?= time() ?>"></script>
+    <script src="../../scripts/language-toggle.js?v=<?= time() ?>"></script>
+    <script src="../../scripts/navigation.js?v=<?= time() ?>"></script>
     <script src="dashboard.js?t=<?php echo time(); ?>"></script>
     <!--
         The inline bootstrap fallback has been removed because dashboard.js
@@ -643,7 +638,7 @@ if ($parentId) {
         Keeping this caused a race condition where it checked for functions
         before they were available.
     -->
-    <script src="../../scripts/chatbot.js"></script>
+    <script src="../../scripts/chatbot.js?v=<?= time() ?>"></script>
     <script>
         // Dashboard sidebar toggle for mobile
         function toggleDashboardSidebar() {

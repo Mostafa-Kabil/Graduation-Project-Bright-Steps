@@ -21,11 +21,10 @@ if ($mStmt->fetchColumn() === '1') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Clinic Dashboard - Bright Steps</title>
     <link rel="icon" type="image/png" href="../../assets/logo.png">
-    <link rel="stylesheet" href="../../styles/globals.css">
-    <link rel="stylesheet" href="../../styles/dashboard.css">
-    <link rel="stylesheet" href="../../styles/doctor.css">
-    <link rel="stylesheet" href="../../styles/clinic.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="../../styles/globals.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="../../styles/dashboard.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="../../styles/doctor.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="../../styles/clinic.css?v=<?= time() ?>">
 </head>
 
 <body>
@@ -141,9 +140,9 @@ if ($mStmt->fetchColumn() === '1') {
         window.clinicSessionId = <?= json_encode($_SESSION['id']) ?>;
         window.clinicSessionRole = <?= json_encode($_SESSION['role'] ?? '') ?>;
     </script>
-    <script src="../../scripts/theme-toggle.js"></script>
-    <script src="../../scripts/language-toggle.js?v=5"></script>
-    <script src="../../scripts/navigation.js"></script>
+    <script src="../../scripts/theme-toggle.js?v=<?= time() ?>"></script>
+    <script src="../../scripts/language-toggle.js?v=<?= time() ?>"></script>
+    <script src="../../scripts/navigation.js?v=<?= time() ?>"></script>
     <script src="clinic-dashboard.js?v=<?= time() ?>"></script>
 </body>
 
