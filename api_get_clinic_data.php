@@ -59,7 +59,7 @@ try {
             (SELECT IFNULL(AVG(rating), 0) FROM feedback f WHERE f.specialist_id = s.specialist_id) as rating
         FROM specialist s
         LEFT JOIN users u ON s.specialist_id = u.user_id
-        WHERE s.clinic_id = ?
+        WHERE s.clinic_id = ? AND u.status = 'active'
     ");
     $specStmt->execute([$clinic_id]);
     $specialists = $specStmt->fetchAll(PDO::FETCH_ASSOC);

@@ -31,6 +31,32 @@ function showClinicAlert(title, message) {
     document.body.appendChild(alertOverlay);
 }
 
+function showClinicConfirm(title, message, onConfirm) {
+    const confirmOverlay = document.createElement('div');
+    confirmOverlay.className = 'clinic-modal-overlay active';
+    confirmOverlay.style.zIndex = '1200';
+    
+    confirmOverlay.innerHTML = `
+        <div class="clinic-modal glass-effect" style="max-width: 400px; padding: 2rem; text-align: center; animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            <div style="width: 60px; height: 60px; background: rgba(239, 68, 68, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: #ef4444;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </div>
+            <h3 style="margin: 0 0 0.5rem; color: var(--text-primary); font-size: 1.25rem;">${title}</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">${message}</p>
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn btn-outline" style="flex: 1;" onclick="this.closest('.clinic-modal-overlay').remove()">Cancel</button>
+                <button id="clinic-confirm-btn" class="btn btn-gradient" style="flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626);">Delete</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(confirmOverlay);
+    document.getElementById('clinic-confirm-btn').onclick = () => {
+        confirmOverlay.remove();
+        onConfirm();
+    };
+}
+
 // Ensure the animation exists in CSS
 const style = document.createElement('style');
 style.textContent = `
@@ -492,7 +518,21 @@ async function refreshClinicData(viewId) {
             // View-specific Rendering
             if (viewId === 'specialists') renderSpecialistsTable({ specialists: clinicSpecialists });
             if (viewId === 'patients') renderPatientsTable(clinicPatients);
-            if (viewId === 'appointments') fetchAppointments();
+            if (viewId === 'appointments') {
+                fetchAppointments();
+                // Populate the specialist filter dropdown in Appointments view
+                const specFilter = document.getElementById('apt-spec-filter');
+                if (specFilter) {
+                    // Keep "All Specialists" and add the rest
+                    specFilter.innerHTML = '<option value="">All Specialists</option>';
+                    clinicSpecialists.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.specialist_id;
+                        opt.textContent = `Dr. ${s.first_name} ${s.last_name}`;
+                        specFilter.appendChild(opt);
+                    });
+                }
+            }
             if (viewId === 'reviews') renderReviewsData(data);
             if (viewId === 'revenue') {
                 renderRevenueChart(data.revenue_chart || []);
@@ -772,6 +812,15 @@ async function fetchAppointments() {
     }
 }
 
+function filterAppointmentsBySpec(specId) {
+    if (!specId) {
+        renderAppointmentsList(clinicAppointments);
+        return;
+    }
+    const filtered = clinicAppointments.filter(a => a.specialist_id == specId);
+    renderAppointmentsList(filtered);
+}
+
 function renderAppointmentsList(appointments) {
     const container = document.getElementById('appointments-view-container');
     if (!container) return;
@@ -1045,9 +1094,8 @@ function renderSpecialistsTable(data, updateCounter = true) {
     
     // Update counter boxes
     if (updateCounter) {
-        const countBox = document.querySelector('.stat-card-yellow .stat-card-value') || 
-                        document.querySelector('.stat-card-blue .stat-card-value'); // fallback
-        if (countBox) countBox.textContent = specialists.length;
+        const specCountBox = document.getElementById('stat-active-specialists');
+        if (specCountBox) specCountBox.textContent = specialists.length;
     }
 
     const tbody = document.querySelector('.clinic-table tbody');
@@ -1108,8 +1156,6 @@ function viewSpecialistDetails(id) {
                         <h3 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">Dr. ${spec.first_name} ${spec.last_name}</h3>
                         <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
                             <span style="color: #0d9488; font-weight: 600; font-size: 0.9rem;">${spec.specialization}</span>
-                            <span style="width: 4px; height: 4px; background: var(--text-muted); border-radius: 50%;"></span>
-                            <span style="color: var(--text-secondary); font-size: 0.9rem;">Specialist ID: #SP-${spec.specialist_id}</span>
                         </div>
                     </div>
                 </div>
@@ -1226,27 +1272,32 @@ function closeViewModal() {
 }
 
 function confirmDeleteSpecialist(id, name) {
-    if (confirm(`Are you sure you want to remove Dr. ${name} from your clinic? This will cancel their upcoming appointments.`)) {
-        fetch('../../api_clinic_delete_specialist.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ specialist_id: id })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                showClinicAlert('Success', `Dr. ${name} has been removed from your team.`);
-                closeViewModal();
-                refreshClinicData('specialists');
-            } else {
-                showClinicAlert('Error', data.error || 'Failed to remove specialist.');
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            showClinicAlert('Error', 'An unexpected error occurred.');
-        });
-    }
+    showClinicConfirm(
+        'Confirm Removal', 
+        `Are you sure you want to remove Dr. ${name} from your clinic? This will cancel their upcoming appointments.`,
+        () => {
+            fetch('../../api_clinic_delete_specialist.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ specialist_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showClinicAlert('Success', `Dr. ${name} has been removed from your team.`);
+                    closeViewModal();
+                    // Force refresh and switch to specialists view
+                    showClinicView('specialists');
+                } else {
+                    showClinicAlert('Error', data.error || 'Failed to remove specialist.');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showClinicAlert('Error', 'An unexpected error occurred.');
+            });
+        }
+    );
 }
 
 function openEditSpecialistModal(id) {
@@ -1699,11 +1750,8 @@ function getAppointmentsView() {
         <div class="section-card">
             <div class="section-card-header">
                 <h2 class="section-heading">Upcoming Appointments</h2>
-                <select class="search-input" style="width:auto;">
-                    <option>All Specialists</option>
-                    <option>Dr. Sarah Mitchell</option>
-                    <option>Dr. Michael Chen</option>
-                    <option>Dr. Aisha Rahman</option>
+                <select id="apt-spec-filter" class="search-input" style="width:auto;" onchange="filterAppointmentsBySpec(this.value)">
+                    <option value="">All Specialists</option>
                 </select>
             </div>
             <div id="appointments-view-container">
@@ -1716,7 +1764,7 @@ function getAppointmentsView() {
                         <div class="patient-avatar">EJ</div>
                         <div class="patient-info">
                             <div class="patient-name">Emma Johnson</div>
-                            <div class="patient-details">with Dr. Sarah Mitchell • Routine Checkup</div>
+                            <div class="patient-details">with Specialist • Routine Checkup</div>
                         </div>
                         <div class="patient-status status-green">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -1817,45 +1865,48 @@ function openNewAppointmentModal() {
 
     modal.classList.add('active');
     
-    // Fetch Data
-    fetch('../../api_get_clinic_data.php')
-        .then(res => res.json())
-        .then(data => {
-            console.log("Appointment Data Debug:", data.debug);
-            if (data.error) {
-                showClinicToast(data.error, 'error');
-                return;
-            }
-            
-            const pSelect = document.getElementById('apt-patient');
-            const sSelect = document.getElementById('apt-specialist');
-            
-            if (data.patients && data.patients.length > 0) {
-                data.patients.forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p.child_id;
-                    opt.textContent = `${p.first_name} ${p.last_name || ''} (Parent: ${p.parent_fname})`;
-                    pSelect.appendChild(opt);
-                });
-            } else {
-                pSelect.innerHTML = '<option value="">No patients found...</option>';
-            }
-            
-            if (data.specialists && data.specialists.length > 0) {
-                data.specialists.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.specialist_id;
-                    opt.textContent = `Dr. ${s.first_name} ${s.last_name || ''} - ${s.specialization || 'Specialist'}`;
-                    sSelect.appendChild(opt);
-                });
-            } else {
-                sSelect.innerHTML = '<option value="">No specialists found...</option>';
-            }
-        })
-        .catch(err => {
-            console.error('Fetch error:', err);
-            showClinicToast('Failed to load clinic data', 'error');
-        });
+    // Use cached data if available, otherwise fetch
+    const populateForm = (data) => {
+        const pSelect = document.getElementById('apt-patient');
+        const sSelect = document.getElementById('apt-specialist');
+        
+        if (!pSelect || !sSelect) return;
+
+        // Clear existing options (except first)
+        pSelect.innerHTML = '<option value="">Choose a patient...</option>';
+        sSelect.innerHTML = '<option value="">Choose a specialist...</option>';
+
+        if (data.patients && data.patients.length > 0) {
+            data.patients.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.child_id;
+                opt.textContent = `${p.first_name} ${p.last_name || ''} (Parent: ${p.parent_fname})`;
+                pSelect.appendChild(opt);
+            });
+        }
+        
+        if (data.specialists && data.specialists.length > 0) {
+            data.specialists.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.specialist_id;
+                opt.textContent = `Dr. ${s.first_name} ${s.last_name || ''} - ${s.specialization || 'Specialist'}`;
+                sSelect.appendChild(opt);
+            });
+        }
+    };
+
+    if (window.clinicData) {
+        populateForm(window.clinicData);
+    } else {
+        fetch('../../api_get_clinic_data.php')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.error) {
+                    window.clinicData = data;
+                    populateForm(data);
+                }
+            });
+    }
 }
 
 function submitNewAppointment() {
@@ -3239,7 +3290,7 @@ async function renderSpecialistDetailsPage(id) {
         // 1. Header & Profile
         document.getElementById('spec-page-name').textContent = `Dr. ${p.first_name} ${p.last_name}`;
         document.getElementById('spec-page-avatar').textContent = `${p.first_name[0]}${p.last_name[0]}`.toUpperCase();
-        document.getElementById('spec-page-sub').textContent = `${p.specialization} • Specialist ID: #SP-${p.specialist_id}`;
+        document.getElementById('spec-page-sub').textContent = p.specialization;
         document.getElementById('spec-page-email').textContent = p.email || 'N/A';
         document.getElementById('spec-page-phone').textContent = p.phone || '+20 102 345 6789';
         document.getElementById('spec-page-exp').textContent = `${p.experience_years || 0} Years`;
