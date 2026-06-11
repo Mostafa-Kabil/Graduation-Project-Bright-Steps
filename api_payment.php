@@ -34,7 +34,7 @@ switch ($action) {
         }
 
         // Get subscription details
-        $stmt = $connect->prepare("SELECT plan_name, price FROM subscription WHERE subscription_id = ?");
+        $stmt = $connect->prepare("SELECT plan_name, price, plan_period FROM subscription WHERE subscription_id = ?");
         $stmt->execute([$subscriptionId]);
         $sub = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -63,11 +63,18 @@ switch ($action) {
             $stmt->execute([$parentId, $subscriptionId, $amount, 0.00, $paymentMethod, 'completed']);
             $paymentId = $connect->lastInsertId();
 
+            // Determine expiration
+            $period = strtolower($sub['plan_period'] ?? 'month');
+            $interval = $period === 'year' ? '1 YEAR' : '1 MONTH';
+
             // Insert/update parent subscription
             $stmt = $connect->prepare(
-                "INSERT INTO parent_subscription (parent_id, subscription_id, child_name) 
-                 VALUES (?, ?, ?)
-                 ON DUPLICATE KEY UPDATE subscription_id = VALUES(subscription_id)"
+                "INSERT INTO parent_subscription (parent_id, subscription_id, child_name, expires_at, status) 
+                 VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL $interval), 'active')
+                 ON DUPLICATE KEY UPDATE 
+                    subscription_id = VALUES(subscription_id),
+                    expires_at = VALUES(expires_at),
+                    status = VALUES(status)"
             );
             $stmt->execute([$parentId, $subscriptionId, $childName]);
 

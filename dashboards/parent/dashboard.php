@@ -9,6 +9,19 @@ if (!isset($_SESSION['email'])) {
 }
 
 $parentId = $_SESSION['id'] ?? null;
+
+if ($parentId) {
+    // Check if account is suspended
+    $statusCheck = $connect->prepare("SELECT status FROM users WHERE user_id = ?");
+    $statusCheck->execute([$parentId]);
+    $userStatus = $statusCheck->fetchColumn();
+    
+    if ($userStatus === 'suspended') {
+        session_destroy();
+        header("Location: ../../account-suspended.php");
+        exit();
+    }
+}
 $planname = 'Free';
 $dashboardData = [
     'parent' => [

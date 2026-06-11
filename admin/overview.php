@@ -54,6 +54,10 @@ try {
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $distribution[$row['role']] = (int) $row['count'];
     }
+    
+    // Explicitly pull clinic count from clinic table since they might not be in users table
+    $stmt = $connect->query("SELECT COUNT(*) as total FROM clinic");
+    $distribution['clinic'] = (int) $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
     // Users this month
     $stmt = $connect->query("SELECT COUNT(*) as c FROM users WHERE created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')");
@@ -159,7 +163,12 @@ try {
     // ── System Logs (for IT/System Admin) ─────────────────
     $systemLogs = [];
     try {
-        $stmt = $connect->query("SELECT id, level, message, endpoint, method, response_time_ms, created_at FROM system_logs ORDER BY created_at DESC LIMIT 15");
+        // Add status column if missing
+        try {
+            $connect->query("ALTER TABLE system_logs ADD COLUMN status VARCHAR(20) DEFAULT 'unresolved'");
+        } catch (Exception $ex) {}
+        
+        $stmt = $connect->query("SELECT id, level, message, endpoint, method, response_time_ms, created_at FROM system_logs WHERE status != 'resolved' OR status IS NULL ORDER BY created_at DESC LIMIT 15");
         $systemLogs = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch(Exception $e) {}
 

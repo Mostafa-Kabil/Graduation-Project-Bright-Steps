@@ -19,11 +19,10 @@ async function loadTicketsView(main) {
                 </div>
             </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem;margin-bottom:1.5rem;">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
             <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${an.total||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">📋 Total Tickets</div></div>
-            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:${an.open>0?'var(--yellow-500)':'var(--text-primary)'};">${an.open||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">⏳ Open</div></div>
+            <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:${an.active>0?'var(--yellow-500)':'var(--text-primary)'};">${an.active||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">⏳ Active</div></div>
             <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${an.resolution_rate||0}%</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">✅ Resolution</div></div>
-            <div style="background:linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03));border:1px solid rgba(13,148,136,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${an.avg_response_hours||0}h</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">⚡ Avg Response</div></div>
             <div style="background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(239,68,68,0.03));border:1px solid rgba(239,68,68,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:${modStats.pending>0?'var(--red-500)':'var(--text-primary)'};">${modStats.pending||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">🚩 Flagged</div></div>
             <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(236,72,153,0.03));border:1px solid rgba(236,72,153,0.15);border-radius:14px;padding:1rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''"><div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${modStats.removed||0}</div><div style="font-size:.65rem;color:var(--text-secondary);margin-top:.15rem;">🗑️ Removed</div></div>
         </div>
@@ -110,8 +109,18 @@ async function viewTicket(id) {
                     </div>
                 </div>
             </div>
-        `, `<button class="btn btn-outline" onclick="closeModal()">Close Window</button>`, 'admin-modal-wide');
+        `, `<div style="display:flex;justify-content:space-between;width:100%;"><button class="btn btn-outline" style="color:var(--red-500);border-color:var(--red-500);" onclick="closeSupportTicket(${id})">Close Ticket</button><button class="btn btn-outline" onclick="closeModal()">Close Window</button></div>`, 'admin-modal-wide');
     } catch(e){showAlert('Error loading ticket','error');}
+}
+
+async function closeSupportTicket(id) {
+    showConfirm('Are you sure you want to close this ticket?', async () => {
+        try {
+            await apiPost('tickets.php',{action:'update_status',ticket_id:id,status:'closed'});
+            showAlert('Ticket closed!','success');
+            setTimeout(()=>{closeModal();showAdminView('tickets');},1000);
+        } catch(e){}
+    });
 }
 
 async function replyTicket(id, isInternal) {

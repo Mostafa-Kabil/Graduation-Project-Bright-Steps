@@ -12,6 +12,18 @@ if ($mStmt->fetchColumn() === '1') {
     header("Location: ../../maintenance.php");
     exit;
 }
+
+$cStmt = $connect->prepare("SELECT status FROM clinic WHERE clinic_id = ?");
+$cStmt->execute([$_SESSION['id']]);
+
+$uStmt = $connect->prepare("SELECT status FROM users WHERE user_id = ?");
+$uStmt->execute([$_SESSION['id']]);
+
+if ($cStmt->fetchColumn() === 'suspended' || $uStmt->fetchColumn() === 'suspended') {
+    session_destroy();
+    header("Location: ../../account-suspended.php");
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

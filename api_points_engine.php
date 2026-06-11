@@ -4,8 +4,8 @@
  * Handles point awarding, balance queries, transaction history, and token redemption.
  * Actions: get_balance, get_history, award, redeem_token
  */
-error_reporting(0);
-ini_set('display_errors', 0);
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 session_start();
 require_once 'connection.php';
 header('Content-Type: application/json');
@@ -207,7 +207,23 @@ switch ($action) {
         break;
 
     case 'get_offers':
-        $stmt = $connect->query("SELECT * FROM reward_offers WHERE is_active = 1 ORDER BY points_required ASC");
+        // Check parent's active subscription
+        $subStmt = $connect->prepare("
+            SELECT s.plan_name 
+            FROM parent_subscription ps 
+            JOIN subscription s ON ps.subscription_id = s.subscription_id 
+            WHERE ps.parent_id = ? AND ps.status = 'active' 
+            ORDER BY ps.expires_at DESC LIMIT 1
+        ");
+        $subStmt->execute([$parentId]);
+        $plan = $subStmt->fetchColumn();
+        $isPremium = ($plan && stripos($plan, 'Premium') !== false);
+
+        if ($isPremium) {
+            $stmt = $connect->query("SELECT * FROM reward_offers WHERE is_active = 1 ORDER BY points_required ASC");
+        } else {
+            $stmt = $connect->query("SELECT * FROM reward_offers WHERE is_active = 1 AND (target_plan = 'all' OR target_plan = 'standard') ORDER BY points_required ASC");
+        }
         echo json_encode(['success' => true, 'offers' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         break;
 

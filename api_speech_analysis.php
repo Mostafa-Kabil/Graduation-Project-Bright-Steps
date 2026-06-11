@@ -134,6 +134,9 @@ if (isset($aiResult['clarity_score'])) {
     $clarifyScore = min(1.0, max(0.0, (float)$aiResult['confidence']));
 } elseif (isset($aiResult['match_score']) && $aiResult['match_score'] !== null) {
     $clarifyScore = min(1.0, (float)$aiResult['match_score'] / 100.0);
+} elseif (isset($aiResult['overall_development_score'])) {
+    // Use the comprehensive NLP score provided by the Python backend
+    $clarifyScore = min(1.0, (float)$aiResult['overall_development_score'] / 100.0);
 } else {
     // Fallback: use vocab ratio vs expected with variation
     $vocabRatio = (isset($aiResult['vocab_size']) && $aiResult['vocab_size'] > 0) ? min(1.2, $aiResult['vocab_size'] / max(1, $aiResult['expected_vocab'] ?? 1)) : 0.5;

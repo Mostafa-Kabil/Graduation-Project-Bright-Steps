@@ -60,7 +60,7 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
             <div style="font-size:.7rem;color:var(--text-secondary);margin-bottom:.75rem;">Registered: ${c.added_at ? fmtDate(c.added_at) : '—'}</div>
             <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
                 ${c.status === 'pending' ? `
-                    <button class="btn btn-sm" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="approveClinic(${c.clinic_id})">✓ Approve</button>
+                    <button class="btn btn-sm" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="approveClinic(${c.clinic_id}, '${esc(c.clinic_name)}')">✓ Approve</button>
                     <button class="btn btn-sm" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="rejectClinic(${c.clinic_id},'${esc(c.clinic_name)}')">✕ Reject</button>
                 ` : ''}
                 ${c.status === 'verified' ? `<button class="btn btn-sm btn-outline" style="flex:1;color:var(--yellow-500);" onclick="toggleClinicStatus(${c.clinic_id},'suspended')">⏸ Suspend</button>` : ''}
@@ -272,24 +272,33 @@ async function viewClinicDetail(clinicId) {
 
         showModal('Clinic Details', body, `
             <button class="btn btn-outline" onclick="closeModal()">Close</button>
-            ${c.status === 'pending' ? `<button class="btn" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;" onclick="closeModal();approveClinic(${c.clinic_id})">Approve</button>` : ''}
+            ${c.status === 'pending' ? `<button class="btn" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;" onclick="closeModal();approveClinic(${c.clinic_id}, '${(c.clinic_name||'').replace(/'/g, "\\'")}')">Approve</button>` : ''}
         `);
     } catch(e) { showAlert('Error loading clinic details', 'error'); }
 }
 
 // Approve clinic
-function approveClinic(clinicId) {
-    showConfirm('Are you sure you want to <strong>approve</strong> this clinic?', async () => {
+window.approveClinic = function(clinicId, clinicName = 'this clinic') {
+    showModal('Approve Clinic', `
+        <div style="text-align:center;margin-bottom:1rem;">
+            <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:28px;height:28px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <h3 style="margin:0 0 .5rem;font-size:1.1rem;">Approve <strong>${clinicName}</strong>?</h3>
+            <p style="color:var(--text-secondary);font-size:.85rem;margin:0;">This clinic will be verified and granted full access to the platform.</p>
+        </div>
+    `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" id="approve-confirm-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;">Approve Clinic</button>`);
+
+    document.getElementById('approve-confirm-btn').onclick = async () => {
         try {
             const res = await apiPost('clinics.php', { action: 'approve', clinic_id: clinicId });
             if (res.success) { showAlert('Clinic approved!', 'success'); setTimeout(() => { closeModal(); showAdminView('clinics'); }, 1200); }
             else showAlert(res.error || 'Failed', 'error');
         } catch (e) { showAlert('Error: ' + e.message, 'error'); }
-    });
-}
+    };
+};
 
-// Toggle clinic status (suspend/reactivate)
-function toggleClinicStatus(clinicId, newStatus) {
+window.toggleClinicStatus = function(clinicId, newStatus) {
     showConfirm(`Are you sure you want to <strong>${newStatus === 'suspended' ? 'suspend' : 'verify'}</strong> this clinic?`, async () => {
         try {
             const actionUrl = newStatus === 'suspended' ? 'suspend' : 'reactivate';
@@ -298,10 +307,10 @@ function toggleClinicStatus(clinicId, newStatus) {
             else showAlert(res.error || 'Failed', 'error');
         } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     });
-}
+};
 
 // Register new clinic modal
-function showRegisterClinicModal() {
+window.showRegisterClinicModal = function() {
     showModal('Register New Clinic', `
         <div class="form-group"><label>Clinic Name</label><input type="text" id="rc-name" placeholder="Enter clinic name"></div>
         <div class="form-group"><label>Email</label><input type="email" id="rc-email" placeholder="clinic@example.com"></div>
@@ -316,4 +325,4 @@ function showRegisterClinicModal() {
             else showAlert(res.error || 'Failed', 'error');
         } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     };
-}
+};

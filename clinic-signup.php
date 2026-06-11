@@ -133,6 +133,21 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label" for="phone">Clinic Phone Number</label>
+                        <div style="display:flex; gap:0.5rem;">
+                            <select name="country_code" id="country_code" class="form-input" style="width:110px; margin-bottom:0;">
+                                <option value="+20">EG (+20)</option>
+                                <option value="+1">US (+1)</option>
+                                <option value="+44">UK (+44)</option>
+                                <option value="+966">SA (+966)</option>
+                                <option value="+971">AE (+971)</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <input type="tel" name="phone" id="phone" class="form-input" placeholder="1001234567" style="flex:1; margin-bottom:0;" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label" for="location">Location / Address</label>
                         <input type="text" name="location" id="location" class="form-input" placeholder="123 Health St, Cairo, Egypt" required>
                     </div>

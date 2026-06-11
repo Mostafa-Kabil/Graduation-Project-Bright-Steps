@@ -52,12 +52,38 @@ try {
             $plans = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Get features for each plan
+            $totalParents = $connect->query("SELECT COUNT(*) FROM parent")->fetchColumn();
+            $premiumParents = $connect->query("SELECT COUNT(DISTINCT ps.parent_id) FROM parent_subscription ps JOIN subscription s ON ps.subscription_id=s.subscription_id WHERE s.price > 0 AND ps.status='active'")->fetchColumn();
+
             foreach ($plans as &$plan) {
                 $fStmt = $connect->prepare("SELECT feature_text FROM subscription_feature WHERE subscription_id = :sid ORDER BY feature_id ASC");
                 $fStmt->execute(['sid' => $plan['subscription_id']]);
                 $plan['features'] = $fStmt->fetchAll(PDO::FETCH_COLUMN);
+                
+                if ($plan['price'] == 0) {
+                    $plan['active_users'] = max(0, $totalParents - $premiumParents);
+                    $plan['limits'] = [
+                        'max_children' => 1,
+                        'refresh_recommendations' => 0,
+                        'refresh_articles' => 0,
+                        'download_reports' => 0,
+                        'speech_analysis_trials' => 3,
+                        'motor_skills_trials' => 3
+                    ];
+                    $plan['features'] = ['1 Child Only', '3 Trials of Speech Analysis', '3 Trials of Motor Skills', 'Basic Milestone Tracking', 'No Refreshing Recommendations or Articles', 'No Report Downloads'];
+                } else {
+                    $plan['limits'] = [
+                        'max_children' => -1,
+                        'refresh_recommendations' => -1,
+                        'refresh_articles' => -1,
+                        'download_reports' => -1,
+                        'speech_analysis_trials' => -1,
+                        'motor_skills_trials' => -1
+                    ];
+                    $plan['features'] = ['Unlimited Child Profiles', 'Unlimited Speech & Motor Trials', 'Refresh Recommendations & Articles', 'Download Comprehensive Reports', 'Priority Support'];
+                }
+                
                 $plan['mrr'] = round((float) $plan['price'] * (int) $plan['active_users'], 2);
-                $plan['limits'] = isset($plan['limits']) && $plan['limits'] ? json_decode($plan['limits'], true) : null;
             }
 
             echo json_encode(['success' => true, 'plans' => $plans]);
@@ -99,7 +125,13 @@ try {
             $revTrend = $revLastMonth > 0 ? round(($revThisMonth - $revLastMonth) / $revLastMonth * 100) : 0;
 
             // Active subscribers
-            $activeSubs = $connect->query("SELECT COUNT(DISTINCT parent_id) FROM parent_subscription")->fetchColumn();
+            $activeSubs = $connect->query("SELECT COUNT(DISTINCT ps.parent_id) FROM parent_subscription ps JOIN subscription s ON ps.subscription_id=s.subscription_id WHERE s.price > 0 AND ps.status='active'")->fetchColumn();
+
+            // Churn and Net Growth Calculations
+            $lostUsersThisMonth = $connect->query("SELECT COUNT(*) FROM parent_subscription WHERE status='expired' AND expires_at >= DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn();
+            $totalUsersAtStart = max(1, $activeSubs - $newSubs + $lostUsersThisMonth);
+            $churnRate = round(($lostUsersThisMonth / $totalUsersAtStart) * 100, 1);
+            $netGrowth = round((($newSubs - $lostUsersThisMonth) / $totalUsersAtStart) * 100, 1);
 
             echo json_encode(['success' => true, 'kpis' => [
                 'mrr' => floatval($mrr), 'arr' => floatval($arr),
@@ -108,7 +140,7 @@ try {
                 'total_revenue' => floatval($totalRev),
                 'revenue_this_month' => floatval($revThisMonth),
                 'revenue_trend' => $revTrend,
-                'churn_rate' => 4.2, 'net_growth' => 8.5
+                'churn_rate' => $churnRate, 'net_growth' => $netGrowth
             ]]);
 
         } elseif ($action === 'revenue_chart') {
@@ -123,7 +155,7 @@ try {
             echo json_encode(['success' => true, 'monthly_revenue' => $chartData, 'revenue_by_plan' => $planData]);
 
         } elseif ($action === 'revenue_top_users') {
-            $stmt = $connect->query("SELECT u.user_id, u.first_name, u.last_name, u.email, COALESCE(SUM(p.amount_post_discount), 0) as total_paid, COUNT(p.payment_id) as payment_count FROM users u JOIN parent par ON u.user_id=par.parent_id LEFT JOIN parent_subscription ps ON par.parent_id=ps.parent_id LEFT JOIN payment p ON ps.subscription_id=p.subscription_id WHERE (p.status='completed' OR p.status IS NULL) GROUP BY u.user_id ORDER BY total_paid DESC LIMIT 10");
+            $stmt = $connect->query("SELECT u.user_id, u.first_name, u.last_name, u.email, COALESCE(SUM(p.amount_post_discount), 0) as total_paid, COUNT(p.payment_id) as payment_count FROM users u JOIN parent par ON u.user_id=par.parent_id JOIN parent_subscription ps ON par.parent_id=ps.parent_id JOIN subscription s ON ps.subscription_id=s.subscription_id LEFT JOIN payment p ON ps.subscription_id=p.subscription_id WHERE s.price > 0 AND (p.status='completed' OR p.status IS NULL) GROUP BY u.user_id ORDER BY total_paid DESC LIMIT 50");
             echo json_encode(['success' => true, 'users' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         }
 
@@ -169,7 +201,8 @@ try {
                 }
             }
 
-            logActivity($connect, 'plan_created', "New subscription plan created: {$planName} (\${$price}/{$planPeriod})");
+            logActivity($connect, 'plan_created', "New subscription plan created: {$planName} ({$price} EGP/{$planPeriod})");
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'create_plan', 'subscription', "Created plan: {$planName} ({$price} EGP/{$planPeriod})", $newId);
 
             echo json_encode(['success' => true, 'message' => 'Plan created', 'subscription_id' => $newId]);
 
@@ -238,6 +271,7 @@ try {
             }
 
             logActivity($connect, 'plan_updated', "Subscription plan updated: " . ($planName ?: "ID #{$subId}"));
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'update_plan', 'subscription', "Updated plan: " . ($planName ?: "ID #{$subId}"), $subId);
 
             echo json_encode(['success' => true, 'message' => 'Plan updated']);
 
@@ -269,6 +303,7 @@ try {
             $connect->prepare("DELETE FROM subscription WHERE subscription_id = :sid")->execute(['sid' => $subId]);
 
             logActivity($connect, 'plan_deleted', "Subscription plan deleted: {$deletedName}");
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'delete_plan', 'subscription', "Deleted plan: {$deletedName}", $subId);
 
             echo json_encode(['success' => true, 'message' => 'Plan deleted']);
 

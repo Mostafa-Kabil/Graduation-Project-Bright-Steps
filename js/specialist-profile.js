@@ -137,7 +137,10 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         root.innerHTML = `
-            <a href="javascript:history.back()" class="back-btn">← Back</a>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                <a href="javascript:history.back()" class="back-btn" style="margin-bottom:0;">← Back</a>
+                <button class="btn btn-gradient" onclick="window.location.href='dashboards/parent/dashboard.php?view=clinic&book_specialist=${data.id}'">Book Appointment</button>
+            </div>
             <div class="profile-header">
                 ${logo}
                 <div class="profile-title">

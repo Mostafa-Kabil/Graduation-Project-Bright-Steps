@@ -45,12 +45,12 @@ try {
         $motorAchieved = 0;
         try { $stmt = $connect->query("SELECT COUNT(*) as total FROM motor_milestones WHERE is_achieved = 1"); $motorAchieved = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
 
-        // Consultations
+        // Consultations (mapped to appointments)
         $consultations = 0;
         $completedConsultations = 0;
         try { 
-            $stmt = $connect->query("SELECT COUNT(*) as total FROM consultations"); $consultations = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
-            $stmt = $connect->query("SELECT COUNT(*) as total FROM consultations WHERE status = 'completed'"); $completedConsultations = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM appointment"); $consultations = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM appointment WHERE status = 'completed'"); $completedConsultations = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         } catch(Exception $e) {}
 
         // Appointments
@@ -65,9 +65,9 @@ try {
         $articleReads = 0;
         try { $stmt = $connect->query("SELECT COUNT(*) as total FROM article_reads"); $articleReads = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
 
-        // Community messages
-        $communityMessages = 0;
-        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM community_messages"); $communityMessages = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+        // Support Tickets
+        $supportTickets = 0;
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM contact_messages"); $supportTickets = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
 
         // Flagged children (Needs Attention or Review -> inactive > 7 days)
         $flaggedChildren = 0;
@@ -82,6 +82,10 @@ try {
 
         // Activity completion rate
         $activityCompletionRate = $totalActivities > 0 ? round(($completedActivities / $totalActivities) * 100) : 0;
+
+        // Total parents
+        $stmt = $connect->query("SELECT COUNT(*) as total FROM parent");
+        $totalParents = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         echo json_encode([
             'success' => true,
@@ -100,10 +104,11 @@ try {
                 'total_appointments' => (int) $totalAppointments,
                 'appointments_this_month' => (int) $appointmentsThisMonth,
                 'article_reads' => (int) $articleReads,
-                'community_messages' => (int) $communityMessages,
+                'support_tickets' => (int) $supportTickets,
                 'on_track_rate' => $onTrackRate,
                 'flagged_children' => (int) $flaggedChildren,
-                'total_children' => (int) $totalChildren
+                'total_children' => (int) $totalChildren,
+                'total_parents' => (int) $totalParents
             ]
         ]);
 

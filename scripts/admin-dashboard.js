@@ -74,7 +74,7 @@ async function showAdminView(viewId) {
 
 // Helpers
 function fmtNum(n) { return Number(n).toLocaleString('en-US'); }
-function fmtMoney(n) { return n >= 1000 ? '$' + (n / 1000).toFixed(1) + 'K' : '$' + Number(n).toFixed(2); }
+function fmtMoney(n) { return n >= 1000 ? (n / 1000).toFixed(1) + 'K EGP' : Math.round(Number(n)) + ' EGP'; }
 function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 function timeAgo(d) { if (!d) return ''; const s = Math.floor((new Date() - new Date(d)) / 1000); if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + ' hrs ago'; if (s < 604800) return Math.floor(s / 86400) + ' days ago'; return fmtDate(d); }
 function getInitials(f, l) { return ((f?.[0] || '') + (l?.[0] || '')).toUpperCase(); }
@@ -191,7 +191,7 @@ async function loadOverviewView(main) {
         const data = await apiGet('overview.php');
         if (!data.success) throw new Error(data.error);
         const s = data.stats || {}, dist = data.user_distribution || {}, sysLogs = data.system_logs || [], topClinics = data.top_clinics || [], payments = data.recent_payments || [], audit = data.recent_audit || [];
-        const totalDist = (dist.parent || 0) + (dist.specialist || 0) + (dist.admin || 0) + (dist.clinic || 0);
+        const totalDist = (dist.parent || 0) + (dist.specialist || 0) + (dist.admin || 0) + (dist.clinic || 0) + (dist.doctor || 0);
         const now = new Date();
         const greeting = now.getHours() < 12 ? 'Good Morning' : now.getHours() < 18 ? 'Good Afternoon' : 'Good Evening';
         const dateStr = now.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
@@ -282,6 +282,7 @@ async function loadOverviewView(main) {
                 </div>
                 <div class="distribution-bar-wrap">
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#6366f1;"></span>Parents</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.parent || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#6366f1,#818cf8);"></div></div><div class="dist-value">${fmtNum(dist.parent || 0)}</div></div>
+                <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#10b981;"></span>Doctors</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.doctor || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#10b981,#34d399);"></div></div><div class="dist-value">${fmtNum(dist.doctor || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#0d9488;"></span>Specialists</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.specialist || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#0d9488,#14b8a6);"></div></div><div class="dist-value">${fmtNum(dist.specialist || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#d97706;"></span>Clinics</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.clinic || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#d97706,#f59e0b);"></div></div><div class="dist-value">${fmtNum(dist.clinic || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#ec4899;"></span>Admins</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.admin || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#ec4899,#f472b6);"></div></div><div class="dist-value">${fmtNum(dist.admin || 0)}</div></div>
@@ -299,7 +300,7 @@ async function loadOverviewView(main) {
                 ${topClinics.length === 0 ? '<div style="padding:1.5rem;text-align:center;color:var(--text-secondary);">No clinics</div>' : ''}
             </div></div>
             <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Recent Payments</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Latest</span></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Plan</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr></thead><tbody>
-                ${payments.map(p => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td>${p.plan_name||'—'}</td><td style="font-weight:700;color:var(--green-500);">$${Number(p.amount_post_discount).toFixed(2)}</td><td>${p.method||'—'}</td><td><span class="status-badge ${p.status==='paid'?'status-active':'status-warning'}">${p.status}</span></td><td>${p.paid_at ? fmtDate(p.paid_at) : '—'}</td></tr>`).join('')}
+                ${payments.map(p => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td>${p.plan_name||'—'}</td><td style="font-weight:700;color:var(--green-500);">${Number(p.amount_post_discount).toFixed(2)} EGP</td><td>${p.method||'—'}</td><td><span class="status-badge ${p.status==='paid'?'status-active':'status-warning'}">${p.status}</span></td><td>${p.paid_at ? fmtDate(p.paid_at) : '—'}</td></tr>`).join('')}
                 ${payments.length === 0 ? '<tr><td colspan="5" style="text-align:center;padding:1.5rem;color:var(--text-secondary);">No payments yet</td></tr>' : ''}
             </tbody></table></div></div>
         </div></div>`;
@@ -355,19 +356,19 @@ async function filterUsers() {
     try { const data = await apiGet(`users.php?action=list&role=${encodeURIComponent(role)}&search=${encodeURIComponent(search)}`); if (data.success) renderUsersTable(main, data.users, role, search); } catch (e) { console.error(e); }
 }
 
-function toggleUserStatus(userId, newStatus) {
+window.toggleUserStatus = function(userId, newStatus) {
     showConfirm(`Are you sure you want to <strong>${newStatus === 'suspended' ? 'suspend' : 'activate'}</strong> this user?`, async () => {
         try { const res = await apiPost('users.php', { action: 'toggle_status', user_id: userId, status: newStatus }); if (res.success) { showAlert('User status updated!', 'success'); setTimeout(() => { closeModal(); filterUsers(); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     });
-}
+};
 
-function deleteUser(userId, userName) {
+window.deleteUser = function(userId, userName) {
     showConfirm(`Are you sure you want to <strong>permanently delete</strong> user "${userName}"? This cannot be undone.`, async () => {
         try { const res = await apiPost('users.php', { action: 'delete', user_id: userId }); if (res.success) { showAlert('User deleted successfully!', 'success'); setTimeout(() => { closeModal(); filterUsers(); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     }, 'error');
-}
+};
 
-function editUser(userId, firstName, lastName, email, role) {
+window.editUser = function(userId, firstName, lastName, email, role) {
     showModal('Edit User', `
         <div class="form-group"><label>First Name</label><input type="text" id="mu-fn" value="${firstName}"></div>
         <div class="form-group"><label>Last Name</label><input type="text" id="mu-ln" value="${lastName}"></div>
@@ -378,7 +379,7 @@ function editUser(userId, firstName, lastName, email, role) {
         const d = { action: 'update', user_id: userId, first_name: document.getElementById('mu-fn').value, last_name: document.getElementById('mu-ln').value, email: document.getElementById('mu-em').value, role: document.getElementById('mu-rl').value };
         try { const res = await apiPost('users.php', d); if (res.success) { showAlert('User updated!', 'success'); setTimeout(() => { closeModal(); filterUsers(); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); }
     };
-}
+};
 
 function showAddUserModal() {
     showModal('Add New User', `
@@ -407,16 +408,16 @@ async function loadSubscriptionsView(main) {
         <div class="dashboard-header-section"><div><h1 class="dashboard-title">Subscriptions & Revenue</h1><p class="dashboard-subtitle">Manage plans, track subscribers and financial performance</p></div>
             <div class="header-actions-inline"><button class="btn btn-gradient" onclick="showCreatePlanModal()">+ Create Plan</button></div></div>
         <div class="admin-stats-grid" style="grid-template-columns:repeat(4,1fr);">
-            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-info"><div class="admin-stat-value">$${fmtNum(k.mrr||0)}</div><div class="admin-stat-label">MRR</div><div class="admin-stat-trend trend-up">ARR: $${fmtNum(k.arr||0)}</div></div></div>
+            <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(k.mrr||0)} EGP</div><div class="admin-stat-label">MRR</div><div class="admin-stat-trend trend-up">ARR: ${fmtNum(k.arr||0)} EGP</div></div></div>
             <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(k.active_subscribers||0)}</div><div class="admin-stat-label">Active Subscribers</div></div></div>
             <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-info"><div class="admin-stat-value">${k.churn_rate||0}%</div><div class="admin-stat-label">Churn Rate</div></div></div>
             <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-info"><div class="admin-stat-value">${k.net_growth||0}%</div><div class="admin-stat-label">Net Growth</div></div></div>
         </div>
         <div class="plans-grid">${plans.map((p, i) => `<div class="plan-card ${pc[i] || ''} ${p.status === 'inactive' ? 'plan-inactive' : ''}">
             ${p.status === 'inactive' ? '<div class="plan-badge" style="background:var(--red-500);">Inactive</div>' : (i === plans.length - 1 && plans.length > 1 ? '<div class="plan-badge">Most Popular</div>' : '')}
-            <div class="plan-header"><h3 class="plan-name">${p.plan_name}</h3><div class="plan-price">$${Number(p.price).toFixed(2)}<span>/${p.plan_period || 'mo'}</span></div></div>
+            <div class="plan-header"><h3 class="plan-name">${p.plan_name}</h3><div class="plan-price">${Math.round(p.price)} EGP<span>/${p.plan_period || 'mo'}</span></div></div>
             ${p.description ? `<p style="color:var(--text-secondary);font-size:.875rem;margin:0 0 1rem;">${p.description}</p>` : ''}
-            <div class="plan-stats"><div class="plan-stat"><span class="plan-stat-value">${fmtNum(p.active_users)}</span><span class="plan-stat-label">Active Users</span></div><div class="plan-stat"><span class="plan-stat-value">${p.price > 0 ? '$' + fmtNum(p.mrr) : '—'}</span><span class="plan-stat-label">${p.price > 0 ? 'MRR' : '—'}</span></div></div>
+            <div class="plan-stats"><div class="plan-stat"><span class="plan-stat-value">${fmtNum(p.active_users)}</span><span class="plan-stat-label">Active Users</span></div><div class="plan-stat"><span class="plan-stat-value">${p.price > 0 ? fmtNum(p.mrr) + ' EGP' : '—'}</span><span class="plan-stat-label">${p.price > 0 ? 'MRR' : '—'}</span></div></div>
             ${p.limits ? `<div style="margin:.75rem 0;padding:.75rem;background:var(--bg-secondary);border-radius:10px;"><div style="font-size:.75rem;font-weight:600;color:var(--text-secondary);margin-bottom:.5rem;">Usage Limits</div>${Object.entries(p.limits).map(([k,v]) => `<div style="display:flex;justify-content:space-between;font-size:.8rem;padding:.2rem 0;"><span>${k.replace(/_/g,' ').replace(/max /i,'Max ')}</span><span style="font-weight:600;">${v === -1 ? '∞ Unlimited' : v}</span></div>`).join('')}</div>` : ''}
             <ul class="plan-features">${(p.features || []).map(f => `<li>${f}</li>`).join('')}</ul>
             <div style="display:flex;gap:.5rem;margin-top:auto;">
@@ -429,21 +430,21 @@ async function loadSubscriptionsView(main) {
             <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Revenue by Plan</h2></div><div style="padding:1.5rem;"><canvas id="chart-rev-plan" height="220"></canvas></div></div>
         </div>
         <div class="section-card" style="margin-top:1.5rem;"><div class="section-card-header"><h2 class="section-heading">Revenue by Plan (Breakdown)</h2></div><div style="padding:1.5rem;">
-            ${revenue.map(r => `<div class="revenue-row"><span class="revenue-plan">${r.plan_name}</span><span class="revenue-count">${fmtNum(r.subscriber_count)} subscribers</span><span class="revenue-amount">$${fmtNum(r.monthly_revenue)}/mo</span></div>`).join('')}
-            <div class="revenue-row revenue-total"><span class="revenue-plan">Total MRR</span><span></span><span class="revenue-amount">$${fmtNum(totalMRR)}/mo</span></div>
+            ${revenue.map(r => `<div class="revenue-row"><span class="revenue-plan">${r.plan_name}</span><span class="revenue-count">${fmtNum(r.subscriber_count)} subscribers</span><span class="revenue-amount">${fmtNum(r.monthly_revenue)} EGP/mo</span></div>`).join('')}
+            <div class="revenue-row revenue-total"><span class="revenue-plan">Total MRR</span><span></span><span class="revenue-amount">${fmtNum(totalMRR)} EGP/mo</span></div>
         </div></div>
-        <div class="section-card" style="margin-top:1.5rem;"><div class="section-card-header"><h2 class="section-heading">Top Paying Users</h2></div><div id="rev-top-users">Loading...</div></div></div>`;
+        <div class="section-card" style="margin-top:1.5rem;"><div class="section-card-header"><h2 class="section-heading">Subscribed Users</h2></div><div id="rev-top-users">Loading...</div></div></div>`;
         // Revenue charts
         if (typeof Chart !== 'undefined') {
-            if(monthly.length) new Chart(document.getElementById('chart-rev-time'), {type:'bar',data:{labels:monthly.map(m=>m.month),datasets:[{label:'Revenue ($)',data:monthly.map(m=>m.revenue),backgroundColor:'rgba(16,185,129,0.7)',borderRadius:6}]},options:{responsive:true,scales:{y:{beginAtZero:true}}}});
-            if(byPlan.length) new Chart(document.getElementById('chart-rev-plan'), {type:'pie',data:{labels:byPlan.map(p=>p.plan_name),datasets:[{data:byPlan.map(p=>p.revenue),backgroundColor:['#6366f1','#0d9488','#f59e0b','#ec4899']}]},options:{responsive:true}});
+            if(monthly.length) new Chart(document.getElementById('chart-rev-time'), {type:'line',data:{labels:monthly.map(m=>m.month),datasets:[{label:'Revenue (EGP)',data:monthly.map(m=>m.revenue),borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.1)',fill:true,tension:0.4,borderWidth:2}]},options:{responsive:true,scales:{y:{beginAtZero:true}}}});
+            if(byPlan.length) new Chart(document.getElementById('chart-rev-plan'), {type:'doughnut',data:{labels:byPlan.map(p=>p.plan_name),datasets:[{data:byPlan.map(p=>p.revenue),backgroundColor:['#6366f1','#0d9488','#f59e0b','#ec4899']}]},options:{responsive:true,cutout:'70%'}});
         }
         // Load top paying users
         apiGet('subscriptions.php?action=revenue_top_users').then(d=>{
             const area = document.getElementById('rev-top-users');
             if(!area) return;
             const users = d.users||[];
-            area.innerHTML = `<div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>User</th><th>Email</th><th>Total Paid</th><th>Payments</th><th>Actions</th></tr></thead><tbody>${users.map(u=>`<tr><td>${u.first_name} ${u.last_name}</td><td>${u.email}</td><td>$${fmtNum(u.total_paid)}</td><td>${u.payment_count}</td><td><button class="btn btn-sm btn-outline" onclick="viewUser(${u.user_id})">View</button></td></tr>`).join('')}${users.length===0?'<tr><td colspan="5" style="text-align:center;padding:2rem;">No data</td></tr>':''}</tbody></table></div>`;
+            area.innerHTML = `<div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>User</th><th>Email</th><th>Total Paid</th><th>Payments</th><th>Actions</th></tr></thead><tbody>${users.map(u=>`<tr><td>${u.first_name} ${u.last_name}</td><td>${u.email}</td><td>${Math.round(u.total_paid)} EGP</td><td>${u.payment_count}</td><td><button class="btn btn-sm btn-outline" onclick="viewUser(${u.user_id})">View</button></td></tr>`).join('')}${users.length===0?'<tr><td colspan="5" style="text-align:center;padding:2rem;">No data</td></tr>':''}</tbody></table></div>`;
         });
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
@@ -556,12 +557,12 @@ async function loadPointsView(main) {
         </div>
 
         <!-- Points Rules + Leaderboard -->
-        <div class="overview-grid">
+        <div class="overview-grid" style="align-items: start; grid-template-columns: 2fr 1fr;">
             <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Points Rules</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${rules.length} rules</span></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Action</th><th>Points</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-                ${rules.map(r => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td><strong>${r.action_name}</strong></td><td><span style="font-weight:700;color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign}${r.points_value}</span></td><td><span style="font-size:.75rem;padding:3px 10px;border-radius:6px;background:${r.adjust_sign === '+' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign === '+' ? '↑ Deposit' : '↓ Withdrawal'}</span></td><td><button class="btn btn-sm btn-outline" onclick="editRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\\\'")}',${r.points_value},'${r.adjust_sign}')">Edit</button></td></tr>`).join('')}
+                ${rules.map(r => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td><strong>${r.action_name}</strong></td><td><span style="font-weight:700;color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign}${r.points_value}</span></td><td><span style="font-size:.75rem;padding:3px 10px;border-radius:6px;background:${r.adjust_sign === '+' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign === '+' ? '↑ Deposit' : '↓ Withdrawal'}</span></td><td><button class="btn btn-sm btn-outline" style="margin-right:4px;" onclick="editRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\\\'")}',${r.points_value},'${r.adjust_sign}')">Edit</button><button class="btn btn-sm btn-outline" style="color:var(--red-500);border-color:rgba(239,68,68,0.2);" onclick="deleteRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\\\'")}')">Del</button></td></tr>`).join('')}
                 ${rules.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-secondary);">No rules</td></tr>' : ''}
             </tbody></table></div></div>
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">🏆 Leaderboard</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Top ${wallets.length}</span></div><div class="patients-list" style="max-height:320px;overflow-y:auto;">
+            <div class="section-card" style="margin-bottom:0; height: fit-content;"><div class="section-card-header"><h2 class="section-heading">🏆 Leaderboard</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Top ${wallets.length}</span></div><div class="patients-list" style="max-height:320px;overflow-y:auto;padding-bottom:0;">
                 ${wallets.map((w, i) => `<div class="patient-row" style="transition:background .15s;border-radius:10px;padding:.6rem;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
                     <div style="width:28px;text-align:center;font-size:${i < 3 ? '1.2rem' : '.8rem'};font-weight:700;">${i < 3 ? medals[i] : '#'+(i+1)}</div>
                     <div class="patient-avatar" style="${avatarColors.parent}">${getInitials(w.first_name, w.last_name)}</div>
@@ -597,7 +598,8 @@ async function loadPointsView(main) {
                     </div>
                     <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
                         <span style="font-size:.65rem;padding:2px 8px;border-radius:4px;background:${b.is_active ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${b.is_active ? 'var(--green-500)' : 'var(--red-500)'};">${b.is_active ? 'Active' : 'Inactive'}</span>
-                        <button class="btn btn-sm btn-outline" style="font-size:.65rem;" onclick="deleteBannerEngagement(${b.id})">×</button>
+                        <button class="btn btn-sm btn-outline" style="font-size:.65rem;padding:2px 6px;" onclick="editBannerEngagement(${b.id}, '${b.message.replace(/'/g,"\\\\'")}', '${b.style}', '${b.target_audience}', ${b.is_active})">Edit</button>
+                        <button class="btn btn-sm btn-outline" style="font-size:.65rem;padding:2px 6px;color:var(--red-500);border-color:rgba(239,68,68,0.2);" onclick="deleteBannerEngagement(${b.id})">×</button>
                     </div>
                 </div>`).join('')}
                 ${banners.length === 0 ? '<div style="padding:2rem;text-align:center;color:var(--text-secondary);">No banners yet</div>' : ''}
@@ -605,28 +607,54 @@ async function loadPointsView(main) {
         </div>
         
         <!-- Reward Offers -->
-        <div class="section-card" style="margin-top:1rem;">
-            <div class="section-card-header">
-                <h2 class="section-heading">🎁 Redeemable Reward Offers</h2>
-                <button class="btn btn-sm btn-gradient" onclick="showAddOfferModal()">+ Add Offer</button>
+        <div class="overview-grid" style="margin-top:1rem;">
+            <!-- Standard Plan Offers -->
+            <div class="section-card">
+                <div class="section-card-header">
+                    <h2 class="section-heading">Standard Plan Rewards</h2>
+                    <button class="btn btn-sm btn-gradient" onclick="showAddOfferModal('standard')">+ Add Standard</button>
+                </div>
+                <div class="clinic-table-wrap">
+                    <table class="clinic-table">
+                        <thead><tr><th>Icon</th><th>Offer Title</th><th>Cost (Pts)</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            ${(ed.offers || []).filter(o => o.target_plan === 'standard' || o.target_plan === 'all').map(o => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                                <td style="font-size:1.5rem;text-align:center;">${o.icon || '🎁'}</td>
+                                <td><strong>${o.title}</strong><div style="font-size:.65rem;color:var(--text-secondary);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.description||''}</div></td>
+                                <td><span style="font-weight:700;color:var(--yellow-500);background:rgba(245,158,11,0.1);padding:4px 8px;border-radius:6px;">⭐ ${o.points_required}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline" style="font-size:.65rem;padding:3px 6px;" onclick="editOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}',${o.points_required},'${(o.description||'').replace(/'/g,"\\\\'")}', '${o.icon||'🎁'}', '${o.target_plan}')">Edit</button>
+                                    <button class="btn btn-sm btn-outline" style="font-size:.65rem;padding:3px 6px;color:var(--red-500);" onclick="deleteOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}')">Del</button>
+                                </td>
+                            </tr>`).join('')}
+                            ${(ed.offers || []).filter(o => o.target_plan === 'standard' || o.target_plan === 'all').length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-secondary);">No offers</td></tr>' : ''}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="clinic-table-wrap">
-                <table class="clinic-table">
-                    <thead><tr><th>Icon</th><th>Offer Title</th><th>Description</th><th>Cost (Points)</th><th>Actions</th></tr></thead>
-                    <tbody>
-                        ${(ed.offers || []).map(o => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
-                            <td style="font-size:1.5rem;text-align:center;">${o.icon || '🎁'}</td>
-                            <td><strong>${o.title}</strong></td>
-                            <td style="color:var(--text-secondary);font-size:.85rem;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.description || '—'}</td>
-                            <td><span style="font-weight:700;color:var(--yellow-500);background:rgba(245,158,11,0.1);padding:4px 8px;border-radius:6px;">⭐ ${o.points_required}</span></td>
-                            <td>
-                                <button class="btn btn-sm btn-outline" onclick="editOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}',${o.points_required},'${(o.description||'').replace(/'/g,"\\\\'")}', '${(o.icon||'🎁')}')">Edit</button>
-                                <button class="btn btn-sm btn-outline" style="color:var(--red-500);" onclick="deleteOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}')">Delete</button>
-                            </td>
-                        </tr>`).join('')}
-                        ${!(ed.offers && ed.offers.length) ? '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-secondary);">No reward offers configured</td></tr>' : ''}
-                    </tbody>
-                </table>
+            <!-- Premium Plan Offers -->
+            <div class="section-card">
+                <div class="section-card-header">
+                    <h2 class="section-heading">Premium Plan Rewards</h2>
+                    <button class="btn btn-sm btn-gradient" onclick="showAddOfferModal('premium')">+ Add Premium</button>
+                </div>
+                <div class="clinic-table-wrap">
+                    <table class="clinic-table">
+                        <thead><tr><th>Icon</th><th>Offer Title</th><th>Cost (Pts)</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            ${(ed.offers || []).filter(o => o.target_plan === 'premium' || o.target_plan === 'all').map(o => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
+                                <td style="font-size:1.5rem;text-align:center;">${o.icon || '🎁'}</td>
+                                <td><strong>${o.title}</strong><div style="font-size:.65rem;color:var(--text-secondary);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${o.description||''}</div></td>
+                                <td><span style="font-weight:700;color:var(--yellow-500);background:rgba(245,158,11,0.1);padding:4px 8px;border-radius:6px;">⭐ ${o.points_required}</span></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline" style="font-size:.65rem;padding:3px 6px;" onclick="editOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}',${o.points_required},'${(o.description||'').replace(/'/g,"\\\\'")}', '${o.icon||'🎁'}', '${o.target_plan}')">Edit</button>
+                                    <button class="btn btn-sm btn-outline" style="font-size:.65rem;padding:3px 6px;color:var(--red-500);" onclick="deleteOffer(${o.offer_id},'${(o.title||'').replace(/'/g,"\\\\'")}')">Del</button>
+                                </td>
+                            </tr>`).join('')}
+                            ${(ed.offers || []).filter(o => o.target_plan === 'premium' || o.target_plan === 'all').length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-secondary);">No offers</td></tr>' : ''}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
         
@@ -651,29 +679,41 @@ function editRule(ruleId, name, value, sign) {
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="er-save">Save</button>`);
     document.getElementById('er-save').onclick = async () => { try { const res = await apiPost('points.php', { action: 'update_rule', refrence_id: ruleId, action_name: document.getElementById('er-name').value, points_value: parseInt(document.getElementById('er-val').value), adjust_sign: document.getElementById('er-sign').value }); if (res.success) { showAlert('Rule updated!', 'success'); setTimeout(() => { closeModal(); showAdminView('points'); }, 1000); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } };
 }
+window.deleteRule = function(id, name) {
+    showConfirm(`Delete rule <strong>${name}</strong>?`, async () => { try { const r = await apiPost('points.php', {action:'delete_rule',refrence_id:id}); if(r.success){showAlert('Rule deleted!','success');setTimeout(()=>{closeModal();showAdminView('points');},800);}else showAlert('Failed','error');} catch(e){showAlert('Error','error');} });
+};
+
 function showAddRuleModal() {
     showModal('Add Points Rule', `<div class="form-group"><label>Action Name</label><input type="text" id="ar-name" placeholder="e.g. Daily Login"></div><div class="form-group"><label>Points Value</label><input type="number" id="ar-val" placeholder="10"></div><div class="form-group"><label>Type</label><select id="ar-sign"><option value="+">+ Deposit</option><option value="-">- Withdrawal</option></select></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="ar-save">Add Rule</button>`);
     document.getElementById('ar-save').onclick = async () => { const d = { action: 'add_rule', action_name: document.getElementById('ar-name').value, points_value: parseInt(document.getElementById('ar-val').value), adjust_sign: document.getElementById('ar-sign').value }; if (!d.action_name || !d.points_value) { showAlert('Please fill all fields.', 'warning'); return; } try { const res = await apiPost('points.php', d); if (res.success) { showAlert('Rule added!', 'success'); setTimeout(() => { closeModal(); showAdminView('points'); }, 1200); } else showAlert(res.error || 'Failed', 'error'); } catch (e) { showAlert('Error: ' + e.message, 'error'); } };
 }
-function showAddOfferModal() {
-    showModal('Add Reward Offer', `<div class="form-group"><label>Offer Title</label><input type="text" id="ao-title" placeholder="e.g. Free Consultation"></div><div class="form-group"><label>Points Required</label><input type="number" id="ao-pts" placeholder="500"></div><div class="form-group"><label>Description</label><input type="text" id="ao-desc" placeholder="Offer details..."></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="ao-icon" value="🎁" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
+function showAddOfferModal(targetPlan = 'all') {
+    showModal('Add Reward Offer', `<div class="form-group"><label>Offer Title</label><input type="text" id="ao-title" placeholder="e.g. Free Consultation"></div><div class="form-group"><label>Points Required</label><input type="number" id="ao-pts" placeholder="500"></div><div class="form-group"><label>Target Plan</label><select id="ao-plan"><option value="standard" ${targetPlan==='standard'?'selected':''}>Standard Plan</option><option value="premium" ${targetPlan==='premium'?'selected':''}>Premium Plan</option><option value="all" ${targetPlan==='all'?'selected':''}>All Plans</option></select></div><div class="form-group"><label>Description</label><input type="text" id="ao-desc" placeholder="Offer details..."></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="ao-icon" value="🎁" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="ao-save">Add Offer</button>`);
     document.getElementById('ao-save').onclick = async () => {
-        try { const r = await apiPost('engagement.php', {action:'save_offer', title:document.getElementById('ao-title').value, points_required:parseInt(document.getElementById('ao-pts').value), description:document.getElementById('ao-desc').value, icon:document.getElementById('ao-icon').value});
+        try { const r = await apiPost('engagement.php', {action:'save_offer', title:document.getElementById('ao-title').value, points_required:parseInt(document.getElementById('ao-pts').value), description:document.getElementById('ao-desc').value, icon:document.getElementById('ao-icon').value, target_plan:document.getElementById('ao-plan').value});
         if(r.success) { showAlert('Offer added!', 'success'); setTimeout(()=>{closeModal();showAdminView('points');},1000); } else showAlert(r.error||'Failed','error'); } catch(e) { showAlert('Error','error'); }
     };
 }
-function editOffer(id, title, pts, desc, icon) {
-    showModal('Edit Reward Offer', `<div class="form-group"><label>Offer Title</label><input type="text" id="eo-title" value="${title}"></div><div class="form-group"><label>Points Required</label><input type="number" id="eo-pts" value="${pts}"></div><div class="form-group"><label>Description</label><input type="text" id="eo-desc" value="${desc}"></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="eo-icon" value="${icon}" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
+function editOffer(id, title, pts, desc, icon, targetPlan = 'all') {
+    showModal('Edit Reward Offer', `<div class="form-group"><label>Offer Title</label><input type="text" id="eo-title" value="${title}"></div><div class="form-group"><label>Points Required</label><input type="number" id="eo-pts" value="${pts}"></div><div class="form-group"><label>Target Plan</label><select id="eo-plan"><option value="standard" ${targetPlan==='standard'?'selected':''}>Standard Plan</option><option value="premium" ${targetPlan==='premium'?'selected':''}>Premium Plan</option><option value="all" ${targetPlan==='all'?'selected':''}>All Plans</option></select></div><div class="form-group"><label>Description</label><input type="text" id="eo-desc" value="${desc}"></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="eo-icon" value="${icon}" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="eo-save">Save Changes</button>`);
     document.getElementById('eo-save').onclick = async () => {
-        try { const r = await apiPost('engagement.php', {action:'save_offer', offer_id:id, title:document.getElementById('eo-title').value, points_required:parseInt(document.getElementById('eo-pts').value), description:document.getElementById('eo-desc').value, icon:document.getElementById('eo-icon').value});
+        try { const r = await apiPost('engagement.php', {action:'save_offer', offer_id:id, title:document.getElementById('eo-title').value, points_required:parseInt(document.getElementById('eo-pts').value), description:document.getElementById('eo-desc').value, icon:document.getElementById('eo-icon').value, target_plan:document.getElementById('eo-plan').value});
         if(r.success) { showAlert('Offer updated!', 'success'); setTimeout(()=>{closeModal();showAdminView('points');},1000); } else showAlert(r.error||'Failed','error'); } catch(e) { showAlert('Error','error'); }
     };
 }
 function deleteOffer(id, title) {
     showConfirm(`Delete offer <strong>${title}</strong>?`, async () => { try { const r = await apiPost('engagement.php', {action:'delete_offer', offer_id:id}); if(r.success){showAlert('Offer deleted!','success');setTimeout(()=>{closeModal();showAdminView('points');},800);}else showAlert('Failed','error');} catch(e){showAlert('Error','error');} });
+}
+function editBannerEngagement(id, message, style, target_audience, is_active) {
+    showModal('Edit Banner', `<div class="form-group"><label>Message</label><input type="text" id="eb-msg" value="${message}"></div><div class="form-group"><label>Style</label><select id="eb-style"><option value="info" ${style==='info'?'selected':''}>Info</option><option value="success" ${style==='success'?'selected':''}>Success</option><option value="warning" ${style==='warning'?'selected':''}>Warning</option><option value="error" ${style==='error'?'selected':''}>Error</option></select></div><div class="form-group"><label>Audience</label><select id="eb-aud"><option value="all" ${target_audience==='all'?'selected':''}>All Users</option><option value="parent" ${target_audience==='parent'?'selected':''}>Parents</option><option value="clinic" ${target_audience==='clinic'?'selected':''}>Clinics</option><option value="specialist" ${target_audience==='specialist'?'selected':''}>Specialists</option></select></div><div class="form-group" style="display:flex;align-items:center;gap:.5rem;margin-top:1rem;"><input type="checkbox" id="eb-active" ${is_active ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;"><label for="eb-active" style="margin:0;cursor:pointer;">Active Banner</label></div>`,
+        `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="eb-save">Save Changes</button>`);
+    document.getElementById('eb-save').onclick = async () => {
+        try { const r = await apiPost('engagement.php', {action:'save_banner', id:id, message:document.getElementById('eb-msg').value, style:document.getElementById('eb-style').value, target_audience:document.getElementById('eb-aud').value, is_active:document.getElementById('eb-active').checked ? 1 : 0});
+        if(r.success) { showAlert('Banner updated!', 'success'); setTimeout(()=>{closeModal();showAdminView('points');},1000); } else showAlert(r.error||'Failed','error'); } catch(e) { showAlert('Error','error'); }
+    };
 }
 
 // ═══ REPORTS (System Analytics + Behavioral Charts + Export) ═══
@@ -684,7 +724,7 @@ async function loadReportsView(main) {
 
         // Detect low-usage warnings
         const warnings = [];
-        if (s.ai_activities === 0) warnings.push('⚠️ No AI activities have been generated. The OpenAI recommendation engine may be offline.');
+        if (s.ai_activities === 0) warnings.push('⚠️ No activities have been assigned.');
         if (s.voice_samples === 0) warnings.push('⚠️ No voice samples recorded. Speech analysis feature may not be discoverable by parents.');
         if (s.motor_milestones === 0) warnings.push('⚠️ No motor milestones logged. Motor skills tracking may need attention.');
         if (s.total_children > 0 && s.growth_records === 0) warnings.push('⚠️ Children exist but no growth records. Parents may not know how to log measurements.');
@@ -715,8 +755,8 @@ async function loadReportsView(main) {
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;">
                 <div style="background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(99,102,241,0.02));border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:1.25rem;text-align:center;">
                     <div style="font-size:1.75rem;font-weight:800;color:var(--indigo-500);">${fmtNum(s.ai_activities)}</div>
-                    <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem;">AI Activities Generated</div>
-                    <div style="font-size:.7rem;color:${s.ai_activities === 0 ? 'var(--red-500)' : 'var(--green-500)'};margin-top:.5rem;font-weight:600;">${s.ai_activities === 0 ? '🔴 Inactive' : '🟢 Active'}</div>
+                    <div style="font-size:.8rem;font-weight:600;color:var(--text-secondary);margin-top:.25rem;">Activities Assigned</div>
+                    <div style="font-size:.7rem;color:${s.ai_activities === 0 ? 'var(--red-500)' : 'var(--green-500)'};margin-top:.5rem;font-weight:600;">${s.ai_activities === 0 ? '🔴 Inactive' : '🟢 Tracking'}</div>
                 </div>
                 <div style="background:linear-gradient(135deg,rgba(13,148,136,0.08),rgba(13,148,136,0.02));border:1px solid rgba(13,148,136,0.15);border-radius:14px;padding:1.25rem;text-align:center;">
                     <div style="font-size:1.75rem;font-weight:800;color:var(--teal-500);">${fmtNum(s.voice_samples)}</div>
@@ -750,7 +790,7 @@ async function loadReportsView(main) {
                 </div>
                 <div style="background:var(--bg-secondary);border-radius:12px;padding:1rem;display:flex;align-items:center;gap:.75rem;">
                     <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:18px;height:18px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-                    <div><div style="font-size:1.1rem;font-weight:700;">${fmtNum(s.community_messages)}</div><div style="font-size:.75rem;color:var(--text-secondary);">Community Posts</div></div>
+                    <div><div style="font-size:1.1rem;font-weight:700;">${fmtNum(s.support_tickets)}</div><div style="font-size:.75rem;color:var(--text-secondary);">Support Tickets</div></div>
                 </div>
             </div>
 
@@ -770,20 +810,20 @@ async function loadReportsView(main) {
             </div>
         </div></div>
 
-        <!-- Child Health Overview -->
-        <div class="admin-stats-grid">
+        <!-- General User Overview -->
+        <div class="admin-stats-grid" style="margin-bottom:1.5rem;">
+            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.total_parents || 0)}</div><div class="admin-stat-label">Total Parents</div></div></div>
+            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.total_children)}</div><div class="admin-stat-label">Total Children</div></div></div>
             <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${s.on_track_rate}%</div><div class="admin-stat-label">Children On Track</div></div></div>
             <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.flagged_children)}</div><div class="admin-stat-label">Flagged Children</div><div class="admin-stat-trend ${s.flagged_children > 0 ? 'trend-down' : 'trend-up'}">${s.flagged_children > 0 ? '⚠ Needs review' : '✓ All clear'}</div></div></div>
-            <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.total_children)}</div><div class="admin-stat-label">Total Children</div></div></div>
-            <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(s.growth_records)}</div><div class="admin-stat-label">Growth Records</div></div></div>
         </div>
 
         <!-- Parent Engagement & AI Adoption -->
         <div class="overview-grid" style="margin-top:1.5rem;">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">🧠 AI Feature Adoption</h2></div>
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">🧠 Feature Adoption</h2></div>
             <div style="padding:1.5rem;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-                    <div><div style="font-weight:700;font-size:1.1rem;color:var(--text-primary);">${s.ai_activities || 0}</div><div style="font-size:.75rem;color:var(--text-secondary);">Total Recommendations generated</div></div>
+                    <div><div style="font-weight:700;font-size:1.1rem;color:var(--text-primary);">${s.ai_activities || 0}</div><div style="font-size:.75rem;color:var(--text-secondary);">Total Activities Assigned</div></div>
                     <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🤖</div>
                 </div>
                 <div style="margin-bottom:.5rem;">

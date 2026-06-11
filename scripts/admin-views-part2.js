@@ -6,7 +6,7 @@ async function loadNotificationsView(main) {
         const sent = notifs.filter(n => n.status==='sent').length;
         const scheduled = notifs.filter(n => n.status==='scheduled').length;
         const failed = notifs.filter(n => n.status==='failed').length;
-        const totalRecipients = notifs.reduce((s,n) => s + (parseInt(n.recipient_count)||0), 0);
+        const totalRecipients = data.unique_recipients !== undefined ? data.unique_recipients : notifs.reduce((s,n) => s + (parseInt(n.recipient_count)||0), 0);
         main.innerHTML = `<div class="dashboard-content">
         <!-- Hero Header -->
         <div style="background:linear-gradient(135deg,#10b981,#059669,#047857);border-radius:20px;padding:2rem 2.5rem;color:white;margin-bottom:1.5rem;position:relative;overflow:hidden;">
@@ -41,7 +41,7 @@ async function loadNotificationsView(main) {
             <div style="background:linear-gradient(135deg,rgba(236,72,153,0.1),rgba(236,72,153,0.03));border:1px solid rgba(236,72,153,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-3px)'" onmouseleave="this.style.transform=''">
                 <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ec4899,#f472b6);display:flex;align-items:center;justify-content:center;font-size:1rem;">👥</div></div>
                 <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);">${fmtNum(totalRecipients)}</div>
-                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Recipients</div>
+                <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Unique Recipients</div>
             </div>
         </div>
 
@@ -62,7 +62,24 @@ async function loadNotificationsView(main) {
                     </div></td>
                 </tr>`).join('')}
                 ${notifs.length===0?'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-secondary);"><div style="font-size:2rem;margin-bottom:.5rem;">🔔</div>No notifications sent yet</td></tr>':''}
-            </tbody></table></div></div></div>`;
+            </tbody></table></div></div>
+            
+        <!-- Default Notification Rules -->
+        <div class="section-card"><div class="section-card-header"><h2 class="section-heading">⚡ Default Notification Rules</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">System Triggers</span></div>
+            <div style="padding:1.5rem;">
+                <p style="color:var(--text-secondary);font-size:.9rem;margin-bottom:1rem;">These notifications are sent automatically based on system events.</p>
+                <div class="clinic-table-wrap"><table class="clinic-table">
+                    <thead><tr><th>Trigger Event</th><th>Description</th><th>Delivery Method</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Account Registration</strong></td><td>Sent when a new user signs up</td><td><span style="font-size:.75rem;padding:3px 8px;border-radius:6px;background:rgba(99,102,241,0.1);color:var(--indigo-500);">📧 Email</span></td></tr>
+                        <tr><td><strong>Password Reset</strong></td><td>Sent when a user requests a password reset code</td><td><span style="font-size:.75rem;padding:3px 8px;border-radius:6px;background:rgba(99,102,241,0.1);color:var(--indigo-500);">📧 Email</span></td></tr>
+                        <tr><td><strong>New Message</strong></td><td>Sent when a parent receives a reply from a specialist</td><td><span style="font-size:.75rem;padding:3px 8px;border-radius:6px;background:rgba(236,72,153,0.1);color:#ec4899;">📱📧 Both</span></td></tr>
+                        <tr><td><strong>Appointment Reminder</strong></td><td>Sent 24h before a scheduled clinic appointment</td><td><span style="font-size:.75rem;padding:3px 8px;border-radius:6px;background:rgba(16,185,129,0.1);color:var(--green-500);">📱 In-App</span></td></tr>
+                        <tr><td><strong>New Activity Assigned</strong></td><td>Sent when AI generates a new recommended activity</td><td><span style="font-size:.75rem;padding:3px 8px;border-radius:6px;background:rgba(16,185,129,0.1);color:var(--green-500);">📱 In-App</span></td></tr>
+                    </tbody>
+                </table></div>
+            </div>
+        </div></div>`;
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
 }
@@ -79,6 +96,24 @@ function showComposeNotification() {
         <div class="form-group" id="cn-segment-wrap" style="display:none;"><label>Role</label><select id="cn-segment-role"><option value="parent">Parents</option><option value="specialist">Specialists</option><option value="admin">Admins</option></select></div>
         <div class="form-group"><label>Schedule (leave empty for immediate)</label><input type="datetime-local" id="cn-schedule"></div>
     `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="cn-send">Send Notification</button>`);
+    
+    // Enforce minimum schedule time to be 30 minutes from now
+    const schedInput = document.getElementById('cn-schedule');
+    if (schedInput) {
+        const minTime = new Date();
+        minTime.setMinutes(minTime.getMinutes() + 30);
+        minTime.setMinutes(minTime.getMinutes() - minTime.getTimezoneOffset());
+        schedInput.min = minTime.toISOString().slice(0, 16);
+        
+        // Add listener to prevent typing older times manually
+        schedInput.addEventListener('change', function() {
+            if (this.value && this.value < this.min) {
+                showAlert('Scheduled time must be at least 30 minutes from now.', 'warning');
+                this.value = '';
+            }
+        });
+    }
+
     document.getElementById('cn-target').onchange = function() { document.getElementById('cn-segment-wrap').style.display = this.value==='segment'?'block':'none'; };
     document.getElementById('cn-send').onclick = async () => {
         const d = { action:'compose', title:document.getElementById('cn-title').value, body:document.getElementById('cn-body').value, type:document.getElementById('cn-type').value, priority:document.getElementById('cn-priority').value, target_type:document.getElementById('cn-target').value, scheduled_at:document.getElementById('cn-schedule').value||null };

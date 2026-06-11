@@ -87,6 +87,7 @@ try {
             $name = $u ? $u['first_name'] . ' ' . $u['last_name'] : 'Unknown';
 
             logActivity($connect, 'user_status_change', "User {$statusLabel}: {$name}", $userId);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'update_user_status', 'users', "Changed status to {$newStatus} for user: {$name}", $userId);
 
             echo json_encode(['success' => true, 'message' => "User status changed to {$newStatus}"]);
 
@@ -132,6 +133,7 @@ try {
             $stmt->execute($params);
 
             logActivity($connect, 'user_updated', "User updated: {$firstName} {$lastName}", $userId);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'update_user', 'users', "Updated user: {$firstName} {$lastName}", $userId);
 
             echo json_encode(['success' => true, 'message' => 'User updated successfully']);
 
@@ -179,6 +181,7 @@ try {
             }
 
             logActivity($connect, 'user_added', "New user added: {$firstName} {$lastName} ({$role})", $newUserId);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'create_user', 'users', "Created new {$role}: {$firstName} {$lastName}", $newUserId);
 
             echo json_encode(['success' => true, 'message' => 'User created successfully', 'user_id' => $newUserId]);
 
@@ -232,11 +235,19 @@ try {
                     $connect->prepare("DELETE FROM specialist WHERE specialist_id = :id")->execute(['id' => $userId]);
                 }
                 
+                // Delete related generic records to satisfy foreign keys
+                $connect->prepare("DELETE FROM system_logs WHERE user_id = :id")->execute(['id' => $userId]);
+                $connect->prepare("DELETE FROM activity_log WHERE related_user_id = :id")->execute(['id' => $userId]);
+                $connect->prepare("DELETE FROM user_sessions WHERE user_id = :id")->execute(['id' => $userId]);
+                $connect->prepare("DELETE FROM notifications WHERE user_id = :id")->execute(['id' => $userId]);
+                $connect->prepare("DELETE FROM messages WHERE sender_id = :id OR receiver_id = :id")->execute(['id' => $userId]);
+                
                 // Finally delete the user
                 $stmt = $connect->prepare("DELETE FROM users WHERE user_id = :id");
                 $stmt->execute(['id' => $userId]);
 
                 logActivity($connect, 'user_deleted', "User deleted: {$deletedName} ({$deletedRole})", $userId);
+                if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'delete_user', 'users', "Deleted {$deletedRole}: {$deletedName}", $userId);
 
                 echo json_encode(['success' => true, 'message' => 'User deleted']);
             } catch (PDOException $e) {

@@ -5,6 +5,15 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
     header("Location: login.php");
     exit;
 }
+
+include 'connection.php';
+$statusCheck = $connect->prepare("SELECT status FROM users WHERE user_id = ?");
+$statusCheck->execute([$_SESSION['id']]);
+if ($statusCheck->fetchColumn() === 'suspended') {
+    session_destroy();
+    header("Location: account-suspended.php");
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -160,23 +160,23 @@ if (!isset($_SESSION['id'])) {
                     <h3 style="margin-bottom: 0.5rem; font-size: 1.125rem; font-weight: 600;">Main Focus Areas</h3>
                     <p style="color: var(--slate-500); font-size: 0.875rem;">Select the areas you want to track closely</p>
                     <div class="options-grid" id="concerns-grid">
-                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Speech">
-                            <div class="option-icon">🗣️</div><div class="option-label">Speech</div>
+                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Speech & Language">
+                            <div class="option-icon">🗣️</div><div class="option-label">Speech & Language</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Motor Skills">
-                            <div class="option-icon">🏃</div><div class="option-label">Motor Skills</div>
+                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Motor Skills & Movement">
+                            <div class="option-icon">🏃</div><div class="option-label">Motor Skills & Movement</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Cognitive">
-                            <div class="option-icon">🧠</div><div class="option-label">Cognitive</div>
+                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Cognitive Development">
+                            <div class="option-icon">🧠</div><div class="option-label">Cognitive Development</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Social">
-                            <div class="option-icon">🤝</div><div class="option-label">Social</div>
+                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Social & Emotional">
+                            <div class="option-icon">🤝</div><div class="option-label">Social & Emotional</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Growth">
-                            <div class="option-icon">📈</div><div class="option-label">Growth</div>
+                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Physical Growth">
+                            <div class="option-icon">📈</div><div class="option-label">Physical Growth</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Sleep">
-                            <div class="option-icon">😴</div><div class="option-label">Sleep</div>
+                        <div class="option-card" onclick="toggleOption(this, 'concerns')" data-value="Behavior & Sleep">
+                            <div class="option-icon">😴</div><div class="option-label">Behavior & Sleep</div>
                         </div>
                     </div>
                     <div class="wizard-buttons">
@@ -190,17 +190,23 @@ if (!isset($_SESSION['id'])) {
                     <h3 style="margin-bottom: 0.5rem; font-size: 1.125rem; font-weight: 600;">Activity Preferences</h3>
                     <p style="color: var(--slate-500); font-size: 0.875rem;">What kind of activities does your child enjoy?</p>
                     <div class="options-grid" id="activities-grid">
-                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Interactive Games">
+                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Interactive & Digital Games">
                             <div class="option-icon">🎮</div><div class="option-label">Interactive Games</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Outdoor Play">
-                            <div class="option-icon">🌳</div><div class="option-label">Outdoor Play</div>
+                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Physical & Outdoor Play">
+                            <div class="option-icon">🌳</div><div class="option-label">Physical & Outdoor Play</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Reading/Books">
-                            <div class="option-icon">📚</div><div class="option-label">Reading/Books</div>
+                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Reading & Storytelling">
+                            <div class="option-icon">📚</div><div class="option-label">Reading & Storytelling</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Arts & Crafts">
-                            <div class="option-icon">🎨</div><div class="option-label">Arts & Crafts</div>
+                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Arts, Crafts & Music">
+                            <div class="option-icon">🎨</div><div class="option-label">Arts, Crafts & Music</div>
+                        </div>
+                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Puzzles & Problem Solving">
+                            <div class="option-icon">🧩</div><div class="option-label">Puzzles & Problem Solving</div>
+                        </div>
+                        <div class="option-card" onclick="toggleOption(this, 'activities')" data-value="Free & Imaginative Play">
+                            <div class="option-icon">🎭</div><div class="option-label">Free & Imaginative Play</div>
                         </div>
                     </div>
                     <div class="wizard-buttons">
@@ -214,17 +220,23 @@ if (!isset($_SESSION['id'])) {
                     <h3 style="margin-bottom: 0.5rem; font-size: 1.125rem; font-weight: 600;">Your Goals</h3>
                     <p style="color: var(--slate-500); font-size: 0.875rem;">What do you want to achieve with Bright Steps?</p>
                     <div class="options-grid" id="goals-grid">
-                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Track Milestones">
-                            <div class="option-icon">📝</div><div class="option-label">Track Milestones</div>
+                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Monitor Growth & Milestones">
+                            <div class="option-icon">📈</div><div class="option-label">Monitor Milestones</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Consult Specialists">
-                            <div class="option-icon">👨‍⚕️</div><div class="option-label">Consult Specialists</div>
+                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Enhance Speech & Vocabulary">
+                            <div class="option-icon">🗣️</div><div class="option-label">Enhance Speech</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Daily Activities">
+                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Improve Motor Coordination">
+                            <div class="option-icon">🏃</div><div class="option-label">Improve Motor Skills</div>
+                        </div>
+                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Connect with Pediatric Experts">
+                            <div class="option-icon">👨‍⚕️</div><div class="option-label">Connect with Experts</div>
+                        </div>
+                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Get Daily Personalized Activities">
                             <div class="option-icon">📅</div><div class="option-label">Daily Activities</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Speech analysis">
-                            <div class="option-icon">🎙️</div><div class="option-label">Speech Analysis</div>
+                        <div class="option-card" onclick="toggleOption(this, 'goals')" data-value="Prepare for School Readiness">
+                            <div class="option-icon">🏫</div><div class="option-label">School Readiness</div>
                         </div>
                     </div>
                     <div id="finish-error" style="color: #ef4444; font-size: 0.85rem; margin-top: 1rem; text-align: center;"></div>

@@ -155,7 +155,7 @@ try {
         $docSlots = $slotMap[$sid] ?? [];
 
         $availability = [];
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 14; $i++) {
             $d   = (clone $today)->modify("+{$i} day");
             $dow = (int)$d->format('w'); // 0=Sun … 6=Sat
 

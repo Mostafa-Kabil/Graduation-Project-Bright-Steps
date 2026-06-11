@@ -47,7 +47,7 @@ $plans = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <p class="pricing-plan-subtitle <?php echo $isPremium ? 'text-light' : ''; ?>"><?php echo htmlspecialchars($plan['description']); ?></p>
                 
                 <div class="pricing-amount <?php echo $isPremium ? 'text-white' : ''; ?>">
-                    $<?php echo htmlspecialchars($plan['price']); ?>
+                    <?php echo htmlspecialchars($plan['price']); ?> EGP
                     <?php if ($plan['price'] > 0): ?>
                     <span class="pricing-period">/<?php echo htmlspecialchars($plan['plan_period']); ?></span>
                     <?php endif; ?>

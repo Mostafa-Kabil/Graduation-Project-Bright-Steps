@@ -1,5 +1,24 @@
 // Dashboard JavaScript
 (function () {
+    // Global fetch interceptor to catch 401 Unauthorized (e.g. Account Suspended)
+    const originalFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const response = await originalFetch.apply(this, args);
+        if (response.status === 401) {
+            try {
+                const data = await response.clone().json();
+                if (data.redirect) {
+                    window.location.href = window.location.origin + data.redirect;
+                    return new Promise(() => {}); // Stop execution
+                }
+            } catch(e) {}
+            // Fallback to login if no redirect provided
+            window.location.href = '../../login.php';
+            return new Promise(() => {}); // Stop execution
+        }
+        return response;
+    };
+
     var children = (window.dashboardData || {}).children || [];
 
     // Navigation items configuration
@@ -1494,14 +1513,26 @@
     }
 
     function renderSpeechCharts(entries) {
-        if (typeof Chart === 'undefined' || entries.length === 0) return;
+        if (typeof Chart === 'undefined') return;
+        var vocabEl = document.getElementById('speech-vocab-chart');
+        var clarityEl = document.getElementById('speech-clarity-chart');
+        
+        if (entries.length === 0) {
+            if (vocabEl && vocabEl.parentElement) {
+                vocabEl.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--slate-400);font-weight:600;font-size:1.1rem;text-align:center;flex-direction:column;gap:0.5rem;"><span style="font-size:2rem;">📊</span>No vocabulary data yet</div>';
+            }
+            if (clarityEl && clarityEl.parentElement) {
+                clarityEl.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--slate-400);font-weight:600;font-size:1.1rem;text-align:center;flex-direction:column;gap:0.5rem;"><span style="font-size:2rem;">📊</span>No clarity data yet</div>';
+            }
+            return;
+        }
+
         var reversed = entries.slice().reverse();
         var labels = reversed.map(function (e, i) { return 'Rec ' + (i + 1); });
         var vocabData = reversed.map(function (e) { return e.vocabulary_score ? Math.round(e.vocabulary_score) : 0; });
         var clarityData = reversed.map(function (e) { return e.clarify_score ? Math.round(e.clarify_score * 100) : 0; });
 
         // Vocab chart
-        var vocabEl = document.getElementById('speech-vocab-chart');
         if (vocabEl) {
             new Chart(vocabEl, {
                 type: 'line',
@@ -2785,6 +2816,17 @@
 
     // Update Radar Chart (supports 5 pillars: Attention, Communication, Social, Motor, Fine Motor)
     function updateRadarChart(stats, useAgeExpectations = false) {
+        const totalExpected = (stats.attention.expected||0) + (stats.communication.expected||0) + (stats.social.expected||0) + (stats.motor.expected||0) + (stats.fine_motor.expected||0);
+        const totalOld = (stats.attention.total||0) + (stats.communication.total||0) + (stats.social.total||0) + (stats.motor.total||0) + (stats.fine_motor.total||0);
+        
+        if (totalExpected === 0 && totalOld === 0) {
+            const ctxWrap = document.getElementById('radarChart')?.parentElement;
+            if (ctxWrap) {
+                ctxWrap.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--slate-400);font-weight:600;min-height:200px;gap:0.5rem;"><span style="font-size:2.5rem;">🎯</span>No assessment data yet</div>';
+            }
+            return;
+        }
+
         // Support new stats structure with 'expected' field for age-based calculation
         let attentionPercent, communicationPercent, socialPercent, motorPercent, fineMotorPercent;
 
@@ -4344,9 +4386,7 @@
                             <div class="ai-shimmer-card"><div class="shimmer"></div></div>
                             <div class="ai-shimmer-card"><div class="shimmer"></div></div>
                         </div>
-                        <p style="text-align:center;color:var(--slate-500);margin-top:1.5rem;font-size:1rem;">
-                            <span style="font-size:1.5rem;">🤖</span> AI is analyzing ${child ? child.first_name + "'s" : "your child's"} data and preparing personalized recommendations...
-                        </p>
+                    </div>
                     </div>
                 </div>
 
@@ -4368,9 +4408,6 @@
                     <div class="ai-shimmer-card"><div class="shimmer"></div></div>
                     <div class="ai-shimmer-card"><div class="shimmer"></div></div>
                 </div>
-                <p style="text-align:center;color:var(--slate-500);margin-top:1.5rem;">
-                    <span style="font-size:1.5rem;">🤖</span> AI is generating personalized recommendations...
-                </p>
             </div>`;
 
         try {
@@ -4857,7 +4894,7 @@
             if (!availability || availability.length === 0) {
                 return '<div class="avail-no-data">No availability data</div>';
             }
-            return availability.map(function(slot) {
+            return availability.slice(0, 3).map(function(slot) {
                 if (slot.available) {
                     return (
                         '<div class="doctor-avail-slot doctor-avail-active">' +
@@ -5495,9 +5532,15 @@
         return `
         <div class="dashboard-content">
             <div class="dashboard-header-section">
-                <div>
-                    <h1 class="dashboard-title">Points & Rewards 💎</h1>
-                    <p class="dashboard-subtitle">Earn points for engaging with your child's development</p>
+                <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
+                    <div>
+                        <h1 class="dashboard-title">Points & Rewards 💎</h1>
+                        <p class="dashboard-subtitle">Earn points for engaging with your child's development</p>
+                    </div>
+                    <button class="btn btn-outline" style="border-radius:12px;display:flex;align-items:center;gap:0.5rem;" onclick="window.showRulesModal()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+                        Rules & Info
+                    </button>
                 </div>
             </div>
 
@@ -6151,6 +6194,7 @@
         const sub = d.subscription || {};
         const expiredPremium = sub.expired_premium;
         const expiresAt = sub.expires_at ? new Date(sub.expires_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'}) : null;
+        const lang = settings.language || 'en';
 
         return `
         <div class="dashboard-content">
@@ -6302,6 +6346,7 @@
                                     <h4 class="settings-row-title">Current Plan: <span style="color:var(--blue-600);font-weight:700;">${sub.plan_name || 'Free'}</span></h4>
                                     <p class="settings-row-sub">${sub.price && sub.price !== '0.00' ? sub.price + ' EGP/' + (sub.plan_period || 'month') : 'Free plan — upgrade for more features'}</p>
                                     <div style="font-size:0.8rem;color:#64748b;margin-top:0.25rem;">
+                                        Status: <strong>${sub.status ? sub.status.toUpperCase() : 'ACTIVE'}</strong><br>
                                         ${expiresAt ? `Expires: ${expiresAt}` : ''}
                                         ${expiredPremium ? '<span style="color:#ef4444;font-weight:700;margin-left:0.5rem;">⚠️ Subscription Expired</span>' : ''}
                                     </div>
@@ -7761,6 +7806,96 @@
     };
 
     // ══════════════════════════════════════════════════════════════
+    // ── Rules & Info Modal ────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    window.showRulesModal = function() {
+        if (document.getElementById('rules-modal')) return;
+        
+        const modal = document.createElement('div');
+        modal.id = 'rules-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:10000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s;padding:1rem;';
+        
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:24px;width:100%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);transform:scale(0.95);transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);">
+                
+                <!-- Header -->
+                <div style="padding:1.5rem 2rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to right, #f8fafc, #fff);border-radius:24px 24px 0 0;">
+                    <div style="display:flex;align-items:center;gap:1rem;">
+                        <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg, #10b981, #06b6d4);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;box-shadow:0 8px 16px rgba(16,185,129,0.2);">📖</div>
+                        <div>
+                            <h2 style="font-size:1.25rem;font-weight:800;color:#1e293b;margin:0;">Points & Badges Guide</h2>
+                            <p style="font-size:0.85rem;color:#64748b;margin:0.25rem 0 0;">Learn how to earn rewards</p>
+                        </div>
+                    </div>
+                    <button onclick="document.getElementById('rules-modal').remove()" style="background:#f1f5f9;border:none;width:36px;height:36px;border-radius:50%;color:#64748b;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                
+                <!-- Content -->
+                <div style="padding:2rem;overflow-y:auto;flex:1;">
+                    <h3 style="font-size:1.1rem;font-weight:700;color:#0f172a;margin:0 0 1rem;">How to Earn Points 💎</h3>
+                    <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:2rem;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div><div style="font-weight:600;color:#1e293b;">Daily Login</div><div style="font-size:0.8rem;color:#64748b;">Log in once per day</div></div>
+                            <div style="font-weight:700;color:#10b981;">+10 pts</div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div><div style="font-weight:600;color:#1e293b;">Log Growth</div><div style="font-size:0.8rem;color:#64748b;">Record height, weight, or head circumference</div></div>
+                            <div style="font-weight:700;color:#10b981;">+25 pts</div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div><div style="font-weight:600;color:#1e293b;">Record Speech</div><div style="font-size:0.8rem;color:#64748b;">Submit voice sample for AI analysis</div></div>
+                            <div style="font-weight:700;color:#10b981;">+15 pts</div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div><div style="font-weight:600;color:#1e293b;">Complete Activity</div><div style="font-size:0.8rem;color:#64748b;">Finish a recommended activity</div></div>
+                            <div style="font-weight:700;color:#10b981;">+15 pts</div>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div><div style="font-weight:600;color:#1e293b;">Attend Appointment</div><div style="font-size:0.8rem;color:#64748b;">Complete a scheduled specialist appointment</div></div>
+                            <div style="font-weight:700;color:#10b981;">+50 pts</div>
+                        </div>
+                    </div>
+                    
+                    <h3 style="font-size:1.1rem;font-weight:700;color:#0f172a;margin:0 0 1rem;">How to Earn Badges 🏆</h3>
+                    <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                        <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">👶</div>
+                            <div><div style="font-weight:600;color:#1e293b;">First Steps</div><div style="font-size:0.8rem;color:#64748b;">Complete 1 activity</div></div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">⭐</div>
+                            <div><div style="font-weight:600;color:#1e293b;">Rising Star</div><div style="font-size:0.8rem;color:#64748b;">Maintain a 3-day login streak</div></div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">📈</div>
+                            <div><div style="font-weight:600;color:#1e293b;">Growth Tracker</div><div style="font-size:0.8rem;color:#64748b;">Log 1 growth record</div></div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
+                            <div style="width:40px;height:40px;border-radius:50%;background:#f3e8ff;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🗣️</div>
+                            <div><div style="font-weight:600;color:#1e293b;">Speech Explorer</div><div style="font-size:0.8rem;color:#64748b;">Record 5 voice samples</div></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div style="padding:1.5rem 2rem;border-top:1px solid #e2e8f0;background:#f8fafc;border-radius:0 0 24px 24px;text-align:center;">
+                    <button onclick="document.getElementById('rules-modal').remove()" class="btn btn-gradient" style="padding:0.75rem 2rem;font-weight:700;border-radius:12px;">Got it!</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Animate in
+        requestAnimationFrame(() => {
+            modal.style.opacity = '1';
+            modal.querySelector('div').style.transform = 'scale(1)';
+        });
+    };
+
+    // ══════════════════════════════════════════════════════════════
     // ── Integrated Payment UI ──────────────────────────────────────
     // ══════════════════════════════════════════════════════════════
     window.showPaymentModal = function(planName, price) {
@@ -8062,63 +8197,92 @@
         let existing = document.getElementById('book-modal');
         if (existing) existing.remove();
 
-        const dt = new Date();
-        dt.setDate(dt.getDate() + 1);
-        const minDate = dt.toISOString().split('T')[0];
+        const spec = (window._allSpecialists || []).find(s => s.specialist_id == specId) || {};
+        const fee = spec.consultation_fee ? spec.consultation_fee + ' EGP' : '200 EGP';
+        const avatarUrl = spec.profile_photo ? ('../../' + spec.profile_photo) : ('https://ui-avatars.com/api/?name=' + encodeURIComponent(specName) + '&background=6366f1&color=ffffff');
+        
+        let dateOptions = '<option value="">Select a date</option>';
+        if (spec.availability) {
+            spec.availability.forEach(d => {
+                if (d.available) {
+                    dateOptions += `<option value="${d.date}">${d.label} (${d.date})</option>`;
+                }
+            });
+        }
 
         const modal = document.createElement('div');
         modal.id = 'book-modal';
         modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('book-modal').remove()">
-        <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
+        <div style="background:#ffffff;border-radius:24px;width:100%;max-width:850px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
+            
             <div style="background:var(--blue-50);padding:1.5rem 2rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--blue-100);">
-                <div>
-                    <h2 style="font-size:1.25rem;font-weight:700;color:var(--slate-900);margin:0;">Book Appointment</h2>
-                    <p style="margin:0;font-size:0.85rem;color:var(--blue-600);font-weight:600;">with ${specName}</p>
+                <div style="display:flex;align-items:center;gap:1rem;">
+                    <img src="${avatarUrl}" style="width:48px;height:48px;border-radius:12px;object-fit:cover;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    <div>
+                        <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0;">Book Appointment</h2>
+                        <p style="margin:0;font-size:0.85rem;color:var(--blue-600);font-weight:600;">with ${specName} • ${fee}</p>
+                    </div>
                 </div>
                 <button onclick="document.getElementById('book-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);">&times;</button>
             </div>
             
-            <div id="bk-step-1" style="padding:2rem;">
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Child</label>
-                    <select id="bk-child" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
-                        ${(function(){
-                            let opts = '';
-                            if (window.dashboardData && window.dashboardData.children && window.dashboardData.children.length > 0) {
-                                window.dashboardData.children.forEach(c => {
-                                    opts += `<option value="${c.child_id}">${c.first_name} ${c.last_name}</option>`;
-                                });
-                            } else {
-                                opts = '<option value="">No children found</option>';
-                            }
-                            return opts;
-                        })()}
-                    </select>
-                </div>
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Consultation Type</label>
-                    <select id="bk-type" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
-                        <option value="onsite">On-site (Clinic Visit)</option>
-                        <option value="online">Online (Video Session)</option>
-                    </select>
-                </div>
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Date</label>
-                    <input type="date" id="bk-date" min="${minDate}" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;" onchange="window.fetchSlots(${specId})">
-                </div>
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Available Slots</label>
-                    <div id="bk-slot-grid" style="display:grid;grid-template-columns:repeat(3, 1fr);gap:0.5rem;">
-                        <div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">Select a date to view slots</div>
+            <div id="bk-step-1" style="display:flex;flex-direction:row;padding:2rem;gap:2rem;">
+                
+                <!-- Left Column -->
+                <div style="flex:1;display:flex;flex-direction:column;gap:1.5rem;">
+                    <div>
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Child</label>
+                        <select id="bk-child" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
+                            ${(function(){
+                                let opts = '';
+                                if (window.dashboardData && window.dashboardData.children && window.dashboardData.children.length > 0) {
+                                    window.dashboardData.children.forEach(c => {
+                                        opts += '<option value="' + c.child_id + '">' + c.first_name + ' ' + c.last_name + '</option>';
+                                    });
+                                } else {
+                                    opts = '<option value="">No children found</option>';
+                                }
+                                return opts;
+                            })()}
+                        </select>
                     </div>
-                    <input type="hidden" id="bk-slot" value="">
+                    
+                    <div>
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Consultation Type</label>
+                        <select id="bk-type" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
+                            <option value="onsite">On-site (Clinic Visit)</option>
+                            <option value="online">Online (Video Session)</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Notes for Specialist (Optional)</label>
+                        <textarea id="bk-comment" rows="3" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;box-sizing:border-box;font-family:inherit;" placeholder="Briefly describe your concern..."></textarea>
+                    </div>
                 </div>
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Notes for Specialist (Optional)</label>
-                    <textarea id="bk-comment" rows="2" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;box-sizing:border-box;font-family:inherit;" placeholder="Briefly describe your concern..."></textarea>
+
+                <!-- Right Column -->
+                <div style="flex:1;display:flex;flex-direction:column;border-left:1px solid var(--slate-100);padding-left:2rem;">
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Available Dates</label>
+                        <select id="bk-date" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-family:inherit;font-size:0.95rem;" onchange="window.fetchSlots(${specId})">
+                            ${dateOptions}
+                        </select>
+                    </div>
+                    
+                    <div style="flex:1;">
+                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Select Time Slot</label>
+                        <div id="bk-slot-grid" style="display:grid;grid-template-columns:repeat(3, 1fr);gap:0.5rem;max-height:180px;overflow-y:auto;padding-right:0.5rem;">
+                            <div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:2rem;background:#f8fafc;border-radius:12px;border:1px dashed #cbd5e1;">Select an available date to view time slots</div>
+                        </div>
+                        <input type="hidden" id="bk-slot" value="">
+                        <div id="bk-slot-error" style="display:none;color:#ef4444;font-size:0.85rem;margin-top:0.75rem;padding:0.75rem;background:#fef2f2;border-radius:8px;border:1px solid #fecaca;text-align:center;font-weight:500;">⚠️ Please select an available time slot.</div>
+                    </div>
+
+                    <button onclick="window.goToBookingStep2()" class="btn btn-gradient" style="width:100%;padding:1rem;margin-top:1.5rem;font-size:1.05rem;">Continue to Payment</button>
                 </div>
-                <button onclick="window.goToBookingStep2()" class="btn btn-gradient" style="width:100%;padding:1rem;">Continue to Payment</button>
+
             </div>
 
             <div id="bk-step-2" style="padding:2rem;display:none;">
@@ -8134,10 +8298,10 @@
                 </div>
 
                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Consultation Fee</span><span style="font-weight:600;" id="bk-fee">$50.00</span></div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Discount</span><span style="font-weight:600;color:var(--green-600);" id="bk-discount">$0.00</span></div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Consultation Fee</span><span style="font-weight:600;" id="bk-fee">${fee}</span></div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Discount</span><span style="font-weight:600;color:var(--green-600);" id="bk-discount">0.00 EGP</span></div>
                     <div style="height:1px;background:#e2e8f0;margin:0.75rem 0;"></div>
-                    <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--slate-800);">Total to Pay</span><span style="font-weight:800;color:var(--slate-900);font-size:1.1rem;" id="bk-total">$50.00</span></div>
+                    <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--slate-800);">Total to Pay</span><span style="font-weight:800;color:var(--slate-900);font-size:1.1rem;" id="bk-total">${fee}</span></div>
                 </div>
 
                 <div style="margin-bottom:2rem;">
@@ -8185,7 +8349,7 @@
                     </div>
                 </div>
 
-                <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;">Confirm & Pay $50.00</button>
+                <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;">Confirm & Pay ${fee}</button>
             </div>
             
             <div id="bk-step-3" style="padding:2.5rem 2rem;display:none;text-align:center;">
@@ -8285,6 +8449,8 @@
             btn.style.background = 'var(--blue-50)';
             btn.style.color = 'var(--blue-700)';
             document.getElementById('bk-slot').value = val;
+            const err = document.getElementById('bk-slot-error');
+            if (err) err.style.display = 'none';
         };
 
         window.goToBookingStep2 = function () {
@@ -8292,7 +8458,11 @@
             if (!childVal) { alert("Please select a child profile."); return; }
 
             const slotVal = document.getElementById('bk-slot').value;
-            if (!slotVal) { alert("Please select an available slot."); return; }
+            if (!slotVal) { 
+                const err = document.getElementById('bk-slot-error');
+                if (err) err.style.display = 'block';
+                return; 
+            }
 
             document.getElementById('bk-step-1').style.display = 'none';
             document.getElementById('bk-step-2').style.display = 'block';
