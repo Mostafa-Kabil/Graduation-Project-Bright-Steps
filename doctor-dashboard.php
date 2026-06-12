@@ -198,11 +198,16 @@ if ($isAjax) {
                 $stmt2->execute([':sid' => $specialist_id]);
                 $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
 
+                $stmt_week = $connect->prepare("SELECT SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) FROM appointment WHERE specialist_id = :sid");
+                $stmt_week->execute([':sid' => $specialist_id]);
+                $this_week_kpi = (int)$stmt_week->fetchColumn();
+
                 echo json_encode([
                     'success' => true,
                     'data' => [
                         'total_reports' => intval($dr_stats['total_reports'] ?? 0),
                         'this_month' => intval($dr_stats['this_month'] ?? 0),
+                        'this_week_kpi' => $this_week_kpi,
                         'shared_total' => intval($shared_stats['shared_total'] ?? 0),
                         'pending_review' => intval($shared_stats['pending_review'] ?? 0)
                     ]
@@ -472,7 +477,13 @@ if ($isAjax) {
                     ORDER BY last_appointment_date DESC
                 ");
                 $stmt->execute([':sid' => $specialist_id, ':sid2' => $specialist_id, ':sid3' => $specialist_id]);
-                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                $patients_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $stmt_week = $connect->prepare("SELECT SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) FROM appointment WHERE specialist_id = :sid");
+                $stmt_week->execute([':sid' => $specialist_id]);
+                $this_week_kpi = (int)$stmt_week->fetchColumn();
+
+                echo json_encode(['success' => true, 'data' => $patients_data, 'this_week_kpi' => $this_week_kpi]);
                 exit;
 
             } elseif ($action === 'get_patient_detail') {
@@ -616,9 +627,10 @@ if ($isAjax) {
                 $stmt2 = $connect->prepare("
                     SELECT 
                         COUNT(*) AS total,
-                        SUM(CASE WHEN status = 'scheduled' OR status = 'confirmed' THEN 1 ELSE 0 END) AS upcoming,
+                        SUM(CASE WHEN status = 'scheduled' OR status = 'pending' OR status = 'pending reschedule' THEN 1 ELSE 0 END) AS pending,
                         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
                         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+                        SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
                         SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) AS this_week
                     FROM appointment WHERE specialist_id = :sid
                 ");
@@ -945,7 +957,7 @@ if ($isAjax) {
                         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_appointments,
                         SUM(CASE WHEN (status = 'scheduled' OR status = 'confirmed') AND scheduled_at >= CURDATE() THEN 1 ELSE 0 END) AS upcoming_appointments,
                         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_appointments,
-                        SUM(CASE WHEN scheduled_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS this_week,
+                        SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) AS this_week,
                         SUM(CASE WHEN scheduled_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS this_month
                     FROM appointment WHERE specialist_id = :sid
                 ");
@@ -1030,7 +1042,7 @@ if ($isAjax) {
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css?v=8">
     <link rel="stylesheet" href="styles/dashboard.css?v=8">
-    <link rel="stylesheet" href="styles/doctor.css?v=12">
+    <link rel="stylesheet" href="styles/doctor.css?v=13">
     <link rel="stylesheet" href="styles/settings.css?v=8">
     <link rel="stylesheet" href="styles/profile.css?v=8">
     <link rel="stylesheet" href="styles/dr-settings.css?v=11">
@@ -1234,7 +1246,7 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=23"></script>
+    <script src="scripts/doctor-dashboard.js?v=30"></script>
     <script src="scripts/doctor-settings.js?v=7"></script>
 
 </body>

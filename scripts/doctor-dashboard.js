@@ -446,7 +446,7 @@ let allPatientsCache = [];
 function loadPatientsData() {
     fetch(`doctor-dashboard.php?ajax=1&section=patients&action=get_patients&specialist_id=${SPECIALIST_ID}`)
         .then(r => r.json()).then(result => {
-            if (result.success && result.data) { allPatientsCache = result.data; renderPatientsList(result.data); updatePatientsStats(result.data); }
+            if (result.success && result.data) { allPatientsCache = result.data; renderPatientsList(result.data); updatePatientsStats(result.data, result.this_week_kpi); }
             else renderPatientsEmpty();
         }).catch(() => renderPatientsEmpty());
 }
@@ -490,14 +490,12 @@ function renderPatientsEmpty() {
     if (c) c.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No patients found. Patients will appear here once they book appointments with you.</div>';
 }
 
-function updatePatientsStats(patients) {
+function updatePatientsStats(patients, thisWeekKpi) {
     const total = patients.length;
     const onTrack = patients.filter(p => p.last_appointment_status === 'completed').length;
-    const needsAttention = patients.filter(p => p.last_appointment_status !== 'completed').length;
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const thisWeek = patients.filter(p => p.last_appointment_date && new Date(p.last_appointment_date) >= weekAgo).length;
+    const needsAttention = patients.filter(p => p.last_appointment_status === 'pending' || p.last_appointment_status === 'scheduled').length;
     const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
-    el('stat-active-patients', total); el('stat-on-track', onTrack); el('stat-needs-attention', needsAttention); el('stat-this-week-patients', thisWeek);
+    el('stat-active-patients', total); el('stat-on-track', onTrack); el('stat-needs-attention', needsAttention); el('stat-this-week-patients', thisWeekKpi || 0);
     const sub = document.getElementById('patientsSubtitle');
     if (sub) sub.textContent = `You have ${total} patient${total !== 1 ? 's' : ''} assigned to your care`;
 }
@@ -661,6 +659,8 @@ function showPatientDetailModal(data) {
 // ═══════════════════════════════════════════════════
 // REPORTS PAGE — Data-driven
 // ═══════════════════════════════════════════════════
+let allSharedReportsCache = [];
+
 function getReportsView() {
     setTimeout(() => { initReportsPage(); loadReportsData(); }, 50);
     return `<div class="dashboard-content">
@@ -672,13 +672,20 @@ function getReportsView() {
             <div class="stat-card stat-card-blue"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-total-reports">--</div><div class="stat-card-label">Total Reports</div></div></div>
             <div class="stat-card stat-card-yellow"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-pending">--</div><div class="stat-card-label">Pending Review</div></div></div>
             <div class="stat-card stat-card-green"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-completed-reports">--</div><div class="stat-card-label">Completed</div></div></div>
-            <div class="stat-card stat-card-purple"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-this-month">--</div><div class="stat-card-label">This Month</div></div></div>
+            <div class="stat-card stat-card-purple"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-this-week-reports">--</div><div class="stat-card-label">This Week</div></div></div>
         </div>
         <div class="reports-tabs">
             <button class="reports-tab active" data-tab="shared" onclick="switchReportsTab('shared')">Shared Child Reports</button>
             <button class="reports-tab" data-tab="mine" onclick="switchReportsTab('mine')">My Reports</button>
         </div>
-        <div class="reports-tab-content active" id="tab-shared"><div class="reports-list" id="sharedReportsList"><div style="text-align:center;padding:2rem;color:var(--text-secondary);">Loading shared reports...</div></div></div>
+        <div class="reports-tab-content active" id="tab-shared">
+            <div class="reports-tabs" id="sharedReportsFilterTabs" style="margin-bottom:1rem;">
+                <button class="reports-tab active" data-filter="all" onclick="filterSharedReports('all')">All</button>
+                <button class="reports-tab" data-filter="replied" onclick="filterSharedReports('replied')">Replied</button>
+                <button class="reports-tab" data-filter="pending" onclick="filterSharedReports('pending')">Pending Review</button>
+            </div>
+            <div class="reports-list" id="sharedReportsList"><div style="text-align:center;padding:2rem;color:var(--text-secondary);">Loading shared reports...</div></div>
+        </div>
         <div class="reports-tab-content" id="tab-mine"><div class="reports-list" id="myReportsList"><div style="text-align:center;padding:2rem;color:var(--text-secondary);">Loading your reports...</div></div></div>
         <div class="report-modal-overlay" id="reportModal"><div class="report-modal">
             <div class="report-modal-header"><h3>Write Medical Report</h3><button class="report-modal-close" onclick="closeReportModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -702,7 +709,7 @@ function loadReportsData() {
                 el('stat-total-reports', d.total_reports + d.shared_total);
                 el('stat-pending', d.pending_review);
                 el('stat-completed-reports', d.total_reports);
-                el('stat-this-month', d.this_month);
+                el('stat-this-week-reports', d.this_week_kpi);
             }
         }).catch(() => {});
     fetch(`doctor-dashboard.php?ajax=1&section=reports&action=get_shared_reports&specialist_id=${SPECIALIST_ID}`)
@@ -710,60 +717,10 @@ function loadReportsData() {
             const container = document.getElementById('sharedReportsList');
             if (!container) return;
             if (result.success && result.data && result.data.length > 0) {
-                container.innerHTML = result.data.map(r => {
-                    const initials = (r.child_first_name?.charAt(0) || '') + (r.child_last_name?.charAt(0) || '');
-                    const age = calculateAge(r.birth_year, r.birth_month);
-                    const apptDate = r.appointment_date ? new Date(r.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No appointment';
-                    const apptStatus = r.appointment_status ? r.appointment_status.charAt(0).toUpperCase() + r.appointment_status.slice(1) : '';
-                    const isReplied = r.doctor_reply && r.doctor_reply.trim().length > 0;
-                    const statusBadge = isReplied
-                        ? '<span class="report-status report-status-completed">Replied</span>'
-                        : '<span class="report-status report-status-pending">Pending Review</span>';
-                    const replySection = isReplied
-                        ? `<div style="margin-top:0.75rem;padding:0.75rem;background:var(--green-50,#f0fdf4);border-radius:8px;border-left:3px solid var(--green-500,#22c55e);">
-                              <div style="font-size:0.8rem;font-weight:600;color:var(--green-700,#15803d);margin-bottom:0.25rem;">Your Reply (${new Date(r.doctor_reply_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}):</div>
-                              <div style="font-size:0.85rem;color:var(--text-primary);">${r.doctor_reply}</div>
-                           </div>`
-                        : '';
-                    const reportTypeLabel = {
-                        'full-report': '📋 Full Development Report',
-                        'growth-report': '📊 Growth Report',
-                        'speech-report': '🗣️ Speech Report',
-                        'child-report': '👤 Child Profile Report',
-                        'uploaded-pdf': '📎 Uploaded PDF'
-                    }[r.report_type] || ('📄 ' + r.report_type);
-                    const viewUrl = r.file_path ? r.file_path.replace(/'/g, "\\'") : '';
-                    const childNameSafe = (r.child_first_name || '') + ' ' + (r.child_last_name || '');
-                    const safeName = childNameSafe.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-                    const reportContext = 'Shared Report: ' + r.report_type;
-                    return `<div class="report-card"><div class="report-card-header">
-                        <div class="report-child-avatar">${initials}</div>
-                        <div class="report-card-info"><div class="report-child-name">${childNameSafe}</div><div class="report-meta">Shared by ${r.parent_first_name} ${r.parent_last_name} • ${age} • ${reportTypeLabel}</div></div>
-                        ${statusBadge}</div>
-                        <div class="report-card-body">
-                          <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
-                            <div class="report-detail-row"><span class="report-detail-label">📅 Appointment:</span><span>${apptDate} ${apptStatus ? '(' + apptStatus + ')' : ''}</span></div>
-                            <div class="report-detail-row"><span class="report-detail-label">👶 Gender:</span><span>${r.gender || 'N/A'}</span></div>
-                            <div class="report-detail-row"><span class="report-detail-label">📂 Type:</span><span>${r.report_type}</span></div>
-                          </div>
-                          ${replySection}
-                        </div>
-                        <div class="report-card-footer">
-                          <span class="report-date">Shared ${new Date(r.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</span>
-                          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                            <button class="btn btn-sm btn-outline" style="color:var(--blue-500);border-color:var(--blue-500);" onclick="viewSharedReport('${viewUrl}', '${r.report_type}')">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View
-                            </button>
-                            <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="downloadSharedReport('${viewUrl}', '${r.report_type}')">
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download
-                            </button>
-                            <button class="btn btn-sm btn-gradient" onclick="openReportModal('${safeName}', ${r.child_id}, '${reportContext.replace(/'/g, "\\'")}', ${r.report_id})">
-                              ${isReplied ? '✏️ Edit Report' : '💬 Write Report'}
-                            </button>
-                          </div>
-                        </div></div>`;
-                }).join('');
+                allSharedReportsCache = result.data;
+                renderSharedReportsList(allSharedReportsCache);
             } else {
+                allSharedReportsCache = [];
                 container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No shared reports found. Reports will appear here when parents share them with you.</div>';
             }
         }).catch(() => {});
@@ -804,10 +761,91 @@ function initReportsPage() {
 }
 
 function switchReportsTab(tab) {
-    document.querySelectorAll('.reports-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.reports-tab[data-tab]').forEach(t => {
+        if (t.dataset.tab === 'shared' || t.dataset.tab === 'mine') t.classList.remove('active');
+    });
     document.querySelectorAll('.reports-tab-content').forEach(c => c.classList.remove('active'));
     document.querySelector(`.reports-tab[data-tab="${tab}"]`)?.classList.add('active');
     document.getElementById(`tab-${tab}`)?.classList.add('active');
+}
+
+function filterSharedReports(filter) {
+    const filterTabs = document.getElementById('sharedReportsFilterTabs');
+    if (filterTabs) {
+        filterTabs.querySelectorAll('.reports-tab').forEach(t => t.classList.remove('active'));
+        filterTabs.querySelector(`.reports-tab[data-filter="${filter}"]`)?.classList.add('active');
+    }
+    let filtered;
+    if (filter === 'replied') {
+        filtered = allSharedReportsCache.filter(r => r.doctor_reply && r.doctor_reply.trim().length > 0);
+    } else if (filter === 'pending') {
+        filtered = allSharedReportsCache.filter(r => !r.doctor_reply || r.doctor_reply.trim().length === 0);
+    } else {
+        filtered = allSharedReportsCache;
+    }
+    renderSharedReportsList(filtered);
+}
+
+function renderSharedReportsList(reports) {
+    const container = document.getElementById('sharedReportsList');
+    if (!container) return;
+    if (!reports || reports.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-secondary);">No reports match the selected filter.</div>';
+        return;
+    }
+    container.innerHTML = reports.map(r => {
+        const initials = (r.child_first_name?.charAt(0) || '') + (r.child_last_name?.charAt(0) || '');
+        const age = calculateAge(r.birth_year, r.birth_month);
+        const apptDate = r.appointment_date ? new Date(r.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No appointment';
+        const apptStatus = r.appointment_status ? r.appointment_status.charAt(0).toUpperCase() + r.appointment_status.slice(1) : '';
+        const isReplied = r.doctor_reply && r.doctor_reply.trim().length > 0;
+        const statusBadge = isReplied
+            ? '<span class="report-status report-status-completed">Replied</span>'
+            : '<span class="report-status report-status-pending">Pending Review</span>';
+        const replySection = isReplied
+            ? `<div style="margin-top:0.75rem;padding:0.75rem;background:var(--green-50,#f0fdf4);border-radius:8px;border-left:3px solid var(--green-500,#22c55e);">
+                  <div style="font-size:0.8rem;font-weight:600;color:var(--green-700,#15803d);margin-bottom:0.25rem;">Your Reply (${new Date(r.doctor_reply_date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}):</div>
+                  <div style="font-size:0.85rem;color:var(--text-primary);">${r.doctor_reply}</div>
+               </div>`
+            : '';
+        const reportTypeLabel = {
+            'full-report': '📋 Full Development Report',
+            'growth-report': '📊 Growth Report',
+            'speech-report': '🗣️ Speech Report',
+            'child-report': '👤 Child Profile Report',
+            'uploaded-pdf': '📎 Uploaded PDF'
+        }[r.report_type] || ('📄 ' + r.report_type);
+        const viewUrl = r.file_path ? r.file_path.replace(/'/g, "\\'") : '';
+        const childNameSafe = (r.child_first_name || '') + ' ' + (r.child_last_name || '');
+        const safeName = childNameSafe.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+        const reportContext = 'Shared Report: ' + r.report_type;
+        return `<div class="report-card"><div class="report-card-header">
+            <div class="report-child-avatar">${initials}</div>
+            <div class="report-card-info"><div class="report-child-name">${childNameSafe}</div><div class="report-meta">Shared by ${r.parent_first_name} ${r.parent_last_name} • ${age} • ${reportTypeLabel}</div></div>
+            ${statusBadge}</div>
+            <div class="report-card-body">
+              <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+                <div class="report-detail-row"><span class="report-detail-label">📅 Appointment:</span><span>${apptDate} ${apptStatus ? '(' + apptStatus + ')' : ''}</span></div>
+                <div class="report-detail-row"><span class="report-detail-label">👶 Gender:</span><span>${r.gender || 'N/A'}</span></div>
+                <div class="report-detail-row"><span class="report-detail-label">📂 Type:</span><span>${r.report_type}</span></div>
+              </div>
+              ${replySection}
+            </div>
+            <div class="report-card-footer">
+              <span class="report-date">Shared ${new Date(r.created_at).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</span>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline" style="color:var(--blue-500);border-color:var(--blue-500);" onclick="viewSharedReport('${viewUrl}', '${r.report_type}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View
+                </button>
+                <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="downloadSharedReport('${viewUrl}', '${r.report_type}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Download
+                </button>
+                <button class="btn btn-sm btn-gradient" onclick="openReportModal('${safeName}', ${r.child_id}, '${reportContext.replace(/'/g, "\\'")}', ${r.report_id})">
+                  ${isReplied ? '✏️ Edit Report' : '💬 Write Report'}
+                </button>
+              </div>
+            </div></div>`;
+    }).join('');
 }
 
 function openReportModal(childName, childId, childReport, sharedReportId = 0, existingReportId = 0, notes = '', recs = '', rDate = '') {
@@ -935,13 +973,14 @@ function getAppointmentsView() {
         </div></div>
         <div class="doctor-stats-grid">
             <div class="stat-card stat-card-blue"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-total-appts">--</div><div class="stat-card-label">Total</div></div></div>
-            <div class="stat-card stat-card-green"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-upcoming-appts">--</div><div class="stat-card-label">Upcoming</div></div></div>
-            <div class="stat-card stat-card-yellow"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-completed-appts">--</div><div class="stat-card-label">Completed</div></div></div>
+            <div class="stat-card stat-card-yellow"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-pending-appts">--</div><div class="stat-card-label">Pending Review</div></div></div>
+            <div class="stat-card stat-card-green"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-completed-appts">--</div><div class="stat-card-label">Completed</div></div></div>
             <div class="stat-card stat-card-purple"><div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div class="stat-card-info"><div class="stat-card-value" id="stat-week-appts">--</div><div class="stat-card-label">This Week</div></div></div>
         </div>
         <div class="reports-tabs">
             <button class="reports-tab active" data-tab="all" onclick="filterAppointments('')">All</button>
-            <button class="reports-tab" data-tab="scheduled" onclick="filterAppointments('scheduled')">Upcoming</button>
+            <button class="reports-tab" data-tab="pending" onclick="filterAppointments('pending')">Pending Review</button>
+            <button class="reports-tab" data-tab="confirmed" onclick="filterAppointments('confirmed')">Confirmed</button>
             <button class="reports-tab" data-tab="completed" onclick="filterAppointments('completed')">Completed</button>
             <button class="reports-tab" data-tab="cancelled" onclick="filterAppointments('cancelled')">Cancelled</button>
         </div>
@@ -970,8 +1009,10 @@ function renderAppointmentsList(appointments) {
         const date = a.scheduled_at ? new Date(a.scheduled_at) : null;
         const dateStr = date ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
         const timeStr = date ? date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
-        const status = a.status || 'scheduled';
-        const statusClass = status === 'completed' ? 'status-green' : (status === 'cancelled' ? 'status-red' : 'status-yellow');
+        const status = a.status || 'pending';
+        const statusMap = { 'completed': 'status-green', 'confirmed': 'status-green', 'cancelled': 'status-red', 'pending': 'status-yellow', 'scheduled': 'status-yellow' };
+        const statusClass = statusMap[status] || 'status-yellow';
+        const statusLabelMap = { 'scheduled': 'Pending', 'pending': 'Pending', 'confirmed': 'Confirmed', 'completed': 'Completed', 'cancelled': 'Cancelled' };
         const typeIcon = a.type === 'online' ? '🖥' : '🏥';
         const typeLabel = a.type === 'online' ? 'Online' : 'On-site';
         const initials = (a.parent_first_name?.charAt(0) || '') + (a.parent_last_name?.charAt(0) || '');
@@ -983,13 +1024,12 @@ function renderAppointmentsList(appointments) {
             <div class="patient-avatar">${initials}</div>
             <div class="patient-info"><div class="patient-name">${parentName}</div>
                 <div class="patient-details">${a.children_names || 'No children listed'} • ${typeIcon} ${typeLabel}</div></div>
-            <div class="patient-status ${statusClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</div>
+            <div class="patient-status ${statusClass}">${statusLabelMap[status] || status.charAt(0).toUpperCase() + status.slice(1)}</div>
             <div class="patient-last-update">${dateStr}${timeStr ? ' at ' + timeStr : ''}</div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                 ${a.type === 'online' && a.meeting_link && isActive ? `<button class="btn btn-sm btn-join-meeting" onclick="joinMeeting('${a.meeting_link}')">Join Meeting</button>` : ''}
-                ${(status.toLowerCase() === 'pending' || status.toLowerCase() === 'pending reschedule') ? `<div style="display:flex;gap:0.75rem;width:100%;margin-top:0.5rem;"><button onclick="doctorApproveAppointment(${a.appointment_id})" style="flex:1;padding:0.65rem 1rem;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:0.875rem;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">✅ Approve</button><button onclick="doctorRejectAppointment(${a.appointment_id})" style="flex:1;padding:0.65rem 1rem;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:0.875rem;transition:opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">❌ Reject</button></div>` : ''}
-                ${status.toLowerCase() === 'scheduled' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
-                ${status.toLowerCase() === 'completed' ? `<div style="width:100%;margin-top:0.5rem;"><button onclick="openWriteReportModal(${a.appointment_id}, \`${(a.report||'').replace(/`/g, "'")}\`, \`${a.next_visit_recommendation||''}\`)" style="width:100%;padding:0.65rem 1rem;background:${(a.report && a.report.trim() !== '') ? 'linear-gradient(135deg,#8b5cf6,#7c3aed)' : 'linear-gradient(135deg,#6366f1,#4f46e5)'};color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer;font-size:0.875rem;">📝 ${(a.report && a.report.trim() !== '') ? 'Edit Report' : 'Write Report'}</button></div>` : ''}
+                ${(status.toLowerCase() === 'pending' || status.toLowerCase() === 'scheduled' || status.toLowerCase() === 'pending reschedule') ? `<button class="btn btn-sm btn-outline" style="color:#ca8a04;border-color:#ca8a04;" onclick="doctorApproveAppointment(${a.appointment_id})">Confirm</button>` : ''}
+                ${status.toLowerCase() === 'confirmed' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
                 ${isActive ? `<button class="btn btn-sm btn-outline" style="color:var(--red-500);border-color:var(--red-500);" onclick="cancelAppointment(${a.appointment_id})">Cancel</button>` : ''}
                 <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${a.parent_id}, '${parentNameSafe}')">Chat</button>
             </div></div>`;
@@ -1004,14 +1044,26 @@ function renderAppointmentsEmpty() {
 
 function updateAppointmentStats(counts) {
     const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val ?? 0; };
-    el('stat-total-appts', counts.total); el('stat-upcoming-appts', counts.upcoming);
+    el('stat-total-appts', counts.total); el('stat-pending-appts', counts.pending);
     el('stat-completed-appts', counts.completed); el('stat-week-appts', counts.this_week);
 }
 
 function filterAppointments(status) {
     document.querySelectorAll('.reports-tabs .reports-tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`.reports-tab[data-tab="${status || 'all'}"]`)?.classList.add('active');
-    loadAppointmentsData(status);
+    if (status === 'pending') {
+        // Filter pending locally: show scheduled + pending statuses
+        const filtered = allAppointmentsCache.filter(a => {
+            const s = (a.status || '').toLowerCase();
+            return s === 'scheduled' || s === 'pending' || s === 'pending reschedule';
+        });
+        renderAppointmentsList(filtered);
+    } else if (status) {
+        const filtered = allAppointmentsCache.filter(a => (a.status || '').toLowerCase() === status.toLowerCase());
+        renderAppointmentsList(filtered);
+    } else {
+        renderAppointmentsList(allAppointmentsCache);
+    }
 }
 
 function searchAppointmentsLocal(query) {
@@ -2069,7 +2121,7 @@ async function doctorApproveAppointment(appointmentId) {
         const data = await res.json();
         if (data.success) {
             showToast('✅ Appointment approved! Parent has been notified.', 'success');
-            setTimeout(() => location.reload(), 1200);
+            if (typeof loadAppointmentsData === 'function') loadAppointmentsData();
         } else {
             showToast(data.error || 'Failed to approve appointment.', 'error');
         }

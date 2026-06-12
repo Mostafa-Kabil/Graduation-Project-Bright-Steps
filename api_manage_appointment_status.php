@@ -4,7 +4,7 @@ require_once 'connection.php';
 header('Content-Type: application/json');
 
 // Must be specialist
-if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'specialist') {
+if (!isset($_SESSION['id']) || ($_SESSION['role'] !== 'specialist' && $_SESSION['role'] !== 'doctor')) {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
     exit();
@@ -30,7 +30,7 @@ if (!$row) {
     exit();
 }
 
-$newStatus = $action === 'approve' ? 'Scheduled' : 'Cancelled';
+$newStatus = $action === 'approve' ? 'confirmed' : 'Cancelled';
 
 $connect->prepare("UPDATE appointment SET status = ? WHERE appointment_id = ?")->execute([$newStatus, $appointmentId]);
 

@@ -893,12 +893,25 @@
     flex-direction: column;
     gap: 0.75rem;
     background: var(--bg-secondary);
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
 }
 
 .chat-messages::-webkit-scrollbar {
-    display: none;
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.6);
 }
 
 .chat-date-divider {
@@ -1078,6 +1091,7 @@
 
     .chat-window {
         min-height: 400px;
+        height: calc(100vh - 350px);
     }
 }
 
@@ -1197,6 +1211,15 @@
 
 [data-theme="dark"] .chat-messages {
     background: var(--bg-secondary);
+    scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+}
+
+[data-theme="dark"] .chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.5);
+}
+
+[data-theme="dark"] .chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.7);
 }
 
 [data-theme="dark"] .chat-date-divider span {
