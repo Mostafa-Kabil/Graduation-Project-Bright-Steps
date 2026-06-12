@@ -13,7 +13,15 @@ require_once 'connection.php'; // DB connection, auth helpers
   <link rel="stylesheet" href="styles/globals.css">
   <link rel="stylesheet" href="css/specialist-profile.css">
 </head>
-<body class="theme-dark" style="margin:0; padding:0;">
+<body style="margin:0; padding:0;">
+  <script>
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.body.classList.add('theme-dark');
+    } else {
+      document.body.classList.add('theme-light');
+    }
+  </script>
   
   <!-- We'll include the topbar if user is logged in -->
   <?php if(isset($_SESSION['user_id'])): ?>

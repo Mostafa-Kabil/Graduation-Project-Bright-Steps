@@ -24,6 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$ticketId, $adminId, $message, $isInternal]);
             // Update ticket timestamp
             $connect->prepare("UPDATE support_tickets SET updated_at=NOW() WHERE id=?")->execute([$ticketId]);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $adminId, 'reply_ticket', 'support_ticket', "Replied to ticket #{$ticketId}", $ticketId);
             echo json_encode(['success' => true, 'message_id' => $connect->lastInsertId()]);
             break;
 
@@ -32,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $status = $input['status'] ?? '';
             $stmt = $connect->prepare("UPDATE support_tickets SET status=? WHERE id=?");
             $stmt->execute([$status, $ticketId]);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $adminId, 'update_ticket_status', 'support_ticket', "Changed ticket #{$ticketId} status to {$status}", $ticketId);
             echo json_encode(['success' => true]);
             break;
 
@@ -40,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $assignTo = $input['assign_to'] ?? null;
             $stmt = $connect->prepare("UPDATE support_tickets SET assigned_to=?, status='in_progress' WHERE id=?");
             $stmt->execute([$assignTo, $ticketId]);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $adminId, 'assign_ticket', 'support_ticket', "Assigned ticket #{$ticketId} to admin {$assignTo}", $ticketId);
             echo json_encode(['success' => true]);
             break;
 
@@ -48,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $priority = $input['priority'] ?? 'medium';
             $stmt = $connect->prepare("UPDATE support_tickets SET priority=? WHERE id=?");
             $stmt->execute([$priority, $ticketId]);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $adminId, 'update_ticket_priority', 'support_ticket', "Changed ticket #{$ticketId} priority to {$priority}", $ticketId);
             echo json_encode(['success' => true]);
             break;
 
@@ -96,10 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'analytics':
             $total = $connect->query("SELECT COUNT(*) FROM support_tickets")->fetchColumn();
             $open = $connect->query("SELECT COUNT(*) FROM support_tickets WHERE status='open'")->fetchColumn();
+            $active = $connect->query("SELECT COUNT(*) FROM support_tickets WHERE status IN ('open','in_progress','waiting')")->fetchColumn();
             $resolved = $connect->query("SELECT COUNT(*) FROM support_tickets WHERE status IN ('resolved','closed')")->fetchColumn();
             $resolutionRate = $total > 0 ? round($resolved / $total * 100) : 0;
             echo json_encode(['success' => true, 'analytics' => [
-                'total' => $total, 'open' => $open, 'resolved' => $resolved,
+                'total' => $total, 'open' => $open, 'active' => $active, 'resolved' => $resolved,
                 'in_progress' => $connect->query("SELECT COUNT(*) FROM support_tickets WHERE status='in_progress'")->fetchColumn(),
                 'resolution_rate' => $resolutionRate,
                 'avg_response_hours' => 2.4

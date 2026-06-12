@@ -111,8 +111,28 @@ try {
         $slotMap = [];
     }
 
+    $bookingsMap = [];
     $bookedMap = [];
     try {
+        // Fetch booked appointments for the next 3 days (Local HEAD style)
+        $todayStr = date('Y-m-d');
+        $maxDateStr = date('Y-m-d', strtotime('+3 days'));
+        $apptStmt = $connect->prepare("
+            SELECT specialist_id, scheduled_at 
+            FROM appointment 
+            WHERE status NOT IN ('cancelled', 'Rejected')
+              AND DATE(scheduled_at) >= ? 
+              AND DATE(scheduled_at) <= ?
+        ");
+        $apptStmt->execute([$todayStr, $maxDateStr]);
+        $allBookings = $apptStmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($allBookings as $b) {
+            $sid = (int)$b['specialist_id'];
+            $formattedDT = date('Y-m-d H:i:s', strtotime($b['scheduled_at']));
+            $bookingsMap[$sid][] = $formattedDT;
+        }
+
+        // Fetch booked slots (Remote style)
         $apptsStmt = $connect->query("
             SELECT specialist_id, scheduled_at 
             FROM appointment 
@@ -135,7 +155,7 @@ try {
         $docSlots = $slotMap[$sid] ?? [];
 
         $availability = [];
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 14; $i++) {
             $d   = (clone $today)->modify("+{$i} day");
             $dow = (int)$d->format('w'); // 0=Sun … 6=Sat
 
@@ -159,6 +179,7 @@ try {
         }
 
         $sp['availability']       = $availability;
+        $sp['booked_appointments'] = $bookingsMap[$sid] ?? [];
         $sp['experience_years']   = (int)($sp['experience_years'] ?? 0);
         $sp['rating']             = $sp['db_rating'] !== null ? (float)$sp['db_rating'] : null;
         $sp['clinic_rating']      = $sp['clinic_rating'] !== null ? (float)$sp['clinic_rating'] : null;

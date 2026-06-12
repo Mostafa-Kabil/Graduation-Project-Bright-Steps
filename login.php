@@ -37,6 +37,11 @@ if (isset($_POST['login'])) {
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
+                if (isset($user['status']) && $user['status'] === 'suspended') {
+                    header("Location: account-suspended.php");
+                    exit;
+                }
+
                 // credentials are correct – set session
                 $_SESSION['id'] = $user['user_id'];
                 $_SESSION['fname'] = $user['first_name'];

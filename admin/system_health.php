@@ -8,8 +8,19 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
 }
 
 try {
+    $connect->query("ALTER TABLE system_logs ADD COLUMN status VARCHAR(20) DEFAULT 'unresolved'");
+} catch (Exception $ex) {}
+
+try {
 
 $action = $_GET['action'] ?? 'metrics';
+$jsonBody = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $jsonBody = json_decode(file_get_contents('php://input'), true);
+    if (!empty($jsonBody['action'])) {
+        $action = $jsonBody['action'];
+    }
+}
 
 switch ($action) {
     case 'metrics':
@@ -118,9 +129,21 @@ switch ($action) {
         echo json_encode(['success' => true, 'log' => $stmt->fetch(PDO::FETCH_ASSOC)]);
         break;
 
+    case 'mark_resolved':
+        $id = isset($jsonBody['id']) ? $jsonBody['id'] : ($_POST['id'] ?? ($_GET['id'] ?? 0));
+        if (!$id) {
+            echo json_encode(['error' => 'Log ID required']);
+            exit;
+        }
+        $stmt = $connect->prepare("UPDATE system_logs SET status = 'resolved', is_resolved = 1 WHERE id = ?");
+        $stmt->execute([$id]);
+        if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'], 'resolve_log', 'system_logs', "Marked system log #{$id} as resolved", $id);
+        echo json_encode(['success' => true]);
+        break;
+
     case 'download':
         $format = $_GET['format'] ?? 'csv';
-        $stmt = $connect->query("SELECT id, level, message, endpoint, method, response_time_ms, created_at FROM system_logs ORDER BY created_at DESC LIMIT 500");
+        $stmt = $connect->query("SELECT id, level, message, endpoint, method, response_time_ms, created_at, status FROM system_logs ORDER BY created_at DESC LIMIT 500");
         $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success' => true, 'data' => $logs, 'format' => $format]);
         break;

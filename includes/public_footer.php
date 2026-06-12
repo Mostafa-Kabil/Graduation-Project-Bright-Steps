@@ -20,8 +20,7 @@
                 <div class="footer-column">
                     <h4 class="footer-heading">Resources</h4>
                     <ul class="footer-links">
-                        <li><a href="help.php">Help Center</a></li>
-                        <li><a href="help.php">Guidelines</a></li>
+                        <li><a href="help.php">Help Center & Guidelines</a></li>
                         <li><a href="privacy.php">Privacy Policy</a></li>
                         <li><a href="terms.php">Terms of Service</a></li>
                     </ul>
@@ -32,7 +31,7 @@
                         <li><a href="about.php">About Us</a></li>
                         <li><a href="contact.php">Contact</a></li>
                         <li><a href="for-clinics.php">For Clinics</a></li>
-                        <li><a href="#">Careers</a></li>
+                        <li><a href="articles.php">Blog</a></li>
                     </ul>
                 </div>
             </div>

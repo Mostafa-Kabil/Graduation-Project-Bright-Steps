@@ -40,11 +40,22 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
         $phoneErr = "Phone number is required";
         $formValid = false;
     } else {
-        $phone = validate_input($_POST["phone"]);
-        if (!preg_match("/^[0-9\-\+\s]{8,15}$/", $phone)) {
-            $phoneErr = "Invalid phone number format";
+        $raw_phone = validate_input($_POST["phone"]);
+        $country_code = $_POST["country_code"] ?? '+20';
+        
+        $isValid = false;
+        if ($country_code === '+20' && preg_match('/^1[0-9]{9}$/', $raw_phone)) $isValid = true;
+        else if ($country_code === '+1' && preg_match('/^[0-9]{10}$/', $raw_phone)) $isValid = true;
+        else if ($country_code === '+44' && preg_match('/^[0-9]{10}$/', $raw_phone)) $isValid = true;
+        else if ($country_code === '+966' && preg_match('/^5[0-9]{8}$/', $raw_phone)) $isValid = true;
+        else if ($country_code === '+971' && preg_match('/^5[0-9]{8}$/', $raw_phone)) $isValid = true;
+        else if ($country_code === 'other' && preg_match('/^[0-9]{8,15}$/', $raw_phone)) $isValid = true;
+        
+        if (!$isValid) {
+            $phoneErr = "Invalid phone number format for selected country";
             $formValid = false;
         } else {
+            $phone = ($country_code === 'other' ? '' : $country_code) . $raw_phone;
             $stmt = $connect->prepare("SELECT phone FROM users WHERE phone = ?");
             $stmt->execute([$phone]);
             if ($stmt->rowCount() > 0) {
@@ -318,7 +329,6 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                             <button class="verify-btn" id="verify-btn" onclick="verifyCode()">Verify Email</button>
                             <div class="verify-error" id="verify-error"></div>
                             <div class="verify-resend">Didn't receive it? <a onclick="sendCode()">Resend Code</a></div>
-                            <div class="verify-dev-code" id="dev-code"></div>
                         </div>
                     </div>
                     <script>
@@ -332,12 +342,10 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
                         });
                         async function sendCode() {
                             try {
-                                const res = await fetch('api_email_verify.php?action=send', {
+                                await fetch('api_email_verify.php?action=send', {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ email: VERIFY_EMAIL })
                                 });
-                                const data = await res.json();
-                                if (data.dev_code) document.getElementById('dev-code').textContent = '🔧 Dev code: ' + data.dev_code;
                             } catch (e) { console.error(e); }
                         }
                         async function verifyCode() {
@@ -386,9 +394,19 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 
                     <div class="form-group">
                         <label class="form-label" for="phone">Phone Number</label>
-                        <input type="tel" name="phone" id="phone" placeholder="+1234567890"
-                            class="form-input <?= !empty($phoneErr) ? 'input-error' : '' ?>"
-                            value="<?= htmlspecialchars($phone) ?>">
+                        <div style="display:flex; gap:0.5rem;">
+                            <select name="country_code" class="form-input" style="width:110px; margin-bottom:0;">
+                                <option value="+20" <?= (isset($_POST['country_code']) && $_POST['country_code'] === '+20') ? 'selected' : '' ?>>EG (+20)</option>
+                                <option value="+1" <?= (isset($_POST['country_code']) && $_POST['country_code'] === '+1') ? 'selected' : '' ?>>US (+1)</option>
+                                <option value="+44" <?= (isset($_POST['country_code']) && $_POST['country_code'] === '+44') ? 'selected' : '' ?>>UK (+44)</option>
+                                <option value="+966" <?= (isset($_POST['country_code']) && $_POST['country_code'] === '+966') ? 'selected' : '' ?>>SA (+966)</option>
+                                <option value="+971" <?= (isset($_POST['country_code']) && $_POST['country_code'] === '+971') ? 'selected' : '' ?>>AE (+971)</option>
+                                <option value="other" <?= (isset($_POST['country_code']) && $_POST['country_code'] === 'other') ? 'selected' : '' ?>>Other</option>
+                            </select>
+                            <input type="tel" name="phone" id="phone" placeholder="1001234567"
+                                class="form-input <?= !empty($phoneErr) ? 'input-error' : '' ?>" style="flex:1; margin-bottom:0;"
+                                value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+                        </div>
                         <div class="error"><?= $phoneErr ?></div>
                     </div>
 

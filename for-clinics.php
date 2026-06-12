@@ -100,21 +100,34 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
 
     
     <script>
-        document.querySelectorAll('.counter').forEach(counter => {
-            const updateCount = () => {
-                const target = +counter.getAttribute('data-target');
-                const count = +counter.innerText;
-                const speed = 200;
-                const inc = target / speed;
-                if(count < target) {
-                    counter.innerText = (count + inc).toFixed(target % 1 !== 0 ? 1 : 0);
-                    setTimeout(updateCount, 1);
-                } else {
-                    counter.innerText = target;
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const counter = entry.target;
+                    const target = parseFloat(counter.getAttribute('data-target'));
+                    const isDecimal = target % 1 !== 0;
+                    const duration = 2000;
+                    const frameRate = 16;
+                    const totalFrames = duration / frameRate;
+                    const inc = target / totalFrames;
+                    let currentCount = 0;
+                    
+                    const updateCount = () => {
+                        currentCount += inc;
+                        if (currentCount < target) {
+                            counter.innerText = currentCount.toFixed(isDecimal ? 1 : 0);
+                            requestAnimationFrame(updateCount);
+                        } else {
+                            counter.innerText = target;
+                        }
+                    };
+                    updateCount();
+                    observer.unobserve(counter);
                 }
-            };
-            updateCount();
-        });
+            });
+        }, { threshold: 0.5 });
+
+        document.querySelectorAll('.counter').forEach(counter => observer.observe(counter));
 
         function calculateROI() {
             const appts = document.getElementById('appts').value || 0;

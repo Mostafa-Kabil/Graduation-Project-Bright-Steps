@@ -33,7 +33,7 @@ foreach ($streaksData as $s) {
 $data['streaks'] = $streakMap;
 
 // --- Subscription Plan ---
-$sql = "SELECT s.plan_name, s.price, s.plan_period
+$sql = "SELECT s.plan_name, s.price, s.plan_period, ps.expires_at, ps.status
         FROM parent_subscription ps
         INNER JOIN subscription s ON ps.subscription_id = s.subscription_id
         WHERE ps.parent_id = :parent_id
@@ -41,7 +41,23 @@ $sql = "SELECT s.plan_name, s.price, s.plan_period
 $stmt = $connect->prepare($sql);
 $stmt->execute(['parent_id' => $parentId]);
 $plan = $stmt->fetch(PDO::FETCH_ASSOC);
-$data['subscription'] = $plan ?: ['plan_name' => 'Free', 'price' => '0.00', 'plan_period' => ''];
+
+if ($plan) {
+    $plan['expired_premium'] = false;
+    if ($plan['expires_at'] && strtotime($plan['expires_at']) < time() && $plan['status'] === 'active') {
+        $plan['status'] = 'expired';
+        if ($plan['plan_name'] === 'Premium') {
+            $plan['expired_premium'] = true;
+        }
+        // Auto-transition state in DB (lazy approach for user login)
+        $stmtEx = $connect->prepare("UPDATE parent_subscription SET status = 'expired' WHERE parent_id = :pid AND status = 'active'");
+        $stmtEx->execute(['pid' => $parentId]);
+    } elseif ($plan['status'] === 'expired' && $plan['plan_name'] === 'Premium') {
+        $plan['expired_premium'] = true;
+    }
+}
+
+$data['subscription'] = $plan ?: ['plan_name' => 'Free', 'price' => '0.00', 'plan_period' => '', 'expires_at' => null, 'expired_premium' => false, 'status' => 'active'];
 
 // --- Children ---
 $sql = "SELECT child_id, first_name, last_name, birth_day, birth_month, birth_year, gender, ssn

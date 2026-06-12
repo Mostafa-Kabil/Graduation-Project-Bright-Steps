@@ -48,7 +48,7 @@ function renderSpecialistsView(main, specialists, currentSearch) {
             
             <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
                 ${s.status === 'pending' ? `
-                    <button class="btn btn-sm" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="approveSpecialist(${s.specialist_id})">✓ Approve</button>
+                    <button class="btn btn-sm" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="approveSpecialist(${s.specialist_id}, '${esc(s.first_name + ' ' + s.last_name)}')">✓ Approve</button>
                     <button class="btn btn-sm" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="rejectSpecialist(${s.specialist_id},'${esc(s.first_name + ' ' + s.last_name)}')">✕ Reject</button>
                 ` : ''}
             </div>
@@ -164,15 +164,24 @@ function renderSpecialistsView(main, specialists, currentSearch) {
     });
 }
 
-// Approve specialist
-function approveSpecialist(specId) {
-    showConfirm('Are you sure you want to <strong>approve</strong> this specialist?', async () => {
+function approveSpecialist(specId, specName = 'this specialist') {
+    showModal('Approve Specialist', `
+        <div style="text-align:center;margin-bottom:1rem;">
+            <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" style="width:28px;height:28px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <h3 style="margin:0 0 .5rem;font-size:1.1rem;">Approve <strong>Dr. ${specName}</strong>?</h3>
+            <p style="color:var(--text-secondary);font-size:.85rem;margin:0;">This specialist will be verified and able to receive appointments.</p>
+        </div>
+    `, `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn" id="approve-confirm-btn" style="background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;">Approve Specialist</button>`);
+
+    document.getElementById('approve-confirm-btn').onclick = async () => {
         try {
             const res = await apiPost('specialists.php', { action: 'approve', specialist_id: specId });
-            if (res.success) { showAlert('Specialist approved!', 'success'); setTimeout(() => { showAdminView('specialists'); }, 1200); }
+            if (res.success) { showAlert('Specialist approved!', 'success'); setTimeout(() => { closeModal(); showAdminView('specialists'); }, 1200); }
             else showAlert(res.error || 'Failed', 'error');
         } catch (e) { showAlert('Error: ' + e.message, 'error'); }
-    });
+    };
 }
 
 // Reject specialist

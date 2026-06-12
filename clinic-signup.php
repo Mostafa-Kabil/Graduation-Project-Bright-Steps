@@ -133,12 +133,37 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label" for="phone">Clinic Phone Number</label>
+                        <div style="display:flex; gap:0.5rem;">
+                            <select name="country_code" id="country_code" class="form-input" style="width:110px; margin-bottom:0;">
+                                <option value="+20">EG (+20)</option>
+                                <option value="+1">US (+1)</option>
+                                <option value="+44">UK (+44)</option>
+                                <option value="+966">SA (+966)</option>
+                                <option value="+971">AE (+971)</option>
+                                <option value="other">Other</option>
+                            </select>
+                            <input type="tel" name="phone" id="phone" class="form-input" placeholder="1001234567" style="flex:1; margin-bottom:0;" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label" for="location">Location / Address</label>
                         <input type="text" name="location" id="location" class="form-input" placeholder="123 Health St, Cairo, Egypt" required>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Verification Document <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
+                        <label class="form-label" for="password">Create Password</label>
+                        <input type="password" name="password" id="password" class="form-input" placeholder="Min. 8 characters" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="confirm_password">Confirm Password</label>
+                        <input type="password" name="confirm_password" id="confirm_password" class="form-input" placeholder="Re-type password" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Verification Document <span style="color:#e53935;font-weight:600;">*</span></label>
                         <div class="upload-area" onclick="document.getElementById('verification_doc').click()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                             <p>Click to upload license or registration document</p>
@@ -228,9 +253,24 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
             const name = document.getElementById('clinic_name').value.trim();
             const email = document.getElementById('email').value.trim();
             const location = document.getElementById('location').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            const fileInput = document.getElementById('verification_doc');
 
-            if (!name || !email || !location) {
-                errorDiv.textContent = 'Clinic name, email, and location are required.';
+            if (!name || !email || !location || !password || !confirmPassword || !fileInput.files.length) {
+                errorDiv.textContent = 'All fields including verification document are required.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (password.length < 8) {
+                errorDiv.textContent = 'Password must be at least 8 characters long.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match.';
                 errorDiv.style.display = 'block';
                 return;
             }

@@ -85,12 +85,17 @@ async function loadSystemHealthView(main) {
         <!-- Logs Table -->
         <div class="section-card" style="margin-top:1.5rem;"><div class="section-card-header"><h2 class="section-heading">Recent Logs</h2>
             <select class="search-input" style="width:auto;" id="log-level-filter" onchange="filterLogs()"><option value="">All Levels</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option><option value="critical">Critical</option></select></div>
-            <div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Level</th><th>Message</th><th>Endpoint</th><th>Response</th><th>Time</th><th>Actions</th></tr></thead><tbody>
+            <div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Level</th><th>Message</th><th>Endpoint</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead><tbody>
                 ${logs.map(l => `<tr>
                     <td><span class="status-badge ${l.level==='error'||l.level==='critical'?'status-danger':l.level==='warning'?'status-warning':'status-active'}">${l.level}</span></td>
                     <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">${l.message}</td>
                     <td><code>${l.endpoint||'—'}</code></td>
-                    <td>${l.response_time_ms?l.response_time_ms+'ms':'—'}</td>
+                    <td>
+                        ${(l.level==='error'||l.level==='critical') ? 
+                            `<span class="status-badge ${l.status==='resolved'?'status-active':'status-warning'}">${l.status||'unresolved'}</span>` : 
+                            `<span style="color:#94a3b8;font-size:0.8rem;">—</span>`
+                        }
+                    </td>
                     <td>${timeAgo(l.created_at)}</td>
                     <td><button class="btn btn-sm btn-outline" onclick="viewLogDetail(${l.id})">View</button></td>
                 </tr>`).join('')}
@@ -114,9 +119,16 @@ async function viewLogDetail(id) {
     try {
         const d = await apiGet('system_health.php?action=view_log&id='+id);
         const l = d.log;
+        
+        let actionBtn = `<button class="btn btn-outline" onclick="closeModal()">Close</button>`;
+        if ((l.level === 'error' || l.level === 'critical') && l.status !== 'resolved') {
+            actionBtn = `<button class="btn btn-outline" onclick="closeModal()">Close</button><button class="btn btn-gradient" onclick="markLogResolved(${l.id})">Mark as Resolved</button>`;
+        }
+        
         showModal('Log Detail', `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="detail-row"><span class="detail-label">Level</span><span class="detail-value"><span class="status-badge ${l.level==='error'?'status-danger':'status-active'}">${l.level}</span></span></div>
+                <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value"><span class="status-badge ${l.status==='resolved'?'status-active':'status-warning'}">${l.status||'unresolved'}</span></span></div>
                 <div class="detail-row"><span class="detail-label">Endpoint</span><span class="detail-value"><code>${l.endpoint||'—'}</code></span></div>
                 <div class="detail-row"><span class="detail-label">Method</span><span class="detail-value">${l.method||'—'}</span></div>
                 <div class="detail-row"><span class="detail-label">Response Time</span><span class="detail-value">${l.response_time_ms?l.response_time_ms+'ms':'—'}</span></div>
@@ -126,9 +138,24 @@ async function viewLogDetail(id) {
             <div style="margin-top:1rem;"><strong>Message:</strong><p>${l.message}</p></div>
             ${l.stack_trace?`<div style="margin-top:1rem;"><strong>Stack Trace:</strong><pre style="background:var(--bg-secondary);padding:1rem;border-radius:8px;overflow-x:auto;font-size:.8rem;">${l.stack_trace}</pre></div>`:''}
             ${l.request_payload?`<div style="margin-top:1rem;"><strong>Request Payload:</strong><pre style="background:var(--bg-secondary);padding:1rem;border-radius:8px;overflow-x:auto;font-size:.8rem;">${l.request_payload}</pre></div>`:''}
-        `, `<button class="btn btn-outline" onclick="closeModal()">Close</button>`);
+        `, actionBtn);
     } catch(e){showAlert('Error','error');}
 }
+
+window.markLogResolved = async function(id) {
+    try {
+        const res = await apiPost('system_health.php', { action: 'mark_resolved', id: id });
+        if (res.success) {
+            showAlert('Marked as resolved', 'success');
+            closeModal();
+            showAdminView('system_health');
+        } else {
+            showAlert('Failed: ' + (res.error || 'Unknown error'), 'error');
+        }
+    } catch (e) {
+        showAlert('Error marking resolved', 'error');
+    }
+};
 
 // ═══ AUDIT LOGS VIEW ═══
 window.loadLogsView = async function(main) {
@@ -138,18 +165,41 @@ window.loadLogsView = async function(main) {
         const stats = data.stats || {};
         
         main.innerHTML = `<div class="dashboard-content">
-            <div class="dashboard-header-section">
-                <div><h1 class="dashboard-title">System Audit Logs</h1><p class="dashboard-subtitle">Monitor administrative actions and system events</p></div>
-                <div class="header-actions-inline">
-                    <button class="btn btn-outline" onclick="loadLogsView(document.getElementById('admin-main-content'))">⟳ Refresh</button>
+            <!-- Hero Header -->
+            <div style="background:linear-gradient(135deg,#0f172a,#1e293b,#334155);border-radius:20px;padding:1.5rem 2rem;margin-bottom:1.5rem;position:relative;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.1);">
+                <div style="position:absolute;top:-20px;right:20px;font-size:80px;opacity:.05;">🛡️</div>
+                <div style="position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <h1 style="font-size:1.75rem;font-weight:800;margin:0 0 .25rem;color:white !important;">System Audit Logs</h1>
+                        <p style="opacity:.85;margin:0;font-size:.95rem;color:white !important;">Monitor administrative actions, system events, and security access</p>
+                    </div>
+                    <div style="display:flex;gap:.5rem;">
+                        <button class="btn" onclick="loadLogsView(document.getElementById('admin-main-content'))" style="background:rgba(255,255,255,0.1);color:white;border:1px solid rgba(255,255,255,0.2);backdrop-filter:blur(8px);font-size:.85rem;padding:.5rem 1.25rem;border-radius:10px;cursor:pointer;transition:all 0.2s;" onmouseenter="this.style.background='rgba(255,255,255,0.2)'" onmouseleave="this.style.background='rgba(255,255,255,0.1)'">⟳ Refresh Logs</button>
+                    </div>
                 </div>
             </div>
             
-            <div class="admin-stats-grid" style="grid-template-columns:repeat(4,1fr);">
-                <div class="admin-stat-card admin-stat-indigo"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.total_logs || 0)}</div><div class="admin-stat-label">Total Recorded Events</div></div></div>
-                <div class="admin-stat-card admin-stat-emerald"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.admin_actions || 0)}</div><div class="admin-stat-label">Admin Actions</div></div></div>
-                <div class="admin-stat-card admin-stat-teal"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.system_actions || 0)}</div><div class="admin-stat-label">System Actions</div></div></div>
-                <div class="admin-stat-card admin-stat-amber"><div class="admin-stat-info"><div class="admin-stat-value">${fmtNum(stats.today_actions || 0)}</div><div class="admin-stat-label">Events Today</div></div></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;">
+                <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(99,102,241,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:1rem;">📊</div></div>
+                    <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(stats.total_logs || 0)}</div>
+                    <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Total Recorded Events</div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(16,185,129,0.03));border:1px solid rgba(16,185,129,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(16,185,129,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#34d399);display:flex;align-items:center;justify-content:center;font-size:1rem;">👩‍💼</div></div>
+                    <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(stats.admin_actions || 0)}</div>
+                    <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Admin Actions</div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(20,184,166,0.1),rgba(20,184,166,0.03));border:1px solid rgba(20,184,166,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(20,184,166,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#14b8a6,#2dd4bf);display:flex;align-items:center;justify-content:center;font-size:1rem;">⚙️</div></div>
+                    <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(stats.system_actions || 0)}</div>
+                    <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">System Actions</div>
+                </div>
+                <div style="background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.03));border:1px solid rgba(245,158,11,0.15);border-radius:16px;padding:1.25rem;transition:transform .2s,box-shadow .2s;" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 25px rgba(245,158,11,0.15)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;"><div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#fbbf24);display:flex;align-items:center;justify-content:center;font-size:1rem;">📅</div></div>
+                    <div style="font-size:1.75rem;font-weight:800;color:var(--text-primary);line-height:1;">${fmtNum(stats.today_actions || 0)}</div>
+                    <div style="font-size:.75rem;color:var(--text-secondary);margin-top:.2rem;">Events Today</div>
+                </div>
             </div>
 
             <div class="section-card">
@@ -169,7 +219,7 @@ window.loadLogsView = async function(main) {
                         <thead>
                             <tr>
                                 <th>Type</th>
-                                <th>Description</th>
+                                <th>Section / Resource</th>
                                 <th>User</th>
                                 <th>Role</th>
                                 <th>IP Address</th>
@@ -178,13 +228,21 @@ window.loadLogsView = async function(main) {
                         </thead>
                         <tbody id="audit-logs-tbody">
                             ${logs.map(l => `
-                            <tr class="audit-log-row" data-role="${l.user_role || ''}">
+                            <tr class="audit-log-row" data-role="${l.user_role || ''}" onclick="toggleAuditDetail(${l.log_id})" style="cursor:pointer;transition:background 0.2s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''">
                                 <td><span class="status-badge" style="background:var(--bg-secondary);color:var(--text-secondary);border:1px solid var(--border);">${l.activity_type}</span></td>
-                                <td class="log-desc" style="max-width:300px; white-space:normal; line-height:1.4;">${l.description}</td>
+                                <td class="log-desc" style="max-width:300px; white-space:normal; line-height:1.4;"><strong>${l.description}</strong><br><span style="font-size:0.75rem;color:var(--text-secondary);">ID: ${l.resource_id||'—'}</span></td>
                                 <td class="log-user"><strong>${l.user_name || '—'}</strong></td>
                                 <td><span class="role-badge role-${l.user_role || 'default'}">${l.user_role || '—'}</span></td>
                                 <td><code style="font-size:0.8rem;color:var(--text-secondary);">${l.ip_address || '—'}</code></td>
                                 <td style="font-size:0.85rem;color:var(--text-secondary);">${fmtDate(l.created_at)} <span style="font-size:0.75rem;opacity:0.8">${new Date(l.created_at).toLocaleTimeString()}</span></td>
+                            </tr>
+                            <tr id="audit-detail-${l.log_id}" style="display:none;background:var(--bg-secondary);">
+                                <td colspan="6" style="padding:1.5rem;">
+                                    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;">
+                                        <strong style="display:block;margin-bottom:0.5rem;color:var(--text-primary);">Changes / Details</strong>
+                                        <pre style="margin:0;font-size:0.8rem;color:var(--text-secondary);white-space:pre-wrap;word-wrap:break-word;">${(function(d){if(!d)return 'No details available.'; try{return JSON.stringify(JSON.parse(d),null,2);}catch(e){return d;}})(l.details)}</pre>
+                                    </div>
+                                </td>
                             </tr>
                             `).join('')}
                             ${logs.length === 0 ? '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-secondary);">No logs found</td></tr>' : ''}
@@ -208,6 +266,13 @@ window.loadLogsView = async function(main) {
                 else r.style.display = 'none';
             });
             // could add a "no results" row but this is fine
+        };
+
+        window.toggleAuditDetail = function(id) {
+            const el = document.getElementById('audit-detail-' + id);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+            }
         };
 
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
@@ -388,7 +453,7 @@ function showCreateRole() {
     body += '<p style="font-size:.75rem;color:var(--text-secondary);margin:.25rem 0 .75rem;">Enter application-specific capabilities (comma-separated). Example: <code>bypass_filters, export_financials, manage_api_keys</code></p>';
     body += '<input type="text" id="cr-custom" placeholder="e.g. bypass_filters, export_financials"></div>';
     body += '</div>';
-    showModal('Create New Role', body, '<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="cr-save">Create Role</button>');
+    showModal('Create New Role', body, '<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="cr-save">Create Role</button>', 'admin-modal-wide');
     document.getElementById('cr-save').onclick = async function() {
         var perms = [].slice.call(document.querySelectorAll('.cr-perm:checked')).map(function(c){return c.value;});
         var custom = document.getElementById('cr-custom').value.split(',').map(function(s){return s.trim();}).filter(function(s){return s;});
@@ -444,7 +509,7 @@ function showEditRole(roleId) {
     
     body += '</div>';
 
-    showModal('Edit Role — ' + role.name, body, '<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="er-save">Save Changes</button>');
+    showModal('Edit Role — ' + role.name, body, '<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="er-save">Save Changes</button>', 'admin-modal-wide');
     document.getElementById('er-save').onclick = async function() {
         var perms = [].slice.call(document.querySelectorAll('.er-perm:checked')).map(function(c){return c.value;});
         var custom = document.getElementById('er-custom').value.split(',').map(function(s){return s.trim();}).filter(function(s){return s;});

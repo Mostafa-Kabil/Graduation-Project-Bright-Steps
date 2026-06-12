@@ -20,6 +20,18 @@ if (!$isAjax) {
         header('Location: doctor-login.php');
         exit;
     }
+    if (isset($_SESSION['is_first_login']) && $_SESSION['is_first_login'] === 1) {
+        header('Location: doctor-first-login.php');
+        exit;
+    }
+    
+    $statusCheck = $connect->prepare("SELECT status FROM users WHERE user_id = ?");
+    $statusCheck->execute([$_SESSION['id']]);
+    if ($statusCheck->fetchColumn() === 'suspended') {
+        session_destroy();
+        header("Location: account-suspended.php");
+        exit;
+    }
 }
 
 // Session-derived variables for the HTML view
@@ -27,6 +39,16 @@ $sessionSpecialistId = intval($_SESSION['specialist_id'] ?? $_SESSION['id'] ?? 0
 $sessionDoctorName = 'Dr. ' . htmlspecialchars($_SESSION['fname'] ?? '') . ' ' . htmlspecialchars($_SESSION['lname'] ?? '');
 $sessionDoctorInitials = strtoupper(substr($_SESSION['fname'] ?? 'D', 0, 1) . substr($_SESSION['lname'] ?? 'S', 0, 1));
 $sessionSpecialization = htmlspecialchars($_SESSION['specialization'] ?? 'Specialist');
+
+if (!$isAjax && isset($_SESSION['id'])) {
+    $statusCheck = $connect->prepare("SELECT status FROM users WHERE user_id = ?");
+    $statusCheck->execute([$_SESSION['id']]);
+    if ($statusCheck->fetchColumn() === 'suspended') {
+        session_destroy();
+        header("Location: account-suspended.php");
+        exit;
+    }
+}
 
 // ─── Onboarding Check: redirect if not completed ─────────────
 if (!$isAjax) {

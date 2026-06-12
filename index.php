@@ -59,7 +59,7 @@ if (isset($_SESSION['email']) && isset($_SESSION['id'])) {
                     <div class="hero-buttons">
                         <button class="btn btn-gradient btn-lg" onclick="navigateTo('signup')">Start Tracking
                             Free</button>
-                        <button class="btn btn-outline btn-lg" onclick="navigateTo('demo')">Watch Demo</button>
+                        <button class="btn btn-outline btn-lg" onclick="navigateTo('features')">Explore Features</button>
                     </div>
                     <div class="hero-features">
                         <div class="feature-check">

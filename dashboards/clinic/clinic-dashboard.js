@@ -31,6 +31,32 @@ function showClinicAlert(title, message) {
     document.body.appendChild(alertOverlay);
 }
 
+function showClinicConfirm(title, message, onConfirm) {
+    const confirmOverlay = document.createElement('div');
+    confirmOverlay.className = 'clinic-modal-overlay active';
+    confirmOverlay.style.zIndex = '1200';
+    
+    confirmOverlay.innerHTML = `
+        <div class="clinic-modal glass-effect" style="max-width: 400px; padding: 2rem; text-align: center; animation: modalPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            <div style="width: 60px; height: 60px; background: rgba(239, 68, 68, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: #ef4444;">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </div>
+            <h3 style="margin: 0 0 0.5rem; color: var(--text-primary); font-size: 1.25rem;">${title}</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">${message}</p>
+            <div style="display: flex; gap: 1rem;">
+                <button class="btn btn-outline" style="flex: 1;" onclick="this.closest('.clinic-modal-overlay').remove()">Cancel</button>
+                <button id="clinic-confirm-btn" class="btn btn-gradient" style="flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626);">Delete</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(confirmOverlay);
+    document.getElementById('clinic-confirm-btn').onclick = () => {
+        confirmOverlay.remove();
+        onConfirm();
+    };
+}
+
 // Ensure the animation exists in CSS
 const style = document.createElement('style');
 style.textContent = `
@@ -83,6 +109,7 @@ function renderClinicTopBar() {
     if (!main || document.getElementById('dashboard-topbar')) return;
 
     const initial = window.clinicData && window.clinicData.clinic && window.clinicData.clinic.clinic_name ? window.clinicData.clinic.clinic_name[0].toUpperCase() : 'C';
+    const profileImg = window.clinicData && window.clinicData.clinic && window.clinicData.clinic.profile_image ? window.clinicData.clinic.profile_image : null;
 
     const topbar = document.createElement('div');
     topbar.id = 'dashboard-topbar';
@@ -122,8 +149,8 @@ function renderClinicTopBar() {
                     </div>
                 </div>
             </div>
-            <div id="topbar-avatar" onclick="showClinicView('settings')" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #0d9488, #0891b2); color:white; display:flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; font-size:0.9rem;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
-                ${initial}
+            <div id="topbar-avatar" onclick="showClinicView('settings')" style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg, #0d9488, #0891b2); color:white; display:flex; align-items:center; justify-content:center; font-weight:600; cursor:pointer; font-size:0.9rem; overflow:hidden;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                ${profileImg ? `<img src="../../${profileImg}" style="width:100%; height:100%; object-fit:cover;">` : initial}
             </div>
         </div>
     `;
@@ -410,7 +437,7 @@ function openAllNotificationsModal() {
     document.body.appendChild(modal);
 }
 
-function showClinicView(viewId) {
+function showClinicView(viewId, dataId = null) {
     const main = document.getElementById('clinic-main-content');
     if (!main) return;
 
@@ -420,7 +447,8 @@ function showClinicView(viewId) {
         'patients': getPatientsView,
         'revenue': getRevenueView,
         'reviews': getReviewsView,
-        'settings': getSettingsView
+        'settings': getSettingsView,
+        'specialist-details': () => getSpecialistDetailsView(dataId)
     };
 
     const fn = views[viewId];
@@ -429,7 +457,11 @@ function showClinicView(viewId) {
         if (typeof retranslateCurrentPage === 'function') retranslateCurrentPage();
         
         // Load actual data from API after rendering the skeleton
-        refreshClinicData(viewId);
+        if (viewId === 'specialist-details') {
+            renderSpecialistDetailsPage(dataId);
+        } else {
+            refreshClinicData(viewId);
+        }
     }
 }
 
@@ -454,46 +486,240 @@ async function refreshClinicData(viewId) {
 
             // Update ALL stat cards by ID (works across all views)
             const reviewStats = data.review_stats || {};
+            const revenue = s.revenue || 0;
+            const pendingRev = s.pending_revenue || 0;
+            const txCount = s.transaction_count || 0;
+
             const statUpdates = {
                 'stat-active-specialists': clinicSpecialists.length,
                 'stat-total-appointments': s.total_appointments || 0,
-                'stat-monthly-revenue': '$' + (s.revenue || 0).toLocaleString(),
-                'stat-avg-rating': s.avg_rating || '0.0',
                 'stat-today-appointments': s.today_appointments || 0,
                 'stat-completed': s.completed_appointments || 0,
+                'stat-accepted': s.accepted_appointments || 0,
+                'stat-cancelled': s.cancelled_appointments || 0,
                 'stat-pending': s.pending_appointments || 0,
-                'stat-revenue-month': '$' + (s.revenue || 0).toLocaleString(),
-                'stat-growth-rate': s.total_appointments > 0 ? '+' + Math.min(Math.round((s.completed_appointments / Math.max(s.total_appointments, 1)) * 100), 100) + '%' : '0%',
+                'stat-revenue-month': revenue > 0 ? '$' + revenue.toLocaleString() : '$0',
+                'stat-monthly-revenue': revenue > 0 ? '$' + revenue.toLocaleString() : '$0',
+                'stat-cash-total': 'Cash: $' + (s.cash_revenue || 0).toLocaleString(),
+                'stat-credit-total': 'Credit: $' + (s.credit_revenue || 0).toLocaleString(),
+                'stat-sessions-booked': txCount,
                 'stat-active-patients': clinicPatients.length,
-                'stat-pending-payments': s.pending_appointments || 0,
-                'stat-overall-rating': (reviewStats.avg_rating || '0.0') + '/5',
-                'stat-positive-pct': (reviewStats.positive_pct || 0) + '%',
+                'stat-pending-revenue': pendingRev > 0 ? '$' + pendingRev.toLocaleString() : '$0',
+                'stat-overall-rating': s.avg_rating || '0.0',
+                'stat-avg-rating': s.avg_rating || '0.0',
                 'stat-total-reviews': reviewStats.count || 0
             };
             
-            Object.entries(statUpdates).forEach(([id, val]) => {
+            for (const [id, val] of Object.entries(statUpdates)) {
                 const el = document.getElementById(id);
-                if (el) el.textContent = val;
-            });
-
-            // View-specific logic
-            if (viewId === 'specialists') {
-                renderSpecialistsTable(data);
-            } else if (viewId === 'appointments') {
-                fetchAppointments();
-            } else if (viewId === 'patients') {
-                renderPatientsTable(clinicPatients);
-            } else if (viewId === 'settings') {
-                renderSettingsData();
-            } else if (viewId === 'revenue') {
-                renderRevenueData(s);
-            } else if (viewId === 'reviews') {
-                renderReviewsData(data);
+                if (el) el.innerText = val;
             }
+
+            // View-specific Rendering
+            if (viewId === 'specialists') renderSpecialistsTable({ specialists: clinicSpecialists });
+            if (viewId === 'patients') renderPatientsTable(clinicPatients);
+            if (viewId === 'appointments') {
+                fetchAppointments();
+                // Populate the specialist filter dropdown in Appointments view
+                const specFilter = document.getElementById('apt-spec-filter');
+                if (specFilter) {
+                    // Keep "All Specialists" and add the rest
+                    specFilter.innerHTML = '<option value="">All Specialists</option>';
+                    clinicSpecialists.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.specialist_id;
+                        opt.textContent = `Dr. ${s.first_name} ${s.last_name}`;
+                        specFilter.appendChild(opt);
+                    });
+                }
+            }
+            if (viewId === 'reviews') renderReviewsData(data);
+            if (viewId === 'revenue') {
+                renderRevenueChart(data.revenue_chart || []);
+                renderRevenueBreakdown(data.revenue_breakdown || []);
+            }
+            if (viewId === 'settings') renderSettingsData();
         }
     } catch (err) {
         console.error("Error fetching clinic data:", err);
     }
+}
+
+function renderRevenueChart(chartData) {
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+
+    // Destroy existing chart if it exists
+    if (window.myRevenueChart) {
+        window.myRevenueChart.destroy();
+    }
+
+    // If no revenue data at all, show empty state
+    if (!chartData || chartData.length === 0) {
+        ctx.parentElement.innerHTML = `
+            <div style="height:350px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#94a3b8;">
+                <div style="width:64px;height:64px;background:#f8fafc;border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem;border:1px solid #e2e8f0;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                </div>
+                <div style="font-size:1rem;font-weight:700;color:#64748b;margin-bottom:0.375rem;">No Revenue Data</div>
+                <div style="font-size:0.85rem;color:#94a3b8;">The chart will populate once payments are recorded.</div>
+            </div>`;
+        return;
+    }
+
+    const labels = chartData.map(d => {
+        const date = new Date(d.day);
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    });
+    const cashData = chartData.map(d => parseFloat(d.cash) || 0);
+    const creditData = chartData.map(d => parseFloat(d.credit) || 0);
+
+    window.myRevenueChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Cash Revenue',
+                    data: cashData,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#10b981'
+                },
+                {
+                    label: 'Credit Revenue',
+                    data: creditData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index',
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        display: true,
+                        drawBorder: false,
+                        color: '#f1f5f9'
+                    },
+                    ticks: { 
+                        callback: (value) => '$' + value,
+                        padding: 10,
+                        font: { weight: '600' }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        padding: 10,
+                        font: { weight: '600' }
+                    }
+                }
+            },
+            plugins: {
+                legend: { 
+                    position: 'top',
+                    align: 'end',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20,
+                        font: { size: 12, weight: '700' }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    padding: 12,
+                    titleFont: { size: 14, weight: '700' },
+                    bodyFont: { size: 13 },
+                    cornerRadius: 12,
+                    displayColors: true
+                }
+            }
+        }
+    });
+}
+
+function renderRevenueBreakdown(logs) {
+    const container = document.getElementById('revenue-breakdown-container');
+    if (!container) return;
+
+    if (!logs || logs.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center; padding:4rem 2rem; color:#94a3b8;">
+                <div style="width:72px;height:72px;background:#f8fafc;border-radius:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;border:1px solid #e2e8f0;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <div style="font-size:1.1rem;font-weight:700;color:#64748b;margin-bottom:0.5rem;">No Transactions Yet</div>
+                <div style="font-size:0.9rem;color:#94a3b8;">Revenue will appear here once payments are received from patients.</div>
+            </div>`;
+        return;
+    }
+
+    let html = `
+        <div class="records-table-wrap" style="border:none; border-radius:16px; overflow:hidden;">
+            <table style="width:100%; border-collapse:collapse; text-align:left;">
+                <thead style="background:#f8fafc;">
+                    <tr>
+                        <th style="padding:1.25rem 1.5rem; font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase;">Date</th>
+                        <th style="padding:1.25rem 1.5rem; font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase;">Specialist</th>
+                        <th style="padding:1.25rem 1.5rem; font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase;">Method</th>
+                        <th style="padding:1.25rem 1.5rem; font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase;">Status</th>
+                        <th style="padding:1.25rem 1.5rem; font-size:0.75rem; font-weight:700; color:#94a3b8; text-transform:uppercase; text-align:right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody style="background:white;">
+    `;
+
+    logs.forEach(log => {
+        const dt = new Date(log.date);
+        const dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        
+        const method = (log.method || 'Cash').toLowerCase();
+        const isCash = method.includes('cash');
+        const methodTag = isCash ? 
+            `<span style="background:#f0fdf4; color:#16a34a; padding:4px 10px; border-radius:99px; font-size:0.75rem; font-weight:600;">Cash</span>` :
+            `<span style="background:#eff6ff; color:#2563eb; padding:4px 10px; border-radius:99px; font-size:0.75rem; font-weight:600;">Credit Card</span>`;
+
+        const status = (log.status || 'Pending').toLowerCase();
+        const sClass = status === 'completed' ? 'status-active' : 'status-warning';
+
+        html += `
+            <tr style="border-bottom:1px solid #f1f5f9;">
+                <td style="padding:1.25rem 1.5rem;">
+                    <div style="font-weight:600; color:#1e293b;">${dateStr}</div>
+                    <div style="font-size:0.75rem; color:#64748b;">${timeStr}</div>
+                </td>
+                <td style="padding:1.25rem 1.5rem;">
+                    <div style="font-weight:500; color:#475569;">Dr. ${log.spec_fname} ${log.spec_lname}</div>
+                </td>
+                <td style="padding:1.25rem 1.5rem;">${methodTag}</td>
+                <td style="padding:1.25rem 1.5rem;"><span class="status-badge ${sClass}">${log.status}</span></td>
+                <td style="padding:1.25rem 1.5rem; text-align:right; font-weight:700; color:#0f172a;">$${parseFloat(log.amount || 0).toLocaleString()}</td>
+            </tr>
+        `;
+    });
+
+    html += `</tbody></table></div>`;
+    container.innerHTML = html;
 }
 
 function renderRevenueData(stats) {
@@ -554,9 +780,20 @@ function updateSidebarProfile(name) {
     const nameEl = document.querySelector('.user-info .user-name');
     const subtitle = document.querySelector('.dashboard-subtitle');
     const avatar = document.getElementById('topbar-avatar');
+    
     if (nameEl) nameEl.textContent = name;
     if (subtitle) subtitle.textContent = `Healthcare Management - ${name}`;
-    if (avatar && name) avatar.textContent = name[0].toUpperCase();
+    
+    if (avatar && name) {
+        const c = window.clinicData && window.clinicData.clinic ? window.clinicData.clinic : {};
+        if (c.profile_image) {
+            avatar.innerHTML = `<img src="../../${c.profile_image}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            avatar.style.background = 'transparent';
+        } else {
+            avatar.textContent = name[0].toUpperCase();
+            avatar.style.background = 'linear-gradient(135deg, #0d9488, #0891b2)';
+        }
+    }
 }
 
 async function fetchAppointments() {
@@ -575,12 +812,23 @@ async function fetchAppointments() {
     }
 }
 
+function filterAppointmentsBySpec(specId) {
+    if (!specId) {
+        renderAppointmentsList(clinicAppointments);
+        return;
+    }
+    const filtered = clinicAppointments.filter(a => a.specialist_id == specId);
+    renderAppointmentsList(filtered);
+}
+
 function renderAppointmentsList(appointments) {
     const container = document.getElementById('appointments-view-container');
     if (!container) return;
 
     if (appointments.length === 0) {
-        container.innerHTML = '<div style="padding: 40px; text-align: center; color: rgba(255,255,255,0.5);">No upcoming appointments</div>';
+        container.innerHTML = '<div style="padding: 60px 40px; text-align: center; color: #64748b; font-weight: 500; display: flex; flex-direction: column; align-items: center; gap: 1rem;">' +
+            '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.3;"><path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><polyline points="16 2 16 6"/><polyline points="8 2 8 6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' +
+            'No upcoming appointments found for this period.</div>';
         return;
     }
 
@@ -588,7 +836,7 @@ function renderAppointmentsList(appointments) {
     
     appointments.forEach(apt => {
         const dt = new Date(apt.scheduled_at);
-        const timeStr = dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
         const dateStr = dt.toLocaleDateString();
 
         // Safely handle potentially null child names
@@ -609,26 +857,54 @@ function renderAppointmentsList(appointments) {
         } else if (statusLower === 'cancelled') {
             statusClass = "status-danger";
             statusIcon = '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>';
+        } else if (statusLower === 'accepted') {
+            statusClass = "status-indigo";
+            statusIcon = '<polyline points="20 6 9 17 4 12"/>';
         }
 
+        // Payment & Type coloring
+        const paymentMethod = (apt.payment_method || 'Cash').toLowerCase();
+        const isCredit = paymentMethod.includes('credit') || paymentMethod.includes('card');
+        const paymentColor = isCredit ? '#2563eb' : '#059669';
+        const paymentBg = isCredit ? '#eff6ff' : '#f0fdf4';
+
+        const typeLower = (apt.type || 'onsite').toLowerCase();
+        const typeColor = typeLower === 'online' ? '#8b5cf6' : '#22c55e';
+        const typeBg = typeLower === 'online' ? '#f5f3ff' : '#f0fdf4';
+
         html += `
-            <div class="patient-row">
-                <div class="appointment-time-badge">
-                    <div class="apt-time">${timeStr}</div>
-                    <div class="apt-date">${dateStr}</div>
+            <div class="patient-row" style="padding: 1.25rem 1.5rem;">
+                <div class="appointment-time-badge" style="min-width: 80px;">
+                    <div class="apt-time" style="font-size: 0.95rem;">${timeStr}</div>
+                    <div class="apt-date" style="font-size: 0.75rem;">${dateStr}</div>
                 </div>
-                <div class="patient-avatar" style="background: linear-gradient(135deg, #009688, #00bcd4);">
+                <div class="patient-avatar" style="width: 44px; height: 44px; background: linear-gradient(135deg, #0d9488, #0891b2); font-size: 0.85rem;">
                     ${childInitials}
                 </div>
-                <div class="patient-info">
-                    <div class="patient-name">${childFname} ${childLname}</div>
-                    <div class="patient-details">with Dr. ${specFname} ${specLname} • ${apt.type || ''}</div>
+                <div class="patient-info" style="flex: 2;">
+                    <div class="patient-name" style="font-size: 1rem; margin-bottom: 0.15rem;">${childFname} ${childLname}</div>
+                    <div style="font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-bottom: 0.35rem;">Parent: ${apt.parent_fname} ${apt.parent_lname || ''}</div>
+                    <div class="patient-details" style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                        <span style="color: #64748b;">with</span>
+                        <span style="color: #1e293b; font-weight: 700;">Dr. ${specFname} ${specLname}</span>
+                    </div>
                 </div>
-                <div class="patient-status ${statusClass}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${statusIcon}</svg>
-                    ${apt.status || 'Scheduled'}
+                
+                <div style="display: flex; gap: 0.75rem; flex: 1.5; justify-content: flex-end; align-items: center; margin-right: 1.5rem;">
+                    <span style="padding: 4px 12px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; background: ${typeBg}; color: ${typeColor}; text-transform: uppercase; border: 1px solid ${typeColor}20;">
+                        ${apt.type || 'Onsite'}
+                    </span>
+                    <span style="padding: 4px 12px; border-radius: 8px; font-size: 0.7rem; font-weight: 800; background: ${paymentBg}; color: ${paymentColor}; text-transform: uppercase; border: 1px solid ${paymentColor}20;">
+                        ${apt.payment_method || 'Cash'}
+                    </span>
                 </div>
-                <button class="btn btn-sm btn-outline" onclick="viewAppointmentDetails(${apt.appointment_id})">Details</button>
+
+                <div class="patient-status ${statusClass}" style="min-width: 120px; justify-content: center;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${statusIcon}</svg>
+                    <span style="font-weight: 700;">${apt.status || 'Scheduled'}</span>
+                </div>
+                
+                <button class="btn btn-sm btn-outline" style="margin-left: 1rem; padding: 0.5rem 1rem; border-radius: 10px;" onclick="viewAppointmentDetails(${apt.appointment_id})">Details</button>
             </div>
         `;
     });
@@ -648,7 +924,7 @@ function viewAppointmentDetails(id) {
     const initials = (apt.child_fname ? apt.child_fname[0] : '') + (apt.child_lname ? apt.child_lname[0] : '');
     const dt = new Date(apt.scheduled_at);
     const dateFormatted = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-    const timeFormatted = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeFormatted = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
     modal.innerHTML = `
         <div class="clinic-modal light-premium-modal" style="max-width: 650px; width: 95%; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);">
@@ -682,10 +958,19 @@ function viewAppointmentDetails(id) {
                         <p style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #1e293b;">${dateFormatted} at ${timeFormatted}</p>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Type / Status</label>
-                        <div style="display: flex; align-items: center; gap: 0.75rem;">
-                            <span style="background: #ecfdf5; color: #059669; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; text-transform: capitalize;">${apt.appointment_type}</span>
-                            <span style="color: #475569; font-size: 0.9rem; font-weight: 600;">${apt.status.charAt(0).toUpperCase() + apt.status.slice(1)}</span>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Type & Payment / Status</label>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <span style="background: #f5f3ff; color: #8b5cf6; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; text-transform: capitalize;">${apt.type || 'Onsite'}</span>
+                                <span style="background: #f0fdf4; color: #16a34a; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; text-transform: capitalize;">${apt.payment_method || 'Cash'}</span>
+                                <span style="color: #475569; font-size: 0.9rem; font-weight: 700;">${apt.status.charAt(0).toUpperCase() + apt.status.slice(1)}</span>
+                            </div>
+                            ${apt.status.toLowerCase() === 'cancelled' && apt.cancelled_by ? `
+                                <div style="font-size: 0.8rem; color: #ef4444; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                    Cancelled by ${apt.cancelled_by === 'specialist' ? 'Doctor (Specialist)' : (apt.cancelled_by === 'clinic' ? 'Clinic' : 'Patient')}
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
@@ -699,14 +984,21 @@ function viewAppointmentDetails(id) {
             </div>
 
             <div class="clinic-modal-footer" style="padding: 2rem 2.5rem; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; gap: 1.25rem;">
-                ${apt.status === 'pending' ? `
-                    <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.2);" onclick="manageAppointment(${apt.appointment_id}, 'approve')">Approve Appointment</button>
-                ` : ''}
-                ${apt.status === 'Pending Reschedule' ? `
-                    <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #ef4444; background: white; color: #ef4444; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="manageAppointment(${apt.appointment_id}, 'reject')">Reject & Refund</button>
-                ` : ''}
-                <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #3b82f6; background: white; color: #3b82f6; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="showRescheduleModal(${apt.appointment_id})">Reschedule</button>
-                <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #ef4444; background: white; color: #ef4444; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="manageAppointment(${apt.appointment_id}, 'cancel')">Cancel Appointment</button>
+                ${['pending', 'scheduled'].includes(apt.status.toLowerCase()) ? `
+                    <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2); display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.95rem;" onclick="manageAppointment(${apt.appointment_id}, 'accepted')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        Accept Appointment
+                    </button>
+                    <button class="btn" style="flex: 1; padding: 0.875rem; border-radius: 12px; border: 1.5px solid #ef4444; background: white; color: #ef4444; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; font-size: 0.95rem;" onclick="manageAppointment(${apt.appointment_id}, 'cancel')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        Cancel Appointment
+                    </button>
+                ` : `
+                    <div style="flex: 1; text-align: center; padding: 0.875rem; border-radius: 12px; background: ${apt.status.toLowerCase() === 'completed' ? '#f0fdf4' : apt.status.toLowerCase() === 'cancelled' ? '#fef2f2' : '#f8fafc'}; color: ${apt.status.toLowerCase() === 'completed' ? '#16a34a' : apt.status.toLowerCase() === 'cancelled' ? '#ef4444' : '#64748b'}; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                        ${apt.status.toLowerCase() === 'completed' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' : apt.status.toLowerCase() === 'cancelled' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>' : ''}
+                        This appointment is ${apt.status.toLowerCase()}
+                    </div>
+                `}
             </div>
         </div>
     `;
@@ -802,9 +1094,8 @@ function renderSpecialistsTable(data, updateCounter = true) {
     
     // Update counter boxes
     if (updateCounter) {
-        const countBox = document.querySelector('.stat-card-yellow .stat-card-value') || 
-                        document.querySelector('.stat-card-blue .stat-card-value'); // fallback
-        if (countBox) countBox.textContent = specialists.length;
+        const specCountBox = document.getElementById('stat-active-specialists');
+        if (specCountBox) specCountBox.textContent = specialists.length;
     }
 
     const tbody = document.querySelector('.clinic-table tbody');
@@ -829,14 +1120,14 @@ function renderSpecialistsTable(data, updateCounter = true) {
                 </div>
             </td>
             <td>${spec.specialization}</td>
+            <td>${spec.location || 'Main Branch'}</td>
             <td>${spec.experience_years || 0} years</td>
-            <td>${spec.patients_count || Math.floor(Math.random() * 50)}</td>
-            <td><span class="rating-badge">★ ${spec.rating || (4 + Math.random()).toFixed(1)}</span></td>
+            <td>${spec.patients_count || 0}</td>
+            <td><span class="rating-badge">★ ${spec.rating ? parseFloat(spec.rating).toFixed(1) : '0.0'}</span></td>
             <td><span class="status-badge status-active">Active</span></td>
             <td>
                 <div style="display:flex; gap: 0.5rem;">
-                    <button class="btn btn-sm btn-outline" onclick="viewSpecialistDetails(${spec.specialist_id})">View</button>
-                    <button class="btn btn-sm btn-outline" style="border-color: var(--teal-600); color: var(--teal-600);" onclick="manageSpecialistShifts(${spec.specialist_id})">Shifts</button>
+                    <button class="btn btn-sm btn-outline" onclick="showClinicView('specialist-details', ${spec.specialist_id})">View</button>
                 </div>
             </td>
         </tr>
@@ -865,8 +1156,6 @@ function viewSpecialistDetails(id) {
                         <h3 style="margin: 0; font-size: 1.5rem; color: var(--text-primary);">Dr. ${spec.first_name} ${spec.last_name}</h3>
                         <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.25rem;">
                             <span style="color: #0d9488; font-weight: 600; font-size: 0.9rem;">${spec.specialization}</span>
-                            <span style="width: 4px; height: 4px; background: var(--text-muted); border-radius: 50%;"></span>
-                            <span style="color: var(--text-secondary); font-size: 0.9rem;">Specialist ID: #SP-${spec.specialist_id}</span>
                         </div>
                     </div>
                 </div>
@@ -893,6 +1182,10 @@ function viewSpecialistDetails(id) {
                                 <div style="color: #0d9488;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
                                 <div style="font-size: 0.85rem; color: var(--text-primary);">${clinicName}</div>
                             </div>
+                            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                <div style="color: #0d9488;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M2 12h20"/></svg></div>
+                                <div style="font-size: 0.85rem; color: var(--text-primary);">${spec.location || 'N/A'}</div>
+                            </div>
                         </div>
                     </div>
 
@@ -903,13 +1196,9 @@ function viewSpecialistDetails(id) {
                                 <div style="font-size: 0.7rem; color: var(--text-secondary);">Experience</div>
                                 <div style="font-weight: 600; color: var(--text-primary);">${spec.experience_years || 0} Years</div>
                             </div>
-                            <div style="margin-bottom: 0.75rem;">
-                                <div style="font-size: 0.7rem; color: var(--text-secondary);">Success Rate</div>
-                                <div style="font-weight: 600; color: #16a34a;">98.2%</div>
-                            </div>
                             <div>
                                 <div style="font-size: 0.7rem; color: var(--text-secondary);">Rating</div>
-                                <div style="font-weight: 600; color: #f59e0b;">★ ${spec.rating || '4.8'}</div>
+                                <div style="font-weight: 600; color: #f59e0b;">★ ${spec.rating ? parseFloat(spec.rating).toFixed(1) : '0.0'}</div>
                             </div>
                         </div>
                     </div>
@@ -918,15 +1207,13 @@ function viewSpecialistDetails(id) {
                 <!-- Main Details Area -->
                 <div style="padding: 2rem; overflow-y: auto; max-height: 60vh;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-                        <div style="background: white; padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                            <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">Current Workload</div>
-                            <div style="font-size: 1.5rem; font-weight: 700; color: #0d9488;">24 Patients</div>
-                            <div style="font-size: 0.75rem; color: #16a34a; margin-top: 0.25rem;">↑ 3 from last month</div>
+                        <div style="background: white; padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.02); text-align: center;">
+                            <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">Total Patients</div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: #0d9488;">${spec.patients_count || 0} Patients</div>
                         </div>
-                        <div style="background: white; padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                            <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">Avg. Session Time</div>
-                            <div style="font-size: 1.5rem; font-weight: 700; color: #0d9488;">45 Mins</div>
-                            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Standard consultation</div>
+                        <div style="background: white; padding: 1.25rem; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px rgba(0,0,0,0.02); text-align: center;">
+                            <div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 0.5rem;">Joined Date</div>
+                            <div style="font-size: 1.1rem; font-weight: 700; color: #6366f1; margin-top: 0.4rem;">${spec.joined_at ? new Date(spec.joined_at).toLocaleDateString() : 'Active'}</div>
                         </div>
                     </div>
 
@@ -985,250 +1272,125 @@ function closeViewModal() {
 }
 
 function confirmDeleteSpecialist(id, name) {
-    if (confirm(`Are you sure you want to remove Dr. ${name} from your clinic? This will cancel their upcoming appointments.`)) {
-        fetch('../../api_clinic_delete_specialist.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ specialist_id: id })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                showClinicAlert('Success', `Dr. ${name} has been removed from your team.`);
-                closeViewModal();
-                refreshClinicData('specialists');
-            } else {
-                showClinicAlert('Error', data.error || 'Failed to remove specialist.');
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            showClinicAlert('Error', 'An unexpected error occurred.');
-        });
-    }
+    showClinicConfirm(
+        'Confirm Removal', 
+        `Are you sure you want to remove Dr. ${name} from your clinic? This will cancel their upcoming appointments.`,
+        () => {
+            fetch('../../api_clinic_delete_specialist.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ specialist_id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showClinicAlert('Success', `Dr. ${name} has been removed from your team.`);
+                    closeViewModal();
+                    // Force refresh and switch to specialists view
+                    showClinicView('specialists');
+                } else {
+                    showClinicAlert('Error', data.error || 'Failed to remove specialist.');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showClinicAlert('Error', 'An unexpected error occurred.');
+            });
+        }
+    );
 }
 
 function openEditSpecialistModal(id) {
     const spec = clinicSpecialists.find(s => s.specialist_id == id);
-    if (!spec) return;
-
-    closeViewModal(); // Close the detail view first
+    if (!spec) {
+        showClinicToast('Error: Specialist data not found.', 'error');
+        return;
+    }
 
     const existing = document.getElementById('edit-specialist-modal');
     if (existing) existing.remove();
 
     const modal = document.createElement('div');
     modal.id = 'edit-specialist-modal';
-    modal.className = 'clinic-modal-overlay';
+    modal.className = 'clinic-modal-overlay active';
     modal.innerHTML = `
-        <div class="clinic-modal-container glass-effect premium-modal">
-            <div class="clinic-modal-header">
-                <div class="header-icon-circle" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
+        <div class="clinic-modal light-premium-modal" style="max-width: 550px; width: 95%; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);">
+            <div class="clinic-modal-header" style="padding: 1.5rem 2rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 40px; height: 40px; background: rgba(245, 158, 11, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #f59e0b;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 22px; height: 22px;">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #0f172a;">Edit Specialist Profile</h3>
+                        <p style="margin: 0; font-size: 0.85rem; color: #64748b;">Update Dr. ${spec.first_name}'s professional details</p>
+                    </div>
                 </div>
-                <div class="header-text">
-                    <h3>Edit Specialist Profile</h3>
-                    <p>Update Dr. ${spec.first_name}'s details</p>
-                </div>
-                <button class="clinic-modal-close-btn" onclick="closeEditSpecialistModal()">&times;</button>
+                <button class="clinic-modal-close" style="background: #f8fafc; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; color: #64748b;" onclick="closeEditSpecialistModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 16px; height: 16px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
-            <form id="edit-specialist-form" class="clinic-modal-body" onsubmit="submitEditSpecialist(event, ${spec.specialist_id})">
-                <div class="form-grid">
+            <form id="edit-specialist-form" class="clinic-modal-body" onsubmit="submitEditSpecialist(event, ${spec.specialist_id})" style="padding: 2rem;">
+                <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                     <div class="form-group">
-                        <label>First Name</label>
-                        <div class="input-with-icon">
-                            <input type="text" name="first_name" required value="${spec.first_name}">
-                        </div>
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">First Name</label>
+                        <input type="text" name="first_name" required value="${spec.first_name}" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none;">
                     </div>
                     <div class="form-group">
-                        <label>Last Name</label>
-                        <div class="input-with-icon">
-                            <input type="text" name="last_name" required value="${spec.last_name || ''}">
-                        </div>
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Last Name</label>
+                        <input type="text" name="last_name" required value="${spec.last_name}" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none;">
                     </div>
-                    <div class="form-group full-width">
-                        <label>Email Address</label>
-                        <div class="input-with-icon">
-                            <input type="email" name="email" required value="${spec.email || ''}">
-                        </div>
-                    </div>
-                    <div class="form-group full-width">
-                        <label>Password (Leave blank to keep current)</label>
-                        <div class="input-with-icon">
-                            <input type="password" name="password" placeholder="••••••••••••">
-                        </div>
+                    <div class="form-group full-width" style="grid-column: span 2;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Email Address (Locked)</label>
+                        <input type="email" name="email" value="${spec.email}" readonly class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f1f5f9; color: #64748b; font-size: 0.95rem; outline: none; cursor: not-allowed;">
                     </div>
                     <div class="form-group">
-                        <label>Specialization</label>
-                        <div class="input-with-icon">
-                            <select name="specialization" id="edit-spec-dropdown" required style="width:100%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 0.75rem 1rem; color: var(--text-primary); font-size: 0.9rem; outline: none; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230d9488' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
-                                <option value="" disabled>Select a specialization…</option>
-                                <optgroup label="Core Pediatric Medicine">
-                                    <option value="Pediatrician">Pediatrician (General)</option>
-                                    <option value="Pediatric Neurologist">Pediatric Neurologist</option>
-                                    <option value="Developmental Pediatrician">Developmental Pediatrician</option>
-                                    <option value="Pediatric Psychiatrist">Pediatric Psychiatrist</option>
-                                    <option value="Pediatric Psychologist">Pediatric Psychologist</option>
-                                </optgroup>
-                                <optgroup label="Therapy & Rehabilitation">
-                                    <option value="Speech-Language Therapist">Speech-Language Therapist</option>
-                                    <option value="Occupational Therapist">Occupational Therapist</option>
-                                    <option value="Physical Therapist">Physical Therapist</option>
-                                    <option value="Behavioral Therapist">Behavioral Therapist</option>
-                                    <option value="Applied Behavior Analysis (ABA) Therapist">ABA Therapist</option>
-                                    <option value="Play Therapist">Play Therapist</option>
-                                    <option value="Music Therapist">Music Therapist</option>
-                                </optgroup>
-                                <optgroup label="Development & Learning">
-                                    <option value="Child Development Specialist">Child Development Specialist</option>
-                                    <option value="Special Education Specialist">Special Education Specialist</option>
-                                    <option value="Learning Disabilities Specialist">Learning Disabilities Specialist</option>
-                                    <option value="Autism Spectrum Specialist">Autism Spectrum Specialist</option>
-                                    <option value="ADHD Specialist">ADHD Specialist</option>
-                                </optgroup>
-                                <optgroup label="Other Pediatric Specialties">
-                                    <option value="Pediatric Audiologist">Pediatric Audiologist</option>
-                                    <option value="Pediatric Nutritionist">Pediatric Nutritionist</option>
-                                    <option value="Child & Family Counselor">Child & Family Counselor</option>
-                                    <option value="Pediatric Social Worker">Pediatric Social Worker</option>
-                                    <option value="Neonatologist">Neonatologist</option>
-                                </optgroup>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Specialization</label>
+                        <select name="specialization" required class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
+                            <option value="Pediatrician" ${spec.specialization === 'Pediatrician' ? 'selected' : ''}>Pediatrician</option>
+                            <option value="Neurologist" ${spec.specialization === 'Neurologist' ? 'selected' : ''}>Neurologist</option>
+                            <option value="Psychologist" ${spec.specialization === 'Psychologist' ? 'selected' : ''}>Psychologist</option>
+                            <option value="Speech Therapist" ${spec.specialization === 'Speech Therapist' ? 'selected' : ''}>Speech Therapist</option>
+                            <option value="Occupational Therapist" ${spec.specialization === 'Occupational Therapist' ? 'selected' : ''}>Occupational Therapist</option>
+                            <option value="Developmental Pediatrician" ${spec.specialization === 'Developmental Pediatrician' ? 'selected' : ''}>Developmental Pediatrician</option>
+                        </select>
                     </div>
                     <div class="form-group">
-                        <label>Experience (Years)</label>
-                        <div class="input-with-icon">
-                            <input type="number" name="experience" required min="1" value="${spec.experience_years || 1}">
-                        </div>
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Work Location (Clinic Branch)</label>
+                        <select name="location" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
+                            <option value="Main Branch, Cairo" ${spec.location === 'Main Branch, Cairo' ? 'selected' : ''}>Main Branch, Cairo</option>
+                            <option value="Alexandria Center" ${spec.location === 'Alexandria Center' ? 'selected' : ''}>Alexandria Center</option>
+                            <option value="Giza Clinic" ${spec.location === 'Giza Clinic' ? 'selected' : ''}>Giza Clinic</option>
+                            <option value="Mansoura Branch" ${spec.location === 'Mansoura Branch' ? 'selected' : ''}>Mansoura Branch</option>
+                            <option value="Tanta Facility" ${spec.location === 'Tanta Facility' ? 'selected' : ''}>Tanta Facility</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Experience (Years)</label>
+                        <input type="number" name="experience" required min="1" value="${spec.experience_years || 1}" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none;">
+                    </div>
+                    <div class="form-group full-width" style="grid-column: span 2;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Certification Notes</label>
+                        <textarea name="certification_text" placeholder="Update credentials summary..." class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; height: 80px; resize:none;">${spec.certification_text || ''}</textarea>
+                    </div>
+                    <div class="form-group full-width" style="grid-column: span 2;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Update Certificate (PDF)</label>
+                        <input type="file" name="certification_pdf" accept=".pdf" class="premium-light-input" style="width: 100%; padding: 0.5rem; border-radius: 12px; border: 1.5px dashed #cbd5e1; background: #f8fafc; color: #1e293b; font-size: 0.85rem; outline: none;">
+                        ${spec.certification_pdf ? `<p style="font-size: 0.75rem; color: #0d9488; margin-top: 5px;">Current: ${spec.certification_pdf.split('/').pop()}</p>` : ''}
                     </div>
                 </div>
-                <div class="clinic-modal-actions">
-                    <button type="button" class="btn-cancel" onclick="closeEditSpecialistModal()">Cancel</button>
-                    <button type="submit" class="btn-submit" style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">
-                        <span>Save Changes</span>
-                    </button>
+                <div class="clinic-modal-actions" style="margin-top: 2.5rem; display: flex; justify-content: flex-end; gap: 1rem;">
+                    <button type="button" class="btn" style="padding: 0.75rem 2rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: white; color: #475569; font-weight: 600; cursor: pointer;" onclick="closeEditSpecialistModal()">Cancel</button>
+                    <button type="submit" class="btn btn-submit" style="padding: 0.75rem 2.5rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 8px 20px rgba(245, 158, 11, 0.2);">Save Changes</button>
                 </div>
             </form>
         </div>
     `;
     document.body.appendChild(modal);
-    
-    // Set current specialization if it matches
-    const dropdown = document.getElementById('edit-spec-dropdown');
-    let matched = false;
-    for(let i=0; i<dropdown.options.length; i++) {
-        if(dropdown.options[i].value === spec.specialization) {
-            dropdown.selectedIndex = i;
-            matched = true;
-            break;
-        }
-    }
-    if(!matched && spec.specialization) {
-        dropdown.value = "Other";
-    }
-
-    // Inject local styles for this modal if not present
-    if (!document.getElementById('modal-premium-styles')) {
-        const style = document.createElement('style');
-        style.id = 'modal-premium-styles';
-        style.innerHTML = `
-            .premium-modal {
-                max-width: 550px !important;
-                background: rgba(255, 255, 255, 0.08) !important;
-                backdrop-filter: blur(20px) !important;
-                border: 1px solid rgba(255, 255, 255, 0.1) !important;
-                border-radius: 24px !important;
-                padding: 0 !important;
-                overflow: hidden;
-            }
-            .clinic-modal-header {
-                background: linear-gradient(135deg, rgba(0, 150, 136, 0.2), rgba(0, 188, 212, 0.1));
-                padding: 30px;
-                display: flex;
-                align-items: center;
-                gap: 20px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-                position: relative;
-            }
-            .header-icon-circle {
-                width: 50px;
-                height: 50px;
-                background: #009688;
-                border-radius: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-            }
-            .header-icon-circle svg { width: 28px; height: 28px; }
-            .header-text h3 { margin: 0; color: white; font-size: 20px; font-weight: 600; }
-            .header-text p { margin: 5px 0 0; color: rgba(255,255,255,0.6); font-size: 14px; }
-            .clinic-modal-close-btn {
-                position: absolute;
-                top: 20px;
-                right: 20px;
-                background: none;
-                border: none;
-                color: rgba(255,255,255,0.4);
-                font-size: 28px;
-                cursor: pointer;
-            }
-            .clinic-modal-body { padding: 30px; }
-            .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-            .full-width { grid-column: span 2; }
-            .form-group label { display: block; margin-bottom: 8px; color: rgba(255,255,255,0.8); font-size: 13px; font-weight: 500; }
-            .input-with-icon input {
-                width: 100%;
-                background: rgba(255,255,255,0.05);
-                border: 1px solid rgba(255,255,255,0.1);
-                border-radius: 12px;
-                padding: 12px 16px;
-                color: white;
-                font-size: 14px;
-                transition: all 0.3s ease;
-            }
-            .input-with-icon input:focus {
-                background: rgba(255,255,255,0.1);
-                border-color: #009688;
-                box-shadow: 0 0 0 3px rgba(0, 150, 136, 0.1);
-                outline: none;
-            }
-            .clinic-modal-actions { margin-top: 35px; display: flex; gap: 15px; justify-content: flex-end; }
-            .btn-cancel {
-                padding: 12px 24px;
-                background: rgba(255,255,255,0.05);
-                border: none;
-                border-radius: 12px;
-                color: rgba(255,255,255,0.6);
-                cursor: pointer;
-                transition: 0.3s;
-            }
-            .btn-cancel:hover { background: rgba(255,255,255,0.1); color: white; }
-            .btn-submit {
-                padding: 12px 30px;
-                background: linear-gradient(135deg, #009688, #00bcd4);
-                border: none;
-                border-radius: 12px;
-                color: white;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-weight: 600;
-                box-shadow: 0 10px 20px rgba(0, 150, 136, 0.2);
-                transition: 0.3s;
-            }
-            .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 15px 25px rgba(0, 150, 136, 0.3); }
-        `;
-        document.head.appendChild(style);
-    }
-
-    requestAnimationFrame(() => modal.classList.add('active'));
 }
+
+
 
 function closeEditSpecialistModal() {
     const modal = document.getElementById('edit-specialist-modal');
@@ -1516,12 +1678,12 @@ function getSpecialistsView() {
                 <div class="stat-card-info"><div class="stat-card-value" id="stat-total-appointments">--</div><div class="stat-card-label">Total Appointments</div></div>
             </div>
             <div class="stat-card stat-card-yellow">
-                <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-monthly-revenue">--</div><div class="stat-card-label">Monthly Revenue</div></div>
+                <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-active-patients">--</div><div class="stat-card-label">Total Patients</div></div>
             </div>
             <div class="stat-card stat-card-purple">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-avg-rating">--</div><div class="stat-card-label">Avg Rating</div></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-avg-rating">--</div><div class="stat-card-label">Specialist Avg Rating</div></div>
             </div>
         </div>
 
@@ -1533,7 +1695,7 @@ function getSpecialistsView() {
             <div class="clinic-table-wrap">
                 <table class="clinic-table">
                     <thead>
-                        <tr><th>Specialist</th><th>Specialization</th><th>Experience</th><th>Patients</th><th>Rating</th><th>Status</th><th>Actions</th></tr>
+                        <tr><th>Specialist</th><th>Specialization</th><th>Location</th><th>Experience</th><th>Patients</th><th>Rating</th><th>Status</th><th>Actions</th></tr>
                     </thead>
                     <tbody>
                         <tr><td colspan="7" style="text-align:center; padding: 20px;">Loading team members...</td></tr>
@@ -1558,33 +1720,38 @@ function getAppointmentsView() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     Calendar View
                 </button>
-                <button class="btn btn-gradient" onclick="openNewAppointmentModal()">+ New Appointment</button>
+
             </div>
         </div>
 
-        <div class="doctor-stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="doctor-stats-grid" style="grid-template-columns: repeat(5, 1fr); gap: 1rem;">
             <div class="stat-card stat-card-blue">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-today-appointments">--</div><div class="stat-card-label">Today's Appointments</div></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-today-appointments">--</div><div class="stat-card-label">Today</div></div>
             </div>
             <div class="stat-card stat-card-green">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
                 <div class="stat-card-info"><div class="stat-card-value" id="stat-completed">--</div><div class="stat-card-label">Completed</div></div>
             </div>
+            <div class="stat-card stat-card-indigo">
+                <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-accepted">--</div><div class="stat-card-label">Accepted</div></div>
+            </div>
             <div class="stat-card stat-card-yellow">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
                 <div class="stat-card-info"><div class="stat-card-value" id="stat-pending">--</div><div class="stat-card-label">Pending</div></div>
+            </div>
+            <div class="stat-card stat-card-red" style="border-left: 4px solid #ef4444;">
+                <div class="stat-card-icon" style="color:#ef4444;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-cancelled">--</div><div class="stat-card-label">Cancelled</div></div>
             </div>
         </div>
 
         <div class="section-card">
             <div class="section-card-header">
                 <h2 class="section-heading">Upcoming Appointments</h2>
-                <select class="search-input" style="width:auto;">
-                    <option>All Specialists</option>
-                    <option>Dr. Sarah Mitchell</option>
-                    <option>Dr. Michael Chen</option>
-                    <option>Dr. Aisha Rahman</option>
+                <select id="apt-spec-filter" class="search-input" style="width:auto;" onchange="filterAppointmentsBySpec(this.value)">
+                    <option value="">All Specialists</option>
                 </select>
             </div>
             <div id="appointments-view-container">
@@ -1597,7 +1764,7 @@ function getAppointmentsView() {
                         <div class="patient-avatar">EJ</div>
                         <div class="patient-info">
                             <div class="patient-name">Emma Johnson</div>
-                            <div class="patient-details">with Dr. Sarah Mitchell • Routine Checkup</div>
+                            <div class="patient-details">with Specialist • Routine Checkup</div>
                         </div>
                         <div class="patient-status status-green">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -1665,76 +1832,112 @@ function openNewAppointmentModal() {
                             </div>
                         </div>
                     </div>
-                    <div class="modal-form-group" style="margin-bottom: 1.5rem;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Appointment Type</label>
-                        <select id="apt-type" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem;">
-                            <option value="onsite">Onsite Visit</option>
-                            <option value="online">Online Session</option>
-                        </select>
-                    </div>
-                    <div class="modal-form-group">
+                    <div class="modal-form-group" style="margin-bottom: 2rem;">
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Additional Comments</label>
-                        <textarea id="apt-comment" class="premium-light-input" style="width: 100%; height: 100px; padding: 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; resize: none;" placeholder="Notes for the specialist..."></textarea>
+                        <textarea id="apt-comment" class="premium-light-input" placeholder="Notes for the specialist..." style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; height: 80px; resize: none;"></textarea>
+                    </div>
+                    <div class="modal-form-group" style="margin-bottom: 1.5rem;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Certification Document (PDF) <span style="color: #ef4444;">*</span></label>
+                        <div style="position: relative; padding: 1rem; border: 1.5px dashed #cbd5e1; border-radius: 12px; background: #f8fafc; text-align: center;">
+                            <input type="file" id="apt-certification" accept=".pdf" required style="position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;">
+                            <div id="file-status-text" style="color: #64748b; font-size: 0.85rem;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 4px; display: block; margin: 0 auto 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <span>Click to upload PDF certification</span>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
             <div class="clinic-modal-footer" style="padding: 1.5rem 2rem; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; gap: 1rem;">
                 <button class="btn" style="padding: 0.75rem 2rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: white; color: #475569; font-weight: 600; cursor: pointer; transition: all 0.2s;" onclick="closeClinicModal('appointment-modal-overlay')">Cancel</button>
-                <button class="btn" style="padding: 0.75rem 2rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25); transition: all 0.2s;" onclick="submitNewAppointment()">Confirm Booking</button>
+                <button id="btn-confirm-booking" class="btn" style="padding: 0.75rem 2rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25); transition: all 0.2s;" onclick="submitNewAppointment()">Confirm Booking</button>
             </div>
         </div>
+        <script>
+            document.getElementById('apt-certification')?.addEventListener('change', function(e) {
+                const text = document.getElementById('file-status-text');
+                if (this.files && this.files[0]) {
+                    text.innerHTML = '<span style="color: #0d9488; font-weight: 600;">✓ ' + this.files[0].name + '</span>';
+                }
+            });
+        </script>
     `;
 
     modal.classList.add('active');
     
-    // Fetch Data
-    fetch('../../api_get_clinic_data.php')
-        .then(res => res.json())
-        .then(data => {
-            console.log("Appointment Data Debug:", data.debug);
-            if (data.error) {
-                showClinicToast(data.error, 'error');
-                return;
-            }
-            
-            const pSelect = document.getElementById('apt-patient');
-            const sSelect = document.getElementById('apt-specialist');
-            
-            if (data.patients && data.patients.length > 0) {
-                data.patients.forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p.child_id;
-                    opt.textContent = `${p.first_name} ${p.last_name || ''} (Parent: ${p.parent_fname})`;
-                    pSelect.appendChild(opt);
-                });
-            } else {
-                pSelect.innerHTML = '<option value="">No patients found...</option>';
-            }
-            
-            if (data.specialists && data.specialists.length > 0) {
-                data.specialists.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.specialist_id;
-                    opt.textContent = `Dr. ${s.first_name} ${s.last_name || ''} - ${s.specialization || 'Specialist'}`;
-                    sSelect.appendChild(opt);
-                });
-            } else {
-                sSelect.innerHTML = '<option value="">No specialists found...</option>';
-            }
-        })
-        .catch(err => {
-            console.error('Fetch error:', err);
-            showClinicToast('Failed to load clinic data', 'error');
-        });
+    // Use cached data if available, otherwise fetch
+    const populateForm = (data) => {
+        const pSelect = document.getElementById('apt-patient');
+        const sSelect = document.getElementById('apt-specialist');
+        
+        if (!pSelect || !sSelect) return;
+
+        // Clear existing options (except first)
+        pSelect.innerHTML = '<option value="">Choose a patient...</option>';
+        sSelect.innerHTML = '<option value="">Choose a specialist...</option>';
+
+        if (data.patients && data.patients.length > 0) {
+            data.patients.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.child_id;
+                opt.textContent = `${p.first_name} ${p.last_name || ''} (Parent: ${p.parent_fname})`;
+                pSelect.appendChild(opt);
+            });
+        }
+        
+        if (data.specialists && data.specialists.length > 0) {
+            data.specialists.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.specialist_id;
+                opt.textContent = `Dr. ${s.first_name} ${s.last_name || ''} - ${s.specialization || 'Specialist'}`;
+                sSelect.appendChild(opt);
+            });
+        }
+    };
+
+    if (window.clinicData) {
+        populateForm(window.clinicData);
+    } else {
+        fetch('../../api_get_clinic_data.php')
+            .then(res => res.json())
+            .then(data => {
+                if (!data.error) {
+                    window.clinicData = data;
+                    populateForm(data);
+                }
+            });
+    }
 }
 
 function submitNewAppointment() {
+    const pId = document.getElementById('apt-patient').value;
+    const sId = document.getElementById('apt-specialist').value;
+    const date = document.getElementById('apt-date').value;
+    const time = document.getElementById('apt-time').value;
+    const certInput = document.getElementById('apt-certification');
+
+    if (!pId || !sId || !date || !time) {
+        showClinicToast('Please fill all required fields.', 'error');
+        return;
+    }
+
+    if (!certInput.files || !certInput.files[0]) {
+        showClinicToast('Certification PDF is required.', 'error');
+        return;
+    }
+
     const formData = new FormData();
-    formData.append('child_id', document.getElementById('apt-patient').value);
-    formData.append('specialist_id', document.getElementById('apt-specialist').value);
-    formData.append('scheduled_at', document.getElementById('apt-date').value + ' ' + document.getElementById('apt-time').value);
-    formData.append('type', document.getElementById('apt-type').value);
+    formData.append('child_id', pId);
+    formData.append('specialist_id', sId);
+    formData.append('scheduled_at', date + ' ' + time);
+    formData.append('type', document.getElementById('apt-type')?.value || 'onsite');
     formData.append('comment', document.getElementById('apt-comment').value);
+    formData.append('certification_pdf', certInput.files[0]);
+
+    const submitBtn = document.getElementById('btn-confirm-booking');
+    const originalText = submitBtn.innerText;
+    submitBtn.innerText = 'Scheduling...';
+    submitBtn.disabled = true;
 
     fetch('../../api_clinic_book_appointment.php', {
         method: 'POST',
@@ -1804,16 +2007,24 @@ function renderCalendarGrid(container) {
 
     // Days of the month
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset for comparison
+
     for (let day = 1; day <= daysInMonth; day++) {
+        const checkDate = new Date(currentCalendarYear, currentCalendarMonth, day);
+        const isPast = checkDate < today;
         const isToday = today.getDate() === day && today.getMonth() === currentCalendarMonth && today.getFullYear() === currentCalendarYear;
         
         // Find appointments for this specific day
         const dayApts = monthApts.filter(a => new Date(a.scheduled_at).getDate() === day);
         
+        const bgColor = isPast ? '#f1f5f9' : (isToday ? 'rgba(13,148,136,0.05)' : 'var(--bg-primary)');
+        const opacity = isPast ? '0.7' : '1';
+        const textColor = isPast ? '#94a3b8' : 'var(--text-primary)';
+
         gridHtml += `
-            <div style="background:var(--bg-primary);min-height:100px;padding:0.5rem;border:1px solid var(--border-color);${isToday ? 'background:rgba(13,148,136,0.05);' : ''}">
-                <div style="font-weight:700;font-size:0.8rem;margin-bottom:0.5rem;${isToday ? 'color:#0d9488;' : ''}">${day}</div>
-                <div style="display:flex;flex-direction:column;gap:4px;">
+            <div style="background:${bgColor}; opacity:${opacity}; min-height:100px; padding:0.5rem; border:1px solid var(--border-color); position:relative;">
+                <div style="font-weight:700; font-size:0.8rem; margin-bottom:0.5rem; color:${isToday ? '#0d9488' : textColor};">${day}</div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
                     ${dayApts.map(a => `
                         <div class="calendar-apt-pill" 
                              onclick="viewAppointmentDetails(${a.appointment_id})"
@@ -1886,7 +2097,6 @@ function getPatientsView() {
                 <h2 class="section-heading">All Patients</h2>
                 <div style="display:flex; gap:1rem; align-items:center;">
                     <input type="text" class="search-input" placeholder="Search by name or parent..." onkeyup="filterPatients(this.value)">
-                    <button class="btn btn-gradient" onclick="showAddPatientModal()">+ Add Patient</button>
                 </div>
             </div>
             <div class="clinic-table-wrap">
@@ -1960,52 +2170,77 @@ function getRevenueView() {
     <div class="dashboard-content">
         <div class="dashboard-header-section">
             <div>
-                <h1 class="dashboard-title">Revenue & Payments</h1>
-                <p class="dashboard-subtitle">Financial overview and payment tracking</p>
+                <h1 class="dashboard-title">Treasury & Finance</h1>
+                <p class="dashboard-subtitle">Comprehensive fiscal management and transaction audit</p>
             </div>
             <div class="header-actions-inline">
-                <a href="../../api_clinic_revenue_export.php" target="_blank" class="btn btn-outline" style="text-decoration: none; display: inline-flex; align-items: center;">Export Report</a>
+                <select id="export-month-select" class="premium-light-input" style="width: auto; padding: 0.5rem 1rem;">
+                    ${Array.from({length: 6}, (_, i) => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() - i);
+                        const m = d.toLocaleString('default', { month: 'long' });
+                        const y = d.getFullYear();
+                        return `<option value="${d.getMonth()+1}-${y}">${m} ${y}</option>`;
+                    }).join('')}
+                </select>
+                <button onclick="exportRevenueReport()" class="btn btn-gradient" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export Report
+                </button>
             </div>
         </div>
 
-        <div class="doctor-stats-grid">
+        <div class="doctor-stats-grid" style="grid-template-columns: repeat(3, 1fr);">
             <div class="stat-card stat-card-green">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-revenue-month">--</div><div class="stat-card-label">This Month</div></div>
+                <div class="stat-card-info">
+                    <div class="stat-card-value" id="stat-revenue-month">--</div>
+                    <div class="stat-card-label">Gross Revenue</div>
+                    <div style="font-size: 0.75rem; margin-top: 4px; display: flex; gap: 8px;">
+                        <span style="color: #059669; font-weight: 600;" id="stat-cash-total">Cash: --</span>
+                        <span style="color: #2563eb; font-weight: 600;" id="stat-credit-total">Credit: --</span>
+                    </div>
+                </div>
             </div>
             <div class="stat-card stat-card-blue">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-growth-rate">--</div><div class="stat-card-label">Completion Rate</div></div>
-            </div>
-            <div class="stat-card stat-card-purple">
-                <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-active-patients">--</div><div class="stat-card-label">Active Patients</div></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-sessions-booked">--</div><div class="stat-card-label">Transaction Volume</div></div>
             </div>
             <div class="stat-card stat-card-yellow">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-pending-payments">--</div><div class="stat-card-label">Pending Appointments</div></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-pending-revenue">--</div><div class="stat-card-label">Accounts Receivable</div></div>
             </div>
         </div>
 
-        <div class="revenue-grid">
+        <div style="display: grid; grid-template-columns: 1fr; gap: 2rem; margin-bottom: 2rem;">
             <div class="section-card">
-                <div class="section-card-header"><h2 class="section-heading">Revenue Breakdown</h2></div>
-                <div style="padding: 1.5rem;" id="revenue-breakdown">
-                    <div style="text-align:center; padding:2rem; color:var(--text-secondary);">Loading revenue data...</div>
+                <div class="section-card-header">
+                    <h2 class="section-heading">Daily Fiscal Summary</h2>
+                </div>
+                <div style="padding: 1.5rem; height: 350px;">
+                    <canvas id="revenueChart"></canvas>
                 </div>
             </div>
-            <div class="section-card">
-                <div class="section-card-header"><h2 class="section-heading">Revenue Summary</h2></div>
-                <div style="padding: 1.5rem;">
-                    <div style="text-align:center; padding:2rem;">
-                        <div style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:var(--text-muted); margin-bottom:0.5rem;">Estimated Revenue per Appointment</div>
-                        <div style="font-size:2.5rem; font-weight:800; color:#0d9488;">$50</div>
-                        <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:1rem;">Revenue is calculated as $50 per completed appointment. Connect a billing system for precise tracking.</p>
-                    </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-card-header">
+                <h2 class="section-heading">General Ledger & Audit</h2>
+            </div>
+            <div id="revenue-breakdown-container">
+                <div style="text-align:center; padding:3rem; color:#64748b;">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 1rem;">Loading transaction breakdown...</p>
                 </div>
             </div>
         </div>
     </div>`;
+}
+
+function exportRevenueReport() {
+    const period = document.getElementById('export-month-select').value;
+    const [month, year] = period.split('-');
+    window.open(`../../api_clinic_revenue_export.php?month=${month}&year=${year}`, '_blank');
 }
 
 // ── Reviews View ─────────────────────────────────────────────
@@ -2019,18 +2254,14 @@ function getReviewsView() {
             </div>
         </div>
 
-        <div class="doctor-stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="doctor-stats-grid" style="grid-template-columns: repeat(2, 1fr);">
             <div class="stat-card stat-card-yellow">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-overall-rating">--</div><div class="stat-card-label">Overall Rating</div></div>
-            </div>
-            <div class="stat-card stat-card-green">
-                <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-positive-pct">--</div><div class="stat-card-label">Positive Feedback</div></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-overall-rating">--</div><div class="stat-card-label">Overall Clinic Rating</div></div>
             </div>
             <div class="stat-card stat-card-blue">
                 <div class="stat-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
-                <div class="stat-card-info"><div class="stat-card-value" id="stat-total-reviews">--</div><div class="stat-card-label">Total Reviews</div></div>
+                <div class="stat-card-info"><div class="stat-card-value" id="stat-total-reviews">--</div><div class="stat-card-label">Feedback</div></div>
             </div>
         </div>
 
@@ -2059,10 +2290,9 @@ function getSettingsView() {
             <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                 <div class="section-card" id="clinic-profile-card">
                     <div class="section-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-                        <h2 class="section-heading">Public Profile</h2>
+                        <h2 class="section-heading">Clinic Profile</h2>
                         <div class="header-actions-inline">
-                            <button class="btn btn-outline btn-sm" onclick="window.open('../../book-clinic.php', '_blank')">View Public Profile</button>
-                            <button class="btn btn-outline btn-sm" id="btn-edit-profile" onclick="toggleClinicProfileEdit()">Edit Public Profile</button>
+                            <button class="btn btn-gradient btn-sm" id="btn-edit-profile" onclick="toggleClinicProfileEdit()">Edit Profile</button>
                         </div>
                     </div>
                     
@@ -2075,28 +2305,26 @@ function getSettingsView() {
                     <div id="clinic-profile-edit" style="display: none; padding: 1.5rem;">
                         <div class="form-grid">
                             <div class="form-group"><label>Clinic Name</label><input type="text" id="edit-clinic-name" class="form-input"></div>
-                            <div class="form-group"><label>Email Address</label><input type="email" id="edit-clinic-email" class="form-input"></div>
-                            <div class="form-group"><label>Location</label><input type="text" id="edit-clinic-location" class="form-input"></div>
-                            <div class="form-group"><label>Website</label><input type="text" id="edit-clinic-website" class="form-input"></div>
+                            <div class="form-group"><label>Public Email Address</label><input type="email" id="edit-clinic-email" class="form-input"></div>
+                            <div class="form-group"><label>Clinic Location</label><input type="text" id="edit-clinic-location" class="form-input"></div>
+                        </div>
+                        <div class="form-group" style="margin-top:1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Update Profile Picture</label>
+                            <div style="display: flex; align-items: center; gap: 1.5rem;">
+                                <div id="edit-pfp-preview" style="width: 70px; height: 70px; border-radius: 16px; background: #f1f5f9; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid #e2e8f0;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                </div>
+                                <input type="file" id="edit-pfp-input" accept="image/*" style="display: none;" onchange="previewClinicPfp(this)">
+                                <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('edit-pfp-input').click()">Pick Image</button>
+                            </div>
                         </div>
                         <div class="form-group" style="margin-top:1.5rem;">
                             <label>Description / Bio</label>
                             <textarea id="edit-clinic-bio" class="form-input" rows="4" placeholder="Brief description about your clinic's mission and services"></textarea>
                         </div>
-                        <div class="form-group" style="margin-top:1.5rem;">
-                            <label>Operating Hours</label>
-                            <select id="edit-clinic-hours" class="form-input">
-                                <option value="Mon-Fri: 8am-4pm, Weekends: Closed">Mon-Fri: 8am-4pm, Weekends: Closed</option>
-                                <option value="Mon-Fri: 9am-5pm, Weekends: Closed">Mon-Fri: 9am-5pm, Weekends: Closed</option>
-                                <option value="Mon-Fri: 10am-6pm, Weekends: Closed">Mon-Fri: 10am-6pm, Weekends: Closed</option>
-                                <option value="Mon-Fri: 8am-6pm, Sat: 9am-2pm">Mon-Fri: 8am-6pm, Sat: 9am-2pm</option>
-                                <option value="Mon-Fri: 9am-7pm, Sat: 10am-4pm">Mon-Fri: 9am-7pm, Sat: 10am-4pm</option>
-                                <option value="24/7 Emergency Care">24/7 Emergency Care</option>
-                            </select>
-                        </div>
                         
                         <div style="display:flex; justify-content:flex-end; gap:1rem; margin-top:2rem;">
-                            <button class="btn btn-outline" onclick="toggleClinicProfileEdit()">Cancel</button>
+                            <button class="btn btn-outline" onclick="toggleClinicProfileEdit()">Discard Changes</button>
                             <button class="btn btn-gradient" onclick="saveClinicProfile()">Save Changes</button>
                         </div>
                     </div>
@@ -2162,12 +2390,20 @@ function getSettingsView() {
                     </div>
                 </div>
 
-                <div class="section-card danger-card" style="border: 1px solid var(--red-200);">
-                    <div style="padding: 1.5rem;">
-                        <h2 class="section-heading" style="color:var(--red-600); margin-bottom:0.5rem;">Danger Zone</h2>
-                        <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:1rem;">These actions are permanent and cannot be undone.</p>
-                        <button class="btn btn-outline" style="border-color:var(--red-400);color:var(--red-600);width:100%;">Deactivate Clinic</button>
+                <div class="danger-zone-card">
+                    <div class="danger-zone-content">
+                        <div class="danger-icon-wrapper">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </div>
+                        <div class="danger-text">
+                            <h2 class="danger-title">Clinic Deactivation</h2>
+                            <p class="danger-description">Irreversible actions that affect your clinic's visibility and accessibility. Please proceed with extreme caution.</p>
+                        </div>
                     </div>
+                    <button class="btn btn-danger-premium" onclick="handleDeactivateClinic()">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                        Deactivate Clinic Account
+                    </button>
                 </div>
             </div>
         </div>
@@ -2183,40 +2419,22 @@ function renderSettingsData() {
     // Populate View Mode
     viewContainer.innerHTML = `
         <div style="display:flex; gap:1.5rem; align-items:center; margin-bottom:2rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border-color);">
-            <div style="width:80px; height:80px; border-radius:16px; background:linear-gradient(135deg, #0d9488, #2dd4bf); display:flex; justify-content:center; align-items:center; color:white; font-size:2rem; font-weight:bold; box-shadow:0 10px 25px rgba(13,148,136,0.2);">
-                ${c.clinic_name ? c.clinic_name[0] : 'C'}
+            <div style="width:80px; height:80px; border-radius:16px; background:linear-gradient(135deg, #0d9488, #2dd4bf); display:flex; justify-content:center; align-items:center; color:white; font-size:2rem; font-weight:bold; box-shadow:0 10px 25px rgba(13,148,136,0.2); overflow:hidden;">
+                ${c.profile_image ? `<img src="../../${c.profile_image}" style="width:100%; height:100%; object-fit:cover;">` : (c.clinic_name ? c.clinic_name[0] : 'C')}
             </div>
             <div>
-                <h3 style="margin:0 0 0.25rem; font-size:1.5rem; color:var(--text-primary);">${c.clinic_name || 'Clinic Name'}</h3>
-                <div style="color:var(--text-secondary); font-size:0.95rem;">${c.location || 'Location not set'}</div>
-            </div>
-        </div>
-        
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.5rem; margin-bottom:2rem;">
-            <div style="background:var(--bg-secondary); padding:1rem; border-radius:12px;">
-                <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted); margin-bottom:0.25rem;">Contact Email</div>
-                <div style="font-weight:500; color:var(--text-primary);">${c.email || 'Not provided'}</div>
-            </div>
-            <div style="background:var(--bg-secondary); padding:1rem; border-radius:12px;">
-                <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--text-muted); margin-bottom:0.25rem;">Website</div>
-                <div style="font-weight:500; color:#0d9488;">${c.website ? '<a href="'+c.website+'" target="_blank">'+c.website+'</a>' : 'Not provided'}</div>
-            </div>
-        </div>
-        
-        <div style="margin-bottom:2rem;">
-            <div style="font-size:0.85rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Operating Hours
-            </div>
-            <div style="background:var(--bg-secondary); padding:1rem; border-radius:12px; font-size:0.9rem; line-height:1.6; color:var(--text-primary);">
-                ${c.opening_hours ? c.opening_hours.replace(/\\n/g, '<br>') : 'Hours not specified'}
+                <h3 style="margin:0 0 0.5rem; font-size:1.5rem; color:var(--text-primary);">${c.clinic_name || 'Clinic Name'}</h3>
+                <div style="display:flex; align-items:center; color:var(--text-secondary); font-size:0.95rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    ${c.location || 'Location not set'}
+                </div>
             </div>
         </div>
         
         <div>
-            <div style="font-size:0.85rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">About the Clinic</div>
+            <div style="font-size:0.85rem; font-weight:700; color:var(--text-primary); margin-bottom:0.5rem;">Clinic Overview & Bio</div>
             <p style="margin:0; font-size:0.95rem; line-height:1.6; color:var(--text-secondary);">
-                ${c.bio || 'No description provided.'}
+                ${c.bio || 'No description provided. Click Edit Profile to add information about your clinic.'}
             </p>
         </div>
     `;
@@ -2225,9 +2443,17 @@ function renderSettingsData() {
     document.getElementById('edit-clinic-name').value = c.clinic_name || '';
     document.getElementById('edit-clinic-email').value = c.email || '';
     document.getElementById('edit-clinic-location').value = c.location || '';
-    document.getElementById('edit-clinic-website').value = c.website || '';
     document.getElementById('edit-clinic-bio').value = c.bio || '';
-    document.getElementById('edit-clinic-hours').value = c.opening_hours || '';
+    
+    // Populate Edit Mode PFP preview
+    const editPreview = document.getElementById('edit-pfp-preview');
+    if (editPreview) {
+        if (c.profile_image) {
+            editPreview.innerHTML = `<img src="../../${c.profile_image}" style="width:100%; height:100%; object-fit:cover;">`;
+        } else {
+            editPreview.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`;
+        }
+    }
 }
 
 function toggleClinicProfileEdit() {
@@ -2238,44 +2464,140 @@ function toggleClinicProfileEdit() {
     if (viewEl.style.display !== 'none') {
         viewEl.style.display = 'none';
         editEl.style.display = 'block';
-        btn.textContent = 'Hide Form';
+        btn.textContent = 'Editing Mode';
     } else {
         viewEl.style.display = 'block';
         editEl.style.display = 'none';
-        btn.textContent = 'Edit Public Profile';
+        btn.textContent = 'Edit Profile';
+    }
+}
+
+function previewClinicPfp(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('edit-pfp-preview');
+            if (preview) {
+                preview.innerHTML = `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+            }
+        };
+        reader.readAsDataURL(input.files[0]);
     }
 }
 
 async function saveClinicProfile() {
-    const data = {
-        clinic_name: document.getElementById('edit-clinic-name').value,
-        email: document.getElementById('edit-clinic-email').value,
-        location: document.getElementById('edit-clinic-location').value,
-        website: document.getElementById('edit-clinic-website').value,
-        bio: document.getElementById('edit-clinic-bio').value,
-        opening_hours: document.getElementById('edit-clinic-hours').value
-    };
+    const name = document.getElementById('edit-clinic-name').value;
+    const email = document.getElementById('edit-clinic-email').value;
+    const loc = document.getElementById('edit-clinic-location').value;
+    const bio = document.getElementById('edit-clinic-bio').value;
+    const pfpInput = document.getElementById('edit-pfp-input');
+
+    const formData = new FormData();
+    formData.append('clinic_name', name);
+    formData.append('email', email);
+    formData.append('location', loc);
+    formData.append('bio', bio);
+    if (pfpInput && pfpInput.files[0]) {
+        formData.append('profile_image', pfpInput.files[0]);
+    }
 
     try {
         const res = await fetch('../../api_clinic_update_profile.php', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: formData
         });
         const result = await res.json();
         
         if (result.success) {
             showClinicToast('Clinic profile updated successfully', 'success');
-            // Update local data
-            window.clinicData.clinic = { ...window.clinicData.clinic, ...data };
+            // Update local state and re-render
+            window.clinicData.clinic = { ...window.clinicData.clinic, clinic_name: name, email, location: loc, bio };
+            if (result.profile_image) {
+                window.clinicData.clinic.profile_image = result.profile_image;
+            }
             renderSettingsData();
             toggleClinicProfileEdit();
+            
+            // Also update sidebar if name changed
+            updateSidebarProfile(name);
         } else {
             showClinicToast(result.error || 'Failed to update profile', 'error');
         }
     } catch (err) {
+        console.error("Save Profile Error:", err);
+        showClinicToast('Failed to connect to server', 'error');
+    }
+}
+
+function showDangerConfirm(title, message, confirmText = "Confirm Action") {
+    return new Promise((resolve) => {
+        const modalId = "danger-confirm-modal-" + Date.now();
+        const modal = document.createElement("div");
+        modal.id = modalId;
+        modal.className = "clinic-modal-overlay active";
+        modal.style.zIndex = "10001";
+        
+        modal.innerHTML = `
+            <div class="clinic-modal" style="max-width: 500px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border-radius: 40px; overflow: hidden; box-shadow: 0 40px 120px -20px rgba(220, 38, 38, 0.4); border: 1px solid rgba(254, 226, 226, 0.5); animation: modalIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);">
+                <div style="padding: 3.5rem 3rem; text-align: center;">
+                    <img src="../../clinic_deactivation_warning_illustration_1779711663944.png" alt="Warning" style="width: 140px; height: auto; margin-bottom: 2rem; filter: drop-shadow(0 10px 20px rgba(220, 38, 38, 0.2));">
+                    <h3 style="margin: 0 0 1rem; font-size: 1.85rem; font-weight: 900; color: #1e293b; letter-spacing: -0.03em; line-height: 1.1;">Account Deactivation Checkpoint</h3>
+                    <p style="margin: 0; font-size: 1.05rem; color: #64748b; line-height: 1.6; font-weight: 500;">
+                        This action will immediately terminate your clinic's public presence. Are you absolutely certain you wish to proceed with deactivation?
+                    </p>
+                </div>
+                <div style="padding: 2.5rem 3rem; background: rgba(255, 250, 250, 0.8); display: flex; flex-direction: column; gap: 1.25rem; border-top: 1px solid #fee2e2;">
+                    <button class="btn-confirm" style="width: 100%; padding: 1.25rem; border-radius: 20px; background: linear-gradient(135deg, #ef4444, #dc2626); border: none; color: white; font-size: 1.1rem; font-weight: 800; cursor: pointer; transition: all 0.3s; box-shadow: 0 12px 30px rgba(239, 68, 68, 0.3);">
+                        Confirm Deactivation
+                    </button>
+                    <button class="btn-cancel" style="width: 100%; padding: 1.1rem; border-radius: 20px; background: white; border: 1px solid #e2e8f0; color: #64748b; font-size: 1rem; font-weight: 700; cursor: pointer; transition: all 0.2s;">
+                        Return to Safety
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const closeModal = (val) => {
+            modal.style.opacity = '0';
+            modal.style.transform = 'translateY(10px)';
+            setTimeout(() => {
+                modal.remove();
+                resolve(val);
+            }, 200);
+        };
+
+        modal.querySelector(".btn-cancel").onclick = () => closeModal(false);
+        modal.querySelector(".btn-confirm").onclick = () => closeModal(true);
+        modal.onclick = (e) => { if (e.target === modal) closeModal(false); };
+    });
+}
+
+async function handleDeactivateClinic() {
+    const confirmed = await showDangerConfirm(
+        "Critical Deactivation", 
+        "Are you sure you want to deactivate your clinic account? This will hide your profile from parents and log you out immediately. This action is permanent.",
+        "Deactivate Account"
+    );
+    
+    if (!confirmed) return;
+
+    try {
+        const res = await fetch('../../api_clinic_deactivate.php', { method: 'POST' });
+        const result = await res.json();
+        
+        if (result.success) {
+            showClinicToast("Account successfully deactivated", "success");
+            setTimeout(() => {
+                window.location.href = '../../login.php';
+            }, 1500);
+        } else {
+            showClinicToast(result.error || "Failed to deactivate", "error");
+        }
+    } catch (err) {
         console.error(err);
-        showClinicToast('Network error', 'error');
+        showClinicToast("Network error", "error");
     }
 }
 
@@ -2357,31 +2679,57 @@ function openAddSpecialistModal() {
                     </div>
                     <div class="form-group full-width" style="grid-column: span 2;">
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Email Address <span style="color: #ef4444;">*</span></label>
-                        <input type="email" name="email" required placeholder="sarah.m@clinic.com" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none;">
+                        <div style="position: relative;">
+                            <input type="email" name="email" placeholder="dr.smith@example.com" required class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; font-weight:600;">
+                            <svg style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #64748b;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        </div>
                     </div>
                     <div class="form-group full-width" style="grid-column: span 2;">
-                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Password <span style="color: #ef4444;">*</span></label>
-                        <input type="password" name="password" required placeholder="••••••••••••" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Default Password (Locked) <span style="color: #ef4444;">*</span></label>
+                        <div style="position: relative;">
+                            <input type="text" name="password" value="12345678" readonly required class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem 0.75rem 2.5rem; border-radius: 12px; border: 1.5px solid #bfdbfe; background: #eff6ff; color: #1e40af; font-size: 0.95rem; outline: none; cursor: not-allowed; font-weight:600;">
+                            <svg style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #3b82f6;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </div>
+                        <p style="margin-top: 6px; font-size: 0.75rem; color: #3b82f6; font-weight: 500;">Specialist must update these credentials during their first secured login.</p>
                     </div>
                     <div class="form-group">
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Specialization <span style="color: #ef4444;">*</span></label>
                         <select name="specialization" required class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
-                            <option value="" disabled selected>Select a specialization…</option>
+                            <option value="" disabled selected>Select specialization…</option>
                             <option value="Pediatrician">Pediatrician</option>
                             <option value="Neurologist">Neurologist</option>
                             <option value="Psychologist">Psychologist</option>
                             <option value="Speech Therapist">Speech Therapist</option>
                             <option value="Occupational Therapist">Occupational Therapist</option>
+                            <option value="Developmental Pediatrician">Developmental Pediatrician</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Work Location (Clinic Branch)</label>
+                        <select name="location" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
+                            <option value="Main Branch, Cairo" selected>Main Branch, Cairo</option>
+                            <option value="Alexandria Center">Alexandria Center</option>
+                            <option value="Giza Clinic">Giza Clinic</option>
+                            <option value="Mansoura Branch">Mansoura Branch</option>
+                            <option value="Tanta Facility">Tanta Facility</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Experience (Years) <span style="color: #ef4444;">*</span></label>
                         <input type="number" name="experience" required min="1" placeholder="5" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none;">
                     </div>
+                    <div class="form-group full-width" style="grid-column: span 2;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Certification Notes <span style="color: #ef4444;">*</span></label>
+                        <textarea name="certification_text" required placeholder="Verified credentials and training summary..." class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; height: 80px; resize:none;"></textarea>
+                    </div>
+                    <div class="form-group full-width" style="grid-column: span 2;">
+                        <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Certification Document (PDF) <span style="color: #ef4444;">*</span></label>
+                        <input type="file" name="certification_pdf" accept=".pdf" required class="premium-light-input" style="width: 100%; padding: 0.5rem; border-radius: 12px; border: 1.5px dashed #cbd5e1; background: #f8fafc; color: #1e293b; font-size: 0.85rem; outline: none;">
+                    </div>
                 </div>
                 <div class="clinic-modal-actions" style="margin-top: 2.5rem; display: flex; justify-content: flex-end; gap: 1rem;">
                     <button type="button" class="btn" style="padding: 0.75rem 2rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: white; color: #475569; font-weight: 600; cursor: pointer;" onclick="closeSpecialistModal()">Discard</button>
-                    <button type="submit" class="btn" style="padding: 0.75rem 2.5rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 8px 20px rgba(13, 148, 136, 0.2);">Add Specialist</button>
+                    <button type="submit" class="btn btn-submit" style="padding: 0.75rem 2.5rem; border-radius: 12px; border: none; background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; font-weight: 600; cursor: pointer; box-shadow: 0 8px 20px rgba(13, 148, 136, 0.2);">Create Specialist</button>
                 </div>
             </form>
         </div>
@@ -2401,7 +2749,6 @@ function submitAddSpecialist(event) {
     event.preventDefault();
     const form = event.target;
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
 
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerText;
@@ -2410,15 +2757,14 @@ function submitAddSpecialist(event) {
 
     fetch('../../api_clinic_add_specialist.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: formData
     })
     .then(res => res.json())
     .then(result => {
         if (result.success) {
-            showClinicToast('Specialist added successfully!', 'success');
+            showClinicToast(`Specialist added! Account: ${result.email}`, 'success');
             closeSpecialistModal();
-            showClinicView('specialists'); // Refresh list
+            showClinicView('specialists');
         } else {
             showClinicToast(result.error || 'Failed to add specialist', 'error');
             submitBtn.innerText = originalText;
@@ -2479,50 +2825,22 @@ async function updateClinicNotificationSetting(key, value) {
     }
 }
 
-function renderSettingsData() {
-    if (!window.clinicData || !window.clinicData.clinic) return;
-    const c = window.clinicData.clinic;
-
-    // Load notification settings
-    loadClinicNotificationSettings();
-
-    // Set view mode values
-    const viewContainer = document.getElementById('clinic-profile-view');
-    if (viewContainer) {
-        viewContainer.innerHTML = `
-            <div style="display:grid; grid-template-columns: 100px 1fr; gap: 1.5rem; align-items: start; margin-bottom: 2rem;">
-                <div style="width: 100px; height: 100px; background: linear-gradient(135deg, #0d9488, #0891b2); border-radius: 20px; display: flex; align-items: center; justify-content: center; color: white; font-size: 2.5rem; font-weight: 700;">
-                    ${c.clinic_name ? c.clinic_name[0].toUpperCase() : 'C'}
-                </div>
-                <div>
-                    <h3 style="margin: 0 0 0.5rem 0; font-size: 1.5rem; color: var(--text-primary);">${c.clinic_name || 'Clinic Name'}</h3>
-                    <p style="margin: 0 0 1rem 0; color: var(--text-secondary);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;vertical-align:middle;margin-right:4px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${c.location || 'Location not set'}</p>
-                    <div style="display:flex; gap: 1rem; flex-wrap:wrap;">
-                        <span class="status-badge" style="background:#f1f5f9;color:var(--text-primary);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:4px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>${c.email || 'Email not set'}</span>
-                        <span class="status-badge" style="background:#f1f5f9;color:var(--text-primary);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/></svg>${c.website || 'Website not set'}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 1.5rem;">
-                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">About</h4>
-                <p style="color: var(--text-secondary); line-height: 1.6; margin: 0; font-size: 0.95rem;">${c.bio || 'No description provided.'}</p>
-            </div>
-
-            <div>
-                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.5rem;">Operating Hours</h4>
-                <p style="color: var(--text-secondary); margin: 0; font-size: 0.95rem;">${c.opening_hours || 'Standard Business Hours'}</p>
-            </div>
-        `;
-    }
-
-    // Populate edit fields
-    if (document.getElementById('edit-clinic-name')) document.getElementById('edit-clinic-name').value = c.clinic_name || '';
-    if (document.getElementById('edit-clinic-email')) document.getElementById('edit-clinic-email').value = c.email || '';
-    if (document.getElementById('edit-clinic-location')) document.getElementById('edit-clinic-location').value = c.location || '';
-    if (document.getElementById('edit-clinic-website')) document.getElementById('edit-clinic-website').value = c.website || '';
-    if (document.getElementById('edit-clinic-bio')) document.getElementById('edit-clinic-bio').value = c.bio || '';
-    if (document.getElementById('edit-clinic-hours')) document.getElementById('edit-clinic-hours').value = c.opening_hours || '';
+// Utility for clinic toasts
+function showClinicToast(msg, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `clinic-toast ${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <span class="toast-icon">${type === 'success' ? '✓' : '⚠'}</span>
+            <span class="toast-message">${msg}</span>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 100);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 
@@ -2824,5 +3142,484 @@ async function deleteShift(slotId, specialistId) {
     } catch (err) {
         console.error(err);
         showClinicToast('Network error', 'error');
+    }
+}
+
+/** ─────────────────────────────────────────────────────────────────────────────
+ *  SPECIALIST DETAILS PAGE (FULL SCREEN)
+ *  ───────────────────────────────────────────────────────────────────────────── */
+
+function getSpecialistDetailsView(id) {
+    return `
+    <div class="specialist-details-page">
+        <div class="page-header-premium" style="background: white; padding: 2rem 2.5rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-end;">
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <button class="btn-back" onclick="showClinicView('specialists')" style="display: flex; align-items: center; gap: 0.5rem; background: none; border: none; color: #64748b; font-weight: 600; cursor: pointer; padding: 0; font-size: 0.9rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    Back to Directory
+                </button>
+                <div style="display: flex; align-items: center; gap: 1.5rem;">
+                    <div id="spec-page-avatar" style="width: 80px; height: 80px; border-radius: 20px; background: linear-gradient(135deg, #0d9488, #2dd4bf); display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: 700; box-shadow: 0 10px 25px rgba(13, 148, 136, 0.2);">
+                        ?
+                    </div>
+                    <div>
+                        <h1 id="spec-page-name" style="margin: 0; font-size: 2rem; font-weight: 800; color: #0f172a;">Loading...</h1>
+                        <p id="spec-page-sub" style="margin: 0.25rem 0 0; font-size: 1rem; color: #64748b; font-weight: 500;">Specialist Profile</p>
+                    </div>
+                </div>
+            </div>
+            <div id="spec-page-actions" style="display: none; gap: 1rem;">
+                <button id="btn-remove-spec" class="btn" style="padding: 0.75rem 1.5rem; border-radius: 12px; border: 1.5px solid #fee2e2; background: #fef2f2; color: #ef4444; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    Remove
+                </button>
+            </div>
+        </div>
+
+        <div class="page-content-premium" style="padding: 2.5rem; display: grid; grid-template-columns: 350px 1fr; gap: 2.5rem;">
+            <!-- Left Sidebar: Profile & Contact -->
+            <div style="display: flex; flex-direction: column; gap: 2rem;">
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2rem; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                    <h3 style="margin: 0 0 1.5rem; font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Contact Details</h3>
+                    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                        <div style="display: flex; gap: 1rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: #f0f9ff; color: #0ea5e9; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                            </div>
+                            <div style="overflow: hidden;">
+                                <p style="margin: 0; font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Email Address</p>
+                                <p id="spec-page-email" style="margin: 0; font-size: 0.95rem; color: #1e293b; font-weight: 600; word-break: break-all;">...</p>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 1rem;">
+                            <div style="width: 40px; height: 40px; border-radius: 10px; background: #f0fdf4; color: #22c55e; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                            </div>
+                            <div>
+                                <p style="margin: 0; font-size: 0.75rem; color: #94a3b8; font-weight: 600;">Phone Number</p>
+                                <p id="spec-page-phone" style="margin: 0; font-size: 0.95rem; color: #1e293b; font-weight: 600;">...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2rem; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                    <h3 style="margin: 0 0 1.5rem; font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Professional Snapshot</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="background: #f8fafc; padding: 1.25rem; border-radius: 16px; border: 1px solid #f1f5f9; text-align: center;">
+                            <p style="margin: 0; font-size: 1.5rem; font-weight: 800; color: #0d9488;" id="spec-stat-patients">0</p>
+                            <p style="margin: 0.25rem 0 0; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Patients</p>
+                        </div>
+                        <div style="background: #f8fafc; padding: 1.25rem; border-radius: 16px; border: 1px solid #f1f5f9; text-align: center;">
+                            <p style="margin: 0; font-size: 1.5rem; font-weight: 800; color: #f59e0b;" id="spec-stat-rating">0.0</p>
+                            <p style="margin: 0.25rem 0 0; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Rating</p>
+                        </div>
+                        <div style="grid-column: span 2; background: #f8fafc; padding: 1.25rem; border-radius: 16px; border: 1px solid #f1f5f9; text-align: center;">
+                            <p style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #6366f1;" id="spec-page-exp">...</p>
+                            <p style="margin: 0.25rem 0 0; font-size: 0.7rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Clinical Experience</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2rem; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
+                    <h3 style="margin: 0 0 1.5rem; font-size: 0.85rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Credentials & Docs</h3>
+                    <div id="spec-page-credentials">
+                        <p style="margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.6; font-style: italic;" id="spec-page-cert-text"></p>
+                        <div id="spec-page-cert-pdf-link" style="margin-top: 1.25rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Area: Appointments & Schedule -->
+            <div style="display: flex; flex-direction: column; gap: 2.5rem;">
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2.5rem; border: 1px solid #f1f5f9;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #0f172a;">Appointment History</h3>
+                        <div id="spec-stat-avail" style="padding: 0.6rem 1.25rem; border-radius: 14px; background: #f0fdf4; color: #16a34a; font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 1px solid #dcfce7; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                            Free Slots: 0
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive" style="overflow-x: auto;">
+                        <table class="clinic-table" id="spec-appt-table" style="width: 100%; border-collapse: separate; border-spacing: 0 0.75rem;">
+                            <thead>
+                                <tr style="text-align: left;">
+                                    <th style="padding: 0 1rem 0.5rem; font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Patient / Child</th>
+                                    <th style="padding: 0 1rem 0.5rem; font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Type</th>
+                                    <th style="padding: 0 1rem 0.5rem; font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Date & Time</th>
+                                    <th style="padding: 0 1rem 0.5rem; font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Payment</th>
+                                    <th style="padding: 0 1rem 0.5rem; font-size: 0.8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Slots injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2.5rem; border: 1px solid #f1f5f9;">
+                    <h3 style="margin: 0 0 1.5rem; font-size: 1.25rem; font-weight: 700; color: #0f172a; text-align: center;">Choose your appointment</h3>
+                    <div id="spec-page-slots" style="margin: 0 -2.5rem -2.5rem; padding: 0 2.5rem 2.5rem;">
+                        <!-- Slots injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+async function renderSpecialistDetailsPage(id) {
+    try {
+        const response = await fetch(`../../api_get_specialist_details.php?specialist_id=${id}`);
+        if (!response.ok) throw new Error('Failed to fetch');
+        const result = await response.json();
+
+        if (!result.success) {
+            showClinicToast(result.error || 'Failed to load details', 'error');
+            return;
+        }
+
+        const p = result.profile;
+        const appts = result.appointments || [];
+        const slots = result.slots || [];
+        const stats = result.stats || {};
+        const avail = result.availability || {};
+
+        // 1. Header & Profile
+        document.getElementById('spec-page-name').textContent = `Dr. ${p.first_name} ${p.last_name}`;
+        document.getElementById('spec-page-avatar').textContent = `${p.first_name[0]}${p.last_name[0]}`.toUpperCase();
+        document.getElementById('spec-page-sub').textContent = p.specialization;
+        document.getElementById('spec-page-email').textContent = p.email || 'N/A';
+        document.getElementById('spec-page-phone').textContent = p.phone || '+20 102 345 6789';
+        document.getElementById('spec-page-exp').textContent = `${p.experience_years || 0} Years`;
+
+        // Action buttons
+        const actions = document.getElementById('spec-page-actions');
+        actions.style.display = 'flex';
+        document.getElementById('btn-remove-spec').onclick = () => confirmDeleteSpecialist(id, `${p.first_name} ${p.last_name}`);
+
+        // 2. Stats
+        document.getElementById('spec-stat-patients').textContent = stats.total_patients || 0;
+        document.getElementById('spec-stat-rating').textContent = parseFloat(stats.avg_rating || 0).toFixed(1);
+        document.getElementById('spec-stat-avail').textContent = `Free Slots: ${avail.free || 0}`;
+
+        // 3. Credentials
+        document.getElementById('spec-page-cert-text').textContent = p.certification_text || 'No certification notes available.';
+        const certLink = document.getElementById('spec-page-cert-pdf-link');
+        if (p.certification_pdf) {
+            certLink.innerHTML = `
+                <a href="../../${p.certification_pdf}" target="_blank" style="display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: #0d9488; font-weight: 700; font-size: 0.9rem;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6m-3 3l3 3 3-3"/></svg>
+                    Download Certification PDF
+                </a>
+            `;
+        } else {
+            certLink.innerHTML = '<p style="font-size: 0.8rem; color: #94a3b8;">No document uploaded.</p>';
+        }
+
+        // 4. Appointments Table
+        const tbody = document.querySelector('#spec-appt-table tbody');
+        if (appts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 40px; color: #64748b;">No appointment history found.</td></tr>';
+        } else {
+            tbody.innerHTML = appts.map(a => {
+                const dt = new Date(a.scheduled_at);
+                const dateStr = dt.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const parentName = `${a.parent_first_name} ${a.parent_last_name || ''}`;
+                const childName = a.child_first_name ? `${a.child_first_name} ${a.child_last_name || ''}` : 'N/A';
+                
+                const method = (a.payment_method || 'Cash').toLowerCase();
+                const isPaid = (a.payment_status || '').toLowerCase() === 'completed';
+                const pColor = method.includes('credit') ? '#2563eb' : '#059669';
+                const pBg = method.includes('credit') ? 'rgba(37, 99, 235, 0.1)' : 'rgba(5, 150, 105, 0.1)';
+
+                const statusLower = (a.status || 'scheduled').toLowerCase();
+                let statusClass = "status-active";
+                if (statusLower === 'cancelled') statusClass = "status-danger";
+                else if (statusLower === 'pending') statusClass = "status-warning";
+
+                return `
+                    <tr style="background: #f8fafc; border-radius: 12px;">
+                        <td style="padding: 1rem; border-top-left-radius: 12px; border-bottom-left-radius: 12px;">
+                            <div style="font-weight:700; color:#1e293b;">${childName}</div>
+                            <div style="font-size:0.75rem; color:#64748b;">Parent: ${parentName}</div>
+                        </td>
+                        <td style="padding: 1rem;"><span style="font-size:0.85rem; font-weight:600; color:#475569;">${a.type || 'Onsite'}</span></td>
+                        <td style="padding: 1rem;"><span style="font-size:0.85rem; color:#64748b;">${dateStr}</span></td>
+                        <td style="padding: 1rem;">
+                            <span style="font-size:0.7rem; font-weight:800; padding:4px 10px; border-radius:8px; background:${pBg}; color:${pColor}; text-transform:uppercase;">${a.payment_method || 'Cash'}</span>
+                            ${isPaid ? '<span style="color:#059669; margin-left:5px;">●</span>' : ''}
+                        </td>
+                        <td style="padding: 1rem; border-top-right-radius: 12px; border-bottom-right-radius: 12px;"><span class="status-badge ${statusClass}" style="font-weight:700;">${a.status}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 5. Schedule Slots
+        renderSpecialistAvailability(slots, appts);
+
+    } catch (err) {
+        console.error(err);
+        showClinicToast('Network error while loading specialist', 'error');
+    }
+}
+
+function renderSpecialistAvailability(slots, appointments) {
+    const container = document.getElementById('spec-page-slots');
+    if (!container) return;
+
+    if (!slots || slots.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:3rem; background:#f8fafc; border-radius:20px; color:#94a3b8;">No weekly schedule configured for this specialist.</div>`;
+        return;
+    }
+
+    const dayNamesShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let html = `
+        <div class="availability-slider-container" style="position: relative; background: #f4f7f9; border-radius: 24px; padding: 3rem 1.5rem; margin-top: 1rem;">
+            <button onclick="scrollAvailabilitySlots('prev')" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 14px; background: white; border: 1px solid #e2e8f0; color: #0070ea; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); z-index: 2; transition: all 0.2s;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            
+            <div id="availability-scroll-box" style="display: flex; gap: 1.25rem; overflow-x: auto; scroll-behavior: smooth; padding: 0 3rem; scrollbar-width: none; -ms-overflow-style: none;">
+    `;
+
+    for (let i = 0; i < 7; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() + i);
+        const dow = date.getDay();
+        const dateStr = date.toISOString().split('T')[0];
+        
+        let label = "";
+        if (i === 0) label = "Today";
+        else if (i === 1) label = "Tomorrow";
+        else {
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            label = `${dayNamesShort[dow]} ${m}/${d}`;
+        }
+
+        // Generate Slots from Schedule
+        const daySchedule = slots.filter(s => parseInt(s.day_of_week) === dow);
+        let timeSlots = [];
+        
+        daySchedule.forEach(sl => {
+            const startTime = sl.start_time.substring(0, 5);
+            const endTime = sl.end_time.substring(0, 5);
+            const duration = parseInt(sl.slot_duration) || 30;
+            
+            let current = new Date(`${dateStr}T${startTime}`);
+            const end = new Date(`${dateStr}T${endTime}`);
+            
+            while (current < end) {
+                const rawTime = current.toTimeString().substring(0, 5);
+                const displayTime = current.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+                
+                const isBooked = appointments.some(a => {
+                    if (!a.scheduled_at) return false;
+                    const apDate = a.scheduled_at.split(' ')[0];
+                    const apTime = a.scheduled_at.split(' ')[1].substring(0, 5);
+                    return apDate === dateStr && apTime === rawTime && !['cancelled', 'rejected'].includes(a.status?.toLowerCase());
+                });
+
+                if (!isBooked) timeSlots.push(displayTime);
+                current.setMinutes(current.getMinutes() + duration);
+            }
+        });
+
+        // Header Color based on label
+        let headerBg = '#7dbef8'; // Light blue default
+        if (i === 1) headerBg = '#0070ea'; // Dark blue for Tomorrow
+
+        html += `
+            <div class="day-slot-card" style="min-width: 180px; background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                <div class="day-header" style="background: ${headerBg}; padding: 14px; text-align: center; color: white; font-weight: 700; font-size: 1rem; border-bottom: 1px solid rgba(0,0,0,0.05);">
+                    ${label}
+                </div>
+                <div class="day-body" style="padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 1rem; align-items: center; min-height: 280px; justify-content: ${timeSlots.length > 0 ? 'flex-start' : 'center'};">
+                    ${timeSlots.length > 0 ? 
+                        timeSlots.slice(0, 7).map(t => `<div style="color: #0070ea; font-weight: 700; font-size: 0.95rem; cursor: pointer; padding: 2px;">${t}</div>`).join('') :
+                        `<div style="color: #94a3b8; font-size: 0.95rem; text-align: center; font-weight: 600; line-height: 1.6;">No Available<br>Appointments</div>`
+                    }
+                    ${timeSlots.length > 7 ? `<div style="color: #0070ea; font-weight: 800; font-size: 1rem; cursor: pointer; margin-top: 0.5rem; text-decoration: underline;">More</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    html += `
+            </div>
+            
+            <button onclick="scrollAvailabilitySlots('next')" style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 14px; background: white; border: 1px solid #e2e8f0; color: #0070ea; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); z-index: 2; transition: all 0.2s;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+function scrollAvailabilitySlots(dir) {
+    const box = document.getElementById('availability-scroll-box');
+    if (!box) return;
+    const move = dir === 'next' ? 200 : -200;
+    box.scrollBy({ left: move, behavior: 'smooth' });
+}
+
+/** ─────────────────────────────────────────────────────────────────────────────
+ *  PATIENT RECORDS POPUP
+ *  ───────────────────────────────────────────────────────────────────────────── */
+
+async function viewPatientRecords(childId, childName) {
+    // Show loading state or modal immediately
+    const modalId = "patient-records-modal";
+    let modal = document.getElementById(modalId);
+    if (modal) modal.remove();
+
+    modal = document.createElement("div");
+    modal.id = modalId;
+    modal.className = "clinic-modal-overlay active";
+    modal.style.zIndex = "9999";
+    modal.innerHTML = `
+        <div class="clinic-modal light-premium-modal" style="max-width: 900px; width: 95%; background: white; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);">
+            <div class="clinic-modal-header" style="padding: 1.5rem 2rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 40px; height: 40px; background: rgba(13, 148, 136, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #0d9488;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 22px; height: 22px;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #0f172a;">${childName}'s Health Records</h3>
+                        <p style="margin: 0; font-size: 0.85rem; color: #64748b;">Comprehensive history and appointment details</p>
+                    </div>
+                </div>
+                <button class="clinic-modal-close" style="background: #f8fafc; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; color: #64748b;" onclick="this.closest('.clinic-modal-overlay').remove()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 16px; height: 16px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="clinic-modal-body" style="padding: 2rem; max-height: 70vh; overflow-y: auto;" id="patient-records-content">
+                <div style="text-align: center; padding: 3rem;">
+                    <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                    <p style="color: #64748b;">Fetching latest medical records...</p>
+                </div>
+            </div>
+            <div class="clinic-modal-footer" style="padding: 1.25rem 2rem; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end;">
+                <button class="btn" style="padding: 0.75rem 1.5rem; border-radius: 10px; border: 1.5px solid #e2e8f0; background: white; color: #475569; font-weight: 600; cursor: pointer;" onclick="this.closest('.clinic-modal-overlay').remove()">Close Records</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    try {
+        const res = await fetch(`../../api_get_child_full_profile.php?child_id=${childId}`);
+        const result = await res.json();
+        
+        if (!result.success) {
+            document.getElementById("patient-records-content").innerHTML = `<div style="padding: 2rem; text-align: center; color: #ef4444;">Error: ${result.error || "Failed to load records"}</div>`;
+            return;
+        }
+
+        const appts = result.appointments || [];
+        const profile = result.profile || {};
+        const basic = profile.basic || {};
+
+        let apptHtml = appts.length === 0 ? "<p style='text-align:center; color:#94a3b8; padding:2rem;'>No appointment history found.</p>" : `
+            <div class="records-table-wrap" style="border: 1px solid #f1f5f9; border-radius: 16px; overflow: hidden;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead style="background: #f8fafc;">
+                        <tr>
+                            <th style="padding: 1rem; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Date & Time</th>
+                            <th style="padding: 1rem; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Specialist</th>
+                            <th style="padding: 1rem; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Payment</th>
+                            <th style="padding: 1rem; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${appts.map(a => {
+                            const dt = new Date(a.scheduled_at);
+                            const dateStr = dt.toLocaleDateString([], {month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: true});
+                            
+                            const method = (a.payment_method || "Cash").toLowerCase();
+                            const isPaid = (a.payment_status || "").toLowerCase() === "completed" || (a.payment_status || "").toLowerCase() === "paid";
+                            const pColor = method.includes("credit") || method.includes("card") ? "#2563eb" : "#059669";
+                            const pBg = method.includes("credit") || method.includes("card") ? "#eff6ff" : "#f0fdf4";
+
+                            const status = (a.status || "Pending").toLowerCase();
+                            let sClass = "status-active";
+                            if (status === "cancelled" || status === "refunded") sClass = "status-danger";
+                            if (status === "pending") sClass = "status-warning";
+
+                            let cancelInfo = "";
+                            if (status === "cancelled" && a.cancelled_by) {
+                                const source = a.cancelled_by === "specialist" ? "Specialist" : (a.cancelled_by === "clinic" ? "Clinic" : "Patient");
+                                cancelInfo = `<div style="font-size: 0.65rem; color: #ef4444; font-weight:700; margin-top:4px;">Cancelled by ${source}</div>`;
+                            }
+
+                            return `
+                                <tr style="border-top: 1px solid #f1f5f9;">
+                                    <td style="padding: 1rem; font-size: 0.9rem; color: #1e293b; font-weight: 600;">${dateStr}</td>
+                                    <td style="padding: 1rem; font-size: 0.85rem; color: #475569;">Dr. ${a.spec_fname || "Unknown"} ${a.spec_lname || ""}</td>
+                                    <td style="padding: 1rem;">
+                                        <div style="display:flex; flex-direction:column; gap:4px;">
+                                            <span style="font-size:0.7rem; font-weight:800; background:${pBg}; color:${pColor}; padding:2px 8px; border-radius:6px; display:inline-block; width:fit-content; text-transform:uppercase;">${a.payment_method || "Cash"}</span>
+                                            <div style="display:flex; align-items:center; gap:4px;">
+                                                <div style="width:6px; height:6px; border-radius:50%; background:${isPaid ? "#22c55e" : "#f59e0b"}"></div>
+                                                <span style="font-size:0.7rem; font-weight:600; color:${isPaid ? "#22c55e" : "#f59e0b"}">${isPaid ? "Paid" : "Unpaid"}</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 1rem;">
+                                        <span class="status-badge ${sClass}" style="font-weight:700; font-size:0.75rem;">${a.status}</span>
+                                        ${cancelInfo}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join("")}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        document.getElementById("patient-records-content").innerHTML = `
+            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2rem;">
+                <!-- Sidebar Extra Info -->
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div style="background: #f8fafc; padding: 1.5rem; border-radius: 20px; border: 1px solid #f1f5f9;">
+                        <h4 style="margin: 0 0 1rem; font-size: 0.75rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Patient Profile</h4>
+                        <div style="display: flex; flex-direction: column; gap: 1rem;">
+                            <div>
+                                <p style="margin: 0; font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Full Name</p>
+                                <p style="margin: 0; font-size: 0.95rem; color: #1e293b; font-weight: 700;">${childName}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 0; font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Age (Months)</p>
+                                <p style="margin: 0; font-size: 0.95rem; color: #1e293b; font-weight: 700;">${basic.age_months || "N/A"}</p>
+                            </div>
+                            <div>
+                                <p style="margin: 0; font-size: 0.7rem; color: #94a3b8; font-weight: 600;">Parent Contact</p>
+                                <p style="margin: 0; font-size: 0.9rem; color: #1e293b; font-weight: 700;">${basic.parent_first_name} ${basic.parent_last_name}</p>
+                                <p style="margin: 2px 0 0; font-size: 0.8rem; color: #64748b;">${basic.parent_phone || "No phone"}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Records Area -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <h4 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #0f172a;">Recent Appointments</h4>
+                        <span style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Found ${appts.length} appointments</span>
+                    </div>
+                    ${apptHtml}
+                </div>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById("patient-records-content").innerHTML = `<div style="padding: 2rem; text-align: center; color: #ef4444;">Network Error: Could not connect to API.</div>`;
     }
 }

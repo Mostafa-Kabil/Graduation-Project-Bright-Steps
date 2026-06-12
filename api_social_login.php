@@ -24,6 +24,10 @@ $stmt->execute([$email]);
 $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if ($user) {
+    if (isset($user['status']) && $user['status'] === 'suspended') {
+        echo json_encode(['success' => false, 'error' => 'Your account has been suspended.', 'redirect' => 'account-suspended.php']);
+        exit();
+    }
     // Existing user – log them in
     if ($user['role'] === 'parent') {
         $_SESSION['id'] = $user['user_id'];

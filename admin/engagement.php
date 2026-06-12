@@ -56,12 +56,14 @@ try {
                 $stmt = $connect->prepare("INSERT INTO points_refrence (admin_id, action_name, points_value, adjust_sign) VALUES (:aid, :name, :pts, :sign)");
                 $stmt->execute(['aid'=>$_SESSION['id'], 'name'=>$name, 'pts'=>$pts, 'sign'=>$sign]);
             }
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'], $id > 0 ? 'update_rule' : 'create_rule', 'points_refrence', ($id > 0 ? 'Updated' : 'Created') . " rule: {$name} ({$sign}{$pts}pts)", $id > 0 ? $id : $connect->lastInsertId());
             echo json_encode(['success' => true]);
 
         } elseif ($action === 'delete_rule') {
             $id = (int)$data['refrence_id'];
             $stmt = $connect->prepare("DELETE FROM points_refrence WHERE refrence_id = :id");
             $stmt->execute(['id'=>$id]);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'], 'delete_rule', 'points_refrence', "Deleted rule ID: {$id}", $id);
             echo json_encode(['success' => true]);
 
         } elseif ($action === 'save_badge') {
@@ -79,12 +81,14 @@ try {
                 $stmt = $connect->prepare("INSERT INTO badge (name, description, icon) VALUES (:name, :desc, :icon)");
                 $stmt->execute(['name'=>$name, 'desc'=>$desc, 'icon'=>$icon]);
             }
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'], $id > 0 ? 'update_badge' : 'create_badge', 'badge', ($id > 0 ? 'Updated' : 'Created') . " badge: {$name}", $id > 0 ? $id : $connect->lastInsertId());
             echo json_encode(['success' => true]);
 
         } elseif ($action === 'delete_badge') {
             $id = (int)$data['badge_id'];
             $stmt = $connect->prepare("DELETE FROM badge WHERE badge_id = :id");
             $stmt->execute(['id'=>$id]);
+            if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'], 'delete_badge', 'badge', "Deleted badge ID: {$id}", $id);
             echo json_encode(['success' => true]);
 
         } elseif ($action === 'save_banner') {
@@ -117,15 +121,16 @@ try {
             $desc = $data['description'] ?? '';
             $pts = (int)($data['points_required'] ?? 0);
             $icon = $data['icon'] ?? '🎁';
+            $targetPlan = $data['target_plan'] ?? 'all';
             
             if (!$title || $pts <= 0) { echo json_encode(['error' => 'Title and positive points are required']); exit; }
 
             if ($id > 0) {
-                $stmt = $connect->prepare("UPDATE reward_offers SET title=:t, description=:d, points_required=:p, icon=:i WHERE offer_id=:id");
-                $stmt->execute(['t'=>$title, 'd'=>$desc, 'p'=>$pts, 'i'=>$icon, 'id'=>$id]);
+                $stmt = $connect->prepare("UPDATE reward_offers SET title=:t, description=:d, points_required=:p, icon=:i, target_plan=:tp WHERE offer_id=:id");
+                $stmt->execute(['t'=>$title, 'd'=>$desc, 'p'=>$pts, 'i'=>$icon, 'tp'=>$targetPlan, 'id'=>$id]);
             } else {
-                $stmt = $connect->prepare("INSERT INTO reward_offers (admin_id, title, description, points_required, icon) VALUES (:aid, :t, :d, :p, :i)");
-                $stmt->execute(['aid'=>$_SESSION['id'], 't'=>$title, 'd'=>$desc, 'p'=>$pts, 'i'=>$icon]);
+                $stmt = $connect->prepare("INSERT INTO reward_offers (admin_id, title, description, points_required, icon, target_plan) VALUES (:aid, :t, :d, :p, :i, :tp)");
+                $stmt->execute(['aid'=>$_SESSION['id'], 't'=>$title, 'd'=>$desc, 'p'=>$pts, 'i'=>$icon, 'tp'=>$targetPlan]);
             }
             echo json_encode(['success' => true]);
 

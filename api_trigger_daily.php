@@ -3,6 +3,11 @@ session_start();
 require_once "connection.php";
 header('Content-Type: application/json');
 
+// --- 0. Subscription Expirations Auto-Transition ---
+// This ensures that subscriptions that expire are marked 'expired' across the entire system
+$stmtSub = $connect->prepare("UPDATE parent_subscription SET status = 'expired' WHERE expires_at IS NOT NULL AND expires_at < NOW() AND status = 'active'");
+$stmtSub->execute();
+
 // --- 1. Basic pseudo-cron lock using platform_settings ---
 $today = date('Y-m-d');
 $stmt = $connect->prepare("SELECT setting_value FROM platform_settings WHERE setting_key = 'last_daily_digest'");

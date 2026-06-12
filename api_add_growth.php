@@ -105,20 +105,7 @@ try {
 
         $pointsToAward = 25; // Points for adding growth measurements (log_growth rule)
 
-        // 2. Ensure Parent Points Wallet Exists
-        $stmt = $connect->prepare("SELECT wallet_id, total_points FROM parent_points_wallet WHERE parent_id = ?");
-        $stmt->execute([$parentId]);
-        $wallet = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$wallet) {
-            $stmt = $connect->prepare("INSERT INTO parent_points_wallet (parent_id, total_points, last_earned_at) VALUES (?, 0, NOW())");
-            $stmt->execute([$parentId]);
-            $walletId = $connect->lastInsertId();
-        } else {
-            $walletId = $wallet['wallet_id'];
-        }
-
-        // 3. Check daily cap (25 points/day for log_growth)
+        // 2. Check daily cap (25 points/day for log_growth)
         $today = date('Y-m-d');
         $dailyCapStmt = $connect->prepare("
             SELECT COALESCE(SUM(points_earned), 0) as daily_total
@@ -160,9 +147,17 @@ try {
         // Check if within caps and not already earned today
         if ($alreadyEarned === false && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
             $pointsToAward = $pointsValue;
-            // Update wallet balance and lifetime earned
-            $stmt = $connect->prepare("UPDATE parent_points_wallet SET total_points = total_points + ?, lifetime_earned = lifetime_earned + ?, last_earned_at = NOW() WHERE wallet_id = ?");
-            $stmt->execute([$pointsToAward, $pointsToAward, $walletId]);
+            
+            // Ensure Child Points Wallet Exists
+            $stmt = $connect->prepare("SELECT wallet_id FROM points_wallet WHERE child_id = ?");
+            $stmt->execute([$childId]);
+            $wallet = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$wallet) {
+                $connect->prepare("INSERT INTO points_wallet (child_id, total_points) VALUES (?, ?)")->execute([$childId, $pointsToAward]);
+            } else {
+                $connect->prepare("UPDATE points_wallet SET total_points = total_points + ? WHERE wallet_id = ?")->execute([$pointsToAward, $wallet['wallet_id']]);
+            }
 
             // Track the transaction (single entry per day)
             $trackStmt = $connect->prepare("
@@ -170,6 +165,12 @@ try {
                 VALUES (?, 'log_growth', ?, ?, ?)
             ");
             $trackStmt->execute([$parentId, $pointsToAward, $today, $weekStart]);
+
+            // Add history
+            try {
+                $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Growth Tracking', ?, 'Logged growth measurement')")
+                        ->execute([$parentId, $childId, $pointsToAward]);
+            } catch (Exception $e) {}
 
             // Create notification
             $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");

@@ -11,6 +11,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="styles/globals.css?v=8">
     <link rel="stylesheet" href="styles/landing.css?v=8">
+    <style>
+        .container { max-width: 800px; margin: 0 auto; padding: 6rem 1.5rem 4rem; animation: fadeIn 0.5s ease-out; }
+        .page-header { text-align: center; margin-bottom: 4rem; }
+        .page-title { font-size: 3rem; font-weight: 800; background: linear-gradient(135deg, var(--purple-600), var(--blue-500)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1rem; }
+        .page-subtitle { font-size: 1.125rem; color: var(--text-secondary); font-weight: 500; }
+        .content-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-2xl); padding: 2.5rem; margin-bottom: 2rem; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .content-section:hover { transform: translateY(-2px); box-shadow: 0 20px 40px -15px rgba(0,0,0,0.1); }
+        .content-section h2 { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
+        .content-section h2::before { content: ''; display: block; width: 24px; height: 24px; background: linear-gradient(135deg, var(--purple-100), var(--blue-100)); border-radius: 6px; border: 2px solid var(--purple-300); }
+        [data-theme="dark"] .content-section h2::before { background: linear-gradient(135deg, rgba(168,85,247,0.2), rgba(59,130,246,0.2)); border-color: var(--purple-500); }
+        .content-section p, .content-section ul { color: var(--text-secondary); line-height: 1.7; font-size: 1.05rem; margin-bottom: 1rem; }
+        .content-section ul { padding-left: 1.5rem; }
+        .content-section li { margin-bottom: 0.5rem; }
+        .content-section li::marker { color: var(--purple-500); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </head>
 
 <body>

@@ -9,31 +9,51 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'clinic') {
     exit();
 }
 
-$input = json_decode(file_get_contents('php://input'), true);
+$input = $_POST;
+if (empty($input)) {
+    $input = json_decode(file_get_contents('php://input'), true);
+}
 
 try {
-    $stmt = $connect->prepare("
-        UPDATE clinic 
-        SET clinic_name = ?, 
-            email = ?, 
-            location = ?, 
-            website = ?, 
-            bio = ?, 
-            opening_hours = ? 
-        WHERE admin_id = ?
-    ");
+    // Self-healing: Ensure bio and profile_image columns exist
+    $connect->exec("ALTER TABLE clinic ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT NULL");
+    $connect->exec("ALTER TABLE clinic ADD COLUMN IF NOT EXISTS profile_image VARCHAR(255) DEFAULT NULL");
     
-    $stmt->execute([
+    $profile_image = null;
+    if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
+        $uploadDir = 'uploads/profiles/';
+        if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+        
+        $ext = pathinfo($_FILES['profile_image']['name'], PATHINFO_EXTENSION);
+        $newFileName = 'clinic_' . $_SESSION['id'] . '_' . time() . '.' . $ext;
+        $destPath = $uploadDir . $newFileName;
+        
+        if (move_uploaded_file($_FILES['profile_image']['tmp_name'], $destPath)) {
+            $profile_image = $destPath;
+        }
+    }
+
+    $query = "UPDATE clinic SET clinic_name = ?, email = ?, location = ?, bio = ?";
+    $params = [
         $input['clinic_name'] ?? '',
         $input['email'] ?? '',
         $input['location'] ?? '',
-        $input['website'] ?? '',
-        $input['bio'] ?? '',
-        $input['opening_hours'] ?? '',
-        $_SESSION['id']
-    ]);
+        $input['bio'] ?? ''
+    ];
 
-    echo json_encode(['success' => true]);
+    if ($profile_image) {
+        $query .= ", profile_image = ?";
+        $params[] = $profile_image;
+    }
+
+    $query .= " WHERE admin_id = ? OR clinic_id = ?";
+    $params[] = $_SESSION['id'];
+    $params[] = $_SESSION['id'];
+
+    $stmt = $connect->prepare($query);
+    $stmt->execute($params);
+
+    echo json_encode(['success' => true, 'profile_image' => $profile_image]);
 
 } catch (Exception $e) {
     http_response_code(500);

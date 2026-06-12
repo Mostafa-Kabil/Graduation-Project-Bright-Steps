@@ -45,8 +45,7 @@ switch ($action) {
 
         echo json_encode([
             'success' => true,
-            'message' => 'Verification code sent to ' . $email,
-            'dev_code' => $code
+            'message' => 'Verification code sent to ' . $email
         ]);
         break;
 
@@ -131,8 +130,7 @@ switch ($action) {
 
         echo json_encode([
             'success' => true,
-            'message' => 'If that email exists, a reset code has been sent.',
-            'dev_code' => $code
+            'message' => 'If that email exists, a reset code has been sent.'
         ]);
         break;
 
@@ -241,8 +239,7 @@ switch ($action) {
         
         $htmlBody = buildEmailTemplate('Change Password', $content);
         sendMail($email, $subject, $htmlBody);
-        
-        echo json_encode(['success' => true, 'message' => 'Verification code sent.', 'dev_code' => $code]);
+        echo json_encode(['success' => true, 'message' => 'Verification code sent.']);
         break;
 
     // ── Verify code & Change password (authenticated) ───────────────

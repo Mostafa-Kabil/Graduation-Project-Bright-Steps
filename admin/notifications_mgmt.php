@@ -114,7 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     switch ($action) {
         case 'list':
             $stmt = $connect->query("SELECT n.*, u.first_name, u.last_name FROM admin_notifications n LEFT JOIN users u ON n.created_by=u.user_id ORDER BY n.created_at DESC LIMIT 50");
-            echo json_encode(['success' => true, 'notifications' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+            $notifs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $uStmt = $connect->query("SELECT COUNT(DISTINCT user_id) FROM admin_notification_recipients");
+            $uniqueCount = $uStmt->fetchColumn();
+            echo json_encode(['success' => true, 'notifications' => $notifs, 'unique_recipients' => $uniqueCount]);
             break;
 
         case 'view':
@@ -156,7 +159,7 @@ function getTargetUsers($connect, $targetType, $filter) {
             return is_array($filter) ? $filter : [];
         case 'segment':
             $where = "status='active'";
-            if (!empty($filter['role'])) $where .= " AND role='" . $connect->quote($filter['role']) . "'";
+            if (!empty($filter['role'])) $where .= " AND role=" . $connect->quote($filter['role']);
             $stmt = $connect->query("SELECT user_id FROM users WHERE $where");
             return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'user_id');
         default:

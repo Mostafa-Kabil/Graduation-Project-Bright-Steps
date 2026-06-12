@@ -1081,15 +1081,22 @@
                         <div class="card-content">
                              <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--slate-100);">
                                 <div>
-                                    <h4 style="font-weight: 600;">Daily Reminders</h4>
-                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Receive daily activity suggestions</p>
+                                    <h4 style="font-weight: 600;">Daily Activity Reminders <span style="font-size:0.75rem; color:var(--blue-500); background:var(--blue-50); padding:2px 6px; border-radius:4px; margin-left:8px;">Push</span></h4>
+                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Receive push notifications for your child's daily personalized activities.</p>
+                                </div>
+                                <input type="checkbox" checked style="width: 1.25rem; height: 1.25rem;">
+                            </div>
+                             <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--slate-100);">
+                                <div>
+                                    <h4 style="font-weight: 600;">Milestone Alerts <span style="font-size:0.75rem; color:var(--purple-500); background:var(--purple-50); padding:2px 6px; border-radius:4px; margin-left:8px;">Email & Push</span></h4>
+                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Get notified when developmental milestones are approaching or achieved.</p>
                                 </div>
                                 <input type="checkbox" checked style="width: 1.25rem; height: 1.25rem;">
                             </div>
                              <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0;">
                                 <div>
-                                    <h4 style="font-weight: 600;">Milestone Alerts</h4>
-                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Get notified when milestones are approaching</p>
+                                    <h4 style="font-weight: 600;">Clinic Appointment Updates <span style="font-size:0.75rem; color:var(--orange-500); background:var(--orange-50); padding:2px 6px; border-radius:4px; margin-left:8px;">Email</span></h4>
+                                    <p style="font-size: 0.875rem; color: var(--slate-500);">Receive email reminders for your upcoming clinic appointments.</p>
                                 </div>
                                 <input type="checkbox" checked style="width: 1.25rem; height: 1.25rem;">
                             </div>
