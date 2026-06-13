@@ -485,13 +485,25 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
         }
 
         try {
+            // Award points from rule
+            require_once 'api_points_engine.php';
+            $awardResult = award_points_from_rule($connect, $childId, $userId, 'complete_activity');
+            
+            $pointsToAward = 0;
+            $cooldownMessage = "";
+            if ($awardResult['success']) {
+                $pointsToAward = $awardResult['points_awarded'];
+            } else if (isset($awardResult['error']) && $awardResult['error'] === 'cooldown') {
+                $cooldownMessage = " (On cooldown: {$awardResult['minutes_remaining']}m remaining)";
+            }
+            
             // Mark as completed
             if ($activityId) {
                 $stmt = $connect->prepare(
-                    "UPDATE child_activities SET is_completed = 1, completed_at = NOW(), points_earned = 15
+                    "UPDATE child_activities SET is_completed = 1, completed_at = NOW(), points_earned = ?
                      WHERE activity_id = ? AND child_id = ? AND is_completed = 0"
                 );
-                $stmt->execute([$activityId, $childId]);
+                $stmt->execute([$pointsToAward, $activityId, $childId]);
 
                 if ($stmt->rowCount() === 0) {
                     echo json_encode(['error' => 'Activity not found or already completed']);
@@ -501,102 +513,18 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
                 // Generic completion (e.g. ad-hoc game)
                 $stmt = $connect->prepare(
                     "INSERT INTO child_activities (child_id, title, category, is_completed, completed_at, points_earned)
-                     VALUES (?, ?, ?, 1, NOW(), 15)"
+                     VALUES (?, ?, ?, 1, NOW(), ?)"
                 );
-                $stmt->execute([$childId, $title, $category]);
+                $stmt->execute([$childId, $title, $category, $pointsToAward]);
             }
-
-            // Award points to wallet
-            $stmtW = $connect->prepare("SELECT wallet_id FROM points_wallet WHERE child_id = ? LIMIT 1");
-            $stmtW->execute([$childId]);
-            $wallet = $stmtW->fetch(PDO::FETCH_ASSOC);
-
-            if ($wallet) {
-                $stmtU = $connect->prepare(
-                    "UPDATE points_wallet SET total_points = total_points + 15 WHERE wallet_id = ?"
-                );
-                $stmtU->execute([$wallet['wallet_id']]);
-
-                $stmtT = $connect->prepare("SELECT total_points FROM points_wallet WHERE wallet_id = ?");
-                $stmtT->execute([$wallet['wallet_id']]);
-                $newPoints = $stmtT->fetchColumn();
-
-                if ($newPoints % 300 >= 225 && ($newPoints - 15) % 300 < 225) {
-                    $stmtReward = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
-                    $stmtReward->execute([$userId, 'Close to a Reward!', "You have $newPoints points! You are 75% of the way to redeeming a 300-point Certificate!"]);
-                }
-            }
-
-            // Check for activity-based badges instantly
-            $awardBadge = function($badgeName) use ($connect, $childId, $userId) {
-                $stmt = $connect->prepare("SELECT badge_id FROM badge WHERE name = ? LIMIT 1");
-                $stmt->execute([$badgeName]);
-                $badge = $stmt->fetch(PDO::FETCH_ASSOC);
-                if ($badge) {
-                    $stmt2 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?");
-                    $stmt2->execute([$childId, $badge['badge_id']]);
-                    if ($stmt2->fetchColumn() == 0) {
-                        $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)")->execute([$childId, $badge['badge_id']]);
-                        $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)")->execute([$userId, "Badge Earned: $badgeName", "Congratulations! You earned the '$badgeName' badge!"]);
-                        return $badgeName;
-                    }
-                }
-                return false;
-            };
-
-            $stmtTot = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1");
-            $stmtTot->execute([$childId]);
-            $totalActivities = (int)$stmtTot->fetchColumn();
-
-            $stmtWk = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
-            $stmtWk->execute([$childId]);
-            $weeklyCount = (int)$stmtWk->fetchColumn();
-
-            $stmtMo = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
-            $stmtMo->execute([$childId]);
-            $monthlyCount = (int)$stmtMo->fetchColumn();
-
-            $stmtArt = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'article' AND is_completed = 1");
-            $stmtArt->execute([$childId]);
-            $articleCount = (int)$stmtArt->fetchColumn();
-
-            $stmtGame = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'website_game' AND is_completed = 1");
-            $stmtGame->execute([$childId]);
-            $gameCount = (int)$stmtGame->fetchColumn();
-
-            $stmtMotor = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'motor' AND is_completed = 1");
-            $stmtMotor->execute([$childId]);
-            $motorCount = (int)$stmtMotor->fetchColumn();
-
-            $stmtSpeech = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'speech' AND is_completed = 1");
-            $stmtSpeech->execute([$childId]);
-            $speechCount = (int)$stmtSpeech->fetchColumn();
-
-            $earnedBadges = [];
-            if ($totalActivities >= 1) { $b = $awardBadge('First Steps'); if ($b) $earnedBadges[] = $b; }
-            if ($weeklyCount >= 5) { $b = $awardBadge('Weekly Champion'); if ($b) $earnedBadges[] = $b; }
-            if ($monthlyCount >= 20) { $b = $awardBadge('Monthly Master'); if ($b) $earnedBadges[] = $b; }
-            if ($articleCount >= 1) { $b = $awardBadge('Article Reader'); if ($b) $earnedBadges[] = $b; }
-            if ($articleCount >= 10) { $b = $awardBadge('Bookworm'); if ($b) $earnedBadges[] = $b; }
-            if ($gameCount >= 5) { $b = $awardBadge('Game Master'); if ($b) $earnedBadges[] = $b; }
-            if ($motorCount >= 5) { $b = $awardBadge('Motor Master'); if ($b) $earnedBadges[] = $b; }
-            if ($speechCount >= 5) { $b = $awardBadge('Speech Explorer'); if ($b) $earnedBadges[] = $b; }
-
-            // Create notification
-            $stmtN = $connect->prepare(
-                "INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)"
-            );
-            $stmtN->execute([
-                $userId,
-                '✅ Activity Completed!',
-                'You completed an activity and earned 15 points! Keep up the great work!'
-            ]);
 
             echo json_encode([
                 'success' => true,
-                'message' => 'Activity completed! +15 points',
-                'points_earned' => 15,
-                'new_badges' => $earnedBadges
+                'message' => "Activity completed! +{$pointsToAward} points" . $cooldownMessage,
+                'points_earned' => $pointsToAward,
+                'new_badges' => [], // Badges handled centrally
+                'cooldown_active' => isset($awardResult['error']) && $awardResult['error'] === 'cooldown',
+                'minutes_remaining' => $awardResult['minutes_remaining'] ?? 0
             ]);
         } catch (PDOException $e) {
             error_log("Complete activity error: " . $e->getMessage());

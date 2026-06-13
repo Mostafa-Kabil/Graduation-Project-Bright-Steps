@@ -103,87 +103,23 @@ try {
             'hc' => $headCirc
         ]);
 
-        $pointsToAward = 25; // Points for adding growth measurements (log_growth rule)
-
-        // 2. Check daily cap (25 points/day for log_growth)
-        $today = date('Y-m-d');
-        $dailyCapStmt = $connect->prepare("
-            SELECT COALESCE(SUM(points_earned), 0) as daily_total
-            FROM parent_points_tracking
-            WHERE parent_id = ? AND action_key = 'log_growth' AND earned_date = ?
-        ");
-        $dailyCapStmt->execute([$parentId, $today]);
-        $dailyTotal = $dailyCapStmt->fetchColumn();
-
-        // Check weekly cap (100 points/week for log_growth)
-        $weekStart = date('Y-m-d', strtotime('monday this week'));
-        $weeklyCapStmt = $connect->prepare("
-            SELECT COALESCE(SUM(points_earned), 0) as weekly_total
-            FROM parent_points_tracking
-            WHERE parent_id = ? AND action_key = 'log_growth' AND earned_date >= ?
-        ");
-        $weeklyCapStmt->execute([$parentId, $weekStart]);
-        $weeklyTotal = $weeklyCapStmt->fetchColumn();
-
-        // Get rule caps
-        $ruleStmt = $connect->prepare("SELECT daily_cap, weekly_cap, points_value FROM points_earning_rules WHERE action_key = 'log_growth'");
-        $ruleStmt->execute();
-        $rule = $ruleStmt->fetch(PDO::FETCH_ASSOC);
-
-        $dailyCap = $rule ? (int) $rule['daily_cap'] : 25;
-        $weeklyCap = $rule ? (int) $rule['weekly_cap'] : 100;
-        $pointsValue = $rule ? (int) $rule['points_value'] : 25;
+        require_once 'api_points_engine.php';
+        $awardResult = award_points_from_rule($connect, $childId, $parentId, 'log_growth');
+        
         $pointsToAward = 0;
         $pointsMessage = "";
-
-        // Check if already earned points for this action today (once per day limit)
-        $alreadyEarnedStmt = $connect->prepare("
-            SELECT points_earned FROM parent_points_tracking
-            WHERE parent_id = ? AND action_key = 'log_growth' AND earned_date = ?
-        ");
-        $alreadyEarnedStmt->execute([$parentId, $today]);
-        $alreadyEarned = $alreadyEarnedStmt->fetchColumn();
-
-        // Check if within caps and not already earned today
-        if ($alreadyEarned === false && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
-            $pointsToAward = $pointsValue;
-            
-            // Ensure Child Points Wallet Exists
-            $stmt = $connect->prepare("SELECT wallet_id FROM points_wallet WHERE child_id = ?");
-            $stmt->execute([$childId]);
-            $wallet = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if (!$wallet) {
-                $connect->prepare("INSERT INTO points_wallet (child_id, total_points) VALUES (?, ?)")->execute([$childId, $pointsToAward]);
-            } else {
-                $connect->prepare("UPDATE points_wallet SET total_points = total_points + ? WHERE wallet_id = ?")->execute([$pointsToAward, $wallet['wallet_id']]);
-            }
-
-            // Track the transaction (single entry per day)
-            $trackStmt = $connect->prepare("
-                INSERT INTO parent_points_tracking (parent_id, action_key, points_earned, earned_date, week_start_date)
-                VALUES (?, 'log_growth', ?, ?, ?)
-            ");
-            $trackStmt->execute([$parentId, $pointsToAward, $today, $weekStart]);
-
-            // Add history
-            try {
-                $connect->prepare("INSERT INTO parent_points_history (parent_id, child_id, action, points, reason) VALUES (?, ?, 'Growth Tracking', ?, 'Logged growth measurement')")
-                        ->execute([$parentId, $childId, $pointsToAward]);
-            } catch (Exception $e) {}
-
-            // Create notification
-            $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
-            $nstmt->execute([$parentId, 'Points Earned!',
-                             "You earned {$pointsToAward} points for logging growth measurements."]);
+        
+        if ($awardResult['success']) {
+            $pointsToAward = $awardResult['points_awarded'];
             $pointsMessage = " You earned {$pointsToAward} points!";
-        } elseif ($alreadyEarned > 0) {
-            $pointsMessage = " You already earned points for growth tracking today. Come back tomorrow!";
-        } elseif ($dailyTotal >= $dailyCap) {
-            $pointsMessage = " Daily points cap reached. Come back tomorrow for more points!";
-        } elseif ($weeklyTotal >= $weeklyCap) {
-            $pointsMessage = " Weekly points cap reached. Come back next week!";
+        } else if (isset($awardResult['error']) && $awardResult['error'] === 'cooldown') {
+            $connect->rollBack();
+            echo json_encode(['error' => 'cooldown', 'minutes_remaining' => $awardResult['minutes_remaining']]);
+            exit();
+        } else if (isset($awardResult['error'])) {
+            $pointsMessage = " (Points error: " . $awardResult['error'] . ")";
         }
+
     }
 
     // Build message

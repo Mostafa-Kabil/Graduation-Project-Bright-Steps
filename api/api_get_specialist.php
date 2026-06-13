@@ -30,9 +30,10 @@ try {
     $stmt = $connect->prepare("
         SELECT 
             s.specialist_id, s.first_name, s.last_name, s.specialization,
+            s.certifications, s.certification_text, s.certification_pdf, s.certificate_of_experience,
             {$bioCol}, {$photoCol}, {$descCol}, {$expCol},
             c.clinic_id, c.clinic_name, c.location AS clinic_location, {$clinicLogoCol},
-            ob.age_groups, ob.therapy_approaches, ob.focus_areas, ob.consultation_types
+            ob.goals, ob.focus_areas, ob.consultation_types
         FROM specialist s
         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
         LEFT JOIN doctor_onboarding ob ON s.specialist_id = ob.doctor_id
@@ -49,7 +50,7 @@ try {
 
     // Availability
     $availability = [];
-    try {
+
     $slotDuration = 30; // default
     try {
         $stmtAvail = $connect->prepare("
@@ -78,9 +79,9 @@ try {
     $review_count = 0;
     try {
         $stmtReviews = $connect->prepare("
-            SELECT r.rating, r.comment, r.created_at as date, p.first_name as parent
+            SELECT r.rating, r.comment, r.created_at as date, u.first_name as parent
             FROM specialist_reviews r
-            JOIN parent p ON r.parent_id = p.parent_id
+            JOIN users u ON r.parent_id = u.user_id
             WHERE r.specialist_id = ?
             ORDER BY r.created_at DESC
         ");
@@ -102,15 +103,16 @@ try {
         "description" => $spec['description'] ?: "",
         "specialties" => array_values(array_filter(array_map('trim', explode(',', $spec['specialization'] ?? '')))),
         "years_experience" => (int)$spec['experience_years'],
-        "certificates" => [], // Not in schema, mocked
+        "certificates" => array_values(array_filter(array_map('trim', explode(',', $spec['certifications'] ?? '')))),
+        "certificate_url" => $spec['certificate_of_experience'] ? (strpos($spec['certificate_of_experience'], 'uploads/') === 0 ? $spec['certificate_of_experience'] : 'uploads/certificates/' . $spec['certificate_of_experience']) : null,
         "clinic" => $spec['clinic_id'] ? [
             "id" => (int)$spec['clinic_id'],
             "name" => $spec['clinic_name'],
             "logo_url" => $spec['clinic_logo'] ?? "",
             "location" => $spec['clinic_location'] ?? ""
         ] : null,
-        "patient_age_group" => $spec['age_groups'] ? implode(', ', json_decode($spec['age_groups'], true) ?: []) : "",
-        "therapy_approaches" => $spec['therapy_approaches'] ? json_decode($spec['therapy_approaches'], true) ?: [] : [],
+        "patient_age_group" => "",
+        "therapy_approaches" => $spec['goals'] ? json_decode($spec['goals'], true) ?: [] : [],
         "session_preferences" => ["duration" => $slotDuration . " min", "frequency" => "As needed"],
         "consultation_types" => $spec['consultation_types'] ? json_decode($spec['consultation_types'], true) ?: [] : [],
         "focus_areas" => $spec['focus_areas'] ? json_decode($spec['focus_areas'], true) ?: [] : [],

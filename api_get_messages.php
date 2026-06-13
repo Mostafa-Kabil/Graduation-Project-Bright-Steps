@@ -34,8 +34,11 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_conversations') {
                     apt.scheduled_at AS appointment_scheduled_at,
                     apt.status AS appointment_status,
                     apt.type AS appointment_type,
+                    c.clinic_id,
                     c.clinic_name,
-                    c.location AS clinic_location
+                    c.location AS clinic_location,
+                    (SELECT COUNT(*) FROM specialist_reviews sr WHERE sr.appointment_id = apt.appointment_id) AS has_specialist_review,
+                    (SELECT COUNT(*) FROM clinic_reviews cr WHERE cr.appointment_id = apt.appointment_id) AS has_clinic_review
                 FROM appointment apt
                 JOIN users partner ON apt.specialist_id = partner.user_id
                 LEFT JOIN specialist s ON partner.user_id = s.specialist_id
@@ -85,6 +88,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_conversations') {
                     apt.scheduled_at AS appointment_scheduled_at,
                     apt.status AS appointment_status,
                     apt.type AS appointment_type,
+                    c.clinic_id,
                     c.clinic_name,
                     c.location AS clinic_location
                 FROM appointment apt
@@ -151,7 +155,7 @@ try {
     // Check if active appointment exists
     $checkAppt = $connect->prepare("
         SELECT a.appointment_id, a.scheduled_at, a.status, a.type,
-               c.clinic_name, c.location
+               c.clinic_id, c.clinic_name, c.location
         FROM appointment a
         LEFT JOIN specialist s ON a.specialist_id = s.specialist_id
         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id

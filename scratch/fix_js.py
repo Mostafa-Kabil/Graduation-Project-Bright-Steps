@@ -1,7 +1,15 @@
-document.addEventListener('DOMContentLoaded', function() {
+import re
+
+with open('js/specialist-profile.js', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# I will recreate the file properly by pulling the first 120 lines from the actual file
+# Wait, let me just reconstruct the renderProfile function cleanly.
+
+new_content = """document.addEventListener('DOMContentLoaded', function() {
     const params = new URLSearchParams(window.location.search);
     const specId = params.get('id');
-    const root = document.getElementById('profile-root');
+    const root = document.getElementById('spec-profile-root');
 
     if (!specId) {
         root.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--slate-500);">No specialist selected.</div>';
@@ -104,10 +112,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (slots.length > 0) {
                     scheduleHtml += `
                     <div style="display:flex;margin-bottom:1.5rem;align-items:center;">
-                        <div style="width:100px;font-weight:700;color:var(--slate-700);">${day}</div>
+                        <div style="width:100px;font-weight:700;color:var(--slate-700);">\${day}</div>
                         <div style="flex:1;display:flex;gap:0.5rem;flex-wrap:wrap;">
-                            ${slots.map(s => {
-                                return `<div style="background:var(--slate-50);border:1px solid var(--slate-200);padding:0.5rem 1rem;border-radius:10px;font-size:0.9rem;color:var(--slate-700);font-weight:600;">${s.start} - ${s.end}</div>`;
+                            \${slots.map(s => {
+                                return `<div style="background:var(--slate-50);border:1px solid var(--slate-200);padding:0.5rem 1rem;border-radius:10px;font-size:0.9rem;color:var(--slate-700);font-weight:600;">\${s.start} - \${s.end}</div>`;
                             }).join('')}
                         </div>
                     </div>`;
@@ -133,27 +141,27 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="animation:fadeIn 0.3s ease-out; margin-top: 3rem;">
                 <h3 style="color:var(--slate-900);font-size:1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.5rem;">⭐ Patient Reviews</h3>
                 <div style="background:linear-gradient(135deg, #4f46e5, #7c3aed);border-radius:24px;padding:2.5rem;margin-bottom:2rem;color:#fff;display:flex;align-items:center;gap:2rem;box-shadow:0 15px 30px rgba(99,102,241,0.2);">
-                    <div style="font-size:4.5rem;font-weight:800;line-height:1;">${data.average_rating}</div>
+                    <div style="font-size:4.5rem;font-weight:800;line-height:1;">\${data.average_rating}</div>
                     <div>
-                        <div style="margin-bottom:0.5rem;">${stars(data.average_rating)}</div>
-                        <div style="color:rgba(255,255,255,0.8);font-size:1.1rem;font-weight:500;">Based on ${data.review_count} patient reviews</div>
+                        <div style="margin-bottom:0.5rem;">\${stars(data.average_rating)}</div>
+                        <div style="color:rgba(255,255,255,0.8);font-size:1.1rem;font-weight:500;">Based on \${data.review_count} patient reviews</div>
                     </div>
                 </div>
                 
                 <div style="display:grid;gap:1.5rem;">
-                ${data.reviews && data.reviews.length ? data.reviews.map(r => `
+                \${data.reviews && data.reviews.length ? data.reviews.map(r => `
                     <div style="background:#fff;border-radius:20px;padding:2rem;box-shadow:0 4px 15px rgba(0,0,0,0.03);border:1px solid rgba(226,232,240,0.8);">
                         <div style="display:flex;justify-content:space-between;margin-bottom:1rem;align-items:center;">
                             <div style="display:flex;align-items:center;gap:1rem;">
-                                <div style="width:40px;height:40px;border-radius:50%;background:var(--slate-100);color:var(--slate-600);display:flex;align-items:center;justify-content:center;font-weight:700;">${r.parent.charAt(0).toUpperCase()}</div>
+                                <div style="width:40px;height:40px;border-radius:50%;background:var(--slate-100);color:var(--slate-600);display:flex;align-items:center;justify-content:center;font-weight:700;">\${r.parent.charAt(0).toUpperCase()}</div>
                                 <div>
-                                    <strong style="color:var(--slate-900);font-size:1.05rem;display:block;">${r.parent}</strong>
-                                    <span style="color:var(--slate-400);font-size:0.85rem;">${r.date.split(' ')[0]}</span>
+                                    <strong style="color:var(--slate-900);font-size:1.05rem;display:block;">\${r.parent}</strong>
+                                    <span style="color:var(--slate-400);font-size:0.85rem;">\${r.date.split(' ')[0]}</span>
                                 </div>
                             </div>
-                            ${stars(r.rating)}
+                            \${stars(r.rating)}
                         </div>
-                        <p style="color:var(--slate-600);margin:0;font-size:1rem;line-height:1.6;">"${r.comment}"</p>
+                        <p style="color:var(--slate-600);margin:0;font-size:1rem;line-height:1.6;">"\${r.comment}"</p>
                     </div>
                 `).join('') : '<div style="text-align:center;padding:3rem;color:var(--slate-500);background:#fff;border-radius:24px;border:1px solid var(--slate-200);">No reviews yet.</div>'}
                 </div>
@@ -183,13 +191,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div style="position:absolute;top:0;left:0;right:0;height:140px;background:linear-gradient(135deg, #e0e7ff, #f3e8ff);z-index:0;"></div>
                     
                     <div style="position:relative;z-index:1;text-align:center;margin-top:20px;">
-                        ${logo}
-                        <h1 style="font-size:2.5rem;font-weight:800;color:var(--slate-900);margin:1.5rem 0 0.5rem;letter-spacing:-0.02em;">${data.full_name}</h1>
-                        <div style="font-size:1.15rem;color:var(--slate-500);font-weight:500;margin-bottom:1.5rem;">${data.years_experience} Years Experience</div>
+                        \${logo}
+                        <h1 style="font-size:2.5rem;font-weight:800;color:var(--slate-900);margin:1.5rem 0 0.5rem;letter-spacing:-0.02em;">\${data.full_name}</h1>
+                        <div style="font-size:1.15rem;color:var(--slate-500);font-weight:500;margin-bottom:1.5rem;">\${data.years_experience} Years Experience</div>
                         <div style="display:flex;justify-content:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
-                            ${specialtiesHtml}
+                            \${specialtiesHtml}
                         </div>
-                        ${clinicInfo}
+                        \${clinicInfo}
                     </div>
                 </div>
 
@@ -200,12 +208,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
 
                 <div class="tab-container">
-                    ${aboutHtml}
-                    ${certHtml}
-                    ${scheduleHtml}
+                    \${aboutHtml}
+                    \${certHtml}
+                    \${scheduleHtml}
                 </div>
                 
-                ${reviewsHtml}
+                \${reviewsHtml}
             </div>
         `;
 
@@ -238,8 +246,8 @@ window.showLocalBookingModal = function(specId, specName, fee) {
                 </div>
                 
                 <div style="margin-bottom:1.5rem;">
-                    <p style="margin:0;color:var(--slate-600);">Booking with <strong>${specName}</strong></p>
-                    <p style="margin:0;color:var(--blue-600);font-weight:600;">Consultation Fee: ${fee} EGP</p>
+                    <p style="margin:0;color:var(--slate-600);">Booking with <strong>\${specName}</strong></p>
+                    <p style="margin:0;color:var(--blue-600);font-weight:600;">Consultation Fee: \${fee} EGP</p>
                 </div>
 
                 <div style="margin-bottom:1.5rem;">
@@ -308,3 +316,7 @@ window.showLocalBookingModal = function(specId, specName, fee) {
         }
     };
 };
+"""
+
+with open('js/specialist-profile.js', 'w', encoding='utf-8') as f:
+    f.write(new_content)

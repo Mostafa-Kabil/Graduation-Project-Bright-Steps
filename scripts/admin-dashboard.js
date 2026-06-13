@@ -511,8 +511,8 @@ function deletePlan(subId, planName) {
 // ═══ POINTS (Modernized) ═══
 async function loadPointsView(main) {
     try {
-        const [sd, wd, ed] = await Promise.all([apiGet('points.php?action=stats'), apiGet('points.php?action=top_wallets'), apiGet('engagement.php?action=all_data')]);
-        const stats = sd.stats, wallets = wd.wallets || [], rules = ed.rules || [], badges = ed.badges || [], banners = ed.banners || [];
+        const [sd, wd, ed, rd] = await Promise.all([apiGet('points.php?action=stats'), apiGet('points.php?action=top_wallets'), apiGet('engagement.php?action=all_data'), apiGet('api_admin_points.php')]);
+        const stats = sd.stats, wallets = wd.wallets || [], rules = rd.rules || [], badges = ed.badges || [], banners = ed.banners || [];
         const medals = ['🥇','🥈','🥉'];
         const styleColors = {info:'#6366f1',warning:'#f59e0b',success:'#10b981',error:'#ef4444'};
         main.innerHTML = `<div class="dashboard-content">
@@ -558,8 +558,8 @@ async function loadPointsView(main) {
 
         <!-- Points Rules + Leaderboard -->
         <div class="overview-grid" style="align-items: start; grid-template-columns: 2fr 1fr;">
-            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Points Rules</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${rules.length} rules</span></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Action</th><th>Points</th><th>Type</th><th>Actions</th></tr></thead><tbody>
-                ${rules.map(r => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td><strong>${r.action_name}</strong></td><td><span style="font-weight:700;color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign}${r.points_value}</span></td><td><span style="font-size:.75rem;padding:3px 10px;border-radius:6px;background:${r.adjust_sign === '+' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'};color:${r.adjust_sign === '+' ? 'var(--green-500)' : 'var(--red-500)'};">${r.adjust_sign === '+' ? '↑ Deposit' : '↓ Withdrawal'}</span></td><td><button class="btn btn-sm btn-outline" style="margin-right:4px;" onclick="editRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\\\'")}',${r.points_value},'${r.adjust_sign}')">Edit</button><button class="btn btn-sm btn-outline" style="color:var(--red-500);border-color:rgba(239,68,68,0.2);" onclick="deleteRule(${r.refrence_id},'${r.action_name.replace(/'/g, "\\\\'")}')">Del</button></td></tr>`).join('')}
+            <div class="section-card"><div class="section-card-header"><h2 class="section-heading">Points Rules</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">${rules.length} rules</span></div><div class="clinic-table-wrap"><table class="clinic-table"><thead><tr><th>Action</th><th>Points</th><th>Cooldown (min)</th><th>Actions</th></tr></thead><tbody>
+                ${rules.map(r => `<tr style="transition:background .15s;" onmouseenter="this.style.background='var(--bg-secondary)'" onmouseleave="this.style.background=''"><td><strong>${r.rule_key}</strong><br><small style="color:var(--text-secondary)">${r.description}</small></td><td><input type="number" id="pts-${r.rule_key}" value="${r.points}" style="width:60px;padding:2px 4px;"></td><td><input type="number" id="cd-${r.rule_key}" value="${r.cooldown_minutes}" style="width:60px;padding:2px 4px;"></td><td><button class="btn btn-sm btn-outline" style="margin-right:4px;" onclick="updateAdminRule('${r.rule_key}')">Save</button></td></tr>`).join('')}
                 ${rules.length === 0 ? '<tr><td colspan="4" style="text-align:center;padding:2rem;color:var(--text-secondary);">No rules</td></tr>' : ''}
             </tbody></table></div></div>
             <div class="section-card" style="margin-bottom:0; height: fit-content;"><div class="section-card-header"><h2 class="section-heading">🏆 Leaderboard</h2><span style="font-size:.7rem;background:var(--bg-secondary);padding:4px 10px;border-radius:6px;color:var(--text-secondary);">Top ${wallets.length}</span></div><div class="patients-list" style="max-height:320px;overflow-y:auto;padding-bottom:0;">
@@ -663,6 +663,20 @@ async function loadPointsView(main) {
     } catch (e) { main.innerHTML = `<div style="padding:3rem;text-align:center;color:var(--red-500);"><h2>Error</h2><p>${e.message}</p></div>`; }
 }
 // Badge & Banner helpers for Engagement page
+window.updateAdminRule = async function(ruleKey) {
+    const pts = document.getElementById('pts-'+ruleKey).value;
+    const cd = document.getElementById('cd-'+ruleKey).value;
+    try {
+        const res = await apiPost('api_admin_points.php', { rule_key: ruleKey, points: pts, cooldown_minutes: cd });
+        if (res.success) {
+            showAlert('Rule updated successfully', 'success');
+        } else {
+            showAlert(res.error || 'Failed to update rule', 'error');
+        }
+    } catch (e) {
+        showAlert('Error connecting to server', 'error');
+    }
+};
 function showAddBadgeModal() {
     showModal('Add Badge', `<div class="form-group"><label>Name</label><input type="text" id="nb-name" placeholder="e.g. Early Bird"></div><div class="form-group"><label>Description</label><input type="text" id="nb-desc" placeholder="Badge description"></div><div class="form-group"><label>Icon (emoji)</label><input type="text" id="nb-icon" value="🏆" style="font-size:1.5rem;width:80px;text-align:center;"></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="nb-save">Add Badge</button>`);

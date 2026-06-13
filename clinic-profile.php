@@ -29,23 +29,45 @@ try {
     $reviews = [];
     $avgRating = 0;
     try {
-        $sql3 = "SELECT r.*, p.first_name, p.last_name 
+        // Clinic Reviews
+        $sql3 = "SELECT r.rating, r.comment, r.created_at, u.first_name, u.last_name, 'Clinic Review' as review_type 
                  FROM clinic_reviews r 
-                 JOIN parent p ON r.parent_id = p.parent_id 
-                 WHERE r.clinic_id = :id ORDER BY r.created_at DESC";
+                 JOIN users u ON r.parent_id = u.user_id 
+                 WHERE r.clinic_id = :id";
         $stmt3 = $connect->prepare($sql3);
         $stmt3->execute(['id' => $clinic_id]);
-        $reviews = $stmt3->fetchAll(PDO::FETCH_ASSOC);
+        $clinic_reviews = $stmt3->fetchAll(PDO::FETCH_ASSOC);
+
+        // Specialist Reviews
+        $sql4 = "SELECT r.rating, r.comment, r.created_at, u.first_name, u.last_name, CONCAT('Dr. ', s.first_name, ' ', s.last_name) as review_type 
+                 FROM specialist_reviews r
+                 JOIN users u ON r.parent_id = u.user_id
+                 JOIN specialist s ON r.specialist_id = s.specialist_id
+                 WHERE s.clinic_id = :id";
+        $stmt4 = $connect->prepare($sql4);
+        $stmt4->execute(['id' => $clinic_id]);
+        $spec_reviews = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+
+        $clinicAvg = 0;
+        $specAvg = 0;
+        if (count($clinic_reviews) > 0) {
+            $clinicAvg = round(array_sum(array_column($clinic_reviews, 'rating')) / count($clinic_reviews), 1);
+        }
+        if (count($spec_reviews) > 0) {
+            $specAvg = round(array_sum(array_column($spec_reviews, 'rating')) / count($spec_reviews), 1);
+        }
+
+        $reviews = array_merge($clinic_reviews, $spec_reviews);
+        usort($reviews, function($a, $b) {
+            return strtotime($b['created_at']) - strtotime($a['created_at']);
+        });
 
         if (count($reviews) > 0) {
-            $sum = 0;
-            foreach ($reviews as $r) {
-                $sum += $r['rating'];
-            }
+            $sum = array_sum(array_column($reviews, 'rating'));
             $avgRating = round($sum / count($reviews), 1);
         }
     } catch (Exception $e) {
-        // Ignore if clinic_reviews doesn't exist yet
+        // Ignore errors
     }
 
 } catch (Exception $e) {
@@ -215,8 +237,12 @@ try {
                 <div class="stat-label">Specialists</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value">⭐ <?= $avgRating ?: 'N/A' ?></div>
-                <div class="stat-label"><?= count($reviews) ?> Reviews</div>
+                <div class="stat-value" style="color:var(--emerald-600);">⭐ <?= !empty($clinicAvg) ? $clinicAvg : 'N/A' ?></div>
+                <div class="stat-label">Clinic Rating (<?= count($clinic_reviews ?? []) ?>)</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" style="color:var(--indigo-600);">⭐ <?= !empty($specAvg) ? $specAvg : 'N/A' ?></div>
+                <div class="stat-label">Specialists Rating (<?= count($spec_reviews ?? []) ?>)</div>
             </div>
         </div>
     </div>
@@ -265,7 +291,10 @@ try {
                     <?php foreach ($reviews as $r): ?>
                         <div class="review-card">
                             <div class="review-header">
-                                <div class="reviewer-name"><?= htmlspecialchars($r['first_name'] . ' ' . $r['last_name'][0] . '.') ?></div>
+                                <div>
+                                    <div class="reviewer-name"><?= htmlspecialchars($r['first_name'] . ' ' . $r['last_name'][0] . '.') ?></div>
+                                    <div style="font-size:0.75rem;color:var(--blue-600);font-weight:600;margin-top:0.2rem;"><?= htmlspecialchars($r['review_type']) ?></div>
+                                </div>
                                 <div class="review-date"><?= date('M d, Y', strtotime($r['created_at'])) ?></div>
                             </div>
                             <div class="stars"><?= str_repeat('★', $r['rating']) . str_repeat('☆', 5 - $r['rating']) ?></div>

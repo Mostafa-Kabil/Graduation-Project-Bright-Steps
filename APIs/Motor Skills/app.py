@@ -416,6 +416,9 @@ async def generate_behavior_checklist(metrics: ChildMetrics):
     try:
         conn = get_db()
         age_range = get_age_range(metrics.age_months)
+        
+        if metrics.condition == "developmental_delay":
+            age_range = get_age_range(max(0, metrics.age_months - 12))
 
         # Get behaviors for age range - 4 Developmental Pillars
         categories = []
@@ -464,23 +467,6 @@ async def generate_behavior_checklist(metrics: ChildMetrics):
             "category_description": "Social interaction, emotional development, play skills, and relationship building",
             "behaviors": [{"behavior_details": b["behavior"], "typical_age": b["typical_age"]} for b in social_behaviors]
         })
-
-        # Filter based on condition if provided
-        if metrics.condition == "developmental_delay":
-            # Include behaviors from younger age range for delayed children
-            younger_range = get_age_range(max(0, metrics.age_months - 3))
-            for cat in categories:
-                type_mapping = {
-                    "⚡ Gross Motor": ["gross_motor"],
-                    "🤏 Fine Motor": ["fine_motor"],
-                    "🧠 Attention": ["attention"],
-                    "💬 Communication": ["communication"],
-                    "🤝 Social Skills": ["social_skills"]
-                }
-                types_to_check = type_mapping.get(cat["category_name"], [cat["category_type"].lower()])
-                for type_key in types_to_check:
-                    younger_behaviors = BEHAVIOR_DATABASE.get(type_key, {}).get(younger_range, [])
-                    cat["behaviors"].extend([{"behavior_details": b["behavior"], "typical_age": b["typical_age"]} for b in younger_behaviors])
 
         # Insert categories and behaviors into database
         inserted_categories = 0

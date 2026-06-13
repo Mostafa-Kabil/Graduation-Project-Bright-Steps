@@ -1610,15 +1610,54 @@
 
     // Age-based recommended words
     function getAgeWords(ageMonths) {
-        if (ageMonths < 18) return { label: '12–17 months', words: ['mama', 'dada', 'ball', 'cup', 'no', 'bye', 'up', 'hi', 'dog', 'cat'] };
-        if (ageMonths < 24) return { label: '18–23 months', words: ['water', 'shoe', 'bird', 'book', 'car', 'baby', 'hot', 'go', 'sit', 'more'] };
-        if (ageMonths < 36) return { label: '24–35 months', words: ['apple', 'tree', 'run', 'jump', 'play', 'happy', 'blue', 'red', 'big', 'eat'] };
-        if (ageMonths < 48) return { label: '36–47 months', words: ['orange', 'school', 'friend', 'animal', 'family', 'outside', 'music', 'color', 'dance', 'grow'] };
-        if (ageMonths < 60) return { label: '48–59 months', words: ['elephant', 'butterfly', 'teacher', 'together', 'beautiful', 'favorite', 'remember', 'always', 'village', 'garden'] };
-        return { label: '60–72 months', words: ['strawberry', 'hospital', 'experiment', 'neighborhood', 'imagination', 'celebrate', 'accomplish', 'wonderful', 'adventure', 'discovery'] };
+        const age = Math.floor(ageMonths / 12);
+        let targetWords = [];
+        let label = '';
+        if (age < 4) {
+            targetWords = ["cat", "dog", "ball", "car"];
+            label = 'Under 4 years';
+        } else if (age >= 4 && age <= 6) {
+            targetWords = ["apple", "house", "water", "happy"];
+            label = '4 to 6 years';
+        } else {
+            targetWords = ["elephant", "beautiful", "tomorrow", "strawberry"];
+            label = 'Over 6 years';
+        }
+        return { label: label, words: targetWords };
     }
 
-    window.openSpeechModal = function (childId) {
+    async function checkAIServers() {
+        try {
+            const res = await fetch('../../api_server_manager.php?action=check_and_start');
+            const data = await res.json();
+            
+            if (data.servers && (data.servers.speech === 'starting' || data.servers.motor === 'starting')) {
+                // Wait 4 seconds to allow FastAPI to boot up
+                await new Promise(r => setTimeout(r, 4000));
+            }
+            return true;
+        } catch (e) {
+            console.error("Server manager error:", e);
+            return false;
+        }
+    }
+
+    window.openSpeechModal = async function (childId) {
+        const btn = document.querySelector(`button[onclick="openSpeechModal(${childId})"]`);
+        let originalText = "";
+        if (btn) {
+            originalText = btn.innerHTML;
+            btn.innerHTML = '🔄 Waking up AI...';
+            btn.disabled = true;
+        }
+        
+        await checkAIServers();
+        
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+
         if (!window.checkSubscriptionAccess('speech', 3)) return;
         let existing = document.getElementById('speech-modal');
         if (existing) existing.remove();
@@ -1841,6 +1880,14 @@
                 } else {
                     loadSpeechHistory(childId);
                 }
+            } else if (data.error === 'cooldown') {
+                if (typeof window.showCooldownPopup === 'function') {
+                    window.showCooldownPopup(data.minutes_remaining);
+                } else {
+                    alert(`Action is on cooldown. Try again in ${data.minutes_remaining} minutes.`);
+                }
+                const modal = document.getElementById('speech-modal');
+                if (modal) modal.remove();
             } else {
                 var errorMsg = data.error || 'Analysis failed';
                 if (errorMsg.includes('port 8000') || errorMsg.includes('unavailable') || errorMsg.includes('offline')) {
@@ -2373,8 +2420,28 @@
                                 onchange="toggleMilestone(${m.id}, ${childId}, this.checked)">
                         </div>
                         <div style="flex:1;">
-                            <div style="font-size:1.05rem;font-weight:600;${m.is_achieved == 1 ? 'text-decoration:line-through;color:var(--slate-400);' : 'color:var(--slate-700);'}">${m.milestone_name}</div>
+                            <div style="font-size:1.05rem;font-weight:600;cursor:pointer;${m.is_achieved == 1 ? 'text-decoration:line-through;color:var(--slate-400);' : 'color:var(--slate-700);'}" onclick="toggleMotorDetails(${m.id})">${m.milestone_name}</div>
                             ${m.achieved_at ? `<div style="font-size:0.75rem;color:var(--slate-400);margin-top:0.25rem;font-weight:500;">✓ Achieved on ${new Date(m.achieved_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}</div>` : ''}
+                            
+                            <div id="motor-details-${m.id}" style="display:none; margin-top: 1rem; gap: 1rem; flex-wrap: wrap;">
+                                <div style="display:flex;align-items:center;gap:0.5rem;">
+                                    <span style="font-size:0.8rem;color:var(--slate-500);font-weight:600;">Frequency:</span>
+                                    <select onchange="saveMotorState(${m.id}, this.value, 'frequency')" style="padding:0.4rem 0.8rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.85rem;outline:none;cursor:pointer;">
+                                        <option value="rarely" ${sessionStorage.getItem('motor_state_'+m.id+'_frequency') === 'rarely' ? 'selected' : ''}>Rarely</option>
+                                        <option value="sometimes" ${!sessionStorage.getItem('motor_state_'+m.id+'_frequency') || sessionStorage.getItem('motor_state_'+m.id+'_frequency') === 'sometimes' ? 'selected' : ''}>Sometimes</option>
+                                        <option value="often" ${sessionStorage.getItem('motor_state_'+m.id+'_frequency') === 'often' ? 'selected' : ''}>Often</option>
+                                        <option value="always" ${sessionStorage.getItem('motor_state_'+m.id+'_frequency') === 'always' ? 'selected' : ''}>Always</option>
+                                    </select>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:0.5rem;">
+                                    <span style="font-size:0.8rem;color:var(--slate-500);font-weight:600;">Severity:</span>
+                                    <select onchange="saveMotorState(${m.id}, this.value, 'severity')" style="padding:0.4rem 0.8rem;border:1px solid #e2e8f0;border-radius:8px;font-size:0.85rem;outline:none;cursor:pointer;">
+                                        <option value="mild" ${!sessionStorage.getItem('motor_state_'+m.id+'_severity') || sessionStorage.getItem('motor_state_'+m.id+'_severity') === 'mild' ? 'selected' : ''}>Mild</option>
+                                        <option value="moderate" ${sessionStorage.getItem('motor_state_'+m.id+'_severity') === 'moderate' ? 'selected' : ''}>Moderate</option>
+                                        <option value="severe" ${sessionStorage.getItem('motor_state_'+m.id+'_severity') === 'severe' ? 'selected' : ''}>Severe</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>`).join('')}
                 </div>
@@ -2427,6 +2494,35 @@
             modal.innerHTML = modalHtml;
             document.body.appendChild(modal);
         }
+
+        setTimeout(() => {
+            const lastExpanded = sessionStorage.getItem('last_expanded_motor_item');
+            if (lastExpanded) {
+                const details = document.getElementById('motor-details-' + lastExpanded);
+                if (details) {
+                    details.style.display = 'flex';
+                    details.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }, 100);
+    };
+
+    window.toggleMotorDetails = function(itemId) {
+        const details = document.getElementById('motor-details-' + itemId);
+        if (details) {
+            const isVisible = details.style.display === 'flex';
+            details.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) {
+                sessionStorage.setItem('last_expanded_motor_item', itemId);
+            } else {
+                sessionStorage.removeItem('last_expanded_motor_item');
+            }
+        }
+    };
+
+    window.saveMotorState = function(itemId, value, type) {
+        sessionStorage.setItem('motor_state_' + itemId + '_' + type, value);
+        sessionStorage.setItem('last_expanded_motor_item', itemId);
     };
 
     async function loadMotorMilestones(childId) {
@@ -2534,8 +2630,12 @@
                 body: JSON.stringify({ milestone_id: milestoneId, child_id: childId, is_achieved: isAchieved ? 1 : 0 })
             });
             const data = await res.json();
-            if (data.success && isAchieved && data.points_awarded) {
-                showBadgeToast('Milestone achieved! +' + data.points_awarded + ' points 🎉');
+            if (data.cooldown_active) {
+                if (typeof window.showCooldownPopup === 'function') {
+                    window.showCooldownPopup(data.minutes_remaining);
+                }
+            } else if (data.success && isAchieved && data.points_awarded) {
+                showBadgeToast('Milestone achieved! +' + data.points_awarded + ' points ✨');
             }
             // Refresh the checklist
             loadMotorMilestones(childId);
@@ -3939,7 +4039,22 @@
         feedbackEl.textContent = finalMessage;
     }
 
-    window.openBehaviorChecklistModal = function (childId) {
+    window.openBehaviorChecklistModal = async function (childId) {
+        const btn = document.querySelector(`button[onclick="openBehaviorChecklistModal(${childId})"]`);
+        let originalText = "";
+        if (btn) {
+            originalText = btn.innerHTML;
+            btn.innerHTML = '🔄 Waking up AI...';
+            btn.disabled = true;
+        }
+
+        await checkAIServers();
+
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+
         if (!_behaviorChecklistData) {
             // Load data first - ensure childId is passed correctly
             loadBehaviorChecklist(childId).then(() => {
@@ -4986,8 +5101,8 @@
                     const cardHtml = c => `
                         <div class="clinic-dir-card" style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;cursor:pointer;transition:transform .2s;" onclick="window.location.href='../../clinic-profile.php?id=${c.clinic_id}'" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
                             <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;">
-                                <div style="width:40px;height:40px;border-radius:8px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;">
-                                    ${c.logo ? `<img src="../../${c.logo}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : '🏥'}
+                                <div style="width:40px;height:40px;border-radius:8px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">
+                                    ${(c.logo && !c.logo.includes('verification')) ? `<img src="../../${c.logo}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : '🏥'}
                                 </div>
                                 <div>
                                     <h3 style="margin:0;font-size:1rem;color:var(--text-primary);">${c.clinic_name}</h3>
@@ -5154,7 +5269,7 @@
 
                         '<!-- Footer Actions -->' +
                         '<div class="doctor-card-footer">' +
-                            '<button class="btn-doctor-profile" onclick="window.location.href = \'../../specialist-profile.php?id=' + s.specialist_id + '\'">' +
+                            '<button class="btn-doctor-profile" onclick="window.viewDoctorInfo(' + s.specialist_id + ')">' +
                                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>' +
                                 'View Profile' +
                             '</button>' +
@@ -5195,15 +5310,7 @@
                 timelineHtml += '</div>';
 
                 let actionsHtml = '<div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">';
-                if (a.status === 'Scheduled') {
-                    actionsHtml += '<button onclick="window.rescheduleAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">Reschedule</button>';
-                    actionsHtml += '<button onclick="window.cancelAppt(' + a.appointment_id + ')" class="btn btn-outline" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1; color:var(--red-500); border-color:var(--red-200);">Cancel</button>';
-                } else if (a.status === 'Completed' || a.status === 'completed') {
-                    if (a.report && a.report.trim() !== '') {
-                        actionsHtml += `<button onclick="window.viewAppointmentReport(${a.appointment_id}, \`${(a.report||'').replace(/`/g,"'")}\`, \`${a.doc_fname} ${a.doc_lname}\`, '${a.next_visit_recommendation||''}')" class="btn btn-outline btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;margin-bottom:0.5rem;font-size:0.7rem;padding:0.35rem 0.5rem;flex:1;">📄 View Report</button>`;
-                    }
-                    actionsHtml += `<button onclick="window.reviewDoctor(${a.appointment_id}, ${a.specialist_id}, '${a.doc_fname} ${a.doc_lname}', ${a.clinic_id || 0}, ${a.type === 'onsite' ? 'true' : 'false'})" class="btn btn-gradient" style="font-size:0.7rem; padding:0.35rem 0.5rem; flex:1;">⭐ Review</button>`;
-                }
+                actionsHtml += `<button onclick="window.viewAppointmentDetailsPopup(${a.appointment_id})" class="btn btn-outline" style="font-size:0.75rem; padding:0.5rem 1rem; flex:1; border-color:var(--slate-200); color:var(--slate-700); background:var(--slate-50); font-weight:600;">View Details</button>`;
                 actionsHtml += '</div>';
 
                 apptHtml += (
@@ -7425,10 +7532,36 @@
                     </div>
                 </div>
                 
+                <div style="margin-top: 1rem; margin-bottom: 1.5rem; height: 200px; position: relative;">
+                    <canvas id="speech-detail-chart"></canvas>
+                </div>
+                
                 <button onclick="document.getElementById('speech-detail-modal').remove()" style="width:100%;padding:0.875rem;background:linear-gradient(135deg,#7c3aed,#2563eb);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;">Close</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
+        
+        setTimeout(() => {
+            const ctx = document.getElementById('speech-detail-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Vocabulary', 'Clarity', 'Overall Dev'],
+                    datasets: [{
+                        label: 'Scores',
+                        data: [vocabScore, clarityScore, entry.overall_development_score ? Math.round(entry.overall_development_score) : 0],
+                        backgroundColor: ['#c4b5fd', '#86efac', '#fca5a5'],
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, max: Math.max(100, vocabScore + 10) } }
+                }
+            });
+        }, 100);
     };
 
     // Initialize
@@ -7744,6 +7877,33 @@
         document.body.appendChild(modal);
     };
 
+    window.showCooldownPopup = function(minutesRemaining) {
+        let existing = document.getElementById('cooldown-modal');
+        if (existing) existing.remove();
+
+        let timeStr = "";
+        if (minutesRemaining >= 1440) {
+            timeStr = Math.ceil(minutesRemaining / 1440) + " day(s)";
+        } else if (minutesRemaining >= 60) {
+            timeStr = Math.ceil(minutesRemaining / 60) + " hour(s)";
+        } else {
+            timeStr = minutesRemaining + " minute(s)";
+        }
+
+        const modal = document.createElement('div');
+        modal.id = 'cooldown-modal';
+        modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.remove()">
+            <div style="background:#ffffff;border-radius:24px;width:100%;max-width:400px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;text-align:center;padding:2.5rem 2rem;">
+                <div style="font-size:3.5rem;margin-bottom:1rem;">⏳</div>
+                <h2 style="font-size:1.5rem;font-weight:800;color:#1e293b;margin:0 0 0.5rem;">Please Wait</h2>
+                <p style="color:#64748b;font-size:0.95rem;margin:0 0 1.5rem;line-height:1.5;">You've already performed this action recently. You can earn points for this again in <strong>${timeStr}</strong>.</p>
+                <button onclick="document.getElementById('cooldown-modal').remove()" style="width:100%;padding:0.875rem;background:#f1f5f9;color:#475569;border:none;border-radius:12px;font-weight:700;font-size:1rem;cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">Got it</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+    };
+
     window.submitLogMeasurement = async function (childId) {
         const btn = document.getElementById('lgm-submit');
         const status = document.getElementById('lgm-status');
@@ -7776,6 +7936,11 @@
                 status.style.display = 'block';
                 status.innerHTML = '<div style="padding:0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;color:#16a34a;font-size:0.85rem;">✅ ' + data.message + '</div>';
                 setTimeout(() => { window.location.reload(); }, 1200);
+            } else if (data.error === 'cooldown') {
+                if (typeof window.showCooldownPopup === 'function') {
+                    window.showCooldownPopup(data.minutes_remaining);
+                }
+                document.getElementById('log-growth-modal').remove();
             } else {
                 status.style.display = 'block';
                 status.innerHTML = '<div style="padding:0.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;color:#dc2626;font-size:0.85rem;">' + (data.error || 'Error saving') + '</div>';
@@ -8186,6 +8351,89 @@
         modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
     };
 
+    window.viewAppointmentDetailsPopup = function(appointmentId) {
+        const d = window.dashboardData || {};
+        const appt = (d.appointments || []).find(a => a.appointment_id === appointmentId);
+        if (!appt) return;
+
+        let actionsHtml = '<div style="margin-top:1.5rem; display:flex; gap:0.5rem; flex-wrap:wrap;">';
+        if (appt.status === 'Scheduled') {
+            actionsHtml += '<button onclick="window.rescheduleAppt(' + appt.appointment_id + '); document.getElementById(\'appt-details-modal\').remove();" class="btn btn-outline" style="flex:1;">Reschedule</button>';
+            actionsHtml += '<button onclick="window.cancelAppt(' + appt.appointment_id + '); document.getElementById(\'appt-details-modal\').remove();" class="btn btn-outline" style="flex:1; color:var(--red-500); border-color:var(--red-200);">Cancel</button>';
+        } else if (appt.status === 'Completed' || appt.status === 'completed') {
+            if (appt.report && appt.report.trim() !== '') {
+                const reportStr = (appt.report || '').replace(/'/g, "\\'").replace(/\n/g, "\\n");
+                const nameStr = (appt.doc_fname + ' ' + appt.doc_lname).replace(/'/g, "\\'");
+                const nextVisitStr = (appt.next_visit_recommendation || '').replace(/'/g, "\\'");
+                actionsHtml += '<button onclick="document.getElementById(\'appt-details-modal\').remove(); window.viewAppointmentReport(' + appt.appointment_id + ', \'' + reportStr + '\', \'' + nameStr + '\', \'' + nextVisitStr + '\')" class="btn btn-outline btn-sm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;flex:1;">📄 View Report</button>';
+            }
+            if (!(parseInt(appt.has_specialist_review) > 0) && !(parseInt(appt.has_clinic_review) > 0)) {
+                const nameStr = (appt.doc_fname + ' ' + appt.doc_lname).replace(/'/g, "\\'");
+                actionsHtml += '<button onclick="document.getElementById(\'appt-details-modal\').remove(); window.reviewDoctor(' + appt.appointment_id + ', ' + appt.specialist_id + ', \'' + nameStr + '\', ' + (appt.clinic_id || 0) + ', ' + (appt.type === 'onsite' ? 'true' : 'false') + ')" class="btn btn-gradient" style="flex:1;">⭐ Review</button>';
+            }
+        }
+        actionsHtml += '</div>';
+
+        let modal = document.getElementById('appt-details-modal');
+        if (modal) modal.remove();
+        
+        modal = document.createElement('div');
+        modal.id = 'appt-details-modal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        
+        const dt = new Date(appt.scheduled_at);
+        const dateStr = dt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeStr = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const typeBadge = appt.type === 'onsite' ? '🏥 Onsite' : '💻 Online';
+        
+        modal.innerHTML = `
+        <div style="background:#fff;border-radius:24px;padding:2rem;width:100%;max-width:450px;box-shadow:0 24px 64px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;animation:slideUp 0.3s ease-out;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+                <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin:0;">Appointment Details</h2>
+                <button onclick="document.getElementById('appt-details-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);">&times;</button>
+            </div>
+            
+            <div style="background:var(--slate-50);border-radius:16px;padding:1.25rem;border:1px solid var(--slate-100);margin-bottom:1.5rem;">
+                <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--slate-200);">
+                    <div style="width:50px;height:50px;background:linear-gradient(135deg,var(--indigo-100),var(--indigo-50));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;">👨‍⚕️</div>
+                    <div>
+                        <h3 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--slate-800);">Dr. ${appt.doc_fname} ${appt.doc_lname}</h3>
+                        <p style="margin:0;font-size:0.85rem;color:var(--slate-500);">${appt.specialization || 'Specialist'}</p>
+                    </div>
+                </div>
+                
+                <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="color:var(--slate-500);font-size:0.85rem;font-weight:600;">Status</span>
+                        <span style="font-size:0.85rem;font-weight:700;color:var(--slate-800);">${appt.status}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="color:var(--slate-500);font-size:0.85rem;font-weight:600;">Type</span>
+                        <span style="font-size:0.85rem;font-weight:700;color:var(--slate-800);">${typeBadge}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="color:var(--slate-500);font-size:0.85rem;font-weight:600;">Date</span>
+                        <span style="font-size:0.85rem;font-weight:700;color:var(--slate-800);">${dateStr}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span style="color:var(--slate-500);font-size:0.85rem;font-weight:600;">Time</span>
+                        <span style="font-size:0.85rem;font-weight:700;color:var(--slate-800);">${timeStr}</span>
+                    </div>
+                    ${appt.clinic_name ? `
+                    <div style="display:flex;justify-content:space-between;border-top:1px dashed var(--slate-200);padding-top:0.75rem;margin-top:0.25rem;">
+                        <span style="color:var(--slate-500);font-size:0.85rem;font-weight:600;">Clinic</span>
+                        <span style="font-size:0.85rem;font-weight:700;color:var(--slate-800);text-align:right;">${appt.clinic_name}<br><span style="font-size:0.75rem;color:var(--slate-400);font-weight:500;">${appt.clinic_location||''}</span></span>
+                    </div>` : ''}
+                </div>
+            </div>
+            
+            ${actionsHtml}
+        </div>
+        `;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    };
+
     window.skipClinicReview = function() {
         const m = document.getElementById('review-modal');
         if (m) m.remove();
@@ -8230,61 +8478,108 @@
 
         const modal = document.createElement('div');
         modal.id = 'review-modal';
+        
+        let clinicSection = '';
+        if (clinicId) {
+            clinicSection = `
+                <div style="margin-top:2rem;padding-top:2rem;border-top:1px solid var(--slate-200);">
+                    <h3 style="font-size:1.15rem;font-weight:700;color:var(--slate-900);margin:0 0 0.5rem;">🏥 Rate the Clinic</h3>
+                    <p style="color:var(--slate-500);margin-bottom:1rem;font-size:0.85rem;">How was the facility, staff, and environment?</p>
+                    <div style="margin-bottom:1rem;text-align:center;">
+                        <div id="clinic-star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:var(--slate-300);cursor:pointer;">
+                            <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                        </div>
+                        <input type="hidden" id="clinic-rev-rating" value="0">
+                    </div>
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Clinic Comment (Optional)</label>
+                        <textarea id="clinic-rev-comment" rows="2" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;font-family:inherit;font-size:0.9rem;" placeholder="Clean facility? Friendly staff?"></textarea>
+                    </div>
+                </div>
+            `;
+        }
+
         modal.innerHTML = `
             <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)this.parentElement.remove()">
-                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:450px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;padding:2rem;">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:500px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;overflow-y:auto;max-height:90vh;animation:slideUp 0.3s ease-out;padding:2rem;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
                         <h2 style="font-size:1.25rem;font-weight:800;color:var(--slate-900);margin:0;">Rate Your Visit</h2>
                         <button onclick="document.getElementById('review-modal').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--slate-400);">&times;</button>
                     </div>
-                    <p style="color:var(--slate-500);margin-bottom:1.5rem;font-size:0.9rem;">How was your experience with ${docName}?</p>
                     
-                    <div style="margin-bottom:1.5rem;text-align:center;">
-                        <div id="star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:var(--slate-300);cursor:pointer;">
-                            <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                    <div>
+                        <h3 style="font-size:1.15rem;font-weight:700;color:var(--slate-900);margin:0 0 0.5rem;">👨‍⚕️ Rate the Specialist</h3>
+                        <p style="color:var(--slate-500);margin-bottom:1rem;font-size:0.85rem;">How was your experience with ${docName}?</p>
+                        <div style="margin-bottom:1rem;text-align:center;">
+                            <div id="star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:var(--slate-300);cursor:pointer;">
+                                <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
+                            </div>
+                            <input type="hidden" id="rev-rating" value="0">
                         </div>
-                        <input type="hidden" id="rev-rating" value="0">
-                    </div>
-                    
-                    <div style="margin-bottom:1.5rem;">
-                        <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Comment (Optional)</label>
-                        <textarea id="rev-comment" rows="3" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;font-family:inherit;" placeholder="Share your thoughts..."></textarea>
+                        <div style="margin-bottom:1.5rem;">
+                            <label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Specialist Comment (Optional)</label>
+                            <textarea id="rev-comment" rows="2" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;resize:none;outline:none;font-family:inherit;font-size:0.9rem;" placeholder="Share your thoughts..."></textarea>
+                        </div>
                     </div>
 
-                    <button id="submit-rev-btn" class="btn btn-gradient" style="width:100%;padding:1rem;">Submit Review</button>
+                    ${clinicSection}
+
+                    <button id="submit-rev-btn" class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.05rem;border-radius:12px;">Submit Review(s)</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
 
-        const stars = document.querySelectorAll('#star-rating span');
-        const ratingInput = document.getElementById('rev-rating');
-        stars.forEach(s => {
-            s.addEventListener('click', () => {
-                const val = parseInt(s.getAttribute('data-val'));
-                ratingInput.value = val;
-                stars.forEach((st, i) => {
-                    st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)';
+        const setupStars = (containerId, inputId) => {
+            const stars = document.querySelectorAll('#' + containerId + ' span');
+            const ratingInput = document.getElementById(inputId);
+            if (!stars.length) return;
+            stars.forEach(s => {
+                s.addEventListener('click', () => {
+                    const val = parseInt(s.getAttribute('data-val'));
+                    ratingInput.value = val;
+                    stars.forEach((st, i) => { st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)'; });
+                });
+                s.addEventListener('mouseover', () => {
+                    const val = parseInt(s.getAttribute('data-val'));
+                    stars.forEach((st, i) => { st.style.color = i < val ? '#fcd34d' : 'var(--slate-300)'; });
+                });
+                s.addEventListener('mouseout', () => {
+                    const val = parseInt(ratingInput.value);
+                    stars.forEach((st, i) => { st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)'; });
                 });
             });
-            s.addEventListener('mouseover', () => {
-                const val = parseInt(s.getAttribute('data-val'));
-                stars.forEach((st, i) => {
-                    st.style.color = i < val ? '#fcd34d' : 'var(--slate-300)';
-                });
-            });
-            s.addEventListener('mouseout', () => {
-                const val = parseInt(ratingInput.value);
-                stars.forEach((st, i) => {
-                    st.style.color = i < val ? '#f59e0b' : 'var(--slate-300)';
-                });
-            });
-        });
+        };
+
+        setupStars('star-rating', 'rev-rating');
+        if (clinicId) {
+            setupStars('clinic-star-rating', 'clinic-rev-rating');
+        }
 
         document.getElementById('submit-rev-btn').addEventListener('click', () => {
-            const rating = parseInt(ratingInput.value);
-            if (rating < 1 || rating > 5) { alert('Please select a star rating.'); return; }
-            const comment = document.getElementById('rev-comment').value;
+            const rating = parseInt(document.getElementById('rev-rating').value);
+            const payload = {
+                appointment_id: appointmentId,
+                specialist_id: specialistId,
+                rating: rating,
+                comment: document.getElementById('rev-comment').value
+            };
+
+            let hasClinicRating = false;
+            if (clinicId) {
+                const clinicRating = parseInt(document.getElementById('clinic-rev-rating').value);
+                if (clinicRating >= 1 && clinicRating <= 5) {
+                    payload.clinic_id = clinicId;
+                    payload.clinic_rating = clinicRating;
+                    payload.clinic_comment = document.getElementById('clinic-rev-comment').value;
+                    hasClinicRating = true;
+                }
+            }
+
+            if ((rating < 1 || rating > 5) && !hasClinicRating) {
+                alert('Please provide a rating for either the specialist or the clinic.');
+                return;
+            }
 
             document.getElementById('submit-rev-btn').disabled = true;
             document.getElementById('submit-rev-btn').innerHTML = 'Submitting...';
@@ -8292,61 +8587,44 @@
             fetch('../../api_doctor_review.php?action=submit', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ appointment_id: appointmentId, specialist_id: specialistId, rating: rating, comment: comment })
+                body: JSON.stringify(payload)
             })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    if (isOnsite && clinicId) {
-                        document.getElementById('review-modal').innerHTML = `
-                        <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;">
-                            <div style="background:#fff;border-radius:20px;padding:2rem;width:100%;max-width:440px;box-shadow:0 24px 64px rgba(0,0,0,0.25);">
-                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
-                                    <div style="width:32px;height:32px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;">✓</div>
-                                    <div style="width:32px;height:32px;border-radius:50%;background:#6366f1;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.85rem;font-weight:700;">2</div>
-                                    <p style="margin:0;font-size:0.85rem;color:#64748b;">Step 2 of 2 — Rate the Clinic</p>
-                                </div>
-                                <h3 style="margin:0.75rem 0 0.25rem;font-size:1.2rem;font-weight:700;color:#0f172a;">🏥 How was the clinic?</h3>
-                                <p style="margin:0 0 1.25rem;font-size:0.875rem;color:#64748b;">Share your experience with the facility, staff, and environment.</p>
-                                <div id="clinic-star-rating" style="display:flex;justify-content:center;gap:0.5rem;font-size:2.5rem;color:#d1d5db;cursor:pointer;margin-bottom:1rem;">
-                                    <span data-val="1">★</span><span data-val="2">★</span><span data-val="3">★</span><span data-val="4">★</span><span data-val="5">★</span>
-                                </div>
-                                <input type="hidden" id="clinic-rev-rating" value="0">
-                                <textarea id="clinic-rev-comment" rows="3" placeholder="Clean facility? Friendly staff? Easy to find? (optional)" style="width:100%;padding:0.75rem 1rem;border:1.5px solid #e2e8f0;border-radius:12px;font-family:inherit;font-size:0.9rem;resize:none;outline:none;box-sizing:border-box;margin-bottom:1rem;transition:border-color 0.2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e2e8f0'"></textarea>
-                                <div style="display:flex;gap:0.75rem;">
-                                    <button onclick="window.skipClinicReview()" style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;font-size:0.875rem;">Skip</button>
-                                    <button id="submit-clinic-rev-btn" onclick="window.submitClinicReview(${appointmentId}, ${clinicId})" style="flex:2;padding:0.75rem;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">Submit Clinic Review</button>
-                                </div>
-                            </div>
-                        </div>`;
-                        
-                        const clinicStars = document.querySelectorAll('#clinic-star-rating span');
-                        const clinicRatingInput = document.getElementById('clinic-rev-rating');
-                        clinicStars.forEach(s => {
-                            s.addEventListener('click', () => {
-                                const val = parseInt(s.dataset.val);
-                                clinicRatingInput.value = val;
-                                clinicStars.forEach((st, i) => { st.style.color = i < val ? '#f59e0b' : '#d1d5db'; });
-                            });
-                            s.addEventListener('mouseover', () => {
-                                const val = parseInt(s.dataset.val);
-                                clinicStars.forEach((st, i) => { st.style.color = i < val ? '#fbbf24' : '#d1d5db'; });
-                            });
-                            s.addEventListener('mouseout', () => {
-                                const current = parseInt(clinicRatingInput.value);
-                                clinicStars.forEach((st, i) => { st.style.color = i < current ? '#f59e0b' : '#d1d5db'; });
-                            });
-                        });
-                    } else {
-                        window.showReviewThankYou();
+                    const m = document.getElementById('review-modal');
+                    if (m) m.remove();
+                    
+                    const d = window.dashboardData || {};
+                    const appt = (d.appointments || []).find(a => a.appointment_id === appointmentId);
+                    if (appt) {
+                        if (payload.rating > 0) appt.has_specialist_review = "1";
+                        if (payload.clinic_rating > 0) appt.has_clinic_review = "1";
                     }
+                    if (window._parentConversationsCache) {
+                        const conv = window._parentConversationsCache.find(c => c.appointment_id == appointmentId);
+                        if (conv) {
+                            if (payload.rating > 0) conv.has_specialist_review = "1";
+                            if (payload.clinic_rating > 0) conv.has_clinic_review = "1";
+                        }
+                    }
+                    const chatReviewBtn = document.getElementById('parent-chat-review-btn');
+                    if (chatReviewBtn) chatReviewBtn.style.display = 'none';
+                    if (typeof window.renderDashboard === 'function') window.renderDashboard();
+
+                    window.showReviewThankYou();
                 } else {
                     alert(data.error || 'Failed to submit review.');
                     document.getElementById('submit-rev-btn').disabled = false;
-                    document.getElementById('submit-rev-btn').innerHTML = 'Submit Review';
+                    document.getElementById('submit-rev-btn').innerHTML = 'Submit Review(s)';
                 }
             })
-            .catch(console.error);
+            .catch(err => {
+                console.error(err);
+                alert('Error submitting review.');
+                document.getElementById('submit-rev-btn').disabled = false;
+                document.getElementById('submit-rev-btn').innerHTML = 'Submit Review(s)';
+            });
         });
     };
 
@@ -8374,7 +8652,7 @@
         modal.id = 'book-modal';
         modal.innerHTML = `
     <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;" onclick="if(event.target===this)document.getElementById('book-modal').remove()">
-        <div style="background:#ffffff;border-radius:24px;width:100%;max-width:850px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
+        <div style="background:#ffffff;border-radius:24px;width:100%;max-width:850px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;overflow-y:auto;max-height:90vh;animation:slideUp 0.3s ease-out;display:flex;flex-direction:column;">
             
             <div style="background:var(--blue-50);padding:1.5rem 2rem;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--blue-100);">
                 <div style="display:flex;align-items:center;gap:1rem;">
@@ -8562,7 +8840,7 @@
         }
 
         window.goToBookingStep1 = function () {
-            document.getElementById('bk-step-1').style.display = 'block';
+            document.getElementById('bk-step-1').style.display = 'flex';
             document.getElementById('bk-step-2').style.display = 'none';
             document.getElementById('bk-step-3').style.display = 'none';
         };
@@ -9409,10 +9687,10 @@
                         };
                     }
                     if (reviewBtn) {
-                        if (conv.appointment_id) {
+                        if (conv.appointment_id && !(parseInt(conv.has_specialist_review) > 0) && !(parseInt(conv.has_clinic_review) > 0)) {
                             reviewBtn.style.display = 'inline-block';
                             reviewBtn.onclick = function() {
-                                reviewDoctor(conv.appointment_id, conv.partner_id, 'Dr. ' + conv.partner_first_name + ' ' + conv.partner_last_name);
+                                reviewDoctor(conv.appointment_id, conv.partner_id, 'Dr. ' + conv.partner_first_name + ' ' + conv.partner_last_name, conv.clinic_id || 0);
                             };
                         } else {
                             reviewBtn.style.display = 'none';

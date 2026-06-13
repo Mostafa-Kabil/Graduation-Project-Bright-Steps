@@ -37,6 +37,6 @@ require_once 'connection.php'; // DB connection, auth helpers
     <div class="loader">Loading…</div>
   </main>
 
-  <script src="js/specialist-profile.js"></script>
+  <script src="js/specialist-profile.js?v=<?= time() ?>"></script>
 </body>
 </html>

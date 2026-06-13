@@ -248,93 +248,27 @@ try {
     $modeLabel = $mode === 'read_compare' ? 'Read & Compare' : 'Free Talk';
     $pointsMessage = "";
 
-    // Award points for recording speech (15 points per 'record_speech' rule)
-    $today = date('Y-m-d');
-    $weekStart = date('Y-m-d', strtotime('monday this week'));
-
-    // Check/create wallet
-    $walletStmt = $connect->prepare("SELECT wallet_id, total_points FROM parent_points_wallet WHERE parent_id = ?");
-    $walletStmt->execute([$parentId]);
-    $wallet = $walletStmt->fetch(PDO::FETCH_ASSOC);
-
-    if (!$wallet) {
-        $walletStmt = $connect->prepare("INSERT INTO parent_points_wallet (parent_id, total_points, last_earned_at) VALUES (?, 0, NOW())");
-        $walletStmt->execute([$parentId]);
-        $walletId = $connect->lastInsertId();
-    } else {
-        $walletId = $wallet['wallet_id'];
-    }
-
-    // Check daily cap (45 points/day for record_speech)
-    $dailyCapStmt = $connect->prepare("
-        SELECT COALESCE(SUM(points_earned), 0) as daily_total
-        FROM parent_points_tracking
-        WHERE parent_id = ? AND action_key = 'record_speech' AND earned_date = ?
-    ");
-    $dailyCapStmt->execute([$parentId, $today]);
-    $dailyTotal = $dailyCapStmt->fetchColumn();
-
-    // Check weekly cap (200 points/week for record_speech)
-    $weeklyCapStmt = $connect->prepare("
-        SELECT COALESCE(SUM(points_earned), 0) as weekly_total
-        FROM parent_points_tracking
-        WHERE parent_id = ? AND action_key = 'record_speech' AND earned_date >= ?
-    ");
-    $weeklyCapStmt->execute([$parentId, $weekStart]);
-    $weeklyTotal = $weeklyCapStmt->fetchColumn();
-
-    // Get rule caps
-    $ruleStmt = $connect->prepare("SELECT daily_cap, weekly_cap, points_value FROM points_earning_rules WHERE action_key = 'record_speech'");
-    $ruleStmt->execute();
-    $rule = $ruleStmt->fetch(PDO::FETCH_ASSOC);
-
-    $dailyCap = (int) $rule['daily_cap'];
-    $weeklyCap = (int) $rule['weekly_cap'];
-    $pointsValue = (int) $rule['points_value'];
+    // Award points for recording speech
+    require_once 'api_points_engine.php';
+    $awardResult = award_points_from_rule($connect, $childId, $parentId, 'record_speech');
+    
     $pointsToAward = 0;
-
-    // Check if already earned points for this action today
-    $alreadyEarnedStmt = $connect->prepare("
-        SELECT points_earned FROM parent_points_tracking
-        WHERE parent_id = ? AND action_key = 'record_speech' AND earned_date = ?
-    ");
-    $alreadyEarnedStmt->execute([$parentId, $today]);
-    $alreadyEarned = $alreadyEarnedStmt->fetchColumn();
-
-    // Check if within caps and not already earned today
-    if ($alreadyEarned == null && ($dailyTotal + $pointsValue) <= $dailyCap && ($weeklyTotal + $pointsValue) <= $weeklyCap) {
-        $pointsToAward = $pointsValue;
-
-        // Update wallet balance and lifetime earned
-        $updateWallet = $connect->prepare("UPDATE parent_points_wallet SET total_points = total_points + ?, lifetime_earned = lifetime_earned + ?, last_earned_at = NOW() WHERE wallet_id = ?");
-        $updateWallet->execute([$pointsToAward, $pointsToAward, $walletId]);
-
-        // Track the transaction (single entry per day)
-        $trackStmt = $connect->prepare("
-            INSERT INTO parent_points_tracking (parent_id, action_key, points_earned, earned_date, week_start_date)
-            VALUES (?, 'record_speech', ?, ?, ?)
-        ");
-        $trackStmt->execute([$parentId, $pointsToAward, $today, $weekStart]);
-
-        // Create notification
-        $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
-        $nstmt->execute([$parentId, 'Points Earned!',
-                         "You earned {$pointsToAward} points for recording a speech sample."]);
+    if ($awardResult['success']) {
+        $pointsToAward = $awardResult['points_awarded'];
         $pointsMessage = " +{$pointsToAward} points earned!";
-    } elseif ($alreadyEarned > 0) {
-        $pointsMessage = " (Points already earned for speech today - come back tomorrow!)";
-    } elseif ($dailyTotal >= $dailyCap) {
-        $pointsMessage = " (Daily speech points cap reached - come back tomorrow!)";
-    } elseif ($weeklyTotal >= $weeklyCap) {
-        $pointsMessage = " (Weekly speech points cap reached - come back next week!)";
+    } else if (isset($awardResult['error']) && $awardResult['error'] === 'cooldown') {
+        $connect->rollBack();
+        echo json_encode(['error' => 'cooldown', 'minutes_remaining' => $awardResult['minutes_remaining']]);
+        exit();
+    } else if (isset($awardResult['error'])) {
+        $pointsMessage = " (Points error: " . $awardResult['error'] . ")";
     }
 
     $nstmt = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)");
     $nstmt->execute([$parentId, 'Speech Analysis Complete',
                      "$modeLabel session complete. $wordCount words detected."
                      . ($matchScore !== null ? " Match score: {$matchScore}%." : '')
-                     . $pointsMessage
-                     . ($pointsToAward > 0 ? " +{$pointsToAward} points earned!" : '')]);
+                     . $pointsMessage]);
 
     $connect->commit();
 } catch (Exception $e) {

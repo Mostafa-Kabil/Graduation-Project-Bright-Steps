@@ -88,7 +88,134 @@ function awardPoints($connect, $parentId, $childId, $actionName, $points, $reaso
     }
 }
 
-switch ($action) {
+// Function to check and enforce points rules, then award
+function award_points_from_rule($connect, $childId, $parentId, $actionKey) {
+    // 1. Fetch rule
+    $stmt = $connect->prepare("SELECT points, cooldown_minutes, daily_cap, description FROM points_rules WHERE rule_key = ? AND is_active = 1");
+    $stmt->execute([$actionKey]);
+    $rule = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$rule) return ['success' => false, 'message' => 'Rule not found or inactive'];
+
+    // 2. Enforce Cooldown
+    if ($rule['cooldown_minutes'] > 0) {
+        $lastAction = $connect->prepare("SELECT created_at FROM parent_points_history WHERE child_id = ? AND action = ? ORDER BY created_at DESC LIMIT 1");
+        $lastAction->execute([$childId, $actionKey]);
+        $lastTime = $lastAction->fetchColumn();
+        
+        if ($lastTime) {
+            $minutesPassed = (time() - strtotime($lastTime)) / 60;
+            if ($minutesPassed < $rule['cooldown_minutes']) {
+                $remaining = ceil($rule['cooldown_minutes'] - $minutesPassed);
+                return ['success' => false, 'error' => 'cooldown', 'minutes_remaining' => $remaining];
+            }
+        }
+    }
+
+    // 3. Award points
+    $result = awardPoints($connect, $parentId, $childId, $actionKey, $rule['points'], "Earned points for: " . $rule['description']);
+    
+    // 4. Trigger Badge Check silently
+    if ($result['success']) {
+        $result['new_badges'] = check_and_award_badges($connect, $childId, $parentId);
+    }
+    
+    return $result;
+}
+
+// Ensure 1 notification per badge
+function check_and_award_badges($connect, $childId, $parentId) {
+    $progress = [];
+    try {
+        // Total activities completed
+        $s = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1");
+        $s->execute([$childId]); $totalAct = (int)$s->fetchColumn();
+        // Weekly activities
+        $s = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+        $s->execute([$childId]); $weeklyAct = (int)$s->fetchColumn();
+        // Monthly activities
+        $s = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
+        $s->execute([$childId]); $monthlyAct = (int)$s->fetchColumn();
+        // Growth records
+        $s = $connect->prepare("SELECT COUNT(*) FROM growth_record WHERE child_id = ?");
+        $s->execute([$childId]); $growthCount = (int)$s->fetchColumn();
+        // Voice samples
+        $speechCount = 0;
+        try { $s = $connect->prepare("SELECT COUNT(*) FROM voice_sample WHERE child_id = ?"); $s->execute([$childId]); $speechCount = (int)$s->fetchColumn(); } catch(Exception $e) {}
+        // Motor milestones
+        $motorCount = 0;
+        try { $s = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND is_achieved = 1"); $s->execute([$childId]); $motorCount = (int)$s->fetchColumn(); } catch(Exception $e) {}
+        // Streak
+        $streakCount = 0;
+        try {
+            $s = $connect->prepare("SELECT current_count FROM streaks WHERE child_id = ? AND streak_type = 'daily_login' LIMIT 1");
+            $s->execute([$childId]);
+            $sc = $s->fetchColumn();
+            if ($sc !== false) $streakCount = (int)$sc;
+        } catch(Exception $e) {}
+
+        // Article count
+        $s = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'article' AND is_completed = 1");
+        $s->execute([$childId]); $articleCount = (int)$s->fetchColumn();
+        
+        // Game count
+        $s = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND category = 'website_game' AND is_completed = 1");
+        $s->execute([$childId]); $gameCount = (int)$s->fetchColumn();
+
+        $progress = [
+            'First Steps' => ['current' => min($totalAct, 1), 'needed' => 1],
+            'Rising Star' => ['current' => min($streakCount, 3), 'needed' => 3],
+            'Weekly Champion' => ['current' => min($weeklyAct, 5), 'needed' => 5],
+            'Consistency King' => ['current' => min($streakCount, 7), 'needed' => 7],
+            'Growth Tracker' => ['current' => min($growthCount, 1), 'needed' => 1],
+            'Health Champion' => ['current' => min($growthCount, 5), 'needed' => 5],
+            'Voice Hero' => ['current' => min($speechCount, 1), 'needed' => 1],
+            'Speech Explorer' => ['current' => min($speechCount, 5), 'needed' => 5],
+            'Motor Master' => ['current' => min($motorCount, 5), 'needed' => 5],
+            'Monthly Master' => ['current' => min($monthlyAct, 20), 'needed' => 20],
+            'Super Parent' => ['current' => min($streakCount, 30), 'needed' => 30],
+            'Article Reader' => ['current' => min($articleCount, 1), 'needed' => 1],
+            'Bookworm' => ['current' => min($articleCount, 10), 'needed' => 10],
+            'Game Master' => ['current' => min($gameCount, 5), 'needed' => 5]
+        ];
+
+        // Retrospective check: if progress is met, award the badge if not already awarded
+        $stmtEarned = $connect->prepare("SELECT b.name FROM child_badge cb JOIN badge b ON cb.badge_id = b.badge_id WHERE cb.child_id = ?");
+        $stmtEarned->execute([$childId]);
+        $earnedNames = $stmtEarned->fetchAll(PDO::FETCH_COLUMN);
+
+        $stmtAll = $connect->query("SELECT badge_id, name FROM badge");
+        $allBadges = [];
+        while($b = $stmtAll->fetch(PDO::FETCH_ASSOC)) { $allBadges[$b['name']] = $b['badge_id']; }
+
+        $newBadges = [];
+        foreach($progress as $bName => $pData) {
+            if ($pData['current'] >= $pData['needed'] && !in_array($bName, $earnedNames) && isset($allBadges[$bName])) {
+                $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)")->execute([$childId, $allBadges[$bName]]);
+                $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)")->execute([$parentId, "Badge Earned: $bName", "Congratulations! You earned the '$bName' badge!"]);
+                $newBadges[] = $bName;
+            }
+        }
+        return $newBadges;
+    } catch (Exception $e) {
+        error_log("Badge progress error: " . $e->getMessage());
+        return [];
+    }
+}
+
+if (basename(__FILE__) === basename($_SERVER['SCRIPT_FILENAME'])) {
+    switch ($action) {
+        case 'award_points':
+            if (!$childId || !verifyChildOwnership($connect, $childId, $parentId)) {
+                echo json_encode(['error' => 'Invalid child']);
+                exit();
+            }
+            $ruleKey = $_GET['rule_key'] ?? $_POST['rule_key'] ?? '';
+            if (!$ruleKey) {
+                echo json_encode(['error' => 'Missing rule_key']);
+                exit();
+            }
+            echo json_encode(award_points_from_rule($connect, $childId, $parentId, $ruleKey));
+            break;
 
     case 'get_balance':
         if (!$childId || !verifyChildOwnership($connect, $childId, $parentId)) {
@@ -465,7 +592,8 @@ switch ($action) {
         }
         break;
 
-    default:
-        echo json_encode(['error' => 'Unknown action. Use: get_balance, get_history, redeem_token, get_tokens, get_offers, redeem_offer, redeem, get_badge_progress, get_earned_badges']);
+        default:
+            echo json_encode(['error' => 'Unknown action. Use: get_balance, get_history, redeem_token, get_tokens, get_offers, redeem_offer, redeem, get_badge_progress, get_earned_badges']);
+    }
 }
 ?>

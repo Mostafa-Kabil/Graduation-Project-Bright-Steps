@@ -127,99 +127,20 @@ switch ($action) {
             $stmt2->execute([$userId, $childId, $today]);
         }
 
-        // Check badge eligibility based on streak count
-        $badgeRules = [
-            3 => 'Rising Star',
-            7 => 'Consistency King',
-            30 => 'Super Parent'
-        ];
-
-        // Helper to check and award badge
-        $awardBadge = function($badgeName) use ($connect, $childId, $userId, &$newBadges) {
-            $stmt = $connect->prepare("SELECT badge_id FROM badge WHERE name = ?");
-            $stmt->execute([$badgeName]);
-            $badge = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($badge) {
-                $stmt2 = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ? AND badge_id = ?");
-                $stmt2->execute([$childId, $badge['badge_id']]);
-                if ($stmt2->fetchColumn() == 0) {
-                    $stmt3 = $connect->prepare("INSERT INTO child_badge (child_id, badge_id) VALUES (?, ?)");
-                    $stmt3->execute([$childId, $badge['badge_id']]);
-                    $newBadges[] = $badgeName;
-                    $stmt4 = $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'milestone', ?, ?)");
-                    $stmt4->execute([$userId, "Badge Earned: $badgeName", "Congratulations! You earned the '$badgeName' badge!"]);
-                }
-            }
-        };
-
-        // Streak badges
-        $badgeRules = [
-            3 => 'Rising Star',
-            7 => 'Consistency King',
-            30 => 'Super Parent'
-        ];
-        foreach ($badgeRules as $threshold => $badgeName) {
-            if ($newCount >= $threshold) {
-                $awardBadge($badgeName);
-            }
-        }
-
-        // Activity badges
-        $stmt7 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1");
-        $stmt7->execute([$childId]);
-        $totalActivities = (int)$stmt7->fetchColumn();
-
-        $stmt7 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
-        $stmt7->execute([$childId]);
-        $weeklyCount = (int)$stmt7->fetchColumn();
-
-        $stmt8 = $connect->prepare("SELECT COUNT(*) FROM child_activities WHERE child_id = ? AND is_completed = 1 AND completed_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)");
-        $stmt8->execute([$childId]);
-        $monthlyCount = (int)$stmt8->fetchColumn();
-
-        if ($totalActivities >= 1) $awardBadge('First Steps');
-        if ($weeklyCount >= 5) $awardBadge('Weekly Champion');
-        if ($monthlyCount >= 20) $awardBadge('Monthly Master');
-
-        // Growth badges
-        $stmtGrowth = $connect->prepare("SELECT COUNT(*) FROM growth_record WHERE child_id = ?");
-        $stmtGrowth->execute([$childId]);
-        $growthCount = (int)$stmtGrowth->fetchColumn();
-        if ($growthCount >= 1) $awardBadge('Growth Tracker');
-        if ($growthCount >= 5) $awardBadge('Health Champion');
-
-        // Speech badges — 5 voice samples = Speech Explorer
-        try {
-            $stmtSpeech = $connect->prepare("SELECT COUNT(*) FROM voice_sample WHERE child_id = ?");
-            $stmtSpeech->execute([$childId]);
-            $speechCount = (int)$stmtSpeech->fetchColumn();
-            if ($speechCount >= 1) $awardBadge('Voice Hero');
-            if ($speechCount >= 5) $awardBadge('Speech Explorer');
-        } catch (Exception $e) { /* voice_sample table may not exist */ }
-
-        // Motor badges — 5 motor milestones = Motor Master
-        try {
-            $stmtMotor = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = ? AND is_achieved = 1");
-            $stmtMotor->execute([$childId]);
-            if ((int)$stmtMotor->fetchColumn() >= 5) $awardBadge('Motor Master');
-        } catch (Exception $e) { /* motor_milestones table may not exist */ }
-
-        // Award 50 points for 7-day login streak
+        // Check badge eligibility and award daily login points
+        require_once 'api_points_engine.php';
+        $awardResult = award_points_from_rule($connect, $childId, $userId, 'daily_login');
+        
         $streakPointsAwarded = 0;
-        if ($newCount >= 7 && ($streak ? $streak['current_count'] < 7 : false)) {
-            $streakPointsAwarded = 50;
-            try {
-                $walletStmt = $connect->prepare("SELECT wallet_id, total_points FROM points_wallet WHERE child_id = ?");
-                $walletStmt->execute([$childId]);
-                $wallet = $walletStmt->fetch(PDO::FETCH_ASSOC);
-                if ($wallet) {
-                    $connect->prepare("UPDATE points_wallet SET total_points = total_points + 50 WHERE wallet_id = ?")->execute([$wallet['wallet_id']]);
-                } else {
-                    $connect->prepare("INSERT INTO points_wallet (child_id, total_points) VALUES (?, 50)")->execute([$childId]);
-                }
-                // Log to tracking
-                $connect->prepare("INSERT INTO parent_points_tracking (parent_id, child_id, action, points, reason) VALUES (?, ?, '7-Day Login Streak', 50, 'Maintained a 7-day login streak!')")->execute([$userId, $childId]);
-            } catch (Exception $e) { /* points tables may not exist */ }
+        $newBadges = [];
+        if ($awardResult['success']) {
+            $streakPointsAwarded = $awardResult['points_awarded'];
+            if (isset($awardResult['new_badges'])) {
+                $newBadges = $awardResult['new_badges'];
+            }
+        } else {
+            // Even if on cooldown for points, we still want to check badges
+            $newBadges = check_and_award_badges($connect, $childId, $userId);
         }
 
         echo json_encode([

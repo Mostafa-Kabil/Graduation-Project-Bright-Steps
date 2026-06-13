@@ -362,6 +362,12 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
         result = model.transcribe(wav_path)
         transcript = result["text"].strip()
 
+        clarity_score = 0.75
+        if "segments" in result and result["segments"]:
+            import math
+            probs = [math.exp(s.get("avg_logprob", -0.28)) for s in result["segments"]]
+            clarity_score = round(sum(probs) / len(probs), 2)
+
         # Basic vocabulary analysis
         vocab_size, unique_words = analyze_vocabulary(transcript)
         status, expected_vocab = evaluate_child_vocab(vocab_size, age)
@@ -401,7 +407,8 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
             "word_complexity": word_complexity,
             "readability_scores": readability,
             "developmental_feedback": feedback,
-            "overall_development_score": overall_score
+            "overall_development_score": overall_score,
+            "clarity_score": clarity_score
         })
 
     finally:
@@ -562,6 +569,12 @@ async def analyze_compare(audio: UploadFile, age: int = Form(...), target_text: 
         result = model.transcribe(wav_path)
         transcript = result["text"].strip()
 
+        clarity_score = 0.75
+        if "segments" in result and result["segments"]:
+            import math
+            probs = [math.exp(s.get("avg_logprob", -0.28)) for s in result["segments"]]
+            clarity_score = round(sum(probs) / len(probs), 2)
+
         # Standard vocab analysis
         vocab_size, unique_words = analyze_vocabulary(transcript)
         status, expected_vocab = evaluate_child_vocab(vocab_size, age)
@@ -629,6 +642,7 @@ async def analyze_compare(audio: UploadFile, age: int = Form(...), target_text: 
             "word_hits": word_hits,
             "word_misses": word_misses,
             "target_words": target_words,
+            "clarity_score": clarity_score,
         })
 
     finally:

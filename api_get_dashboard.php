@@ -134,11 +134,13 @@ unset($child);
 $data['children'] = $children;
 
 // --- Appointments ---
-$sql = "SELECT a.appointment_id, a.status, a.type, a.scheduled_at, 
+$sql = "SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.specialist_id, s.clinic_id,
                COALESCE(NULLIF(TRIM(a.report), ''), (SELECT CONCAT('Specialist Notes:\n', dr.doctor_notes, '\n\nRecommendations:\n', dr.recommendations) FROM doctor_report dr WHERE dr.specialist_id = a.specialist_id AND dr.child_id = a.child_id ORDER BY dr.report_date DESC LIMIT 1)) AS report,
                a.comment, a.next_visit_recommendation,
                s.first_name AS doc_fname, s.last_name AS doc_lname, s.specialization,
-               c.clinic_name, c.location AS clinic_location
+               c.clinic_name, c.location AS clinic_location,
+               (SELECT COUNT(*) FROM specialist_reviews sr WHERE sr.appointment_id = a.appointment_id) AS has_specialist_review,
+               (SELECT COUNT(*) FROM clinic_reviews cr WHERE cr.appointment_id = a.appointment_id) AS has_clinic_review
         FROM appointment a
         INNER JOIN specialist s ON a.specialist_id = s.specialist_id
         INNER JOIN clinic c ON s.clinic_id = c.clinic_id

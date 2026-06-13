@@ -75,9 +75,9 @@ if ($action === 'submit') {
     }
     
     $stmt = $connect->prepare("
-        SELECT r.rating, r.comment, r.created_at, p.first_name, p.last_name 
+        SELECT r.rating, r.comment, r.created_at, u.first_name, u.last_name 
         FROM clinic_reviews r 
-        JOIN parent p ON r.parent_id = p.parent_id 
+        JOIN users u ON r.parent_id = u.user_id 
         WHERE r.clinic_id = ? 
         ORDER BY r.created_at DESC
     ");
