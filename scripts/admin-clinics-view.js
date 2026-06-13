@@ -16,11 +16,11 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
     const active = clinics.filter(c => c.status === 'verified');
     const suspended = clinics.filter(c => c.status === 'suspended');
     const rejected = clinics.filter(c => c.status === 'rejected');
-    const other = clinics.filter(c => !['pending','verified','suspended','rejected'].includes(c.status));
+    const other = clinics.filter(c => !['pending','verified','suspended','rejected','deactivated'].includes(c.status));
 
-    const statusColor = s => s === 'verified' ? '#10b981' : s === 'pending' ? '#f59e0b' : s === 'suspended' ? '#ef4444' : s === 'rejected' ? '#6b7280' : '#6366f1';
+    const statusColor = s => s === 'verified' ? '#10b981' : s === 'pending' ? '#f59e0b' : s === 'suspended' || s === 'deactivated' ? '#ef4444' : s === 'rejected' ? '#6b7280' : '#6366f1';
     const statusBadge = s => {
-        const cls = s === 'verified' ? 'status-active' : s === 'suspended' || s === 'rejected' ? 'status-danger' : 'status-warning';
+        const cls = s === 'verified' ? 'status-active' : s === 'suspended' || s === 'deactivated' || s === 'rejected' ? 'status-danger' : 'status-warning';
         return `<span class="status-badge ${cls}">${(s||'pending').charAt(0).toUpperCase()+(s||'pending').slice(1)}</span>`;
     };
 
@@ -64,7 +64,7 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
                     <button class="btn btn-sm" style="background:linear-gradient(135deg,#ef4444,#dc2626);color:white;border:none;flex:1;border-radius:10px;font-weight:600;padding:.5rem;" onclick="rejectClinic(${c.clinic_id},'${esc(c.clinic_name)}')">✕ Reject</button>
                 ` : ''}
                 ${c.status === 'verified' ? `<button class="btn btn-sm btn-outline" style="flex:1;color:var(--yellow-500);" onclick="toggleClinicStatus(${c.clinic_id},'suspended')">⏸ Suspend</button>` : ''}
-                ${c.status === 'suspended' ? `<button class="btn btn-sm btn-outline" style="flex:1;color:var(--green-500);" onclick="toggleClinicStatus(${c.clinic_id},'verified')">▶ Reactivate</button>` : ''}
+                ${c.status === 'suspended' || c.status === 'deactivated' ? `<button class="btn btn-sm btn-outline" style="flex:1;color:var(--green-500);" onclick="toggleClinicStatus(${c.clinic_id},'verified')">▶ Reactivate</button>` : ''}
                 <button class="btn btn-sm btn-outline" style="flex:1;" onclick="viewClinicDetail(${c.clinic_id})">View Details</button>
             </div>
         </div>`;
@@ -85,7 +85,7 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
         </div>
 
         <!-- Stats Grid -->
-        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem;">
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.75rem;margin-bottom:1.5rem;">
             <div style="background:linear-gradient(135deg,rgba(13,148,136,0.1),rgba(13,148,136,0.03));border:1px solid rgba(13,148,136,0.15);border-radius:14px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
                 <div style="font-size:1.5rem;font-weight:800;color:var(--text-primary);">${fmtNum(stats.total_clinics)}</div>
                 <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">🏥 Total</div>
@@ -100,11 +100,15 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
             </div>
             <div style="background:linear-gradient(135deg,rgba(239,68,68,0.1),rgba(239,68,68,0.03));border:1px solid rgba(239,68,68,0.15);border-radius:14px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
                 <div style="font-size:1.5rem;font-weight:800;color:var(--red-500);">${fmtNum(stats.suspended)}</div>
-                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">🚫 Suspended</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">⏸ Suspended</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(107,114,128,0.1),rgba(107,114,128,0.03));border:1px solid rgba(107,114,128,0.15);border-radius:14px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+                <div style="font-size:1.5rem;font-weight:800;color:var(--slate-500);">${fmtNum(stats.deactivated)}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">🔴 Deactivated</div>
             </div>
             <div style="background:linear-gradient(135deg,rgba(99,102,241,0.1),rgba(99,102,241,0.03));border:1px solid rgba(99,102,241,0.15);border-radius:14px;padding:1rem;text-align:center;transition:transform .2s;" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
-                <div style="font-size:1.5rem;font-weight:800;color:var(--indigo-500);">★ ${stats.avg_rating||'0.0'}</div>
-                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">📊 Avg Rating</div>
+                <div style="font-size:1.5rem;font-weight:800;color:var(--indigo-500);">⭐ ${stats.avg_rating||'0.0'}</div>
+                <div style="font-size:.65rem;color:var(--text-secondary);margin-top:.1rem;">📈 Avg Rating</div>
             </div>
         </div>
 
@@ -116,6 +120,7 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
                 <option value="pending">Pending</option>
                 <option value="verified">Verified</option>
                 <option value="suspended">Suspended</option>
+                <option value="deactivated">Deactivated</option>
                 <option value="rejected">Rejected</option>
             </select>
         </div>
@@ -166,6 +171,18 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem;">
                 ${rejected.map(c => clinicCard(c)).join('')}
+            </div>
+        </div>` : ''}
+
+        <!-- Deactivated -->
+        ${clinics.filter(c => c.status === 'deactivated').length > 0 ? `
+        <div style="margin-bottom:1.5rem;">
+            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
+                <div style="width:10px;height:10px;border-radius:50%;background:var(--red-500);"></div>
+                <h2 style="font-size:1.15rem;font-weight:700;margin:0;color:var(--text-primary);">Deactivated (${clinics.filter(c => c.status === 'deactivated').length})</h2>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem;">
+                ${clinics.filter(c => c.status === 'deactivated').map(c => clinicCard(c)).join('')}
             </div>
         </div>` : ''}
 
@@ -244,7 +261,7 @@ async function viewClinicDetail(clinicId) {
                 <h3 style="margin:0;font-size:1.15rem;">${c.clinic_name}</h3>
                 <p style="margin:.25rem 0 0;font-size:.85rem;color:var(--text-secondary);">${c.email}</p>
                 <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center;">
-                    ${c.status === 'verified' ? '<span class="status-badge status-active">Verified</span>' : c.status === 'suspended' ? '<span class="status-badge status-danger">Suspended</span>' : c.status === 'rejected' ? '<span class="status-badge status-danger">Rejected</span>' : '<span class="status-badge status-warning">Pending</span>'}
+                    ${c.status === 'verified' ? '<span class="status-badge status-active">Verified</span>' : c.status === 'suspended' ? '<span class="status-badge status-danger">Suspended</span>' : c.status === 'deactivated' ? '<span class="status-badge status-danger">Deactivated</span>' : c.status === 'rejected' ? '<span class="status-badge status-danger">Rejected</span>' : '<span class="status-badge status-warning">Pending</span>'}
                     <span style="font-size:.75rem;color:var(--text-secondary);">Since ${fmtDate(c.added_at)}</span>
                 </div>
             </div>
@@ -299,7 +316,7 @@ window.approveClinic = function(clinicId, clinicName = 'this clinic') {
 };
 
 window.toggleClinicStatus = function(clinicId, newStatus) {
-    showConfirm(`Are you sure you want to <strong>${newStatus === 'suspended' ? 'suspend' : 'verify'}</strong> this clinic?`, async () => {
+    showConfirm(`Are you sure you want to <strong>${newStatus === 'suspended' ? 'suspend' : 'verify / reactivate'}</strong> this clinic?`, async () => {
         try {
             const actionUrl = newStatus === 'suspended' ? 'suspend' : 'reactivate';
             const res = await apiPost('clinics.php', { action: actionUrl, clinic_id: clinicId });

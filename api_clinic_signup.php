@@ -11,15 +11,19 @@ if ($method !== 'POST') {
 
 $clinicName = $_POST['clinic_name'] ?? '';
 $email = $_POST['email'] ?? '';
-$location = $_POST['location'] ?? '';
+$street = $_POST['street'] ?? '';
+$city = $_POST['city'] ?? '';
+$detailed = $_POST['detailed_location'] ?? '';
 $password = $_POST['password'] ?? '';
 $raw_phone = $_POST['phone'] ?? '';
 $country_code = $_POST['country_code'] ?? '+20';
 
-if (!$clinicName || !$email || !$location || !$password || !$raw_phone) {
-    echo json_encode(['success' => false, 'error' => 'Clinic Name, Email, Phone, Location, and Password are required.']);
+if (!$clinicName || !$email || !$street || !$city || !$detailed || !$password || !$raw_phone) {
+    echo json_encode(['success' => false, 'error' => 'All fields are required.']);
     exit;
 }
+
+$location = trim("$street, $city - $detailed");
 
 $isValid = false;
 if ($country_code === '+20' && preg_match('/^1[0-9]{9}$/', $raw_phone)) $isValid = true;

@@ -147,19 +147,72 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label" for="location">Location / Address</label>
-                        <input type="text" name="location" id="location" class="form-input" placeholder="123 Health St, Cairo, Egypt" required>
+                    <div class="form-group" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        <div style="flex: 1 1 100%;">
+                            <label class="form-label" for="street">Street Address</label>
+                            <input type="text" name="street" id="street" class="form-input" placeholder="e.g. 123 Health St" required>
+                        </div>
+                        <div style="flex: 1 1 calc(50% - 0.25rem);">
+                            <label class="form-label" for="city">City (Egypt)</label>
+                            <select name="city" id="city" class="form-input" required>
+                                <option value="">Select City</option>
+                                <option value="Cairo">Cairo</option>
+                                <option value="Alexandria">Alexandria</option>
+                                <option value="Giza">Giza</option>
+                                <option value="Shubra El-Kheima">Shubra El-Kheima</option>
+                                <option value="Port Said">Port Said</option>
+                                <option value="Suez">Suez</option>
+                                <option value="Luxor">Luxor</option>
+                                <option value="Mansoura">Mansoura</option>
+                                <option value="Tanta">Tanta</option>
+                                <option value="Asyut">Asyut</option>
+                                <option value="Ismailia">Ismailia</option>
+                                <option value="Fayoum">Fayoum</option>
+                                <option value="Zagazig">Zagazig</option>
+                                <option value="Aswan">Aswan</option>
+                                <option value="Damietta">Damietta</option>
+                                <option value="Damanhur">Damanhur</option>
+                                <option value="Minya">Minya</option>
+                                <option value="Beni Suef">Beni Suef</option>
+                                <option value="Hurghada">Hurghada</option>
+                                <option value="Qena">Qena</option>
+                                <option value="Sohag">Sohag</option>
+                                <option value="Shibin El Kom">Shibin El Kom</option>
+                                <option value="Banha">Banha</option>
+                                <option value="Arish">Arish</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1 1 calc(50% - 0.25rem);">
+                            <label class="form-label" for="detailed_location">Detailed Location</label>
+                            <input type="text" name="detailed_location" id="detailed_location" class="form-input" placeholder="e.g. Next to Pharmacy" required>
+                        </div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="password">Create Password</label>
-                        <input type="password" name="password" id="password" class="form-input" placeholder="Min. 8 characters" required>
+                        <div class="password-input-wrapper">
+                            <input type="password" name="password" id="password" class="form-input" placeholder="Min. 8 characters" required>
+                            <button type="button" class="password-toggle-btn" onclick="togglePassword(this)" aria-label="Toggle password visibility">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="password-strength" class="password-strength"></div>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label" for="confirm_password">Confirm Password</label>
-                        <input type="password" name="confirm_password" id="confirm_password" class="form-input" placeholder="Re-type password" required>
+                        <div class="password-input-wrapper">
+                            <input type="password" name="confirm_password" id="confirm_password" class="form-input" placeholder="Re-type password" required>
+                            <button type="button" class="password-toggle-btn" onclick="togglePassword(this)" aria-label="Toggle password visibility">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                                    <line x1="1" y1="1" x2="23" y2="23"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -234,7 +287,20 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
     <script src="scripts/language-toggle.js?v=8"></script>
     <script src="scripts/theme-toggle.js?v=8"></script>
     <script src="scripts/navigation.js?v=8"></script>
+    <script src="scripts/password-strength.js?v=8"></script>
     <script>
+        function togglePassword(btn) {
+            const wrapper = btn.closest('.password-input-wrapper');
+            const input = wrapper.querySelector('input');
+            const icon = btn.querySelector('svg');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'; // Eye
+            } else {
+                input.type = 'password';
+                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>'; // Eye-off
+            }
+        }
         function showFileName(input) {
             const display = document.getElementById('file-display');
             if (input.files.length > 0) {
@@ -252,12 +318,14 @@ if (isset($_SESSION['id']) && isset($_SESSION['role']) && $_SESSION['role'] === 
 
             const name = document.getElementById('clinic_name').value.trim();
             const email = document.getElementById('email').value.trim();
-            const location = document.getElementById('location').value.trim();
+            const street = document.getElementById('street').value.trim();
+            const city = document.getElementById('city').value;
+            const detailed = document.getElementById('detailed_location').value.trim();
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm_password').value;
             const fileInput = document.getElementById('verification_doc');
 
-            if (!name || !email || !location || !password || !confirmPassword || !fileInput.files.length) {
+            if (!name || !email || !street || !city || !detailed || !password || !confirmPassword || !fileInput.files.length) {
                 errorDiv.textContent = 'All fields including verification document are required.';
                 errorDiv.style.display = 'block';
                 return;

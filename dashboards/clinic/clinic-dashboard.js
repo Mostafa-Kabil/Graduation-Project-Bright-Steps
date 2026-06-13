@@ -478,6 +478,18 @@ async function refreshClinicData(viewId) {
             
             const s = data.stats || {};
             const c = data.clinic || {};
+
+            // Check Onboarding
+            if ((!c.bio || c.bio.trim() === '') && !sessionStorage.getItem('clinic_onboarding_skipped')) {
+                const nameInput = document.getElementById('onboarding_clinic_name');
+                if (nameInput) nameInput.value = c.clinic_name || '';
+                const emailInput = document.getElementById('onboarding_email');
+                if (emailInput) emailInput.value = c.email || '';
+                const locationInput = document.getElementById('onboarding_location');
+                if (locationInput) locationInput.value = c.location || '';
+                const modal = document.getElementById('clinic-onboarding-modal');
+                if (modal) modal.style.display = 'flex';
+            }
             
             // Update Clinic Name in Sidebar and Topbar
             if (c.clinic_name) {
@@ -2128,7 +2140,18 @@ function renderPatientsTable(patients) {
     if (!tbody) return;
 
     if (patients.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 40px; color: rgba(255,255,255,0.4);">No patients found matching your search.</td></tr>';
+        const searchInput = document.getElementById('search-patients');
+        const isSearch = searchInput && searchInput.value.trim() !== '';
+        const msg = isSearch ? 'No patients found matching your search.' : 'You have no patients yet. As specialists complete appointments, patients will appear here.';
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 60px 20px;">
+            <div style="display:flex; flex-direction:column; align-items:center; opacity:0.8;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:1rem;color:var(--text-muted);">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <div style="font-size:1.1rem; color:var(--text-primary); font-weight:600; margin-bottom:0.5rem;">No Patients</div>
+                <div style="font-size:0.9rem; color:var(--text-muted); max-width:300px;">${msg}</div>
+            </div>
+        </td></tr>`;
         return;
     }
 
@@ -2362,28 +2385,28 @@ function getSettingsView() {
                         <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;">
                             <span>Push Notifications</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" id="notif-push-toggle" onchange="updateClinicNotificationSetting('push_notifications', this.checked ? 1 : 0)" ${clinicSettings?.push_notifications ? 'checked' : ''}>
+                                <input type="checkbox" id="notif-push-toggle" onchange="updateClinicNotificationSetting('push_notifications', this.checked ? 1 : 0)" ${(clinicSettings ? clinicSettings.push_notifications : 1) ? 'checked' : ''}>
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
                         <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;">
                             <span>Email Notifications</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" id="notif-email-toggle" onchange="updateClinicNotificationSetting('email_notifications', this.checked ? 1 : 0)" ${clinicSettings?.email_notifications ? 'checked' : ''}>
+                                <input type="checkbox" id="notif-email-toggle" onchange="updateClinicNotificationSetting('email_notifications', this.checked ? 1 : 0)" ${(clinicSettings ? clinicSettings.email_notifications : 1) ? 'checked' : ''}>
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
                         <div class="toggle-row" style="display:flex; justify-content:space-between; margin-bottom:1rem;">
                             <span>Appointment Reminders</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" id="notif-appointment-toggle" onchange="updateClinicNotificationSetting('appointment_reminders', this.checked ? 1 : 0)" ${clinicSettings?.appointment_reminders ? 'checked' : ''}>
+                                <input type="checkbox" id="notif-appointment-toggle" onchange="updateClinicNotificationSetting('appointment_reminders', this.checked ? 1 : 0)" ${(clinicSettings ? clinicSettings.appointment_reminders : 1) ? 'checked' : ''}>
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
                         <div class="toggle-row" style="display:flex; justify-content:space-between;">
                             <span>System Alerts</span>
                             <label class="toggle-switch">
-                                <input type="checkbox" id="notif-system-toggle" onchange="updateClinicNotificationSetting('system_alerts', this.checked ? 1 : 0)" ${clinicSettings?.system_alerts ? 'checked' : ''}>
+                                <input type="checkbox" id="notif-system-toggle" onchange="updateClinicNotificationSetting('system_alerts', this.checked ? 1 : 0)" ${(clinicSettings ? clinicSettings.system_alerts : 1) ? 'checked' : ''}>
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
@@ -2642,9 +2665,22 @@ function confirmLogout() {
 }
 
 // ── Specialist Modal Implementation ──────────────────────────
-function openAddSpecialistModal() {
+async function openAddSpecialistModal() {
     const existing = document.getElementById('specialist-modal');
     if (existing) existing.remove();
+
+    let branchOptions = '<option value="" disabled selected>Select branch…</option>';
+    try {
+        const res = await fetch('../../api_get_clinic_branches.php');
+        const data = await res.json();
+        if (data.success && data.data.length > 0) {
+            branchOptions = data.data.map(b => `<option value="${b.id}">${b.branch_name} (${b.area})</option>`).join('');
+        } else {
+            branchOptions = '<option value="" disabled selected>No branches configured</option>';
+        }
+    } catch (e) {
+        branchOptions = '<option value="" disabled selected>Error loading branches</option>';
+    }
 
     const modal = document.createElement('div');
     modal.id = 'specialist-modal';
@@ -2706,12 +2742,8 @@ function openAddSpecialistModal() {
                     </div>
                     <div class="form-group">
                         <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.9rem;">Work Location (Clinic Branch)</label>
-                        <select name="location" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
-                            <option value="Main Branch, Cairo" selected>Main Branch, Cairo</option>
-                            <option value="Alexandria Center">Alexandria Center</option>
-                            <option value="Giza Clinic">Giza Clinic</option>
-                            <option value="Mansoura Branch">Mansoura Branch</option>
-                            <option value="Tanta Facility">Tanta Facility</option>
+                        <select name="branch_id" class="premium-light-input" style="width: 100%; padding: 0.75rem 1rem; border-radius: 12px; border: 1.5px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 0.95rem; outline: none; appearance: none; background-image: url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;); background-repeat: no-repeat; background-position: right 1rem center;">
+                            ${branchOptions}
                         </select>
                     </div>
                     <div class="form-group">
@@ -2794,10 +2826,10 @@ async function loadClinicNotificationSettings() {
             const emailToggle = document.getElementById('notif-email-toggle');
             const apptToggle = document.getElementById('notif-appointment-toggle');
             const systemToggle = document.getElementById('notif-system-toggle');
-            if (pushToggle) pushToggle.checked = !!clinicSettings.push_notifications;
-            if (emailToggle) emailToggle.checked = !!clinicSettings.email_notifications;
-            if (apptToggle) apptToggle.checked = !!clinicSettings.appointment_reminders;
-            if (systemToggle) systemToggle.checked = !!clinicSettings.system_alerts;
+            if (pushToggle) pushToggle.checked = clinicSettings.push_notifications !== undefined ? !!clinicSettings.push_notifications : true;
+            if (emailToggle) emailToggle.checked = clinicSettings.email_notifications !== undefined ? !!clinicSettings.email_notifications : true;
+            if (apptToggle) apptToggle.checked = clinicSettings.appointment_reminders !== undefined ? !!clinicSettings.appointment_reminders : true;
+            if (systemToggle) systemToggle.checked = clinicSettings.system_alerts !== undefined ? !!clinicSettings.system_alerts : true;
         }
     } catch (err) {
         console.error('Failed to load notification settings:', err);
@@ -3622,4 +3654,42 @@ async function viewPatientRecords(childId, childName) {
         console.error(err);
         document.getElementById("patient-records-content").innerHTML = `<div style="padding: 2rem; text-align: center; color: #ef4444;">Network Error: Could not connect to API.</div>`;
     }
+}
+
+function skipOnboarding() {
+    sessionStorage.setItem('clinic_onboarding_skipped', 'true');
+    const modal = document.getElementById('clinic-onboarding-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveOnboarding() {
+    const form = document.getElementById('onboarding-form');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    const btn = document.getElementById('save-onboarding-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="width: 1rem; height: 1rem; margin-right: 0.5rem; display: inline-block; border: 2px solid white; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span>Saving...';
+    
+    const formData = new FormData(form);
+    try {
+        const res = await fetch('../../api_clinic_update_profile.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('clinic-onboarding-modal').style.display = 'none';
+            sessionStorage.setItem('clinic_onboarding_skipped', 'true'); // don't show again this session even if refresh before cache clears
+            await refreshClinicData('specialists');
+            if (typeof openAddSpecialistModal === 'function') openAddSpecialistModal();
+        } else {
+            showClinicAlert('Error', data.error || 'Failed to save onboarding details.');
+        }
+    } catch (e) {
+        showClinicAlert('Error', 'Network error while saving onboarding.');
+    }
+    btn.disabled = false;
+    btn.innerText = 'Save & Add Specialist';
 }

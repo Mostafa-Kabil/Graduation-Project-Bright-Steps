@@ -49,7 +49,7 @@ switch ($action) {
             echo json_encode(['error' => 'Appointment not found for this parent']);
             exit();
         }
-        if ($row['status'] !== 'Completed') {
+        if (strtolower($row['status']) !== 'completed') {
             http_response_code(400);
             echo json_encode(['error' => 'Can only review completed appointments']);
             exit();

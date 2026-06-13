@@ -231,8 +231,8 @@ if ($statusCheck->fetchColumn() === 'suspended') {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="scripts/admin-dashboard.js?v=22"></script>
-    <script src="scripts/admin-clinics-view.js?v=22"></script>
+    <script src="scripts/admin-dashboard.js?v=24"></script>
+    <script src="scripts/admin-clinics-view.js?v=24"></script>
     <script src="scripts/admin-specialists-view.js?v=22"></script>
     <script src="scripts/admin-views-extended.js?v=22"></script>
     <script src="scripts/admin-views-part2.js?v=22"></script>

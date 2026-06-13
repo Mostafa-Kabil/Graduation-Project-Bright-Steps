@@ -20,9 +20,7 @@ try {
     }
 
     // Fetch Specialists in this clinic
-    $sql2 = "SELECT specialist_id, first_name, last_name, specialization, profile_photo, consultation_fee, experience_years 
-             FROM specialist 
-             WHERE clinic_id = :id AND status = 'approved'";
+    $sql2 = "SELECT * FROM specialist WHERE clinic_id = :id";
     $stmt2 = $connect->prepare($sql2);
     $stmt2->execute(['id' => $clinic_id]);
     $specialists = $stmt2->fetchAll(PDO::FETCH_ASSOC);
@@ -51,7 +49,7 @@ try {
     }
 
 } catch (Exception $e) {
-    die("Error loading clinic profile.");
+    die("Error loading clinic profile: " . htmlspecialchars($e->getMessage()));
 }
 ?>
 <!DOCTYPE html>

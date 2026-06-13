@@ -139,7 +139,7 @@ if (!$otherUserId) {
 $stmtCheck = $connect->prepare("
     SELECT 1 FROM appointment 
     WHERE ((parent_id = ? AND specialist_id = ?) OR (parent_id = ? AND specialist_id = ?))
-      AND status IN ('Scheduled', 'Completed') LIMIT 1
+      AND status IN ('Scheduled', 'Completed', 'confirmed', 'approved') LIMIT 1
 ");
 $stmtCheck->execute([$userId, $otherUserId, $otherUserId, $userId]);
 if (!$stmtCheck->fetch()) {

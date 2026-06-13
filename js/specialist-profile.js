@@ -45,13 +45,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="glass-card">
                         <h4 style="margin-top:0;color:#0f172a;">Focus Areas</h4>
                         <ul style="padding-left:1.25rem;color:#475569;margin-bottom:0;">
-                            ${data.focus_areas.length ? data.focus_areas.map(f => `<li>${f}</li>`).join('') : '<li>Not specified</li>'}
+                            ${data.focus_areas && data.focus_areas.length ? data.focus_areas.map(f => `<li>${f}</li>`).join('') : '<li>Not specified</li>'}
                         </ul>
                     </div>
                     <div class="glass-card">
                         <h4 style="margin-top:0;color:#0f172a;">Therapy Approaches</h4>
                         <ul style="padding-left:1.25rem;color:#475569;margin-bottom:0;">
-                            ${data.therapy_approaches.length ? data.therapy_approaches.map(t => `<li>${t}</li>`).join('') : '<li>Not specified</li>'}
+                            ${data.therapy_approaches && data.therapy_approaches.length ? data.therapy_approaches.map(t => `<li>${t}</li>`).join('') : '<li>Not specified</li>'}
+                        </ul>
+                    </div>
+                    <div class="glass-card">
+                        <h4 style="margin-top:0;color:#0f172a;">Consultation Modes</h4>
+                        <ul style="padding-left:1.25rem;color:#475569;margin-bottom:0;">
+                            ${data.consultation_types && data.consultation_types.length ? data.consultation_types.map(t => `<li>${t}</li>`).join('') : '<li>Not specified</li>'}
+                        </ul>
+                    </div>
+                    <div class="glass-card">
+                        <h4 style="margin-top:0;color:#0f172a;">Session Preferences</h4>
+                        <ul style="padding-left:1.25rem;color:#475569;margin-bottom:0;">
+                            ${data.session_preferences ? `<li>Duration: ${data.session_preferences.duration}</li><li>Frequency: ${data.session_preferences.frequency}</li>` : '<li>Not specified</li>'}
                         </ul>
                     </div>
                 </div>

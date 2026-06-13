@@ -50,7 +50,7 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
             SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone, u.status,
                    s.specialization, s.experience_years, s.certificate_of_experience, {$certSel}, s.clinic_id,
                    c.clinic_name, c.location AS clinic_location,
-                   ob.bio, ob.certificate_path, ob.working_days, ob.consultation_types,
+                   s.bio, ob.certificate_path, ob.working_days, ob.consultation_types,
                    ob.start_time, ob.end_time, ob.focus_areas, ob.goals
             FROM users u
             LEFT JOIN specialist s ON u.user_id = s.specialist_id
@@ -158,11 +158,8 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
                 ON DUPLICATE KEY UPDATE doctor_id = doctor_id
             ")->execute([':did' => $doctor_id, ':spec' => $spec]);
 
-            // Store bio in a dedicated column
-            try {
-                $connect->exec("ALTER TABLE doctor_onboarding ADD COLUMN bio TEXT DEFAULT NULL AFTER goals");
-            } catch (Exception $e) { /* column already exists */ }
-            $connect->prepare("UPDATE doctor_onboarding SET bio = :bio WHERE doctor_id = :did")
+            // Remove the alter table and bio save for doctor_onboarding since we store it in specialist table
+            $connect->prepare("UPDATE specialist SET bio = :bio WHERE specialist_id = :did")
                     ->execute([':bio' => $bio, ':did' => $doctor_id]);
 
             $connect->commit();
@@ -217,14 +214,32 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
     // ── POST: Save availability slots ─────────────────
     if ($method === 'POST' && $action === 'save_slots') {
         $input  = json_decode(file_get_contents('php://input'), true);
+        
+        // Fetch actual clinic_id for this specialist
+        $stmt = $connect->prepare("SELECT clinic_id FROM specialist WHERE specialist_id = :did");
+        $stmt->execute([':did' => $doctor_id]);
+        $specRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        $clinic_id = $specRow ? intval($specRow['clinic_id']) : 0;
+        
         $days   = $input['days'] ?? [];        // array of day ints 0-6
         $start  = trim($input['start_time'] ?? '09:00');
         $end    = trim($input['end_time'] ?? '17:00');
         $duration = intval($input['slot_duration'] ?? 30);
         $consultation_types = isset($input['consultation_types']) ? json_encode($input['consultation_types']) : '[]';
+        $age_groups = isset($input['age_groups']) ? json_encode($input['age_groups']) : '[]';
+        $therapy_approaches = isset($input['therapy_approaches']) ? json_encode($input['therapy_approaches']) : '[]';
 
-        $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
-                ->execute([':ct' => $consultation_types, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
+        try {
+            // Ensure doctor_onboarding row exists
+            $check = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = ? LIMIT 1");
+            $check->execute([$doctor_id]);
+            if (!$check->fetch()) {
+                $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, specialization) VALUES (?, ?)")
+                        ->execute([$doctor_id, $_SESSION['specialization'] ?? '']);
+            }
+
+            $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, age_groups = :ag, therapy_approaches = :ta, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
+                    ->execute([':ct' => $consultation_types, ':ag' => $age_groups, ':ta' => $therapy_approaches, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
 
         // Deactivate all existing slots
         $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
@@ -254,6 +269,9 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         }
 
         echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
+        }
         exit;
     }
 

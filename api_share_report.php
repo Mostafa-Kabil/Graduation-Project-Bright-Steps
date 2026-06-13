@@ -90,7 +90,25 @@ if ($method === 'GET') {
         $sql .= " ORDER BY sr.created_at DESC";
         $stmt = $connect->prepare($sql);
         $stmt->execute($params);
-        echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        $shared_reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Fetch Doctor Reports for this parent's children
+        $sqlDr = "
+            SELECT dr.*, s.first_name as doc_fname, s.last_name as doc_lname, s.specialization, c.first_name as child_fname, c.last_name as child_lname
+            FROM doctor_report dr
+            JOIN child c ON dr.child_id = c.child_id
+            JOIN specialist s ON dr.specialist_id = s.specialist_id
+            WHERE c.parent_id = :pid
+        ";
+        if ($child_id) {
+            $sqlDr .= " AND dr.child_id = :cid";
+        }
+        $sqlDr .= " ORDER BY dr.report_date DESC";
+        $stmtDr = $connect->prepare($sqlDr);
+        $stmtDr->execute($params);
+        $doctor_reports = $stmtDr->fetchAll(PDO::FETCH_ASSOC);
+
+        echo json_encode(['success' => true, 'data' => $shared_reports, 'doctor_reports' => $doctor_reports]);
         exit;
     }
 

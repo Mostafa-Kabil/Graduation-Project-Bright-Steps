@@ -54,7 +54,7 @@ try {
     $specStmt = $connect->prepare("
         SELECT 
             s.specialist_id, s.first_name, s.last_name, s.specialization, s.experience_years, 
-            s.certification_text, s.certification_pdf, s.location, u.email, u.created_at AS joined_at,
+            s.certification_text, s.certification_pdf, u.email, u.created_at AS joined_at,
             (SELECT COUNT(DISTINCT child_id) FROM appointment a WHERE a.specialist_id = s.specialist_id) as patients_count,
             (SELECT IFNULL(AVG(rating), 0) FROM feedback f WHERE f.specialist_id = s.specialist_id) as rating
         FROM specialist s

@@ -130,9 +130,8 @@ try {
             exit();
         }
 
-        // Apply discount
-        $discountRate = 100.00;
-        $amountPost = 0.00;
+        $discountAmount = (float) $token['discount_amount'];
+        $amountPost = max(0, $amountPre - $discountAmount);
         $tokenUsed = true;
     }
 

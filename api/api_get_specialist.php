@@ -2,6 +2,9 @@
 session_start();
 require_once '../connection.php';
 header('Content-Type: application/json');
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 
 $id = intval($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -19,9 +22,6 @@ try {
     $photoCol = in_array('profile_photo', $existingCols) ? 's.profile_photo' : "'' AS profile_photo";
     $descCol = in_array('description', $existingCols) ? 's.description' : "'' AS description";
     $expCol = in_array('experience_years', $existingCols) ? 's.experience_years' : "0 AS experience_years";
-    $ageGroupCol = in_array('patient_age_group', $existingCols) ? 's.patient_age_group' : "'' AS patient_age_group";
-    $therapyCol = in_array('therapy_approaches', $existingCols) ? 's.therapy_approaches' : "'' AS therapy_approaches";
-    $focusCol = in_array('focus_areas', $existingCols) ? 's.focus_areas' : "'' AS focus_areas";
 
     $clinicColCheck = $connect->query("SHOW COLUMNS FROM `clinic`");
     $clinicCols = array_column($clinicColCheck->fetchAll(PDO::FETCH_ASSOC), 'Field');
@@ -30,10 +30,12 @@ try {
     $stmt = $connect->prepare("
         SELECT 
             s.specialist_id, s.first_name, s.last_name, s.specialization,
-            {$bioCol}, {$photoCol}, {$descCol}, {$expCol}, {$ageGroupCol}, {$therapyCol}, {$focusCol},
-            c.clinic_id, c.clinic_name, c.location AS clinic_location, {$clinicLogoCol}
+            {$bioCol}, {$photoCol}, {$descCol}, {$expCol},
+            c.clinic_id, c.clinic_name, c.location AS clinic_location, {$clinicLogoCol},
+            ob.age_groups, ob.therapy_approaches, ob.focus_areas, ob.consultation_types
         FROM specialist s
         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+        LEFT JOIN doctor_onboarding ob ON s.specialist_id = ob.doctor_id
         WHERE s.specialist_id = ?
     ");
     $stmt->execute([$id]);
@@ -48,15 +50,20 @@ try {
     // Availability
     $availability = [];
     try {
+    $slotDuration = 30; // default
+    try {
         $stmtAvail = $connect->prepare("
-            SELECT day_of_week, start_time, end_time
-            FROM specialist_availability
-            WHERE specialist_id = ? AND is_active = 1
+            SELECT day_of_week, start_time, end_time, slot_duration
+            FROM appointment_slots
+            WHERE doctor_id = ? AND is_active = 1
             ORDER BY day_of_week, start_time
         ");
         $stmtAvail->execute([$id]);
         $days_map = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         foreach ($stmtAvail->fetchAll(PDO::FETCH_ASSOC) as $av) {
+            if (isset($av['slot_duration']) && $av['slot_duration'] > 0) {
+                $slotDuration = (int)$av['slot_duration'];
+            }
             $availability[] = [
                 'day' => $days_map[(int)$av['day_of_week']] ?? 'Unknown',
                 'start' => date('H:i', strtotime($av['start_time'])),
@@ -93,7 +100,7 @@ try {
         "full_name" => "Dr. " . $spec['first_name'] . " " . $spec['last_name'],
         "bio" => $spec['bio'] ?: "",
         "description" => $spec['description'] ?: "",
-        "specialties" => array_filter(array_map('trim', explode(',', $spec['specialization'] ?? ''))),
+        "specialties" => array_values(array_filter(array_map('trim', explode(',', $spec['specialization'] ?? '')))),
         "years_experience" => (int)$spec['experience_years'],
         "certificates" => [], // Not in schema, mocked
         "clinic" => $spec['clinic_id'] ? [
@@ -102,10 +109,11 @@ try {
             "logo_url" => $spec['clinic_logo'] ?? "",
             "location" => $spec['clinic_location'] ?? ""
         ] : null,
-        "patient_age_group" => $spec['patient_age_group'] ?: "",
-        "therapy_approaches" => array_filter(array_map('trim', explode(',', $spec['therapy_approaches'] ?? ''))),
-        "session_preferences" => ["duration" => "45 min", "frequency" => "Weekly"],
-        "focus_areas" => array_filter(array_map('trim', explode(',', $spec['focus_areas'] ?? ''))),
+        "patient_age_group" => $spec['age_groups'] ? implode(', ', json_decode($spec['age_groups'], true) ?: []) : "",
+        "therapy_approaches" => $spec['therapy_approaches'] ? json_decode($spec['therapy_approaches'], true) ?: [] : [],
+        "session_preferences" => ["duration" => $slotDuration . " min", "frequency" => "As needed"],
+        "consultation_types" => $spec['consultation_types'] ? json_decode($spec['consultation_types'], true) ?: [] : [],
+        "focus_areas" => $spec['focus_areas'] ? json_decode($spec['focus_areas'], true) ?: [] : [],
         "availability" => $availability,
         "average_rating" => $avg_rating,
         "review_count" => $review_count,

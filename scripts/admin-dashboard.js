@@ -373,7 +373,7 @@ window.editUser = function(userId, firstName, lastName, email, role) {
         <div class="form-group"><label>First Name</label><input type="text" id="mu-fn" value="${firstName}"></div>
         <div class="form-group"><label>Last Name</label><input type="text" id="mu-ln" value="${lastName}"></div>
         <div class="form-group"><label>Email</label><input type="email" id="mu-em" value="${email}"></div>
-        <div class="form-group"><label>Role</label><select id="mu-rl"><option value="parent" ${role === 'parent' ? 'selected' : ''}>Parent</option><option value="specialist" ${role === 'specialist' ? 'selected' : ''}>Specialist</option><option value="clinic" ${role === 'clinic' ? 'selected' : ''}>Clinic</option><option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option></select></div>`,
+        <div class="form-group"><label>Role</label><select id="mu-rl"><option value="parent" ${role === 'parent' ? 'selected' : ''}>Parent</option><option value="specialist" ${role === 'specialist' ? 'selected' : ''}>Specialist</option><option value="admin" ${role === 'admin' ? 'selected' : ''}>Admin</option></select></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="mu-save">Save Changes</button>`);
     document.getElementById('mu-save').onclick = async () => {
         const d = { action: 'update', user_id: userId, first_name: document.getElementById('mu-fn').value, last_name: document.getElementById('mu-ln').value, email: document.getElementById('mu-em').value, role: document.getElementById('mu-rl').value };
@@ -387,7 +387,7 @@ function showAddUserModal() {
         <div class="form-group"><label>Last Name</label><input type="text" id="au-ln" placeholder="Enter last name"></div>
         <div class="form-group"><label>Email</label><input type="email" id="au-em" placeholder="user@example.com"></div>
         <div class="form-group"><label>Password</label><input type="password" id="au-pw" placeholder="Min 8 characters"></div>
-        <div class="form-group"><label>Role</label><select id="au-rl"><option value="parent">Parent</option><option value="specialist">Specialist</option><option value="clinic">Clinic</option><option value="admin">Admin</option></select></div>`,
+        <div class="form-group"><label>Role</label><select id="au-rl"><option value="parent">Parent</option><option value="specialist">Specialist</option><option value="admin">Admin</option></select></div>`,
         `<button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-gradient" id="au-save">Create User</button>`);
     document.getElementById('au-save').onclick = async () => {
         const d = { action: 'add', first_name: document.getElementById('au-fn').value, last_name: document.getElementById('au-ln').value, email: document.getElementById('au-em').value, password: document.getElementById('au-pw').value, role: document.getElementById('au-rl').value };

@@ -644,7 +644,7 @@ if ($parentId) {
     <script src="../../scripts/theme-toggle.js?v=<?= time() ?>"></script>
     <script src="../../scripts/language-toggle.js?v=<?= time() ?>"></script>
     <script src="../../scripts/navigation.js?v=<?= time() ?>"></script>
-    <script src="dashboard.js?t=<?php echo time(); ?>"></script>
+    <script src="dashboard.js?v=<?php echo time(); ?>"></script>
     <!--
         The inline bootstrap fallback has been removed because dashboard.js
         now handles its own initialization and error handling properly.

@@ -33,6 +33,9 @@ if (isset($_POST['login'])) {
                 if ($user['status'] == 'suspended') {
                     header("Location: account-suspended.php");
                     exit;
+                } elseif ($user['status'] == 'deactivated') {
+                    header("Location: account-deactivated.php");
+                    exit;
                 } elseif ($user['status'] == 'pending') {
                     header("Location: account-pending.php?portal=clinic");
                     exit;
@@ -42,7 +45,11 @@ if (isset($_POST['login'])) {
                     $_SESSION['clinic_name'] = $user['clinic_name'];
                     $_SESSION['role'] = 'clinic';
 
-                    header("Location: dashboards/clinic/clinic-dashboard.php");
+                    if (isset($user['is_first_login']) && $user['is_first_login'] == 1) {
+                        header("Location: clinic-onboarding.php");
+                    } else {
+                        header("Location: dashboards/clinic/clinic-dashboard.php");
+                    }
                     exit;
                 }
             } else {

@@ -15,9 +15,11 @@ if (empty($input)) {
 }
 
 try {
-    // Self-healing: Ensure bio and profile_image columns exist
+    // Self-healing: Ensure new columns exist for onboarding
     $connect->exec("ALTER TABLE clinic ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT NULL");
     $connect->exec("ALTER TABLE clinic ADD COLUMN IF NOT EXISTS profile_image VARCHAR(255) DEFAULT NULL");
+    $connect->exec("ALTER TABLE clinic ADD COLUMN IF NOT EXISTS branches TEXT DEFAULT NULL");
+    $connect->exec("ALTER TABLE clinic ADD COLUMN IF NOT EXISTS medical_specialties TEXT DEFAULT NULL");
     
     $profile_image = null;
     if (isset($_FILES['profile_image']) && $_FILES['profile_image']['error'] === UPLOAD_ERR_OK) {
@@ -33,12 +35,14 @@ try {
         }
     }
 
-    $query = "UPDATE clinic SET clinic_name = ?, email = ?, location = ?, bio = ?";
+    $query = "UPDATE clinic SET clinic_name = ?, email = ?, location = ?, bio = ?, branches = ?, medical_specialties = ?";
     $params = [
         $input['clinic_name'] ?? '',
         $input['email'] ?? '',
         $input['location'] ?? '',
-        $input['bio'] ?? ''
+        $input['bio'] ?? '',
+        $input['branches'] ?? '',
+        $input['medical_specialties'] ?? ''
     ];
 
     if ($profile_image) {

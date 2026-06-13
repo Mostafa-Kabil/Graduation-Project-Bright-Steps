@@ -25,7 +25,7 @@ if (!$receiverId || (!$content && empty($_FILES['attachment']))) {
 $stmtCheck = $connect->prepare("
     SELECT 1 FROM appointment 
     WHERE ((parent_id = ? AND specialist_id = ?) OR (parent_id = ? AND specialist_id = ?))
-      AND status IN ('Scheduled', 'Completed') LIMIT 1
+      AND status IN ('Scheduled', 'Completed', 'confirmed', 'approved') LIMIT 1
 ");
 $stmtCheck->execute([$senderId, $receiverId, $receiverId, $senderId]);
 if (!$stmtCheck->fetch()) {
@@ -148,6 +148,38 @@ try {
     }
     
     $messageId = $connect->lastInsertId();
+
+    if ($messageType === 'child_report' && $childId) {
+        $reportType = $_POST['report_type'] ?? 'full-report';
+        
+        // Ensure shared_reports table exists
+        $connect->exec("CREATE TABLE IF NOT EXISTS `shared_reports` (
+            `report_id` int(11) NOT NULL AUTO_INCREMENT,
+            `doctor_id` int(11) NOT NULL,
+            `parent_id` int(11) NOT NULL,
+            `child_id` int(11) NOT NULL,
+            `report_type` varchar(50) DEFAULT 'full-report',
+            `file_path` varchar(255) DEFAULT NULL,
+            `is_shared` tinyint(1) DEFAULT 1,
+            `doctor_reply` text DEFAULT NULL,
+            `doctor_reply_date` date DEFAULT NULL,
+            `created_at` timestamp DEFAULT current_timestamp(),
+            PRIMARY KEY (`report_id`),
+            KEY `idx_sr_doc` (`doctor_id`),
+            KEY `idx_sr_child` (`child_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+        
+        $stmtSr = $connect->prepare("
+            INSERT INTO shared_reports (doctor_id, parent_id, child_id, report_type, is_shared)
+            VALUES (:did, :pid, :cid, :rtype, 1)
+        ");
+        $stmtSr->execute([
+            ':did' => $receiverId,
+            ':pid' => $senderId,
+            ':cid' => $childId,
+            ':rtype' => $reportType
+        ]);
+    }
 
     // Notify doctor when a parent sends a message
     if (($_SESSION['role'] ?? '') === 'parent') {

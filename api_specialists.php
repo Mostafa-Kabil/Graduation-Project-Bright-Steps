@@ -8,6 +8,9 @@
 session_start();
 require_once 'connection.php';
 header('Content-Type: application/json');
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 
 // Must be a logged-in parent (or any authenticated user) to browse specialists
 if (!isset($_SESSION['id'])) {
@@ -92,19 +95,20 @@ try {
     $slotMap = [];
     try {
         $slotStmt = $connect->query("
-            SELECT specialist_id, day_of_week, start_time, end_time, slot_duration_minutes
-            FROM specialist_availability
+            SELECT doctor_id AS specialist_id, day_of_week, start_time, end_time, slot_duration
+            FROM appointment_slots
             WHERE is_active = 1
-            ORDER BY specialist_id, day_of_week, start_time
+            ORDER BY doctor_id, day_of_week, start_time
         ");
         $allSlots = $slotStmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($allSlots as $sl) {
             $did = (int)$sl['specialist_id'];
             $dow = (int)$sl['day_of_week'];
+            
             $slotMap[$did][$dow] = [
                 'start_time'    => $sl['start_time'],
                 'end_time'      => $sl['end_time'],
-                'slot_duration' => (int)$sl['slot_duration_minutes'],
+                'slot_duration' => (int)$sl['slot_duration'],
             ];
         }
     } catch (Exception $e) {

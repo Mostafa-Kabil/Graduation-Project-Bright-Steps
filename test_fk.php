@@ -1,4 +1,8 @@
 <?php
 require 'connection.php';
-$stmt = $connect->query("SELECT * FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_NAME = 'specialist' AND TABLE_SCHEMA = 'graduation_project'");
-print_r($stmt->fetchAll(PDO::FETCH_ASSOC));
+try {
+    $connect->exec("ALTER TABLE appointment_slots DROP FOREIGN KEY as_clinic_fk");
+    echo "Dropped FK successfully\n";
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage() . "\n";
+}

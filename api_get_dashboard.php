@@ -134,16 +134,17 @@ unset($child);
 $data['children'] = $children;
 
 // --- Appointments ---
-$sql = "SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
+$sql = "SELECT a.appointment_id, a.status, a.type, a.scheduled_at, 
+               COALESCE(NULLIF(TRIM(a.report), ''), (SELECT CONCAT('Specialist Notes:\n', dr.doctor_notes, '\n\nRecommendations:\n', dr.recommendations) FROM doctor_report dr WHERE dr.specialist_id = a.specialist_id AND dr.child_id = a.child_id ORDER BY dr.report_date DESC LIMIT 1)) AS report,
+               a.comment, a.next_visit_recommendation,
                s.first_name AS doc_fname, s.last_name AS doc_lname, s.specialization,
                c.clinic_name, c.location AS clinic_location
         FROM appointment a
         INNER JOIN specialist s ON a.specialist_id = s.specialist_id
         INNER JOIN clinic c ON s.clinic_id = c.clinic_id
         WHERE a.parent_id = :parent_id
-          AND a.scheduled_at >= NOW()
-        ORDER BY a.scheduled_at ASC
-        LIMIT 10";
+        ORDER BY a.scheduled_at DESC
+        LIMIT 30";
 $stmt = $connect->prepare($sql);
 $stmt->execute(['parent_id' => $parentId]);
 $data['appointments'] = $stmt->fetchAll(PDO::FETCH_ASSOC);

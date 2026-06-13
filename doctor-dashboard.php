@@ -334,6 +334,32 @@ if ($isAjax) {
                             $docName = $sessionDoctorName ?? 'Your doctor';
                             $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)")
                                 ->execute([$sr['parent_id'], 'Doctor Report Added', "{$docName} has written a report based on your shared documents."]);
+                                
+                            // Send chat message
+                            $msgContent = "I have written a specialist report based on your shared documents. You can review it in the 'My Reports' section under your child's patient details.";
+                            $mst = $connect->prepare("
+                                INSERT INTO message (sender_id, receiver_id, child_id, content, is_read, sent_at) 
+                                VALUES (?, ?, ?, ?, 0, NOW())
+                            ");
+                            $mst->execute([$specialist_id, $sr['parent_id'], $child_id, $msgContent]);
+                        }
+                    } else {
+                        // Notify parent for a new report (not a reply)
+                        $pStmt = $connect->prepare("SELECT parent_id FROM child WHERE child_id = ?");
+                        $pStmt->execute([$child_id]);
+                        $parent_id = $pStmt->fetchColumn();
+                        if ($parent_id) {
+                            $docName = $sessionDoctorName ?? 'Your doctor';
+                            $connect->prepare("INSERT INTO notifications (user_id, type, title, message) VALUES (?, 'system', ?, ?)")
+                                ->execute([$parent_id, 'New Report Added', "{$docName} has written a new assessment report."]);
+                                
+                            // Send chat message
+                            $msgContent = "I have written a new specialist assessment report for your child. You can review it in the 'My Reports' section under your child's patient details.";
+                            $mst = $connect->prepare("
+                                INSERT INTO message (sender_id, receiver_id, child_id, content, is_read, sent_at) 
+                                VALUES (?, ?, ?, ?, 0, NOW())
+                            ");
+                            $mst->execute([$specialist_id, $parent_id, $child_id, $msgContent]);
                         }
                     }
 
@@ -493,7 +519,7 @@ if ($isAjax) {
                     FROM appointment a
                     JOIN parent p ON p.parent_id = a.parent_id
                     JOIN users u ON u.user_id = p.parent_id
-                    JOIN child c ON c.parent_id = p.parent_id
+                    LEFT JOIN child c ON c.child_id = a.child_id
                     WHERE a.specialist_id = :sid
                     GROUP BY c.child_id
                     ORDER BY last_appointment_date DESC
@@ -558,11 +584,21 @@ if ($isAjax) {
                 $stmt5 = $connect->prepare("
                     SELECT appointment_id, status, type, scheduled_at, comment
                     FROM appointment
-                    WHERE specialist_id = :sid AND parent_id = (SELECT parent_id FROM child WHERE child_id = :cid LIMIT 1)
+                    WHERE specialist_id = :sid AND child_id = :cid
                     ORDER BY scheduled_at DESC
                 ");
                 $stmt5->execute([':sid' => $specialist_id, ':cid' => $child_id]);
                 $appointments = $stmt5->fetchAll(PDO::FETCH_ASSOC);
+
+                // Shared Reports
+                $stmt6 = $connect->prepare("
+                    SELECT report_id, file_path, report_type, is_shared, doctor_reply, doctor_reply_date, created_at
+                    FROM shared_reports
+                    WHERE doctor_id = :sid AND child_id = :cid AND is_shared = 1
+                    ORDER BY created_at DESC
+                ");
+                $stmt6->execute([':sid' => $specialist_id, ':cid' => $child_id]);
+                $shared_reports = $stmt6->fetchAll(PDO::FETCH_ASSOC);
 
                 echo json_encode([
                     'success' => true,
@@ -571,7 +607,8 @@ if ($isAjax) {
                         'growth_records' => $growth,
                         'milestones' => $milestones,
                         'doctor_reports' => $reports,
-                        'appointments' => $appointments
+                        'appointments' => $appointments,
+                        'shared_reports' => $shared_reports
                     ]
                 ]);
                 exit;
@@ -591,9 +628,9 @@ if ($isAjax) {
                         u.first_name AS parent_first_name, u.last_name AS parent_last_name,
                         p.parent_id
                     FROM appointment a
-                    JOIN parent p ON p.parent_id = a.parent_id
+                    JOIN child c ON c.child_id = a.child_id
+                    JOIN parent p ON p.parent_id = c.parent_id
                     JOIN users u ON u.user_id = p.parent_id
-                    JOIN child c ON c.parent_id = p.parent_id
                     WHERE a.specialist_id = :sid
                       AND (CONCAT(c.first_name, ' ', c.last_name) LIKE :q1
                            OR CONCAT(u.first_name, ' ', u.last_name) LIKE :q2)
@@ -625,12 +662,12 @@ if ($isAjax) {
                     SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.report, a.comment,
                            u.first_name AS parent_first_name, u.last_name AS parent_last_name,
                            p.parent_id,
-                           (SELECT GROUP_CONCAT(c2.first_name SEPARATOR ', ')
-                            FROM child c2 WHERE c2.parent_id = a.parent_id) AS children_names,
+                           c.first_name AS child_first_name, c.last_name AS child_last_name,
                            (SELECT meeting_link FROM message WHERE appointment_id = a.appointment_id AND meeting_link IS NOT NULL LIMIT 1) AS meeting_link
                     FROM appointment a
                     JOIN parent p ON p.parent_id = a.parent_id
                     JOIN users u ON u.user_id = p.parent_id
+                    LEFT JOIN child c ON c.child_id = a.child_id
                     WHERE a.specialist_id = :sid
                 ";
                 $params = [':sid' => $specialist_id];
@@ -777,7 +814,7 @@ if ($isAjax) {
                                s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
                                COALESCE(c.clinic_name, '') AS clinic_name,
                                COALESCE(c.location, '') AS clinic_location,
-                               COALESCE(o.bio, '') AS bio, o.consultation_types, o.focus_areas
+                               COALESCE(s.bio, '') AS bio, o.consultation_types, o.focus_areas
                         FROM users u
                         LEFT JOIN specialist s ON u.user_id = s.specialist_id
                         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
@@ -858,26 +895,20 @@ if ($isAjax) {
                     $connect->prepare("UPDATE users SET first_name = :fn, last_name = :ln, email = :email WHERE user_id = :uid")
                             ->execute([':fn' => $first_name, ':ln' => $last_name, ':email' => $email, ':uid' => $doctor_id]);
                     $connect->prepare("
-                        INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience)
-                        VALUES (:sid, 0, :fn, :ln, :spec, :exp, :cert)
+                        INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certificate_of_experience, bio)
+                        VALUES (:sid, 0, :fn, :ln, :spec, :exp, :cert, :bio)
                         ON DUPLICATE KEY UPDATE
                             first_name = VALUES(first_name),
                             last_name = VALUES(last_name),
                             specialization = VALUES(specialization),
                             experience_years = VALUES(experience_years),
-                            certificate_of_experience = VALUES(certificate_of_experience)
-                    ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':sid' => $doctor_id]);
+                            certificate_of_experience = VALUES(certificate_of_experience),
+                            bio = VALUES(bio)
+                    ")->execute([':fn' => $first_name, ':ln' => $last_name, ':spec' => $spec, ':exp' => $exp, ':cert' => $cert, ':bio' => $bio, ':sid' => $doctor_id]);
 
-                    $stmt_bio = $connect->prepare("UPDATE doctor_onboarding SET goals = :bio WHERE doctor_id = :uid");
-                    $stmt_bio->execute([':bio' => $bio, ':uid' => $doctor_id]);
-                    if ($stmt_bio->rowCount() === 0) {
-                        $check_bio = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = :uid");
-                        $check_bio->execute([':uid' => $doctor_id]);
-                        if (!$check_bio->fetch()) {
-                            $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, goals) VALUES (:uid, :bio)")
-                                    ->execute([':uid' => $doctor_id, ':bio' => $bio]);
-                        }
-                    }
+                    // Removed saving bio to doctor_onboarding.goals
+
+
                     $connect->commit();
                     $_SESSION['fname'] = $first_name;
                     $_SESSION['lname'] = $last_name;
@@ -918,32 +949,52 @@ if ($isAjax) {
 
             if ($action === 'save_slots') {
                 $doctor_id = intval($_SESSION['id']);
-                $clinic_id = intval($_SESSION['clinic_id'] ?? 1);
+                
+                // Fetch actual clinic_id for this specialist
+                $stmt = $connect->prepare("SELECT clinic_id FROM specialist WHERE specialist_id = :did");
+                $stmt->execute([':did' => $doctor_id]);
+                $specRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                $clinic_id = $specRow ? intval($specRow['clinic_id']) : 0;
+                
                 $days     = $input['days'] ?? [];
                 $start    = trim($input['start_time'] ?? '09:00');
                 $end      = trim($input['end_time'] ?? '17:00');
                 $duration = intval($input['slot_duration'] ?? 30);
                 $consultation_types = isset($input['consultation_types']) ? json_encode($input['consultation_types']) : '[]';
                 $focus_areas = isset($input['focus_areas']) ? json_encode($input['focus_areas']) : '[]';
+                $age_groups = isset($input['age_groups']) ? json_encode($input['age_groups']) : '[]';
+                $therapy_approaches = isset($input['therapy_approaches']) ? json_encode($input['therapy_approaches']) : '[]';
 
-                $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, focus_areas = :fa, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
-                        ->execute([':ct' => $consultation_types, ':fa' => $focus_areas, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
-
-                $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
-                        ->execute([':did' => $doctor_id]);
-                if (!empty($days)) {
-                    $stmt = $connect->prepare("
-                        INSERT INTO appointment_slots (doctor_id, clinic_id, day_of_week, start_time, end_time, slot_duration, is_active)
-                        VALUES (:did, :cid, :dow, :start, :end, :dur, 1)
-                        ON DUPLICATE KEY UPDATE start_time = :start2, end_time = :end2, slot_duration = :dur2, is_active = 1
-                    ");
-                    foreach ($days as $dow) {
-                        $dow = intval($dow);
-                        if ($dow < 0 || $dow > 6) continue;
-                        $stmt->execute([':did'=>$doctor_id,':cid'=>$clinic_id,':dow'=>$dow,':start'=>$start,':end'=>$end,':dur'=>$duration,':start2'=>$start,':end2'=>$end,':dur2'=>$duration]);
+                try {
+                    // Ensure doctor_onboarding row exists to avoid silent failures
+                    $check = $connect->prepare("SELECT id FROM doctor_onboarding WHERE doctor_id = ? LIMIT 1");
+                    $check->execute([$doctor_id]);
+                    if (!$check->fetch()) {
+                        $connect->prepare("INSERT INTO doctor_onboarding (doctor_id, specialization) VALUES (?, ?)")
+                                ->execute([$doctor_id, $_SESSION['specialization'] ?? '']);
                     }
+
+                    $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, focus_areas = :fa, age_groups = :ag, therapy_approaches = :ta, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
+                            ->execute([':ct' => $consultation_types, ':fa' => $focus_areas, ':ag' => $age_groups, ':ta' => $therapy_approaches, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
+
+                    $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
+                            ->execute([':did' => $doctor_id]);
+                    if (!empty($days)) {
+                        $stmt = $connect->prepare("
+                            INSERT INTO appointment_slots (doctor_id, clinic_id, day_of_week, start_time, end_time, slot_duration, is_active)
+                            VALUES (:did, :cid, :dow, :start, :end, :dur, 1)
+                            ON DUPLICATE KEY UPDATE start_time = :start2, end_time = :end2, slot_duration = :dur2, is_active = 1
+                        ");
+                        foreach ($days as $dow) {
+                            $dow = intval($dow);
+                            if ($dow < 0 || $dow > 6) continue;
+                            $stmt->execute([':did'=>$doctor_id,':cid'=>$clinic_id,':dow'=>$dow,':start'=>$start,':end'=>$end,':dur'=>$duration,':start2'=>$start,':end2'=>$end,':dur2'=>$duration]);
+                        }
+                    }
+                    echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
+                } catch (Exception $e) {
+                    echo json_encode(['success' => false, 'error' => 'Database error: ' . $e->getMessage()]);
                 }
-                echo json_encode(['success' => true, 'message' => 'Availability saved successfully']);
                 exit;
             }
         }
@@ -966,7 +1017,7 @@ if ($isAjax) {
                 $stmt = $connect->prepare("
                     SELECT COUNT(DISTINCT c.child_id) AS total_patients
                     FROM appointment a
-                    JOIN child c ON c.parent_id = a.parent_id
+                    JOIN child c ON c.child_id = a.child_id
                     WHERE a.specialist_id = :sid
                 ");
                 $stmt->execute([':sid' => $specialist_id]);

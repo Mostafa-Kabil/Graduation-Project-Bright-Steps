@@ -1,7 +1,10 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) { session_start(); }
 require_once '../connection.php';
 header('Content-Type: application/json');
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
 
 if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'parent') {
     http_response_code(401);
@@ -25,9 +28,9 @@ try {
 
     // 2. Fetch working windows for this day
     $stmt = $connect->prepare("
-        SELECT start_time, end_time 
-        FROM specialist_availability 
-        WHERE specialist_id = ? AND day_of_week = ? AND is_active = 1
+        SELECT start_time, end_time, slot_duration 
+        FROM appointment_slots 
+        WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
     ");
     $stmt->execute([$specialist_id, $dayOfWeek]);
     $windows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -42,13 +45,14 @@ try {
         exit;
     }
 
-    // 3. Generate 30-minute slots
+    // 3. Generate slots based on duration
     $slots = [];
-    $now = new DateTime();
+    $now = new DateTime('now', new DateTimeZone('Africa/Cairo'));
 
     foreach ($windows as $win) {
-        $start = new DateTime("$date {$win['start_time']}");
-        $end = new DateTime("$date {$win['end_time']}");
+        $start = new DateTime("$date {$win['start_time']}", new DateTimeZone('Africa/Cairo'));
+        $end = new DateTime("$date {$win['end_time']}", new DateTimeZone('Africa/Cairo'));
+        $duration = intval($win['slot_duration']) > 0 ? intval($win['slot_duration']) : 30;
         
         while ($start < $end) {
             $slotTime = $start->format('H:i');
@@ -61,10 +65,11 @@ try {
                 'label' => $slotLabel,
                 'datetime_full' => $start->format('Y-m-d H:i:s'),
                 'booked' => false,
-                'past' => $isPast
+                'past' => $isPast,
+                'duration' => $duration
             ];
 
-            $start->modify('+30 minutes');
+            $start->modify('+' . $duration . ' minutes');
         }
     }
 

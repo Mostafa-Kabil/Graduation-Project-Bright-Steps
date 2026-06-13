@@ -587,15 +587,37 @@ function showPatientDetailModal(data) {
         : '<p style="color:var(--text-secondary);">No milestones recorded yet.</p>';
 
     // Reports section
-    let reportsHtml = data.doctor_reports?.length > 0
-        ? data.doctor_reports.slice(0, 3).map(r => `<div style="padding:0.75rem;margin-bottom:0.5rem;background:var(--bg-secondary);border-radius:0.5rem;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
-                <div style="font-weight:600;font-size:0.9rem;">${new Date(r.report_date).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
-            </div>
-            <div style="font-size:0.85rem;"><strong>Notes:</strong> ${(r.doctor_notes||'').substring(0, 150)}${(r.doctor_notes||'').length > 150 ? '...' : ''}</div>
-            ${r.recommendations ? `<div style="font-size:0.85rem;margin-top:0.25rem;"><strong>Recommendations:</strong> ${r.recommendations.substring(0, 100)}${r.recommendations.length > 100 ? '...' : ''}</div>` : ''}
-           </div>`).join('')
-        : '<p style="color:var(--text-secondary);">No reports written for this patient.</p>';
+    let reportsHtml = '<p style="color:var(--text-secondary);">No reports written for this patient.</p>';
+    if (data.doctor_reports && data.doctor_reports.length > 0) {
+        reportsHtml = data.doctor_reports.map(r => {
+            const safeNotes = (r.doctor_notes || '').replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, '\\n').replace(/\r/g, '');
+            const safeRecs = (r.recommendations || '').replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\n/g, '\\n').replace(/\r/g, '');
+            const rDate = r.report_date || '';
+            return `<div style="padding:0.75rem;background:var(--bg-secondary);border-radius:0.5rem;margin-bottom:0.5rem;">
+                <div style="font-weight:600;">Report from ${new Date(r.report_date || r.created_at).toLocaleDateString()}</div>
+                <div style="font-size:0.85rem;color:var(--text-secondary);margin-top:0.25rem;">${r.doctor_notes}</div>
+                <div style="margin-top:0.5rem;"><button class="btn btn-sm btn-outline" onclick="document.getElementById('patientDetailModal').remove(); openReportModal('${safeName}', ${c.child_id}, '', 0, ${r.report_id}, '${safeNotes}', '${safeRecs}', '${rDate}')">Edit Report</button></div>
+            </div>`;
+        }).join('');
+    }
+
+    let sharedReportsHtml = '<div style="color:var(--text-secondary);font-size:0.85rem;">No shared reports yet.</div>';
+    if (data.shared_reports && data.shared_reports.length > 0) {
+        sharedReportsHtml = data.shared_reports.map(sr => {
+            const rType = sr.report_type.replace('-report', '').toUpperCase();
+            const reportUrl = sr.file_path ? sr.file_path.replace(/'/g, "\\'") : `api_export_pdf.php?child_id=${c.child_id}&type=${sr.report_type}`;
+            return `<div style="padding:0.75rem;background:var(--bg-secondary);border-radius:0.5rem;margin-bottom:0.5rem;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-weight:600;">${rType} Report</div>
+                    <div style="font-size:0.85rem;color:var(--text-secondary);">Shared on ${new Date(sr.created_at).toLocaleDateString()}</div>
+                </div>
+                <div style="display:flex;gap:0.5rem;">
+                    <button class="btn btn-sm btn-outline" onclick="viewSharedReport('${reportUrl}', '${sr.report_type}')">View</button>
+                    ${sr.doctor_reply ? '<span class="report-status report-status-completed" style="font-size:0.7rem;padding:0.1rem 0.5rem;">Replied</span>' : `<button class="btn btn-sm btn-gradient" onclick="document.getElementById('patientDetailModal').remove(); openReportModal('${safeName}', ${c.child_id}, 'Shared Report: ${sr.report_type}', ${sr.report_id})">Reply</button>`}
+                </div>
+            </div>`;
+        }).join('');
+    }
 
     // Appointments section
     let appointmentsHtml = data.appointments?.length > 0
@@ -640,6 +662,10 @@ function showPatientDetailModal(data) {
             <h4 style="margin:1.5rem 0 0.5rem;color:var(--yellow-600);display:flex;align-items:center;gap:0.5rem;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Appointment History</h4>
             ${appointmentsHtml}
+
+            <h4 style="margin:1.5rem 0 0.5rem;color:var(--blue-500);display:flex;align-items:center;gap:0.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Shared Reports from Parent</h4>
+            ${sharedReportsHtml}
 
             <!-- Action Buttons -->
             <div style="display:flex;gap:0.75rem;margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border-color);">
@@ -815,7 +841,7 @@ function renderSharedReportsList(reports) {
             'child-report': '👤 Child Profile Report',
             'uploaded-pdf': '📎 Uploaded PDF'
         }[r.report_type] || ('📄 ' + r.report_type);
-        const viewUrl = r.file_path ? r.file_path.replace(/'/g, "\\'") : '';
+        const viewUrl = r.file_path ? r.file_path.replace(/'/g, "\\'") : `api_export_pdf.php?child_id=${r.child_id}&type=${r.report_type}`;
         const childNameSafe = (r.child_first_name || '') + ' ' + (r.child_last_name || '');
         const safeName = childNameSafe.replace(/'/g, "\\'").replace(/"/g, "&quot;");
         const reportContext = 'Shared Report: ' + r.report_type;
@@ -1017,13 +1043,13 @@ function renderAppointmentsList(appointments) {
         const typeLabel = a.type === 'online' ? 'Online' : 'On-site';
         const initials = (a.parent_first_name?.charAt(0) || '') + (a.parent_last_name?.charAt(0) || '');
         const isActive = status !== 'completed' && status !== 'cancelled';
-        const childNameSafe = (a.children_names || '').split(',')[0].replace(/'/g, "\\'");
+        const childNameSafe = (a.child_first_name && a.child_last_name) ? `${a.child_first_name} ${a.child_last_name}`.replace(/'/g, "\\'") : '--';
         const parentNameSafe = parentName.replace(/'/g, "\\'");
         
         html += `<div class="patient-row">
             <div class="patient-avatar">${initials}</div>
-            <div class="patient-info"><div class="patient-name">${parentName}</div>
-                <div class="patient-details">${a.children_names || 'No children listed'} • ${typeIcon} ${typeLabel}</div></div>
+            <div class="patient-info"><div class="patient-name">${childNameSafe}</div>
+                <div class="patient-details">Parent: ${parentName} • ${typeIcon} ${typeLabel}</div></div>
             <div class="patient-status ${statusClass}">${statusLabelMap[status] || status.charAt(0).toUpperCase() + status.slice(1)}</div>
             <div class="patient-last-update">${dateStr}${timeStr ? ' at ' + timeStr : ''}</div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -1071,7 +1097,7 @@ function searchAppointmentsLocal(query) {
     if (!q) { renderAppointmentsList(allAppointmentsCache); return; }
     renderAppointmentsList(allAppointmentsCache.filter(a =>
         `${a.parent_first_name} ${a.parent_last_name}`.toLowerCase().includes(q) ||
-        (a.children_names || '').toLowerCase().includes(q)
+        `${a.child_first_name} ${a.child_last_name}`.toLowerCase().includes(q)
     ));
 }
 
@@ -2111,7 +2137,6 @@ function renderAppointmentPieChart(completed, upcoming, cancelled) {
 
 
 async function doctorApproveAppointment(appointmentId) {
-    if (!confirm('Approve this appointment? The parent will be notified and messaging will be unlocked.')) return;
     try {
         const res = await fetch('api_manage_appointment_status.php', {
             method: 'POST',

@@ -23,7 +23,7 @@ $email = trim($_POST['email'] ?? '');
 $specialization = trim($_POST['specialization'] ?? '');
 $experience = intval($_POST['experience'] ?? 0);
 $certification_text = trim($_POST['certification_text'] ?? '');
-$location = trim($_POST['location'] ?? '');
+$location = ''; // Location is obsolete
 
 if (!$specialist_id || !$first_name || !$specialization) {
     echo json_encode(["success" => false, "error" => "Missing required fields."]);
@@ -80,8 +80,8 @@ try {
     $connect->beginTransaction();
 
     // Update specialist table
-    $updateFields = "first_name = ?, last_name = ?, specialization = ?, experience_years = ?, certification_text = ?, location = ?";
-    $params = [$first_name, $last_name, $specialization, $experience, $certification_text, $location];
+    $updateFields = "first_name = ?, last_name = ?, specialization = ?, experience_years = ?, certification_text = ?";
+    $params = [$first_name, $last_name, $specialization, $experience, $certification_text];
     
     if ($certification_pdf) {
         $updateFields .= ", certification_pdf = ?";

@@ -137,8 +137,8 @@ if (isset($_POST['update_credentials'])) {
                 </div>
             </div>
         </div>
-        <div class="auth-visual-side" style="background: linear-gradient(135deg, rgba(13, 148, 136, 0.8), rgba(45, 212, 191, 0.8)), url('assets/visual.jpg') center/cover no-repeat;">
-            <div class="visual-content">
+        <div class="auth-visual-side" style="background: url('assets/doctor_first_login_hero.png') center/cover no-repeat;">
+            <div class="visual-content" style="background: rgba(13, 148, 136, 0.8); padding: 2rem; border-radius: 1rem; backdrop-filter: blur(10px);">
                 <h2>Empower Pediatric Care</h2>
                 <p>Bright Steps connects clinics and specialists to deliver streamlined therapies and developmental support.</p>
             </div>

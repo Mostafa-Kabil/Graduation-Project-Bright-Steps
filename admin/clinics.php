@@ -46,6 +46,12 @@ try {
             $stmt = $connect->query("SELECT COUNT(*) as total FROM clinic WHERE status = 'suspended'");
             $suspended = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM clinic WHERE status = 'deactivated'");
+            $deactivated = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+            $stmt = $connect->query("SELECT COUNT(*) as total FROM clinic WHERE status = 'rejected'");
+            $rejected = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
             $stmt = $connect->query("SELECT AVG(rating) as avg_rating FROM clinic WHERE rating > 0");
             $avgRating = round($stmt->fetch(PDO::FETCH_ASSOC)['avg_rating'] ?? 0, 1);
 
@@ -57,6 +63,8 @@ try {
                     'verified' => (int) $verified,
                     'pending' => (int) $pending,
                     'suspended' => (int) $suspended,
+                    'deactivated' => (int) $deactivated,
+                    'rejected' => (int) $rejected,
                     'avg_rating' => $avgRating
                 ]
             ]);

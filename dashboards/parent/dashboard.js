@@ -21,6 +21,17 @@
 
     var children = (window.dashboardData || {}).children || [];
 
+    // Helper to format full address into "Area, City" or "City, Area"
+    function formatLocation(fullLocation) {
+        if (!fullLocation) return 'Location not specified';
+        const parts = fullLocation.split(',').map(p => p.trim()).filter(p => p);
+        if (parts.length >= 2) {
+            // Usually "Building, Street, Area, City"
+            return parts[parts.length - 2] + ', ' + parts[parts.length - 1];
+        }
+        return fullLocation;
+    }
+
     // Navigation items configuration
     const navItems = [
         { id: 'home', label: 'Home', icon: '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' },
@@ -4939,6 +4950,16 @@
                     if (locF)  locF.innerHTML  = '<option value="">All Clinics</option>'   + locVals.map(function(v){ return '<option value="' + v + '">' + v + '</option>'; }).join('');
 
                     window.renderSpecialists();
+
+                    // Auto-open booking modal if requested
+                    const uParams = new URLSearchParams(window.location.search);
+                    if (uParams.has('book_specialist')) {
+                        const sId = uParams.get('book_specialist');
+                        const sMatch = window._allSpecialists.find(spec => spec.specialist_id == sId);
+                        if (sMatch) {
+                            window.bookSpecialist(sId, 'Dr. ' + sMatch.first_name + ' ' + sMatch.last_name);
+                        }
+                    }
                 } else {
                     specList.innerHTML = '<div class="doctor-empty-state"><div class="doctor-empty-icon">🩺</div><h3>No specialists found</h3><p>Doctors will appear here once added to the system.</p></div>';
                 }
@@ -4949,6 +4970,97 @@
         }, 50);
 
         // ── renderSpecialists: filter + paint cards ───────────────
+        // 🏥 Fetch clinics from backend
+        setTimeout(async function() {
+            const clinicsList = document.getElementById('clinics-dir-list');
+            if (!clinicsList) return;
+            try {
+                const res = await fetch('../../api_get_clinics.php');
+                const data = await res.json();
+                if (data.success && data.clinics && data.clinics.length > 0) {
+                    const allClinics = data.clinics;
+                    window._allClinicsDir = allClinics;
+                    const displayClinics = allClinics.slice(0, 5);
+                    const hasMore = allClinics.length > 5;
+
+                    const cardHtml = c => `
+                        <div class="clinic-dir-card" style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1rem;cursor:pointer;transition:transform .2s;" onclick="window.location.href='../../clinic-profile.php?id=${c.clinic_id}'" onmouseenter="this.style.transform='translateY(-3px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.05)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                            <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem;">
+                                <div style="width:40px;height:40px;border-radius:8px;background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;">
+                                    ${c.logo ? `<img src="../../${c.logo}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">` : '🏥'}
+                                </div>
+                                <div>
+                                    <h3 style="margin:0;font-size:1rem;color:var(--text-primary);">${c.clinic_name}</h3>
+                                    <div style="font-size:.75rem;color:var(--text-secondary);">${formatLocation(c.location)}</div>
+                                </div>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;font-size:.8rem;">
+                                <div style="font-weight:600;"><span style="color:var(--yellow-500);">★</span> ${Number(c.rating||0).toFixed(1)}</div>
+                                <div style="color:var(--text-secondary);">${c.specialist_count||0} Specialists</div>
+                            </div>
+                        </div>`;
+
+                    let html = displayClinics.map(cardHtml).join('');
+                    
+                    if (hasMore) {
+                        html += `
+                        <div class="clinic-dir-card see-more-card" style="background:var(--bg-secondary);border:1px dashed var(--border);border-radius:12px;padding:1rem;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;" onclick="showAllClinicsModal()" onmouseenter="this.style.background='var(--blue-50)';this.style.borderColor='var(--blue-300)'" onmouseleave="this.style.background='var(--bg-secondary)';this.style.borderColor='var(--border)'">
+                            <div style="width:40px;height:40px;border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;margin-bottom:.5rem;color:var(--blue-600);box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 16 16 12 12 8"></polyline><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                            </div>
+                            <div style="font-weight:700;color:var(--text-primary);">See More</div>
+                            <div style="font-size:.75rem;color:var(--text-secondary);">${allClinics.length - 5} more clinics</div>
+                        </div>`;
+                    }
+
+                    clinicsList.innerHTML = html;
+                    
+                    if(!window.showAllClinicsModal) {
+                        window.showAllClinicsModal = function() {
+                            const gridHtml = window._allClinicsDir.map(cardHtml).join('');
+                            
+                            let existing = document.getElementById('all-clinics-modal');
+                            if (existing) existing.remove();
+
+                            const m = document.createElement('div');
+                            m.id = 'all-clinics-modal';
+                            m.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s;padding:1rem;';
+                            
+                            m.innerHTML = `
+                                <div style="background:#fff;border-radius:24px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);transform:scale(0.95);transition:transform 0.2s;overflow:hidden;">
+                                    <div style="padding:1.5rem 2rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-secondary);">
+                                        <div>
+                                            <h2 style="margin:0;font-size:1.5rem;font-weight:800;color:var(--text-primary);">All Verified Clinics</h2>
+                                            <div style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.25rem;">Browse all our partner clinics</div>
+                                        </div>
+                                        <button onclick="document.getElementById('all-clinics-modal').remove()" style="background:var(--slate-200);border:none;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--slate-600);transition:all 0.2s;" onmouseenter="this.style.background='var(--slate-300)';this.style.color='var(--slate-900)'" onmouseleave="this.style.background='var(--slate-200)';this.style.color='var(--slate-600)'">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        </button>
+                                    </div>
+                                    <div style="padding:2rem;overflow-y:auto;flex:1;">
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;">
+                                            ${gridHtml}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            document.body.appendChild(m);
+                            
+                            requestAnimationFrame(() => {
+                                m.style.opacity = '1';
+                                m.firstElementChild.style.transform = 'scale(1)';
+                            });
+                        };
+                    }
+
+                } else {
+                    clinicsList.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--text-secondary);background:var(--bg-card);border-radius:12px;">No clinics available right now.</div>';
+                }
+            } catch (err) {
+                clinicsList.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--red-500);background:var(--bg-card);border-radius:12px;">Error loading clinics. Please try again later.</div>';
+            }
+        }, 50);
+
         window.renderSpecialists = function() {
             const specList = document.getElementById('specialist-list');
             if (!specList || !window._allSpecialists) return;
@@ -5017,11 +5129,11 @@
                                     (s.clinic_id ? 
                                         '<a href="../../clinic-profile.php?id=' + s.clinic_id + '" class="doctor-pill doctor-pill-loc" style="text-decoration:none;">' +
                                             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
-                                            (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                            (s.clinic_name || 'Clinic') + ', ' + formatLocation(s.location) +
                                         '</a>' :
                                         '<div class="doctor-pill doctor-pill-loc">' +
                                             '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' +
-                                            (s.clinic_name || 'Clinic') + ', ' + (s.location || 'N/A') +
+                                            (s.clinic_name || 'Clinic') + ', ' + formatLocation(s.location) +
                                         '</div>'
                                     ) +
                                     '<div class="doctor-pill doctor-pill-fee">' +
@@ -5147,8 +5259,17 @@
                     '<!-- LEFT: Search + Doctor Cards -->' +
                     '<div class="clinic-main-col">' +
 
+                        '<!-- Clinics Directory Section -->' +
+                        '<div class="clinics-directory-section" style="margin-bottom: 2rem;">' +
+                            '<h2 style="font-size:1.25rem; font-weight:700; margin-bottom:1rem; color:var(--text-primary);">Browse Clinics</h2>' +
+                            '<div id="clinics-dir-list" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:1rem;">' +
+                                '<div style="text-align:center; padding:2rem; color:var(--text-secondary); width:100%; grid-column:1/-1; background:var(--bg-card); border-radius:12px;">Loading clinics...</div>' +
+                            '</div>' +
+                        '</div>' +
+
                         '<!-- Filter Bar -->' +
-                        '<div class="clinic-filter-bar">' +
+                        '<div class="clinic-filter-bar" style="border-top:1px solid var(--border); padding-top:1.5rem; margin-top:1rem;">' +
+                            '<h2 style="font-size:1.25rem; font-weight:700; margin-bottom:1rem; width:100%; color:var(--text-primary);">Find Specialists</h2>' +
                             '<div class="clinic-search-wrap">' +
                                 '<svg class="clinic-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
                                 '<input type="text" id="spec-search" placeholder="Search by name, specialty, or clinic…" class="clinic-search-input" oninput="window.renderSpecialists()">' +
@@ -5294,6 +5415,19 @@
                                 <button class="btn btn-outline btn-sm btn-full" style="color:#f97316;border-color:#f97316;" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}openShareReportModal('uploaded-pdf', ${childId})">📎 Upload & Share</button>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Specialist Reports -->
+                <div style="margin-top: 2rem;">
+                    <h2 style="font-weight: 700; font-size: 1.2rem; margin-bottom: 1rem; display:flex; align-items:center; gap:0.5rem;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;color:var(--purple-500);">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        Specialist Reports
+                    </h2>
+                    <div id="parentSpecialistReportsList">
+                        <div style="text-align:center;padding:2rem;color:var(--slate-500);">Loading specialist reports...</div>
                     </div>
                 </div>
 
@@ -5511,6 +5645,32 @@
                         replyHtml +
                     '</div>';
                 }).join('');
+                
+                const specContainer = document.getElementById('parentSpecialistReportsList');
+                if (specContainer) {
+                    if (result.doctor_reports && result.doctor_reports.length > 0) {
+                        specContainer.innerHTML = result.doctor_reports.map(dr => {
+                            const drDate = new Date(dr.report_date).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+                            const safeNotes = (dr.doctor_notes||'').replace(/'/g,"\\'").replace(/"/g,"&quot;").replace(/\n/g,'\\n').replace(/\r/g,'');
+                            const safeRecs = (dr.recommendations||'').replace(/'/g,"\\'").replace(/"/g,"&quot;").replace(/\n/g,'\\n').replace(/\r/g,'');
+                            return '<div class="dashboard-card" style="padding:1.25rem;margin-bottom:1rem;border-left:4px solid var(--purple-500);">' +
+                                '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;">' +
+                                    '<div>' +
+                                        '<div style="font-weight:700;color:var(--slate-800);font-size:1rem;">Dr. ' + dr.doc_fname + ' ' + dr.doc_lname + '</div>' +
+                                        '<div style="font-size:0.85rem;color:var(--slate-500);">' + (dr.specialization || '') + '</div>' +
+                                    '</div>' +
+                                    '<button onclick="window.viewAppointmentReport(null, \'' + safeNotes + '\\n\\nRecommendations:\\n' + safeRecs + '\', \'Dr. ' + dr.doc_fname + ' ' + dr.doc_lname + '\', null, ' + dr.doctor_report_id + ')" class="btn btn-sm btn-outline" style="color:var(--purple-600);border-color:var(--purple-200);">📄 View Details</button>' +
+                                '</div>' +
+                                '<div style="font-size:0.85rem;color:var(--slate-500);margin-bottom:0.5rem;">Written on ' + drDate + '</div>' +
+                            '</div>';
+                        }).join('');
+                    } else {
+                        specContainer.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">' +
+                            '<p style="font-weight:600;">No specialist reports yet</p>' +
+                            '<p style="font-size:0.85rem;">Reports written directly by your doctors will appear here.</p>' +
+                        '</div>';
+                    }
+                }
             } else {
                 container.innerHTML = '<div class="dashboard-card" style="padding:2rem;text-align:center;color:var(--slate-500);">' +
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:3rem;height:3rem;margin:0 auto 1rem;color:var(--slate-300);display:block;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
@@ -7997,7 +8157,7 @@
         .catch(console.error);
     };
 
-    window.viewAppointmentReport = function(appointmentId, reportText, doctorName, nextVisit) {
+    window.viewAppointmentReport = function(appointmentId, reportText, doctorName, nextVisit, doctorReportId = null) {
         let existing = document.getElementById('view-report-modal');
         if (existing) existing.remove();
         const nextVisitHtml = nextVisit 
@@ -8019,7 +8179,7 @@
             ${nextVisitHtml}
             <div style="margin-top:1.5rem;display:flex;gap:0.75rem;">
                 <button onclick="document.getElementById('view-report-modal').remove()" style="flex:1;padding:0.75rem;border:1.5px solid #e2e8f0;border-radius:12px;background:#f8fafc;font-weight:600;cursor:pointer;">Close</button>
-                <button onclick="window.open('../../api_export_pdf.php?type=specialist-report&appointment_id=${appointmentId}','_blank')" style="flex:1;padding:0.75rem;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">📥 Export PDF</button>
+                ${(appointmentId || doctorReportId) ? `<button onclick="window.open('../../api_export_pdf.php?type=specialist-report&${appointmentId ? 'appointment_id='+appointmentId : 'doctor_report_id='+doctorReportId}','_blank')" style="flex:1;padding:0.75rem;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;border:none;border-radius:12px;font-weight:600;cursor:pointer;">📥 Export PDF</button>` : ''}
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -8282,74 +8442,84 @@
 
                     <button onclick="window.goToBookingStep2()" class="btn btn-gradient" style="width:100%;padding:1rem;margin-top:1.5rem;font-size:1.05rem;">Continue to Payment</button>
                 </div>
-
             </div>
 
-            <div id="bk-step-2" style="padding:2rem;display:none;">
-                <button onclick="window.goToBookingStep1()" style="background:none;border:none;color:var(--slate-500);cursor:pointer;font-size:0.85rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.25rem;padding:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back</button>
+            <div id="bk-step-2" style="padding:1.5rem;display:none;">
+                <button onclick="window.goToBookingStep1()" style="background:none;border:none;color:var(--slate-500);cursor:pointer;font-size:0.85rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.25rem;padding:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Back</button>
 
-                <!-- Token Selection -->
-                <div style="margin-bottom:1.5rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Apply Points Token (Optional)</label>
-                    <select id="bk-token" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;" onchange="window.updateTokenDiscount()">
-                        <option value="">No token - Pay full price</option>
-                    </select>
-                    <div id="bk-token-info" style="margin-top:0.5rem;font-size:0.8rem;color:var(--slate-500);"></div>
-                </div>
-
-                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Consultation Fee</span><span style="font-weight:600;" id="bk-fee">${fee}</span></div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Discount</span><span style="font-weight:600;color:var(--green-600);" id="bk-discount">0.00 EGP</span></div>
-                    <div style="height:1px;background:#e2e8f0;margin:0.75rem 0;"></div>
-                    <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--slate-800);">Total to Pay</span><span style="font-weight:800;color:var(--slate-900);font-size:1.1rem;" id="bk-total">${fee}</span></div>
-                </div>
-
-                <div style="margin-bottom:2rem;">
-                    <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Payment Method</label>
-                    <label style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);margin-bottom:0.5rem;cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;document.getElementById('credit-card-form').style.display='block';">
-                        <input type="radio" name="bk-payment" value="Credit Card" checked style="margin-right:1rem;accent-color:var(--blue-600);">
-                        <div>
-                            <div style="font-weight:600;color:var(--blue-900);">Credit Card</div>
-                            <div style="font-size:0.75rem;color:var(--blue-600);">Pay securely online</div>
-                        </div>
-                    </label>
-                    <label id="bk-cash-label" style="display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;opacity:1;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';document.getElementById('credit-card-form').style.display='none';}">
-                        <input type="radio" name="bk-payment" value="Cash" id="bk-cash-input" style="margin-right:1rem;accent-color:var(--blue-600);">
-                        <div>
-                            <div style="font-weight:600;color:var(--slate-800);">Cash at Clinic</div>
-                            <div style="font-size:0.75rem;color:var(--slate-500);">Pay during your visit</div>
-                        </div>
-                    </label>
-                    <div id="bk-cash-warning" style="display:none;margin-top:0.5rem;padding:0.75rem 1rem;background:var(--orange-50);border:1px solid var(--orange-200);border-radius:8px;font-size:0.8rem;color:var(--orange-800);">
-                        ⚠️ Cash payment is not available for online appointments. Please select Credit Card.
-                    </div>
-                    
-                    <div id="credit-card-form" style="margin-top:1.5rem;padding:1.5rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
-                        <div style="font-weight:700;color:var(--slate-800);margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Card Details
-                        </div>
+                <div style="display:flex;flex-direction:row;gap:1.5rem;">
+                    <!-- Left Column -->
+                    <div style="flex:1;display:flex;flex-direction:column;">
+                        <!-- Token Selection -->
                         <div style="margin-bottom:1rem;">
-                            <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Cardholder Name</label>
-                            <input type="text" id="cc-name" placeholder="Name on card" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.75rem;color:var(--slate-700);">Apply Points Token (Optional)</label>
+                            <select id="bk-token" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;" onchange="window.updateTokenDiscount()">
+                                <option value="">No token - Pay full price</option>
+                            </select>
+                            <div id="bk-token-info" style="margin-top:0.5rem;font-size:0.8rem;color:var(--slate-500);"></div>
                         </div>
+
+                        <!-- Payment Method -->
                         <div style="margin-bottom:1rem;">
-                            <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Card Number</label>
-                            <input type="text" id="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(.{4})/g, '$1 ').trim();" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
-                        </div>
-                        <div style="display:flex;gap:1rem;">
-                            <div style="flex:1;">
-                                <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Expiry Date</label>
-                                <input type="text" id="cc-expiry" placeholder="MM/YY" maxlength="5" oninput="if(this.value.length===2&&!this.value.includes('/')){this.value+='/';}" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Payment Method</label>
+                            <div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;">
+                                <label style="flex:1;display:flex;align-items:center;padding:1rem;border:1.5px solid var(--blue-500);border-radius:12px;background:var(--blue-50);cursor:pointer;" onclick="this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.nextElementSibling.style.borderColor='var(--slate-200)';this.nextElementSibling.style.background='#fff';this.nextElementSibling.disabled=false;document.getElementById('credit-card-form').style.display='block';">
+                                    <input type="radio" name="bk-payment" value="Credit Card" checked style="margin-right:0.5rem;accent-color:var(--blue-600);">
+                                    <div>
+                                        <div style="font-weight:600;color:var(--blue-900);">Credit Card</div>
+                                    </div>
+                                </label>
+                                <label id="bk-cash-label" style="flex:1;display:flex;align-items:center;padding:1rem;border:1.5px solid var(--slate-200);border-radius:12px;cursor:pointer;background:#fff;" onclick="if(!this.classList.contains('disabled')){this.style.borderColor='var(--blue-500)';this.style.background='var(--blue-50)';this.previousElementSibling.style.borderColor='var(--slate-200)';this.previousElementSibling.style.background='#fff';document.getElementById('credit-card-form').style.display='none';}">
+                                    <input type="radio" name="bk-payment" value="Cash" id="bk-cash-input" style="margin-right:0.5rem;accent-color:var(--blue-600);">
+                                    <div>
+                                        <div style="font-weight:600;color:var(--slate-800);">Cash at Clinic</div>
+                                    </div>
+                                </label>
                             </div>
-                            <div style="flex:1;">
-                                <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">CVV</label>
-                                <input type="text" id="cc-cvv" placeholder="123" maxlength="4" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                            <div id="bk-cash-warning" style="display:none;margin-top:0.5rem;padding:0.75rem 1rem;background:var(--orange-50);border:1px solid var(--orange-200);border-radius:8px;font-size:0.8rem;color:var(--orange-800);">
+                                ⚠️ Cash payment is not available for online appointments. Please select Credit Card.
+                            </div>
+                            
+                            <div id="credit-card-form" style="margin-top:1rem;padding:1rem;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
+                                <div style="font-weight:700;color:var(--slate-800);margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Card Details
+                                </div>
+                                <div style="margin-bottom:0.75rem;">
+                                    <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Cardholder Name</label>
+                                    <input type="text" id="cc-name" placeholder="Name on card" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                                </div>
+                                <div style="margin-bottom:0.75rem;">
+                                    <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Card Number</label>
+                                    <input type="text" id="cc-number" placeholder="1234 5678 9012 3456" maxlength="19" oninput="this.value = this.value.replace(/[^0-9]/g, '').replace(/(.{4})/g, '$1 ').trim();" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                                </div>
+                                <div style="display:flex;gap:1rem;">
+                                    <div style="flex:1;">
+                                        <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">Expiry Date</label>
+                                        <input type="text" id="cc-expiry" placeholder="MM/YY" maxlength="5" oninput="if(this.value.length===2&&!this.value.includes('/')){this.value+='/';}" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                                    </div>
+                                    <div style="flex:1;">
+                                        <label style="display:block;font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;color:var(--slate-600);">CVV</label>
+                                        <input type="text" id="cc-cvv" placeholder="123" maxlength="4" style="width:100%;padding:0.6rem 0.8rem;border:1px solid var(--slate-300);border-radius:8px;outline:none;">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;">Confirm & Pay ${fee}</button>
+                    <!-- Right Column -->
+                    <div style="flex:1;display:flex;flex-direction:column;border-left:1px solid var(--slate-100);padding-left:1.5rem;">
+                        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem;">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Consultation Fee</span><span style="font-weight:600;" id="bk-fee">${fee}</span></div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;"><span style="color:var(--slate-500);">Discount</span><span style="font-weight:600;color:var(--green-600);" id="bk-discount">0.00 EGP</span></div>
+                            <div style="height:1px;background:#e2e8f0;margin:0.75rem 0;"></div>
+                            <div style="display:flex;justify-content:space-between;"><span style="font-weight:700;color:var(--slate-800);">Total to Pay</span><span style="font-weight:800;color:var(--slate-900);font-size:1.1rem;" id="bk-total">${fee}</span></div>
+                        </div>
+
+                        <div style="flex:1;"></div>
+                        <div id="bk-payment-error" style="display:none;color:#ef4444;font-size:0.85rem;margin-bottom:0.75rem;padding:0.75rem;background:#fef2f2;border-radius:8px;border:1px solid #fecaca;text-align:center;font-weight:500;"></div>
+                        <button id="bk-submit-btn" onclick="window.submitBooking(${specId})" class="btn btn-gradient" style="width:100%;padding:1rem;margin-top:0.5rem;font-size:1.05rem;">Confirm & Pay ${fee}</button>
+                    </div>
+                </div>
             </div>
             
             <div id="bk-step-3" style="padding:2.5rem 2rem;display:none;text-align:center;">
@@ -8428,7 +8598,7 @@
                             return `<button disabled style="padding:0.6rem 0.5rem;border:1.5px solid #fecdd3;border-radius:8px;background:#fff1f2;cursor:not-allowed;font-size:0.8rem;color:#f87171;text-decoration:line-through;">${s.label}<br><span style="font-size:0.65rem;">Booked</span></button>`;
                         }
                         // Available slot — store date|time in hidden input
-                        return `<button class="slot-btn" onclick="window.selectSlot(this, '${dateVal}|${s.time}')" style="padding:0.6rem 0.5rem;border:1.5px solid #bfdbfe;border-radius:8px;background:#fff;cursor:pointer;font-size:0.8rem;color:#1e40af;transition:all 0.2s;font-weight:600;">${s.label}<br><span style="font-size:0.65rem;color:#60a5fa;">30 min</span></button>`;
+                        return `<button class="slot-btn" onclick="window.selectSlot(this, '${dateVal}|${s.time}')" style="padding:0.6rem 0.5rem;border:1.5px solid #bfdbfe;border-radius:8px;background:#fff;cursor:pointer;font-size:0.8rem;color:#1e40af;transition:all 0.2s;font-weight:600;">${s.label}<br><span style="font-size:0.65rem;color:#60a5fa;">${s.duration || 30} min</span></button>`;
                     }).join('');
                 } else {
                     grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--slate-400);font-size:0.85rem;padding:1rem;">No available slots on this date</div>';
@@ -8539,14 +8709,25 @@
         window.submitBooking = async function (sid) {
             const btn = document.getElementById('bk-submit-btn');
             const method = document.querySelector('input[name="bk-payment"]:checked').value;
+            const errDiv = document.getElementById('bk-payment-error');
+            
+            const showError = (msg) => {
+                if(errDiv) {
+                    errDiv.textContent = '⚠️ ' + msg;
+                    errDiv.style.display = 'block';
+                    setTimeout(() => errDiv.style.display = 'none', 5000);
+                } else {
+                    alert(msg);
+                }
+            };
             
             // Validate credit card mock form
             if (method === 'Credit Card') {
                 const ccNum = document.getElementById('cc-number').value.replace(/\s+/g, '');
-                if (ccNum.length !== 16) { alert('Please enter a valid 16-digit card number.'); return; }
-                if (document.getElementById('cc-name').value.trim() === '') { alert('Please enter cardholder name.'); return; }
-                if (document.getElementById('cc-expiry').value.length < 5) { alert('Please enter valid expiry date (MM/YY).'); return; }
-                if (document.getElementById('cc-cvv').value.length < 3) { alert('Please enter valid CVV.'); return; }
+                if (ccNum.length !== 16) { showError('Please enter a valid 16-digit card number.'); return; }
+                if (document.getElementById('cc-name').value.trim() === '') { showError('Please enter cardholder name.'); return; }
+                if (document.getElementById('cc-expiry').value.length < 5) { showError('Please enter valid expiry date (MM/YY).'); return; }
+                if (document.getElementById('cc-cvv').value.length < 3) { showError('Please enter valid CVV.'); return; }
             }
 
             btn.disabled = true;
@@ -8585,12 +8766,12 @@
                     document.getElementById('bk-step-3').style.display = 'block';
                     if (typeof showBadgeToast === 'function') showBadgeToast("Appointment scheduled! 📅");
                 } else {
-                    alert(data.error || "Failed to book appointment.");
+                    showError(data.error || "Failed to book appointment.");
                     btn.disabled = false;
                     btn.innerHTML = origText;
                 }
             } catch (e) {
-                alert('Network error. Please try again.');
+                showError('Network error. Please try again.');
                 btn.disabled = false;
                 btn.innerHTML = origText;
             }
@@ -8928,8 +9109,11 @@
         // Check if parent has any active appointments (confirmed/completed/approved)
         const d = window.dashboardData || {};
         let hasApprovedAppt = false;
-        if (d.parent && d.parent.appointments) {
-            hasApprovedAppt = d.parent.appointments.some(a => a.status === 'approved' || a.status === 'completed' || a.status === 'confirmed');
+        if (d.appointments) {
+            hasApprovedAppt = d.appointments.some(a => {
+                const s = (a.status || '').toLowerCase();
+                return s === 'approved' || s === 'completed' || s === 'confirmed';
+            });
         }
 
         if (!hasApprovedAppt) {
@@ -8983,7 +9167,7 @@
                     </div>
                 </div>
                 <div id="parent-chat-messages" style="flex:1;overflow-y:auto;padding:1.25rem;display:flex;flex-direction:column;gap:0.6rem;background:#f8fafc;"></div>
-                <div style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;flex-direction:column;">
+                <div id="parent-chat-input-area" style="padding:0.75rem 1rem;border-top:1px solid #f1f5f9;display:flex;gap:0.5rem;align-items:flex-end;flex-direction:column;">
                     <div style="display:flex;gap:0.5rem;align-items:flex-end;width:100%;">
                         <button onclick="document.getElementById('parentChatFile').click()" style="width:36px;height:36px;border:none;background:transparent;color:#94a3b8;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color 0.2s;" onmouseover="this.style.color='#6366f1'" onmouseout="this.style.color='#94a3b8'" title="Attach file">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -9000,6 +9184,13 @@
                     <button onclick="window.openChildReportSend()" style="align-self:flex-start;margin-left:44px;padding:0.35rem 0.85rem;border:1.5px solid #e2e8f0;border-radius:8px;background:#f8fafc;cursor:pointer;font-size:0.78rem;color:#6366f1;font-weight:600;display:flex;align-items:center;gap:0.4rem;transition:all 0.2s;" onmouseover="this.style.borderColor='#6366f1';this.style.background='#eef2ff'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
                         📎 Send Child Report
                     </button>
+                </div>
+                <div id="parent-chat-closed-area" style="display:none; padding:1.5rem; text-align:center; background:#f8fafc; border-top:1px solid #e2e8f0; border-bottom-right-radius:16px;">
+                    <p style="margin:0 0 1rem; color:#64748b; font-size:0.9rem;">This appointment has been completed. To chat with the specialist again, please book a new appointment.</p>
+                    <div style="display:flex; gap:0.5rem; justify-content:center;">
+                        <button id="parent-chat-book-btn" onclick="window.navigateToView('appointments')" style="padding:0.6rem 1.25rem; border-radius:10px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-weight:600; border:none; cursor:pointer;">📅 Book Appointment</button>
+                        <button id="parent-chat-review-btn" style="padding:0.6rem 1.25rem; border-radius:10px; background:#fff; border:1px solid #e2e8f0; color:#64748b; font-weight:600; cursor:pointer;">⭐ Write a Review</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -9041,45 +9232,206 @@
                 
                 html += '<div data-convo="' + c.partner_id + '" onclick="selectParentConvo(' + c.partner_id + ')" style="padding:0.85rem 1.15rem;cursor:pointer;display:flex;align-items:center;gap:0.75rem;border-bottom:1px solid #f1f5f9;transition:all 0.15s;' + (isActive ? 'background:#f0f0ff;border-left:3px solid #6366f1;' : 'border-left:3px solid transparent;') + '" onmouseover="if(!this.classList.contains(\'active-convo\'))this.style.background=\'#f8fafc\'" onmouseout="if(!this.classList.contains(\'active-convo\'))this.style.background=\'\'">'
                     + '<div style="width:2.5rem;height:2.5rem;background:' + gradient + ';border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:0.75rem;font-weight:700;flex-shrink:0;">' + initials + '</div>'
-                    + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.partner_first_name + ' ' + c.partner_last_name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + (c.last_message_time ? formatRelativeDate(c.last_message_time) : '') + '</span></div>'
+                    + '<div style="flex:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.15rem;"><span style="font-weight:' + (isActive ? '700' : '600') + ';font-size:0.85rem;color:#1e293b;">' + c.partner_first_name + ' ' + c.partner_last_name + '</span><span style="font-size:0.7rem;color:#94a3b8;">' + (c.last_message_time ? new Date(c.last_message_time).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : '') + '</span></div>'
                     + '<div style="display:flex;justify-content:space-between;align-items:center;"><p style="margin:0;font-size:0.78rem;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">' + preview + '</p>' + (unread > 0 ? '<span style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:0.65rem;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 5px;margin-left:6px;">' + unread + '</span>' : '') + '</div></div></div>';
             });
             list.innerHTML = html;
-        } catch(e) {}
+            
+            // Auto-select first conversation if none selected
+            if (!window._parentCurrentChat && data.conversations.length > 0) {
+                selectParentConvo(data.conversations[0].partner_id);
+            }
+        } catch(e) {
+            alert('Error in renderParentConvoList: ' + e.message);
+        }
     };
 
-    window.selectParentConvo = async function (partnerId) {
-        window._parentCurrentChat = partnerId;
-        
-        // Find conversation data from cache
-        var conv = (window._parentConversationsCache || []).find(c => c.partner_id == partnerId);
-        if (conv) {
-            var initials = (conv.partner_first_name.charAt(0) + conv.partner_last_name.charAt(0)).toUpperCase();
-            var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
-            var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = conv.partner_first_name + ' ' + conv.partner_last_name;
-            var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = conv.specialization || 'Specialist';
-
-            // Show appointment info bar
-            var apptBar = document.getElementById('parent-appt-bar');
-            if (apptBar && conv.appointment_id) {
-                var aptDate = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
-                var aptTime = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
-                var aptType = (conv.appointment_type || '').charAt(0).toUpperCase() + (conv.appointment_type || '').slice(1);
-                var statusColor = conv.appointment_status === 'confirmed' ? '#10b981' : (conv.appointment_status === 'completed' ? '#6366f1' : '#f59e0b');
-                apptBar.style.display = 'flex';
-                apptBar.innerHTML = '<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;width:100%;"><span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;font-weight:600;color:#4338ca;">📅 ' + aptDate + '</span><span style="font-size:0.75rem;color:#6366f1;font-weight:500;">⏰ ' + aptTime + '</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:6px;background:' + statusColor + '18;color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + conv.appointment_status + '</span><span style="font-size:0.7rem;color:#64748b;margin-left:auto;">' + aptType + (conv.clinic_name ? ' · ' + conv.clinic_name : '') + '</span></div>';
-            }
-
-            // Show reminder button
-            var reminderBtn = document.getElementById('pch-reminder-btn');
-            if (reminderBtn) reminderBtn.style.display = 'inline-flex';
+    window.openChildReportSend = function() {
+        if (!window._parentCurrentChat) {
+            alert('Please select a conversation first.');
+            return;
+        }
+        const child = (window.dashboardData?.children || [])[window._selectedChildIndex || 0];
+        if (!child) {
+            alert('Please select a child profile first.');
+            return;
         }
         
-        renderParentConvoList(); // Update active state
-        loadParentChatMessages();
+        let existing = document.getElementById('report-send-modal');
+        if (existing) existing.remove();
         
-        if (_parentMessagesPoll) clearInterval(_parentMessagesPoll);
-        _parentMessagesPoll = setInterval(loadParentChatMessages, 5000);
+        const modal = document.createElement('div');
+        modal.id = 'report-send-modal';
+        modal.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;">
+                <div style="background:#ffffff;border-radius:24px;width:100%;max-width:400px;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;animation:slideUp 0.3s ease-out;">
+                    <div style="padding:1.5rem;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+                        <h3 style="margin:0;font-size:1.1rem;font-weight:700;color:#1e293b;">Send Child Report</h3>
+                        <button onclick="document.getElementById('report-send-modal').remove()" style="background:none;border:none;cursor:pointer;color:#94a3b8;transition:color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                    <div style="padding:1.5rem;">
+                        <p style="margin-top:0;margin-bottom:1.5rem;color:#64748b;font-size:0.9rem;">Select which report of <strong>${child.first_name}</strong> to send to the specialist.</p>
+                        
+                        <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                            <label style="display:flex;align-items:center;gap:0.75rem;padding:1rem;border:1.5px solid #e2e8f0;border-radius:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#6366f1';this.style.background='#f8fafc'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background=''">
+                                <input type="radio" name="reportType" value="full-report" checked style="accent-color:#6366f1;width:18px;height:18px;cursor:pointer;">
+                                <div style="flex:1;">
+                                    <div style="font-weight:600;color:#1e293b;font-size:0.9rem;">Full Assessment Report</div>
+                                    <div style="font-size:0.75rem;color:#64748b;margin-top:0.2rem;">Complete developmental profile</div>
+                                </div>
+                            </label>
+                            
+                            <label style="display:flex;align-items:center;gap:0.75rem;padding:1rem;border:1.5px solid #e2e8f0;border-radius:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#6366f1';this.style.background='#f8fafc'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background=''">
+                                <input type="radio" name="reportType" value="growth-report" style="accent-color:#6366f1;width:18px;height:18px;cursor:pointer;">
+                                <div style="flex:1;">
+                                    <div style="font-weight:600;color:#1e293b;font-size:0.9rem;">Growth & Physical Report</div>
+                                    <div style="font-size:0.75rem;color:#64748b;margin-top:0.2rem;">Measurements and physical metrics</div>
+                                </div>
+                            </label>
+
+                            <label style="display:flex;align-items:center;gap:0.75rem;padding:1rem;border:1.5px solid #e2e8f0;border-radius:12px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#6366f1';this.style.background='#f8fafc'" onmouseout="this.style.borderColor='#e2e8f0';this.style.background=''">
+                                <input type="radio" name="reportType" value="speech-report" style="accent-color:#6366f1;width:18px;height:18px;cursor:pointer;">
+                                <div style="flex:1;">
+                                    <div style="font-weight:600;color:#1e293b;font-size:0.9rem;">Speech & Cognitive Report</div>
+                                    <div style="font-size:0.75rem;color:#64748b;margin-top:0.2rem;">Language and learning progress</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <div style="padding:1.25rem 1.5rem;background:#f8fafc;border-top:1px solid #f1f5f9;display:flex;justify-content:flex-end;gap:0.75rem;">
+                        <button onclick="document.getElementById('report-send-modal').remove()" style="padding:0.6rem 1.25rem;border-radius:10px;font-size:0.9rem;font-weight:600;cursor:pointer;border:none;background:transparent;color:#64748b;transition:background 0.2s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='transparent'">Cancel</button>
+                        <button id="send-report-confirm-btn" onclick="sendSelectedChildReport()" style="padding:0.6rem 1.25rem;border-radius:10px;font-size:0.9rem;font-weight:600;cursor:pointer;border:none;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;box-shadow:0 4px 12px rgba(99,102,241,0.25);transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''">Send Report</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    };
+
+    window.sendSelectedChildReport = async function() {
+        const btn = document.getElementById('send-report-confirm-btn');
+        const selected = document.querySelector('input[name="reportType"]:checked');
+        if (!selected) return;
+        
+        const child = (window.dashboardData?.children || [])[window._selectedChildIndex || 0];
+        if (!child) return;
+        
+        let reportName = 'Full Assessment Report';
+        if (selected.value === 'growth-report') reportName = 'Growth & Physical Report';
+        if (selected.value === 'speech-report') reportName = 'Speech & Cognitive Report';
+        
+        btn.innerHTML = 'Sending...';
+        btn.disabled = true;
+        
+        try {
+            const formData = new FormData();
+            formData.append('receiver_id', window._parentCurrentChat);
+            formData.append('child_id', child.child_id);
+            formData.append('content', 'Shared ' + reportName + ' for ' + child.first_name + '. They can view the report by navigating to the patient details.');
+            formData.append('message_type', 'child_report');
+            formData.append('report_type', selected.value);
+
+            const res = await fetch('../../api_send_message.php', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('report-send-modal').remove();
+                loadParentChatMessages();
+                renderParentConvoList();
+            } else {
+                alert(data.error || 'Failed to send report');
+                btn.innerHTML = 'Send Report';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            alert('Failed to send. Please try again.');
+            btn.innerHTML = 'Send Report';
+            btn.disabled = false;
+        }
+    };
+
+
+    window.selectParentConvo = async function (partnerId) {
+        try {
+            window._parentCurrentChat = partnerId;
+            
+            // Find conversation data from cache
+            var conv = (window._parentConversationsCache || []).find(c => c.partner_id == partnerId);
+            if (conv) {
+                var initials = (conv.partner_first_name.charAt(0) + conv.partner_last_name.charAt(0)).toUpperCase();
+                var avatar = document.getElementById('pch-avatar'); if (avatar) { avatar.textContent = initials; avatar.style.background = 'linear-gradient(135deg,#6366f1,#8b5cf6)'; }
+                var nameEl = document.getElementById('pch-name'); if (nameEl) nameEl.textContent = conv.partner_first_name + ' ' + conv.partner_last_name;
+                var detailEl = document.getElementById('pch-detail'); if (detailEl) detailEl.textContent = conv.specialization || 'Specialist';
+
+                // Show appointment info bar
+                var apptBar = document.getElementById('parent-appt-bar');
+                if (apptBar && conv.appointment_id) {
+                    var aptDate = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '';
+                    var aptTime = conv.appointment_scheduled_at ? new Date(conv.appointment_scheduled_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+                    var aptType = (conv.appointment_type || '').charAt(0).toUpperCase() + (conv.appointment_type || '').slice(1);
+                    var statusColor = conv.appointment_status === 'confirmed' ? '#10b981' : (conv.appointment_status === 'completed' ? '#6366f1' : '#f59e0b');
+                    apptBar.style.display = 'flex';
+                    apptBar.innerHTML = '<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;width:100%;"><span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.75rem;font-weight:600;color:#4338ca;">📅 ' + aptDate + '</span><span style="font-size:0.75rem;color:#6366f1;font-weight:500;">⏰ ' + aptTime + '</span><span style="font-size:0.7rem;padding:0.15rem 0.5rem;border-radius:6px;background:' + statusColor + '18;color:' + statusColor + ';font-weight:600;text-transform:capitalize;">' + conv.appointment_status + '</span><span style="font-size:0.7rem;color:#64748b;margin-left:auto;">' + aptType + (conv.clinic_name ? ' · ' + conv.clinic_name : '') + '</span></div>';
+                }
+
+                // Show reminder button
+                var reminderBtn = document.getElementById('pch-reminder-btn');
+                if (reminderBtn) reminderBtn.style.display = 'inline-flex';
+                
+                // Check if appointment is completed or past
+                var isPastOrCompleted = false;
+                if (conv.appointment_status === 'completed' || conv.appointment_status === 'Completed') {
+                    isPastOrCompleted = true;
+                } else if (conv.appointment_scheduled_at) {
+                    var aptDate = new Date(conv.appointment_scheduled_at);
+                    var today = new Date();
+                    aptDate.setHours(0,0,0,0);
+                    today.setHours(0,0,0,0);
+                    if (aptDate.getTime() < today.getTime()) {
+                        isPastOrCompleted = true;
+                    }
+                }
+
+                var inputArea = document.getElementById('parent-chat-input-area');
+                var closedArea = document.getElementById('parent-chat-closed-area');
+                var bookBtn = document.getElementById('parent-chat-book-btn');
+                var reviewBtn = document.getElementById('parent-chat-review-btn');
+                if (isPastOrCompleted) {
+                    if (inputArea) inputArea.style.display = 'none';
+                    if (closedArea) closedArea.style.display = 'block';
+                    if (bookBtn) {
+                        bookBtn.onclick = function() {
+                            bookSpecialist(conv.partner_id, 'Dr. ' + conv.partner_first_name + ' ' + conv.partner_last_name);
+                        };
+                    }
+                    if (reviewBtn) {
+                        if (conv.appointment_id) {
+                            reviewBtn.style.display = 'inline-block';
+                            reviewBtn.onclick = function() {
+                                reviewDoctor(conv.appointment_id, conv.partner_id, 'Dr. ' + conv.partner_first_name + ' ' + conv.partner_last_name);
+                            };
+                        } else {
+                            reviewBtn.style.display = 'none';
+                        }
+                    }
+                } else {
+                    if (inputArea) inputArea.style.display = 'flex';
+                    if (closedArea) closedArea.style.display = 'none';
+                }
+            }
+            
+            renderParentConvoList(); // Update active state
+            loadParentChatMessages();
+            
+            if (_parentMessagesPoll) clearInterval(_parentMessagesPoll);
+            _parentMessagesPoll = setInterval(loadParentChatMessages, 5000);
+        } catch(e) {
+            alert('Error in selectParentConvo: ' + e.message);
+        }
     };
 
     window.loadParentChatMessages = async function() {
@@ -9197,7 +9549,8 @@
         
         // Client-side Zoom/Teams rejection
         if (text && (/zoom\.(us|com)/i.test(text) || /teams\.(microsoft|live)\.com/i.test(text))) {
-            alert('Only Google Meet links are allowed. Zoom and Teams links are not permitted.');
+            if (typeof showBadgeToast === 'function') showBadgeToast('⚠️ Only Google Meet links are allowed.');
+            else alert('Only Google Meet links are allowed. Zoom and Teams links are not permitted.');
             return;
         }
         
@@ -9215,13 +9568,15 @@
             const res = await fetch('../../api_send_message.php', { method: 'POST', body: fd });
             const result = await res.json();
             if (result.error) {
-                alert(result.error);
+                if (typeof showBadgeToast === 'function') showBadgeToast('⚠️ ' + result.error);
+                else alert(result.error);
             } else {
                 loadParentChatMessages();
                 renderParentConvoList();
             }
         } catch(e) {
-            alert('Failed to send message.');
+            if (typeof showBadgeToast === 'function') showBadgeToast('⚠️ Failed to send message.');
+            else alert('Failed to send message.');
         }
     };
 

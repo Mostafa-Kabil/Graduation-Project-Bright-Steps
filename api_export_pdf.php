@@ -7,12 +7,9 @@
 session_start();
 include 'connection.php';
 
-// Load Dompdf for PDF generation
-$dompdfAutoload = __DIR__ . '/vendor/autoload.php';
-$hasDompdf = file_exists($dompdfAutoload);
-if ($hasDompdf) {
-    require_once $dompdfAutoload;
-}
+// Disable Dompdf due to missing composer dependencies - using native browser print fallback
+$hasDompdf = false;
+
 
 if (!isset($_SESSION['id'])) {
     http_response_code(401);
@@ -24,9 +21,41 @@ $userId = $_SESSION['id'];
 $userRole = $_SESSION['role'] ?? 'parent';
 $type = $_GET['type'] ?? 'full-report';
 $childId = $_GET['child_id'] ?? null;
+$appointmentId = $_GET['appointment_id'] ?? null;
+$doctorReportId = $_GET['doctor_report_id'] ?? null;
+
+$specialistReportContent = '';
+if ($type === 'specialist-report') {
+    if ($appointmentId) {
+        $stmtAppt = $connect->prepare("SELECT a.child_id, COALESCE(NULLIF(TRIM(a.report), ''), (SELECT CONCAT('Specialist Notes:\n', dr.doctor_notes, '\n\nRecommendations:\n', dr.recommendations) FROM doctor_report dr WHERE dr.specialist_id = a.specialist_id AND dr.child_id = a.child_id ORDER BY dr.report_date DESC LIMIT 1)) AS report FROM appointment a WHERE a.appointment_id = ?");
+        $stmtAppt->execute([$appointmentId]);
+        $row = $stmtAppt->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $specialistReportContent = $row['report'];
+            if (!$childId) $childId = $row['child_id'];
+        }
+    } else if ($doctorReportId) {
+        $stmtDr = $connect->prepare("SELECT child_id, CONCAT('Specialist Notes:\n', doctor_notes, '\n\nRecommendations:\n', recommendations) AS report FROM doctor_report WHERE doctor_report_id = ?");
+        $stmtDr->execute([$doctorReportId]);
+        $row = $stmtDr->fetch(PDO::FETCH_ASSOC);
+        if ($row) {
+            $specialistReportContent = $row['report'];
+            if (!$childId) $childId = $row['child_id'];
+        }
+    } else {
+        http_response_code(400);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'appointment_id or doctor_report_id is required for specialist-report']);
+        exit();
+    }
+    
+    if (!$specialistReportContent) {
+        $specialistReportContent = 'No report content available.';
+    }
+}
 
 // ── Fetch child data ──
-if (!$childId) {
+if (!$childId && $type !== 'specialist-report') {
     if ($userRole === 'parent') {
         $stmt = $connect->prepare("SELECT child_id FROM child WHERE parent_id = ? ORDER BY child_id ASC LIMIT 1");
         $stmt->execute([$userId]);
@@ -124,6 +153,8 @@ if ($type === 'child-report')
     $reportTitle = 'Child Profile Report';
 if ($type === 'speech-report')
     $reportTitle = 'Speech Analysis Report';
+if ($type === 'specialist-report')
+    $reportTitle = 'Specialist Appointment Report';
 
 ob_start();
 ?>
@@ -417,7 +448,16 @@ ob_start();
         </div>
     </div>
 
-    <?php if ($type !== 'child-report'): ?>
+    <?php if ($type === 'specialist-report'): ?>
+        <div class="section">
+            <div class="section-title">Specialist Report</div>
+            <div style="white-space: pre-wrap; font-size: 11pt; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <?= htmlspecialchars($specialistReportContent) ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($type !== 'child-report' && $type !== 'specialist-report'): ?>
         <!-- Growth History -->
         <div class="section">
             <div class="section-title">Growth History</div>
@@ -456,8 +496,8 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <?php if ($type === 'full-report'): ?>
-        <!-- Appointments -->
+    <?php if ($type !== 'growth-report' && $type !== 'specialist-report'): ?>
+        <!-- Appointment History -->
         <div class="section">
             <div class="section-title">Appointment History</div>
             <?php if (count($appointments) > 0): ?>
@@ -499,8 +539,8 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <?php if ($type === 'full-report' || $type === 'speech-report'): ?>
-        <!-- Speech Analysis -->
+    <?php if ($type !== 'growth-report' && $type !== 'specialist-report'): ?>
+        <!-- Speech Analysis History -->
         <div class="section">
             <div class="section-title">Speech Analysis History</div>
             <?php if (count($speechRecords) > 0): ?>

@@ -36,22 +36,32 @@ try {
             $role = $_GET['role'] ?? 'all';
             $search = $_GET['search'] ?? '';
 
-            $sql = "SELECT u.user_id, u.first_name, u.last_name, u.email, u.role, u.status, u.created_at FROM users u WHERE 1=1";
+            $sqlUsers = "SELECT u.user_id, u.first_name, u.last_name, u.email, u.role, u.status, u.created_at FROM users u WHERE 1=1";
+            $sqlClinics = "SELECT c.clinic_id as user_id, c.clinic_name as first_name, '' as last_name, c.email, 'clinic' as role, c.status, c.added_at as created_at FROM clinic c WHERE 1=1";
+            
             $params = [];
 
-            if ($role !== 'all' && $role !== '') {
-                $sql .= " AND u.role = :role";
-                $params['role'] = $role;
-            }
-
             if ($search !== '') {
-                $sql .= " AND (u.first_name LIKE :search OR u.last_name LIKE :search2 OR u.email LIKE :search3)";
+                $searchCondU = " AND (u.first_name LIKE :search OR u.last_name LIKE :search2 OR u.email LIKE :search3)";
+                $searchCondC = " AND (c.clinic_name LIKE :search OR c.email LIKE :search2)";
+                $sqlUsers .= $searchCondU;
+                $sqlClinics .= $searchCondC;
                 $params['search'] = "%$search%";
                 $params['search2'] = "%$search%";
                 $params['search3'] = "%$search%";
             }
 
-            $sql .= " ORDER BY u.created_at DESC";
+            if ($role === 'clinic') {
+                $sql = $sqlClinics . " ORDER BY created_at DESC";
+                if ($search !== '') {
+                    unset($params['search3']); // Not used in clinic query
+                }
+            } elseif ($role !== 'all' && $role !== '') {
+                $sql = $sqlUsers . " AND u.role = :role ORDER BY created_at DESC";
+                $params['role'] = $role;
+            } else {
+                $sql = "($sqlUsers) UNION ALL ($sqlClinics) ORDER BY created_at DESC";
+            }
 
             $stmt = $connect->prepare($sql);
             $stmt->execute($params);

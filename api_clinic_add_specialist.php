@@ -33,7 +33,7 @@ $email = $data['email'] ?? '';
 $password = $data['password'] ?? '';
 $specialization = $data['specialization'] ?? '';
 $experience = $data['experience'] ?? 0;
-$location = $data['location'] ?? '';
+$location = ''; // Location is obsolete
 $user_id = intval($_SESSION['id']);
 
 $certification_text = $data['certification_text'] ?? null;
@@ -104,26 +104,14 @@ try {
         $clinic_id = $clinic['clinic_id'];
     }
 
-    // 2. Check if email already exists - if so, auto-generate a unique variation for the placeholder
-    $final_email = $email;
+    // 2. Check if email already exists
     $checkStmt = $connect->prepare("SELECT user_id FROM users WHERE email = ?");
     $checkStmt->execute([$email]);
     
     if ($checkStmt->fetch()) {
-        // If it's a "standard" placeholder or already taken, generate a unique one using the specialist's name
-        $name_safe = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $first_name . $last_name));
-        $domain = explode('@', $email)[1] ?? 'brightsteps.com';
-        $prefix = explode('@', $email)[0] ?? 'specialist';
-        
-        $final_email = $prefix . "." . $name_safe . "@" . $domain;
-        
-        // Re-check the generated one just in case
-        $checkStmt->execute([$final_email]);
-        if ($checkStmt->fetch()) {
-            $final_email = $prefix . "." . $name_safe . rand(100, 999) . "@" . $domain;
-        }
+        echo json_encode(["success" => false, "error" => "This email is already registered. Please use a different one."]);
+        exit;
     }
-    $email = $final_email;
 
     // 3. Insert into users table
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
@@ -131,9 +119,11 @@ try {
     $userStmt->execute([$first_name, $last_name, $email, $hashed_password]);
     $new_specialist_id = $connect->lastInsertId();
 
+    $branch_id = !empty($data['branch_id']) ? intval($data['branch_id']) : null;
+
     // 4. Insert into specialist table
-    $specStmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certification_text, certification_pdf, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $specStmt->execute([$new_specialist_id, $clinic_id, $first_name, $last_name, $specialization, $experience, $certification_text, $certification_pdf, $location]);
+    $specStmt = $connect->prepare("INSERT INTO specialist (specialist_id, clinic_id, first_name, last_name, specialization, experience_years, certification_text, certification_pdf, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $specStmt->execute([$new_specialist_id, $clinic_id, $first_name, $last_name, $specialization, $experience, $certification_text, $certification_pdf, $branch_id]);
 
     $connect->commit();
     echo json_encode(["success" => true, "email" => $email]);
