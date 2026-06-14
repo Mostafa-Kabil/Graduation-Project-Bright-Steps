@@ -68,7 +68,13 @@ switch ($action) {
                 $stmt->execute([$fname, $lname, $gender, $birthDay, $birthMonth, $birthYear, $childId, $parentId]);
             } else {
                 // Check subscription for child limit
-                $subStmt = $connect->prepare("SELECT plan_name FROM subscription WHERE user_id = ? ORDER BY subscription_id DESC LIMIT 1");
+                $subStmt = $connect->prepare("
+                    SELECT s.plan_name 
+                    FROM subscription s
+                    JOIN parent_subscription ps ON s.subscription_id = ps.subscription_id
+                    WHERE ps.parent_id = ? 
+                    ORDER BY ps.created_at DESC LIMIT 1
+                ");
                 $subStmt->execute([$parentId]);
                 $sub = $subStmt->fetch(PDO::FETCH_ASSOC);
                 $isPremium = ($sub && $sub['plan_name'] === 'Premium');

@@ -3,7 +3,9 @@
  * Bright Steps – Notifications API
  * PHP endpoint that works within XAMPP.
  */
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 include 'connection.php';
 header('Content-Type: application/json');
 
@@ -75,7 +77,7 @@ switch ($action) {
 
         if ($notifId) {
             $stmt = $connect->prepare(
-                "UPDATE notifications SET is_read = 1 WHERE id = ? AND $whereClause"
+                "UPDATE notifications SET is_read = 1 WHERE notification_id = ? AND $whereClause"
             );
             $stmt->execute([$notifId, $userId]);
         } else {
@@ -144,7 +146,7 @@ switch ($action) {
 
         if ($notifId) {
             $stmt = $connect->prepare(
-                "DELETE FROM notifications WHERE id = ? AND $whereClause"
+                "DELETE FROM notifications WHERE notification_id = ? AND $whereClause"
             );
             $stmt->execute([$notifId, $userId]);
         }

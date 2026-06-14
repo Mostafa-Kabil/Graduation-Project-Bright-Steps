@@ -218,23 +218,12 @@ switch ($action) {
             $useAI = $aiResponse['success'] ?? false;
             $aiUnavailable = $aiResponse['ai_unavailable'] ?? false;
 
-            // Get categories and behaviors from database (AI-generated or existing)
-            $stmt = $connect->prepare("SELECT * FROM behavior_category WHERE LOWER(category_name) LIKE '%attention%' OR LOWER(category_name) LIKE '%communication%' OR LOWER(category_name) LIKE '%social%' OR LOWER(category_name) LIKE '%motor%' ORDER BY category_type, category_name");
-            $stmt->execute();
-            $dbCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // If AI generated new behaviors, use them directly to build the checklist
+            if ($useAI && !empty($aiResponse['categories'])) {
+                $dbCategories = [];
+                $dbBehaviors = [];
+                $catNames = [];
 
-            $stmt = $connect->prepare("
-                SELECT b.*, bc.category_name, bc.category_type, bc.category_description
-                FROM behavior b
-                INNER JOIN behavior_category bc ON b.category_id = bc.category_id
-                WHERE LOWER(bc.category_name) LIKE '%attention%' OR LOWER(bc.category_name) LIKE '%communication%' OR LOWER(bc.category_name) LIKE '%social%' OR LOWER(bc.category_name) LIKE '%motor%'
-                ORDER BY bc.category_type, bc.category_name, b.behavior_details
-            ");
-            $stmt->execute();
-            $dbBehaviors = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-            // If AI generated new behaviors, insert them into database only if this is a new checklist
-            if ($useAI && !empty($aiResponse['categories']) && !$hasExisting) {
                 foreach ($aiResponse['categories'] as $aiCat) {
                     $categoryId = ensureCategoryExistsChecklist(
                         $connect,
@@ -242,6 +231,16 @@ switch ($action) {
                         $aiCat['category_type'],
                         $aiCat['category_description']
                     );
+
+                    if (!isset($catNames[$aiCat['category_name']])) {
+                        $dbCategories[] = [
+                            'category_id' => $categoryId,
+                            'category_name' => $aiCat['category_name'],
+                            'category_type' => $aiCat['category_type'],
+                            'category_description' => $aiCat['category_description']
+                        ];
+                        $catNames[$aiCat['category_name']] = true;
+                    }
 
                     foreach ($aiCat['behaviors'] as $aiBeh) {
                         $behaviorId = ensureBehaviorExistsChecklist(
@@ -251,10 +250,25 @@ switch ($action) {
                             'milestone',
                             $aiBeh['typical_age'] ?? 'AI-generated'
                         );
+
+                        $dbBehaviors[] = [
+                            'behavior_id' => $behaviorId,
+                            'category_id' => $categoryId,
+                            'behavior_details' => $aiBeh['behavior_details'],
+                            'behavior_type' => 'milestone',
+                            'indicator' => $aiBeh['typical_age'] ?? 'AI-generated',
+                            'category_name' => $aiCat['category_name'],
+                            'category_type' => $aiCat['category_type'],
+                            'category_description' => $aiCat['category_description']
+                        ];
                     }
                 }
+            } else {
+                // Fallback to database if AI fails
+                $stmt = $connect->prepare("SELECT * FROM behavior_category WHERE LOWER(category_name) LIKE '%attention%' OR LOWER(category_name) LIKE '%communication%' OR LOWER(category_name) LIKE '%social%' OR LOWER(category_name) LIKE '%motor%' ORDER BY category_type, category_name");
+                $stmt->execute();
+                $dbCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // Re-fetch behaviors after AI insertion
                 $stmt = $connect->prepare("
                     SELECT b.*, bc.category_name, bc.category_type, bc.category_description
                     FROM behavior b

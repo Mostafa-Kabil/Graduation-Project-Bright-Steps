@@ -18,7 +18,7 @@ if ($action === 'check_and_start') {
     if (!$fp_speech) {
         $scriptDir = realpath(__DIR__ . '/APIs/Speech Analysis');
         if ($scriptDir) {
-            pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port ' . $speech_port . ' > NUL 2> NUL', "r"));
+            pclose(popen('cd "' . $scriptDir . '" && start /B start-server.bat > NUL 2> NUL', "r"));
         }
         $status['speech'] = 'starting';
     } else {
@@ -30,7 +30,7 @@ if ($action === 'check_and_start') {
     if (!$fp_motor) {
         $scriptDir = realpath(__DIR__ . '/APIs/Motor Skills');
         if ($scriptDir) {
-            pclose(popen('cd "' . $scriptDir . '" && start /B python app.py > NUL 2> NUL', "r"));
+            pclose(popen('cd "' . $scriptDir . '" && start /B start-server.bat > NUL 2> NUL', "r"));
         }
         $status['motor'] = 'starting';
     } else {

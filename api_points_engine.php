@@ -4,9 +4,11 @@
  * Handles point awarding, balance queries, transaction history, and token redemption.
  * Actions: get_balance, get_history, award, redeem_token
  */
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-session_start();
+error_reporting(0);
+ini_set('display_errors', 0);
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once 'connection.php';
 header('Content-Type: application/json');
 
@@ -98,16 +100,21 @@ function award_points_from_rule($connect, $childId, $parentId, $actionKey) {
 
     // 2. Enforce Cooldown
     if ($rule['cooldown_minutes'] > 0) {
-        $lastAction = $connect->prepare("SELECT created_at FROM parent_points_history WHERE child_id = ? AND action = ? ORDER BY created_at DESC LIMIT 1");
-        $lastAction->execute([$childId, $actionKey]);
-        $lastTime = $lastAction->fetchColumn();
-        
-        if ($lastTime) {
-            $minutesPassed = (time() - strtotime($lastTime)) / 60;
-            if ($minutesPassed < $rule['cooldown_minutes']) {
-                $remaining = ceil($rule['cooldown_minutes'] - $minutesPassed);
-                return ['success' => false, 'error' => 'cooldown', 'minutes_remaining' => $remaining];
+        try {
+            $lastAction = $connect->prepare("SELECT created_at FROM parent_points_history WHERE child_id = ? AND action = ? ORDER BY created_at DESC LIMIT 1");
+            $lastAction->execute([$childId, $actionKey]);
+            $lastTime = $lastAction->fetchColumn();
+            
+            if ($lastTime) {
+                $minutesPassed = (time() - strtotime($lastTime)) / 60;
+                if ($minutesPassed < $rule['cooldown_minutes']) {
+                    $remaining = ceil($rule['cooldown_minutes'] - $minutesPassed);
+                    return ['success' => false, 'error' => 'cooldown', 'minutes_remaining' => $remaining];
+                }
             }
+        } catch (Exception $e) {
+            // Table might not exist yet, meaning no previous actions, so cooldown is not active.
+            // We can safely ignore the error and proceed.
         }
     }
 

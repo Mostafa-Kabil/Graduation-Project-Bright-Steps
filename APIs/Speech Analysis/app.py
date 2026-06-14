@@ -41,7 +41,7 @@ FFMPEG_EXE = os.path.join(_FFMPEG_BIN, "ffmpeg.exe")
 app = FastAPI()
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-model = whisper.load_model("turbo", device=DEVICE)
+model = whisper.load_model("tiny", device=DEVICE)
 
 
 def get_syllable_count(w: str) -> int:
@@ -67,10 +67,13 @@ def convert_to_wav(input_path: str, output_path: str):
         "-f", "wav",
         output_path
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"FFmpeg failed: {result.stderr}")
-    return output_path
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg failed: {result.stderr}")
+        return output_path
+    except FileNotFoundError:
+        raise RuntimeError("FFmpeg is not installed or not found in PATH. Please install FFmpeg.")
 
 
 def analyze_vocabulary(transcript: str):

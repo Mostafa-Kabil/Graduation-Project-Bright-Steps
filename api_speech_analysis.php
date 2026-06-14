@@ -66,7 +66,7 @@ function isPythonServerRunning($port = 8002) {
 if (!isPythonServerRunning(8002)) {
     $scriptDir = realpath(__DIR__ . '/APIs/Speech Analysis');
     if ($scriptDir) {
-        pclose(popen('cd "' . $scriptDir . '" && start /B python -m uvicorn app:app --port 8002 > NUL 2> NUL', 'r'));
+        pclose(popen('cd "' . $scriptDir . '" && start /B start-server.bat > NUL 2> NUL', 'r'));
         $maxWait = 20;
         while (!isPythonServerRunning(8002) && $maxWait > 0) {
             usleep(500000);

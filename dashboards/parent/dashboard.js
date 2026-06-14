@@ -1860,7 +1860,17 @@
         try {
             // Keep fetch running
             const res = await fetch('../../api_speech_analysis.php', { method: 'POST', body: formData });
-            const data = await res.json();
+            const rawText = await res.text();
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch(e) {
+                console.error("Failed to parse JSON. Raw response:", rawText);
+                showToast("Error parsing response: " + rawText.substring(0, 100), "error");
+                btn.disabled = false;
+                btn.textContent = currentMode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
+                return;
+            }
 
             if (typeof window.loadNotifications === 'function') {
                 window.loadNotifications();
@@ -1901,7 +1911,8 @@
                 btn.textContent = currentMode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
             }
         } catch (e) {
-            showToast("Could not connect to the speech analysis server.", "error");
+            console.error("Speech submission error:", e);
+            showToast("Error connecting: " + e.message, "error");
             btn.disabled = false;
             btn.textContent = currentMode === 'read_compare' ? '🔬 Compare & Analyze' : '🔬 Analyze Speech';
         }
