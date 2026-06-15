@@ -319,7 +319,7 @@
                     <div class="footer-logo">
                         <img src="assets/logo.png" alt="Bright Steps">
                     </div>
-                    <p class="footer-text">AI-powered child development monitoring for ages 0-5</p>
+                    <p class="footer-text">Empowering every child's growth journey from 6 months to 5 years — with AI-driven insights parents and specialists trust.</p>
                 </div>
                 <div class="footer-column">
                     <h4 class="footer-heading">Product</h4>
