@@ -308,7 +308,7 @@ def generate_developmental_feedback(
     return feedback
 
 
-def evaluate_child_vocab(vocab_size: int, age_months: int):
+def evaluate_child_vocab(vocab_size: int, age_months: int, duration_seconds: float = 30.0):
     thresholds = {
         12: 5,
         18: 50,
@@ -319,18 +319,37 @@ def evaluate_child_vocab(vocab_size: int, age_months: int):
         72: 3000,
     }
     nearest_age = max(age for age in thresholds if age <= age_months)
-    expected_vocab = thresholds[nearest_age]
-    lower_bound = expected_vocab * 0.8
-    upper_bound = expected_vocab * 1.2
+    expected_total_vocab = thresholds[nearest_age]
 
-    if vocab_size < lower_bound:
-        status = "Below expected range"
-    elif vocab_size > upper_bound:
-        status = "Above expected range"
+    wpm_thresholds = {
+        12: 5,     # mostly babbling
+        18: 20,    # slow speech
+        24: 50,    # short phrases
+        36: 80,    # sentences
+        48: 100,
+        60: 120,
+        72: 130,
+    }
+    nearest_wpm_age = max(age for age in wpm_thresholds if age <= age_months)
+    expected_wpm = wpm_thresholds[nearest_wpm_age]
+    
+    expected_words_per_recording = int(expected_wpm * (duration_seconds / 60.0))
+    if expected_words_per_recording < 2:
+        expected_words_per_recording = 2
+        
+    lower_bound_recording = expected_words_per_recording * 0.5
+    upper_bound_recording = expected_words_per_recording * 1.5
+
+    if vocab_size < lower_bound_recording:
+        recording_status = "Below expected range"
+    elif vocab_size > upper_bound_recording:
+        recording_status = "Above expected range"
     else:
-        status = "Within expected range"
+        recording_status = "Within expected range"
 
-    return status, expected_vocab
+    # For the total vocab, since we only have a short clip, we can't accurately assess it,
+    # but we can provide the expected number.
+    return recording_status, expected_total_vocab, expected_words_per_recording
 
 
 def _transcribe_audio(audio: UploadFile):
@@ -373,7 +392,8 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
 
         # Basic vocabulary analysis
         vocab_size, unique_words = analyze_vocabulary(transcript)
-        status, expected_vocab = evaluate_child_vocab(vocab_size, age)
+        duration = result["segments"][-1]["end"] if "segments" in result and result["segments"] else 30.0
+        status, expected_vocab, expected_words_per_recording = evaluate_child_vocab(vocab_size, age, duration)
 
         # Enhanced NLP analysis
         sentence_complexity = analyze_sentence_complexity(transcript)
@@ -404,6 +424,7 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
             "unique_words": unique_words,
             "child_age_months": age,
             "expected_vocab": expected_vocab,
+            "expected_words_per_recording": expected_words_per_recording,
             "status": status,
             # Enhanced metrics
             "sentence_complexity": sentence_complexity,
@@ -580,7 +601,8 @@ async def analyze_compare(audio: UploadFile, age: int = Form(...), target_text: 
 
         # Standard vocab analysis
         vocab_size, unique_words = analyze_vocabulary(transcript)
-        status, expected_vocab = evaluate_child_vocab(vocab_size, age)
+        duration = result["segments"][-1]["end"] if "segments" in result and result["segments"] else 30.0
+        status, expected_vocab, expected_words_per_recording = evaluate_child_vocab(vocab_size, age, duration)
 
         # Enhanced NLP analysis
         sentence_complexity = analyze_sentence_complexity(transcript)
@@ -633,6 +655,7 @@ async def analyze_compare(audio: UploadFile, age: int = Form(...), target_text: 
             "unique_words": unique_words,
             "child_age_months": age,
             "expected_vocab": expected_vocab,
+            "expected_words_per_recording": expected_words_per_recording,
             "status": status,
             # Enhanced metrics
             "sentence_complexity": sentence_complexity,

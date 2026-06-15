@@ -441,7 +441,30 @@ if ($isAjax) {
                     ORDER BY m.sent_at ASC
                 ");
                 $stmt->execute([':uid' => $user_id, ':pid' => $partner_id, ':pid2' => $partner_id, ':uid2' => $user_id]);
-                echo json_encode(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+                $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                $is_locked = false;
+                $stmtCheck = $connect->prepare("SELECT role FROM users WHERE user_id = ?");
+                $stmtCheck->execute([$user_id]);
+                $role1 = $stmtCheck->fetchColumn();
+                $stmtCheck->execute([$partner_id]);
+                $role2 = $stmtCheck->fetchColumn();
+                
+                if (in_array($role1, ['doctor', 'specialist', 'parent']) && in_array($role2, ['doctor', 'specialist', 'parent'])) {
+                    $doc_id = in_array($role1, ['doctor', 'specialist']) ? $user_id : $partner_id;
+                    $par_id = ($role1 === 'parent') ? $user_id : $partner_id;
+                    
+                    $stmtAppt = $connect->prepare("
+                        SELECT COUNT(*) FROM appointment a
+                        WHERE a.specialist_id = ? AND a.parent_id = ? AND a.status IN ('scheduled', 'pending', 'confirmed', 'pending reschedule')
+                    ");
+                    $stmtAppt->execute([$doc_id, $par_id]);
+                    if ($stmtAppt->fetchColumn() == 0) {
+                        $is_locked = true;
+                    }
+                }
+
+                echo json_encode(['success' => true, 'data' => $messages, 'is_locked' => $is_locked]);
                 exit;
             }
 
@@ -696,7 +719,21 @@ if ($isAjax) {
                 $stmt2->execute([':sid' => $specialist_id]);
                 $counts = $stmt2->fetch(PDO::FETCH_ASSOC);
 
-                echo json_encode(['success' => true, 'data' => $appointments, 'counts' => $counts]);
+                // Check max patients limit for today
+                $checkStmt = $connect->prepare("
+                    SELECT 
+                        (SELECT COUNT(*) FROM appointment WHERE specialist_id = :sid AND DATE(scheduled_at) = CURDATE() AND status NOT IN ('Cancelled', 'Rejected')) as today_booked,
+                        COALESCE(o.max_patients_per_day, 10) as max_patients
+                    FROM doctor_onboarding o WHERE o.doctor_id = :sid2
+                ");
+                $checkStmt->execute([':sid' => $specialist_id, ':sid2' => $specialist_id]);
+                $limitRow = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                $max_patients_warning = false;
+                if ($limitRow && $limitRow['today_booked'] >= $limitRow['max_patients']) {
+                    $max_patients_warning = true;
+                }
+
+                echo json_encode(['success' => true, 'data' => $appointments, 'counts' => $counts, 'max_patients_warning' => $max_patients_warning]);
                 exit;
             }
 
@@ -733,6 +770,11 @@ if ($isAjax) {
                 $sql = "UPDATE appointment SET " . implode(', ', $fields) . " WHERE appointment_id = :aid";
                 $stmt = $connect->prepare($sql);
                 $stmt->execute($params);
+
+                if (strtolower($status) === 'completed') {
+                    $stmtP = $connect->prepare("UPDATE payment SET status = 'paid' WHERE payment_id = (SELECT payment_id FROM appointment WHERE appointment_id = ?)");
+                    $stmtP->execute([$appointment_id]);
+                }
 
                 try {
                     if (isset($input['status'])) {
@@ -811,13 +853,16 @@ if ($isAjax) {
                 try {
                     $stmt = $connect->prepare("
                         SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone,
-                               s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
-                               COALESCE(c.clinic_name, '') AS clinic_name,
-                               COALESCE(c.location, '') AS clinic_location,
-                               COALESCE(s.bio, '') AS bio, o.consultation_types, o.focus_areas
+                               s.specialization, s.experience_years, s.certificate_of_experience, 
+                               COALESCE(s.clinic_id, c_owned.clinic_id) AS clinic_id,
+                               COALESCE(c.clinic_name, c_owned.clinic_name, '') AS clinic_name,
+                               COALESCE(c.location, c_owned.location, '') AS clinic_location,
+                               COALESCE(s.bio, '') AS bio, o.consultation_types, o.focus_areas,
+                               o.session_duration, o.max_patients_per_day, o.follow_up_reminder
                         FROM users u
                         LEFT JOIN specialist s ON u.user_id = s.specialist_id
                         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+                        LEFT JOIN clinic c_owned ON u.user_id = c_owned.admin_id
                         LEFT JOIN doctor_onboarding o ON u.user_id = o.doctor_id
                         WHERE u.user_id = :uid
                     ");
@@ -964,6 +1009,10 @@ if ($isAjax) {
                 $focus_areas = isset($input['focus_areas']) ? json_encode($input['focus_areas']) : '[]';
                 $age_groups = isset($input['age_groups']) ? json_encode($input['age_groups']) : '[]';
                 $therapy_approaches = isset($input['therapy_approaches']) ? json_encode($input['therapy_approaches']) : '[]';
+                
+                $session_duration = intval($input['slot_duration'] ?? 30);
+                $max_patients_per_day = intval($input['max_patients_per_day'] ?? 10);
+                $follow_up_reminder = trim($input['follow_up_reminder'] ?? '1week');
 
                 try {
                     // Ensure doctor_onboarding row exists to avoid silent failures
@@ -974,8 +1023,15 @@ if ($isAjax) {
                                 ->execute([$doctor_id, $_SESSION['specialization'] ?? '']);
                     }
 
-                    $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, focus_areas = :fa, age_groups = :ag, therapy_approaches = :ta, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
-                            ->execute([':ct' => $consultation_types, ':fa' => $focus_areas, ':ag' => $age_groups, ':ta' => $therapy_approaches, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
+                    // Ensure new columns exist
+                    try {
+                        $connect->exec("ALTER TABLE doctor_onboarding ADD COLUMN session_duration INT DEFAULT 30, ADD COLUMN max_patients_per_day INT DEFAULT 10, ADD COLUMN follow_up_reminder VARCHAR(20) DEFAULT '1week'");
+                    } catch (Exception $e) {}
+
+                    $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, focus_areas = :fa, age_groups = :ag, therapy_approaches = :ta, working_days = :wd, start_time = :st, end_time = :et, session_duration = :sd, max_patients_per_day = :mp, follow_up_reminder = :fur WHERE doctor_id = :did")
+                            ->execute([':ct' => $consultation_types, ':fa' => $focus_areas, ':ag' => $age_groups, ':ta' => $therapy_approaches, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':sd' => $session_duration, ':mp' => $max_patients_per_day, ':fur' => $follow_up_reminder, ':did' => $doctor_id]);
+
+                    // Also save these preferences to localStorage via frontend JS, but since they are in DB now we can serve them on load.
 
                     $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
                             ->execute([':did' => $doctor_id]);
@@ -1049,7 +1105,7 @@ if ($isAjax) {
                 // Average rating from feedback
                 $stmt4 = $connect->prepare("
                     SELECT ROUND(AVG(rating), 1) AS avg_rating, COUNT(*) AS total_reviews
-                    FROM feedback WHERE specialist_id = :sid
+                    FROM specialist_reviews WHERE specialist_id = :sid
                 ");
                 $stmt4->execute([':sid' => $specialist_id]);
                 $rating_stats = $stmt4->fetch(PDO::FETCH_ASSOC);
@@ -1115,7 +1171,7 @@ if ($isAjax) {
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="styles/globals.css?v=8">
     <link rel="stylesheet" href="styles/dashboard.css?v=8">
-    <link rel="stylesheet" href="styles/doctor.css?v=13">
+    <link rel="stylesheet" href="styles/doctor.css?v=14">
     <link rel="stylesheet" href="styles/settings.css?v=8">
     <link rel="stylesheet" href="styles/profile.css?v=8">
     <link rel="stylesheet" href="styles/dr-settings.css?v=11">
@@ -1319,8 +1375,8 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=30"></script>
-    <script src="scripts/doctor-settings.js?v=7"></script>
+    <script src="scripts/doctor-dashboard.js?v=32"></script>
+    <script src="scripts/doctor-settings.js?v=11"></script>
 
 </body>
 

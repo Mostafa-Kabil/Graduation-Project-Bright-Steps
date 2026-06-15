@@ -1,14 +1,6 @@
 <?php
 include 'connection.php';
-try {
-    echo "--- MESSAGE TABLE ---\n";
-    $stmt = $connect->query("DESCRIBE message");
-    print_r($stmt->fetchAll(PDO::FETCH_ASSOC));
-    
-    echo "\n--- APPOINTMENT TABLE ---\n";
-    $stmt2 = $connect->query("DESCRIBE appointment");
-    print_r($stmt2->fetchAll(PDO::FETCH_ASSOC));
-} catch(Exception $e) {
-    echo $e->getMessage();
-}
-?>
+$cols = $connect->query("DESCRIBE payment")->fetchAll(PDO::FETCH_ASSOC);
+print_r($cols);
+$cols = $connect->query("DESCRIBE appointment")->fetchAll(PDO::FETCH_ASSOC);
+print_r($cols);

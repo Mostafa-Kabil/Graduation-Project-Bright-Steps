@@ -139,10 +139,34 @@ $stmt = $connect->prepare("SELECT COUNT(*) FROM child_badge WHERE child_id = ?")
 $stmt->execute([$childId]);
 $badgeCount = (int) $stmt->fetchColumn();
 
+// Streaks
+$stmt = $connect->prepare("SELECT current_count FROM streaks WHERE child_id = ? AND streak_type = 'daily_login' LIMIT 1");
+$stmt->execute([$childId]);
+$streak = $stmt->fetchColumn() ?: 0;
+
 // Points
 $stmt = $connect->prepare("SELECT total_points FROM points_wallet WHERE child_id = ? LIMIT 1");
 $stmt->execute([$childId]);
 $points = $stmt->fetchColumn() ?: 0;
+
+// Motor Skills
+$stmt = $connect->prepare("SELECT milestone_name, category, is_achieved FROM motor_milestones WHERE child_id = ? ORDER BY category, milestone_name");
+$stmt->execute([$childId]);
+$motorSkills = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Behavior Checklist
+$stmt = $connect->prepare("
+    SELECT b.*, bc.category_name, bc.category_type, bc.category_description, ceb.frequency, ceb.severity
+    FROM behavior b
+    INNER JOIN behavior_category bc ON b.category_id = bc.category_id
+    LEFT JOIN child_exhibited_behavior ceb ON b.behavior_id = ceb.behavior_id AND ceb.child_id = ?
+    WHERE LOWER(bc.category_name) LIKE '%attention%' OR LOWER(bc.category_name) LIKE '%communication%' OR LOWER(bc.category_name) LIKE '%social%' OR LOWER(bc.category_name) LIKE '%motor%'
+    ORDER BY bc.category_type, bc.category_name, b.behavior_details
+");
+$stmt->execute([$childId]);
+$behaviorChecklist = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+
 
 // ── Generate PDF as HTML ──
 $today = date('F j, Y');
@@ -153,6 +177,8 @@ if ($type === 'child-report')
     $reportTitle = 'Child Profile Report';
 if ($type === 'speech-report')
     $reportTitle = 'Speech Analysis Report';
+if ($type === 'motor-skills-report')
+    $reportTitle = 'Motor Skills Report';
 if ($type === 'specialist-report')
     $reportTitle = 'Specialist Appointment Report';
 
@@ -324,7 +350,7 @@ ob_start();
 
         .stat-card {
             float: left;
-            width: 23%;
+            width: 48%;
             margin-right: 2%;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
@@ -434,18 +460,6 @@ ob_start();
             </div>
             <div class="label">Height (cm)</div>
         </div>
-        <div class="stat-card">
-            <div class="value">
-                <?= $badgeCount ?>
-            </div>
-            <div class="label">Badges</div>
-        </div>
-        <div class="stat-card">
-            <div class="value">
-                <?= $points ?>
-            </div>
-            <div class="label">Points</div>
-        </div>
     </div>
 
     <?php if ($type === 'specialist-report'): ?>
@@ -457,7 +471,7 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <?php if ($type !== 'child-report' && $type !== 'specialist-report'): ?>
+    <?php if (in_array($type, ['full-report', 'growth-report'])): ?>
         <!-- Growth History -->
         <div class="section">
             <div class="section-title">Growth History</div>
@@ -496,7 +510,7 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <?php if ($type !== 'growth-report' && $type !== 'specialist-report'): ?>
+    <?php if (in_array($type, ['full-report', 'child-report'])): ?>
         <!-- Appointment History -->
         <div class="section">
             <div class="section-title">Appointment History</div>
@@ -539,10 +553,25 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <?php if ($type !== 'growth-report' && $type !== 'specialist-report'): ?>
+    <?php if (in_array($type, ['full-report', 'speech-report'])): ?>
         <!-- Speech Analysis History -->
+        <?php 
+        $ageMonthsForSpeech = floor((time() - mktime(0, 0, 0, $child['birth_month'], $child['birth_day'], $child['birth_year'])) / 2629743);
+        $expectedSentence = '1 word';
+        $expectedTotal = '10-50 words';
+        if ($ageMonthsForSpeech >= 60) { $expectedSentence = '5+ words'; $expectedTotal = '5000+ words'; }
+        elseif ($ageMonthsForSpeech >= 48) { $expectedSentence = '4-5 words'; $expectedTotal = '2000+ words'; }
+        elseif ($ageMonthsForSpeech >= 36) { $expectedSentence = '3-4 words'; $expectedTotal = '1000+ words'; }
+        elseif ($ageMonthsForSpeech >= 24) { $expectedSentence = '2-3 words'; $expectedTotal = '200+ words'; }
+        elseif ($ageMonthsForSpeech >= 18) { $expectedSentence = '2 words'; $expectedTotal = '50-100 words'; }
+        ?>
         <div class="section">
             <div class="section-title">Speech Analysis History</div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 16px; page-break-inside: avoid;">
+                <strong style="color: #6C63FF; font-size: 10pt;">Age Expectations (<?= $ageMonthsForSpeech ?> months):</strong><br>
+                <span style="font-size: 9pt; color: #475569;">Expected words in a single recording: <strong><?= $expectedSentence ?></strong></span><br>
+                <span style="font-size: 9pt; color: #475569;">Total expected vocabulary: <strong><?= $expectedTotal ?></strong></span>
+            </div>
             <?php if (count($speechRecords) > 0): ?>
                 <table>
                     <thead>
@@ -579,6 +608,155 @@ ob_start();
             <?php else: ?>
                 <p style="color: #94a3b8; padding: 12px;">No speech recordings on record.</p>
             <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if (in_array($type, ['full-report', 'motor-skills-report'])): ?>
+        <!-- Motor Skills History -->
+        <div class="section">
+            <div class="section-title">Motor Skills History</div>
+            <?php if (count($motorSkills) > 0): ?>
+                <?php
+                $groupedMotor = [];
+                foreach ($motorSkills as $m) {
+                    $cat = ucwords(str_replace('_', ' ', $m['category']));
+                    if (!isset($groupedMotor[$cat])) $groupedMotor[$cat] = [];
+                    $groupedMotor[$cat][] = $m;
+                }
+                ?>
+                <div class="motor-grid" style="width: 100%;">
+                <?php foreach ($groupedMotor as $cat => $skills): ?>
+                    <div style="margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; background: #f8fafc; page-break-inside: avoid;">
+                        <h4 style="margin-bottom: 10px; color: #334155; font-size: 11pt; border-bottom: 1px solid #cbd5e1; padding-bottom: 5px;"><?= htmlspecialchars($cat) ?></h4>
+                        <table style="width: 100%; border: none; margin-top: 0;">
+                        <?php foreach ($skills as $skill): ?>
+                            <tr>
+                                <td style="width: 30px; border: none; padding: 4px 0;">
+                                    <div style="width: 16px; height: 16px; border-radius: 4px; border: 2px solid <?= $skill['is_achieved'] ? '#16a34a' : '#cbd5e1' ?>; background: <?= $skill['is_achieved'] ? '#16a34a' : 'white' ?>; text-align: center; color: white; font-size: 12px; line-height: 16px; font-family: sans-serif;">
+                                        <?= $skill['is_achieved'] ? '✓' : '' ?>
+                                    </div>
+                                </td>
+                                <td style="border: none; padding: 4px 0; color: <?= $skill['is_achieved'] ? '#94a3b8' : '#334155' ?>; text-decoration: <?= $skill['is_achieved'] ? 'line-through' : 'none' ?>; font-size: 10pt;">
+                                    <?= htmlspecialchars($skill['milestone_name']) ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </table>
+                    </div>
+                <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <p style="color: #94a3b8; padding: 12px;">No motor milestones on record.</p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if (in_array($type, ['full-report'])): ?>
+        <?php
+        $behaviorStats = [
+            'attention' => ['total' => 0, 'achieved' => 0, 'behaviors' => [], 'label' => 'Attention', 'icon' => '🧠'],
+            'communication' => ['total' => 0, 'achieved' => 0, 'behaviors' => [], 'label' => 'Communication', 'icon' => '💬'],
+            'social' => ['total' => 0, 'achieved' => 0, 'behaviors' => [], 'label' => 'Social', 'icon' => '🤝'],
+            'motor' => ['total' => 0, 'achieved' => 0, 'behaviors' => [], 'label' => 'Motor', 'icon' => '🏃'],
+            'fine_motor' => ['total' => 0, 'achieved' => 0, 'behaviors' => [], 'label' => 'Fine Motor', 'icon' => '✍️']
+        ];
+
+        $pillarMap = [
+            'attention' => 'attention', 'cognitive' => 'attention',
+            'communication' => 'communication', 'language' => 'communication',
+            'social' => 'social', 'social-emotional' => 'social', 'emotional' => 'social',
+            'motor' => 'motor', 'gross_motor' => 'motor',
+            'fine_motor' => 'fine_motor',
+            'sensory' => 'motor', 'physical' => 'motor'
+        ];
+
+        foreach ($behaviorChecklist as $b) {
+            $catType = strtolower($b['category_type'] ?? 'motor');
+            $pillar = $pillarMap[$catType] ?? 'motor';
+            $behaviorStats[$pillar]['total']++;
+            if (!empty($b['frequency'])) {
+                $behaviorStats[$pillar]['achieved']++;
+                $behaviorStats[$pillar]['behaviors'][] = $b['behavior_details'];
+            }
+        }
+
+        $totalAchieved = 0;
+        $totalMilestones = 0;
+        foreach ($behaviorStats as $s) {
+            $totalAchieved += $s['achieved'];
+            $totalMilestones += $s['total'];
+        }
+        $overallPercent = $totalMilestones > 0 ? round(($totalAchieved / $totalMilestones) * 100) : 0;
+        
+        $ageExpectations = [
+            '0-12' => ['attention' => 3, 'communication' => 4, 'social' => 3, 'motor' => 8, 'fine_motor' => 4],
+            '13-24' => ['attention' => 6, 'communication' => 8, 'social' => 6, 'motor' => 12, 'fine_motor' => 8],
+            '25-36' => ['attention' => 9, 'communication' => 12, 'social' => 9, 'motor' => 15, 'fine_motor' => 12],
+            '37-48' => ['attention' => 12, 'communication' => 15, 'social' => 12, 'motor' => 18, 'fine_motor' => 15]
+        ];
+        $bd = mktime(0, 0, 0, $child['birth_month'], $child['birth_day'], $child['birth_year']);
+        $ageMonthsChecklist = floor((time() - $bd) / 2629743);
+        $ageRange = '37-48';
+        if ($ageMonthsChecklist <= 12) $ageRange = '0-12';
+        elseif ($ageMonthsChecklist <= 24) $ageRange = '13-24';
+        elseif ($ageMonthsChecklist <= 36) $ageRange = '25-36';
+        $expectations = $ageExpectations[$ageRange];
+        ?>
+        <div class="section" style="page-break-inside: avoid;">
+            <div class="section-title">Developmental Progress (Behavior Checklist)</div>
+            
+            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border:1px solid #bae6fd;border-radius:12px;padding:15px;margin-bottom:20px;">
+                <h3 style="margin:0 0 8px;font-size:11pt;color:#0369a1;">Executive Summary</h3>
+                <p style="margin:0;font-size:10pt;color:#0c4a6e;line-height:1.5;">
+                    <?= htmlspecialchars($child['first_name']) ?> is <?= $ageMonthsChecklist ?> months old and has been assessed on <?= $totalMilestones ?> developmental milestones.
+                    <?= $totalAchieved ?> milestones (<?= $overallPercent ?>%) are currently observed.
+                    <?= $overallPercent >= 70 ? 'Development appears to be progressing within expected ranges.' : ($overallPercent >= 40 ? 'Some areas show emerging skills that may benefit from targeted support.' : 'Multiple areas show delays that warrant professional evaluation.') ?>
+                </p>
+            </div>
+
+            <div style="width: 100%; overflow: hidden;">
+                <?php foreach ($behaviorStats as $key => $stat): ?>
+                    <?php if ($stat['total'] === 0) continue; ?>
+                    <?php 
+                        $pct = round(($stat['achieved'] / $stat['total']) * 100);
+                        $expected = $expectations[$key] ?? 5;
+                        $diff = $expected - $stat['achieved'];
+                    ?>
+                    <div style="float: left; width: 48%; margin-right: 2%; margin-bottom: 20px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; background: #ffffff; page-break-inside: avoid; box-sizing: border-box;">
+                        <div style="overflow: hidden; margin-bottom: 10px;">
+                            <div style="float: left; font-weight: 700; font-size: 11pt; color: #1e293b;">
+                                <?= $stat['icon'] ?> <?= $stat['label'] ?>
+                            </div>
+                            <div style="float: right;">
+                                <div style="width: 16px; height: 16px; border-radius: 50%; background: <?= $pct >= 70 ? '#22c55e' : ($pct >= 40 ? '#eab308' : '#ef4444') ?>;"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="overflow: hidden; font-size: 10pt; color: #475569; margin-bottom: 5px;">
+                            <div style="float: left;"><?= $stat['achieved'] ?>/<?= $stat['total'] ?> skills observed</div>
+                            <div style="float: right; font-weight: 600;"><?= $pct ?>%</div>
+                        </div>
+                        
+                        <div style="font-size: 9pt; font-weight: 600; color: <?= $diff > 0 ? '#ea580c' : '#16a34a' ?>; border-bottom: 1px dashed #e2e8f0; padding-bottom: 10px; margin-bottom: 10px;">
+                            <?= $diff > 0 ? "⚠ {$diff} below expectation" : '✓ Age-appropriate' ?>
+                        </div>
+                        
+                        <?php if (count($stat['behaviors']) > 0): ?>
+                            <div style="font-size: 9pt; color: #64748b; margin-bottom: 5px;">Observed behaviors:</div>
+                            <ul style="margin: 0; padding-left: 15px; font-size: 9pt; color: #475569;">
+                                <?php foreach (array_slice($stat['behaviors'], 0, 4) as $bh): ?>
+                                    <li style="margin-bottom: 3px;"><?= htmlspecialchars($bh) ?></li>
+                                <?php endforeach; ?>
+                                <?php if (count($stat['behaviors']) > 4): ?>
+                                    <li style="margin-bottom: 3px; font-style: italic;">...and <?= count($stat['behaviors']) - 4 ?> more</li>
+                                <?php endif; ?>
+                            </ul>
+                        <?php else: ?>
+                            <div style="font-size: 9pt; color: #94a3b8; font-style: italic;">No behaviors observed yet.</div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
         </div>
     <?php endif; ?>
 

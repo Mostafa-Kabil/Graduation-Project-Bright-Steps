@@ -117,11 +117,11 @@ try {
             $newSubs = $connect->query("SELECT COUNT(*) FROM parent_subscription ps JOIN subscription s ON ps.subscription_id=s.subscription_id WHERE s.price > 0")->fetchColumn();
 
             // Total revenue
-            $totalRev = $connect->query("SELECT COALESCE(SUM(amount_post_discount), 0) FROM payment WHERE status='completed' OR status IS NULL")->fetchColumn();
+            $totalRev = $connect->query("SELECT COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) FROM payment WHERE status='completed' OR status IS NULL")->fetchColumn();
 
             // Revenue this month
-            $revThisMonth = $connect->query("SELECT COALESCE(SUM(amount_post_discount), 0) FROM payment WHERE (status='completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn();
-            $revLastMonth = $connect->query("SELECT COALESCE(SUM(amount_post_discount), 0) FROM payment WHERE (status='completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-01') AND paid_at < DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn();
+            $revThisMonth = $connect->query("SELECT COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) FROM payment WHERE (status='completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn();
+            $revLastMonth = $connect->query("SELECT COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) FROM payment WHERE (status='completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-01') AND paid_at < DATE_FORMAT(NOW(), '%Y-%m-01')")->fetchColumn();
             $revTrend = $revLastMonth > 0 ? round(($revThisMonth - $revLastMonth) / $revLastMonth * 100) : 0;
 
             // Active subscribers
@@ -145,17 +145,17 @@ try {
 
         } elseif ($action === 'revenue_chart') {
             // Revenue per month (last 6 months)
-            $stmt = $connect->query("SELECT DATE_FORMAT(paid_at, '%Y-%m') as month, COALESCE(SUM(amount_post_discount), 0) as revenue FROM payment WHERE (status='completed' OR status IS NULL) AND paid_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY month ORDER BY month");
+            $stmt = $connect->query("SELECT DATE_FORMAT(paid_at, '%Y-%m') as month, COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) as revenue FROM payment WHERE (status='completed' OR status IS NULL) AND paid_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY month ORDER BY month");
             $chartData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Revenue by plan
-            $planStmt = $connect->query("SELECT s.plan_name, COALESCE(SUM(p.amount_post_discount), 0) as revenue, COUNT(*) as count FROM payment p JOIN subscription s ON p.subscription_id=s.subscription_id WHERE p.status='completed' OR p.status IS NULL GROUP BY s.plan_name");
+            $planStmt = $connect->query("SELECT s.plan_name, COALESCE(SUM(COALESCE(p.amount_post_discount, p.amount_pre_discount)), 0) as revenue, COUNT(*) as count FROM payment p JOIN subscription s ON p.subscription_id=s.subscription_id WHERE p.status='completed' OR p.status IS NULL GROUP BY s.plan_name");
             $planData = $planStmt->fetchAll(PDO::FETCH_ASSOC);
 
             echo json_encode(['success' => true, 'monthly_revenue' => $chartData, 'revenue_by_plan' => $planData]);
 
         } elseif ($action === 'revenue_top_users') {
-            $stmt = $connect->query("SELECT u.user_id, u.first_name, u.last_name, u.email, COALESCE(SUM(p.amount_post_discount), 0) as total_paid, COUNT(p.payment_id) as payment_count FROM users u JOIN parent par ON u.user_id=par.parent_id JOIN parent_subscription ps ON par.parent_id=ps.parent_id JOIN subscription s ON ps.subscription_id=s.subscription_id LEFT JOIN payment p ON ps.subscription_id=p.subscription_id WHERE s.price > 0 AND (p.status='completed' OR p.status IS NULL) GROUP BY u.user_id ORDER BY total_paid DESC LIMIT 50");
+            $stmt = $connect->query("SELECT u.user_id, u.first_name, u.last_name, u.email, COALESCE(SUM(COALESCE(p.amount_post_discount, p.amount_pre_discount)), 0) as total_paid, COUNT(p.payment_id) as payment_count FROM users u JOIN parent par ON u.user_id=par.parent_id JOIN parent_subscription ps ON par.parent_id=ps.parent_id JOIN subscription s ON ps.subscription_id=s.subscription_id LEFT JOIN payment p ON ps.subscription_id=p.subscription_id WHERE s.price > 0 AND (p.status='completed' OR p.status IS NULL) GROUP BY u.user_id ORDER BY total_paid DESC LIMIT 50");
             echo json_encode(['success' => true, 'users' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         }
 

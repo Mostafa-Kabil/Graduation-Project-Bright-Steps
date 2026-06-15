@@ -567,9 +567,9 @@ def submit_feedback(appointment_id: int, req: FeedbackRequest, user: dict = Depe
             raise HTTPException(status_code=400, detail="Can only submit feedback for completed appointments")
 
         cursor.execute(
-            """INSERT INTO feedback (parent_id, specialist_id, content, rating)
-               VALUES (%s, %s, %s, %s)""",
-            (req.parent_id, req.specialist_id, req.content, req.rating)
+            """INSERT INTO specialist_reviews (parent_id, specialist_id, appointment_id, comment, rating)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (req.parent_id, req.specialist_id, appointment_id, req.content, req.rating)
         )
         db.commit()
 

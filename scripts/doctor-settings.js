@@ -13,7 +13,7 @@ function getSettingsView() {
             <button class="ds-tab" onclick="switchDsTab('security',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Security</button>
         </div>
         <div class="ds-panel active" id="ds-panel-profile"><div style="text-align:center;padding:3rem;color:var(--text-secondary);">Loading profile…</div></div>
-        <div class="ds-panel" id="ds-panel-preferences">${getDsPreferencesHTML()}</div>
+        <div class="ds-panel" id="ds-panel-preferences"><div style="text-align:center;padding:3rem;color:var(--text-secondary);">Loading preferences…</div></div>
         <div class="ds-panel" id="ds-panel-notifications">${getDsNotificationsHTML()}</div>
         <div class="ds-panel" id="ds-panel-security">${getDsSecurityHTML()}</div>
     </div>`;
@@ -27,7 +27,7 @@ function switchDsTab(tab, btn) {
     if (p) p.classList.add('active');
 }
 
-function getDsPreferencesHTML() {
+function getDsPreferencesHTML(d) {
     let ageGroups = ['6m-1y', '1y-3y', '3y-5y'];
     try {
         const stored = localStorage.getItem(`dr_age_groups_${SPECIALIST_ID}`);
@@ -59,6 +59,12 @@ function getDsPreferencesHTML() {
 
     const hasAge = val => ageGroups.includes(val) ? 'checked' : '';
     const hasTherapy = val => therapyApproaches.includes(val) ? 'checked' : '';
+    const prefs = d || { session_duration: 30, max_patients_per_day: 10, follow_up_reminder: '1week', clinic_id: 0 };
+    const durSelected = val => prefs.session_duration == val ? 'selected' : '';
+    const maxSelected = val => prefs.max_patients_per_day == val ? 'selected' : '';
+    const fuSelected = val => prefs.follow_up_reminder === val ? 'selected' : '';
+    const has_onsite_pref = (d && d.consultation_types && d.consultation_types.includes('onsite'));
+    const has_clinic = (prefs.clinic_id > 0) || (prefs.clinic_name && String(prefs.clinic_name).trim().length > 0) || has_onsite_pref;
 
     return `<div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><div><h3>Patient Age Groups</h3><p>Select the age groups you specialize in (6 months to 5 years old)</p></div></div>
@@ -84,18 +90,21 @@ function getDsPreferencesHTML() {
         <div class="ds-card-body">
             <div class="ds-field-row">
                 <div class="ds-field"><label>Default Session Duration</label><select class="ds-select" id="ds-session-duration">
-                    <option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="90">90 minutes</option>
+                    <option value="15" ${durSelected(15)}>15 minutes</option><option value="30" ${durSelected(30)}>30 minutes</option><option value="45" ${durSelected(45)}>45 minutes</option><option value="60" ${durSelected(60)}>60 minutes</option><option value="90" ${durSelected(90)}>90 minutes</option>
                 </select></div>
                 <div class="ds-field"><label>Max Patients Per Day</label><select class="ds-select" id="ds-max-patients">
-                    <option value="5">5 patients</option><option value="8">8 patients</option><option value="10" selected>10 patients</option><option value="15">15 patients</option><option value="20">20 patients</option>
+                    <option value="5" ${maxSelected(5)}>5 patients</option><option value="8" ${maxSelected(8)}>8 patients</option><option value="10" ${maxSelected(10)}>10 patients</option><option value="15" ${maxSelected(15)}>15 patients</option><option value="20" ${maxSelected(20)}>20 patients</option>
                 </select></div>
             </div>
             <div class="ds-field-row">
                 <div class="ds-field"><label>Preferred Consultation Mode</label><select class="ds-select" id="ds-consult-mode">
-                    <option value="both" selected>Online & On-site</option><option value="online">Online Only</option><option value="onsite">On-site Only</option>
-                </select></div>
+                    ${has_clinic ? '<option value="both" selected>Online & On-site</option><option value="onsite">On-site Only</option>' : ''}
+                    <option value="online" ${!has_clinic ? 'selected' : ''}>Online Only</option>
+                </select>
+                ${!has_clinic ? '<div style="font-size:0.75rem;color:var(--orange-600);margin-top:0.5rem;">⚠️ On-site locked. You must add a clinic first.</div>' : ''}
+                </div>
                 <div class="ds-field"><label>Follow-up Reminder</label><select class="ds-select" id="ds-followup">
-                    <option value="1week" selected>After 1 week</option><option value="2weeks">After 2 weeks</option><option value="1month">After 1 month</option><option value="custom">Custom</option>
+                    <option value="1week" ${fuSelected('1week')}>After 1 week</option><option value="2weeks" ${fuSelected('2weeks')}>After 2 weeks</option><option value="1month" ${fuSelected('1month')}>After 1 month</option><option value="custom" ${fuSelected('custom')}>Custom</option>
                 </select></div>
             </div>
             <label class="ds-field-label" style="margin-top:1.25rem">Working Days</label>
@@ -106,7 +115,6 @@ function getDsPreferencesHTML() {
         <div class="ds-card">
         <div class="ds-card-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><div><h3>Focus Areas</h3><p>Conditions and areas of special interest</p></div></div>
         <div class="ds-card-body"><div class="ds-chip-grid" id="ds-focus-areas">
-            <label class="ds-chip"><input type="checkbox" value="autism" checked><span>Autism Spectrum</span></label>
             <label class="ds-chip"><input type="checkbox" value="adhd"><span>ADHD</span></label>
             <label class="ds-chip"><input type="checkbox" value="speech-delay" checked><span>Speech Delay</span></label>
             <label class="ds-chip"><input type="checkbox" value="learning-disability"><span>Learning Disabilities</span></label>
@@ -245,6 +253,10 @@ function renderDsProfile(d) {
             <button type="submit" class="btn btn-gradient">Save Changes</button>
         </div></form>`;
 
+    // Render preferences tab with data
+    const prefPanel = document.getElementById('ds-panel-preferences');
+    if (prefPanel) prefPanel.innerHTML = getDsPreferencesHTML(d);
+
     // Photo upload
     document.getElementById('ds-photo')?.addEventListener('change', function(e) {
         const f = e.target.files[0]; if (!f) return;
@@ -367,17 +379,22 @@ function dsSavePreferences() {
     document.querySelectorAll('#ds-therapy-approaches input[type="checkbox"]:checked').forEach(cb => therapyApproaches.push(cb.value));
     localStorage.setItem(`dr_therapy_approaches_${SPECIALIST_ID}`, JSON.stringify(therapyApproaches));
 
-    if (days.length > 0 && st && et) {
-        fetch('doctor-dashboard.php?ajax=1&section=settings', {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({action:'save_slots', days, start_time:st, end_time:et, slot_duration:30, focus_areas: focusAreas, consultation_types: consultTypes})
-        }).then(r=>r.json()).then(res => {
-            if (res.success) showToast('Preferences saved!','success');
-            else showToast(res.error||'Save failed','error');
-        }).catch(()=>showToast('Connection error','error'));
-    } else {
-        showToast('Preferences saved!','success');
+    const slotDuration = parseInt(document.getElementById('ds-session-duration')?.value || 30);
+    const maxPatients = parseInt(document.getElementById('ds-max-patients')?.value || 10);
+    const followup = document.getElementById('ds-followup')?.value || '1week';
+
+    if (!st || !et) {
+        showToast('Start and end time required', 'error');
+        return;
     }
+    
+    fetch('doctor-dashboard.php?ajax=1&section=settings', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({action:'save_slots', days, start_time:st, end_time:et, slot_duration:slotDuration, max_patients_per_day: maxPatients, follow_up_reminder: followup, focus_areas: focusAreas, consultation_types: consultTypes})
+    }).then(r=>r.json()).then(res => {
+        if (res.success) showToast('Preferences saved!','success');
+        else showToast(res.error||'Save failed','error');
+    }).catch(()=>showToast('Connection error','error'));
 }
 
 function syncTherapyApproaches() {

@@ -56,7 +56,7 @@ try {
             s.specialist_id, s.first_name, s.last_name, s.specialization, s.experience_years, 
             s.certification_text, s.certification_pdf, u.email, u.created_at AS joined_at,
             (SELECT COUNT(DISTINCT child_id) FROM appointment a WHERE a.specialist_id = s.specialist_id) as patients_count,
-            (SELECT IFNULL(AVG(rating), 0) FROM feedback f WHERE f.specialist_id = s.specialist_id) as rating
+            (SELECT IFNULL(AVG(rating), 0) FROM specialist_reviews f WHERE f.specialist_id = s.specialist_id) as rating
         FROM specialist s
         LEFT JOIN users u ON s.specialist_id = u.user_id
         WHERE s.clinic_id = ? AND u.status = 'active'
@@ -68,6 +68,7 @@ try {
     // 3. Fetch Patients and their LATEST appointment details
     $childStmt = $connect->prepare("
         SELECT c.child_id, c.first_name, c.last_name, 
+               c.birth_year, c.birth_month, c.birth_day,
                u.first_name as parent_fname, u.last_name as parent_lname,
                a.status as apt_status, a.scheduled_at as last_visit,
                a.comment as cancel_reason,
@@ -186,14 +187,14 @@ try {
     $reviews = [];
     try {
         $reviewStmt = $connect->prepare("
-            SELECT f.feedback_id, f.content, f.rating, f.submitted_at,
+            SELECT f.review_id as feedback_id, f.comment as content, f.rating, f.created_at as submitted_at,
                    u.first_name as parent_fname, u.last_name as parent_lname,
                    s.first_name as spec_fname, s.last_name as spec_lname
-            FROM feedback f
+            FROM specialist_reviews f
             JOIN users u ON f.parent_id = u.user_id
             JOIN specialist s ON f.specialist_id = s.specialist_id
             WHERE s.clinic_id = ?
-            ORDER BY f.submitted_at DESC
+            ORDER BY f.created_at DESC
             LIMIT 20
         ");
         $reviewStmt->execute([$clinic_id]);

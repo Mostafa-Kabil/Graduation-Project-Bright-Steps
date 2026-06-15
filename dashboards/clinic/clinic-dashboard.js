@@ -824,12 +824,61 @@ async function fetchAppointments() {
     }
 }
 
+let currentAptStatusFilter = 'all';
+let currentAptSpecFilter = '';
+
 function filterAppointmentsBySpec(specId) {
-    if (!specId) {
-        renderAppointmentsList(clinicAppointments);
-        return;
+    currentAptSpecFilter = specId;
+    applyAppointmentFilters();
+}
+
+function filterAppointmentsStatus(status, btnElement) {
+    currentAptStatusFilter = status;
+    if (btnElement) {
+        const btns = btnElement.parentElement.querySelectorAll('.btn-filter');
+        btns.forEach(b => b.classList.remove('active'));
+        btnElement.classList.add('active');
+        btnElement.style.background = 'linear-gradient(135deg, #0d9488, #2dd4bf)';
+        btnElement.style.color = 'white';
+        btnElement.style.borderColor = 'transparent';
+        
+        btns.forEach(b => {
+            if(b !== btnElement) {
+                b.style.background = 'transparent';
+                b.style.color = '#64748b';
+                b.style.borderColor = '#e2e8f0';
+            }
+        });
     }
-    const filtered = clinicAppointments.filter(a => a.specialist_id == specId);
+    applyAppointmentFilters();
+}
+
+function applyAppointmentFilters() {
+    let filtered = clinicAppointments;
+    
+    // 1. Filter by Specialist
+    if (currentAptSpecFilter) {
+        filtered = filtered.filter(a => a.specialist_id == currentAptSpecFilter);
+    }
+    
+    // 2. Filter by Status
+    const now = new Date();
+    filtered = filtered.filter(a => {
+        const aptDate = new Date(a.scheduled_at);
+        const st = (a.status || '').toLowerCase();
+        
+        if (currentAptStatusFilter === 'all') return true;
+        if (currentAptStatusFilter === 'cancelled') return st === 'cancelled' || st === 'rejected';
+        if (currentAptStatusFilter === 'completed') return st === 'completed';
+        if (currentAptStatusFilter === 'upcoming') {
+            return (st === 'scheduled' || st === 'accepted' || st === 'pending') && aptDate >= now;
+        }
+        if (currentAptStatusFilter === 'past') {
+            return (st !== 'completed') && (aptDate < now);
+        }
+        return true;
+    });
+    
     renderAppointmentsList(filtered);
 }
 
@@ -1176,9 +1225,9 @@ function viewSpecialistDetails(id) {
                 </button>
             </div>
             
-            <div class="clinic-modal-body" style="padding: 0; background: var(--bg-secondary); display: grid; grid-template-columns: 300px 1fr;">
+            <div class="clinic-modal-body specialist-profile-grid" style="padding: 0; background: var(--bg-secondary);">
                 <!-- Sidebar Info -->
-                <div style="padding: 2rem; border-right: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
+                <div class="specialist-profile-sidebar" style="padding: 2rem; border-right: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
                     <div class="info-section" style="margin-bottom: 2rem;">
                         <h4 style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem;">Contact Information</h4>
                         <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -1760,31 +1809,24 @@ function getAppointmentsView() {
         </div>
 
         <div class="section-card">
-            <div class="section-card-header">
-                <h2 class="section-heading">Upcoming Appointments</h2>
-                <select id="apt-spec-filter" class="search-input" style="width:auto;" onchange="filterAppointmentsBySpec(this.value)">
-                    <option value="">All Specialists</option>
-                </select>
+            <div class="section-card-header" style="flex-wrap:wrap; gap:1rem;">
+                <h2 class="section-heading">Appointments Directory</h2>
+                <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+                    <div class="tab-filters" style="display:flex; gap:0.5rem;">
+                        <button class="btn btn-sm btn-filter active" style="background: linear-gradient(135deg, #0d9488, #2dd4bf); color: white; border-color: transparent;" onclick="filterAppointmentsStatus('all', this)">All</button>
+                        <button class="btn btn-sm btn-filter" style="background: transparent; color: #64748b; border-color: #e2e8f0;" onclick="filterAppointmentsStatus('upcoming', this)">Upcoming</button>
+                        <button class="btn btn-sm btn-filter" style="background: transparent; color: #64748b; border-color: #e2e8f0;" onclick="filterAppointmentsStatus('past', this)">Past</button>
+                        <button class="btn btn-sm btn-filter" style="background: transparent; color: #64748b; border-color: #e2e8f0;" onclick="filterAppointmentsStatus('completed', this)">Completed</button>
+                        <button class="btn btn-sm btn-filter" style="background: transparent; color: #64748b; border-color: #e2e8f0;" onclick="filterAppointmentsStatus('cancelled', this)">Cancelled</button>
+                    </div>
+                    <select id="apt-spec-filter" class="search-input" style="width:auto; padding:0.4rem 1rem;" onchange="filterAppointmentsBySpec(this.value)">
+                        <option value="">All Specialists</option>
+                    </select>
+                </div>
             </div>
             <div id="appointments-view-container">
                 <div class="patients-list">
-                    <div class="patient-row">
-                        <div class="appointment-time-badge">
-                            <div class="apt-time">9:00 AM</div>
-                            <div class="apt-date">Today</div>
-                        </div>
-                        <div class="patient-avatar">EJ</div>
-                        <div class="patient-info">
-                            <div class="patient-name">Emma Johnson</div>
-                            <div class="patient-details">with Specialist • Routine Checkup</div>
-                        </div>
-                        <div class="patient-status status-green">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            Onsite
-                        </div>
-                        <button class="btn btn-sm btn-outline">Details</button>
-                    </div>
-                    <!-- Other rows ... -->
+                    <!-- Loaded dynamically -->
                 </div>
             </div>
         </div>
@@ -2166,6 +2208,37 @@ function renderPatientsTable(patients) {
     tbody.innerHTML = patients.map((p, i) => {
         const bg = gradients[i % gradients.length];
         const initial = (p.first_name[0] || '') + (p.last_name ? p.last_name[0] : '');
+        
+        // Calculate age from birth fields
+        let ageStr = 'N/A';
+        if (p.birth_year) {
+            const now = new Date();
+            let years = now.getFullYear() - p.birth_year;
+            let months = (now.getMonth() + 1) - (p.birth_month || 1);
+            if (months < 0) { years--; months += 12; }
+            if (years >= 1) {
+                ageStr = years + (years === 1 ? ' yr' : ' yrs');
+                if (months > 0) ageStr += ' ' + months + 'mo';
+            } else {
+                ageStr = months + ' mo';
+            }
+        }
+        
+        // Specialist name
+        const specName = (p.spec_fname && p.spec_lname) ? 'Dr. ' + p.spec_fname + ' ' + p.spec_lname : 'Unassigned';
+        
+        // Last visit
+        let lastVisit = 'N/A';
+        if (p.last_visit) {
+            const d = new Date(p.last_visit);
+            lastVisit = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        
+        // Status
+        const aptStatus = p.apt_status || 'Active';
+        const statusClass = aptStatus.toLowerCase() === 'completed' ? 'status-active' : 
+                           aptStatus.toLowerCase() === 'cancelled' ? 'status-inactive' : 'status-active';
+        
         return `
         <tr>
             <td>
@@ -2177,14 +2250,15 @@ function renderPatientsTable(patients) {
                     </div>
                 </div>
             </td>
-            <td>N/A</td>
+            <td>${ageStr}</td>
             <td>${p.parent_fname} ${p.parent_lname || ''}</td>
-            <td>Unassigned</td>
-            <td><span class="status-badge status-active">Active</span></td>
-            <td>N/A</td>
+            <td>${specName}</td>
+            <td><span class="status-badge ${statusClass}">Active</span></td>
+            <td>${lastVisit}</td>
             <td><button class="btn btn-sm btn-outline" onclick="viewPatientRecords(${p.child_id}, '${p.first_name} ${p.last_name || ''}')">View Records</button></td>
         </tr>`;
     }).join('');
+
 }
 
 // ── Revenue View ─────────────────────────────────────────────
@@ -3183,7 +3257,7 @@ async function deleteShift(slotId, specialistId) {
 
 function getSpecialistDetailsView(id) {
     return `
-    <div class="specialist-details-page">
+    <div class="specialist-details-page" style="overflow-x: hidden;">
         <div class="page-header-premium" style="background: white; padding: 2rem 2.5rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: flex-end;">
             <div style="display: flex; flex-direction: column; gap: 1rem;">
                 <button class="btn-back" onclick="showClinicView('specialists')" style="display: flex; align-items: center; gap: 0.5rem; background: none; border: none; color: #64748b; font-weight: 600; cursor: pointer; padding: 0; font-size: 0.9rem;">
@@ -3208,7 +3282,7 @@ function getSpecialistDetailsView(id) {
             </div>
         </div>
 
-        <div class="page-content-premium" style="padding: 2.5rem; display: grid; grid-template-columns: 350px 1fr; gap: 2.5rem;">
+        <div class="page-content-premium" style="padding: 2.5rem; display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 2.5rem; max-width: 100%; overflow: hidden;">
             <!-- Left Sidebar: Profile & Contact -->
             <div style="display: flex; flex-direction: column; gap: 2rem;">
                 <div class="card-premium" style="background: white; border-radius: 24px; padding: 2rem; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);">
@@ -3263,8 +3337,8 @@ function getSpecialistDetailsView(id) {
             </div>
 
             <!-- Right Area: Appointments & Schedule -->
-            <div style="display: flex; flex-direction: column; gap: 2.5rem;">
-                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2.5rem; border: 1px solid #f1f5f9;">
+            <div style="display: flex; flex-direction: column; gap: 2.5rem; min-width: 0;">
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2.5rem; border: 1px solid #f1f5f9; overflow: hidden;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
                         <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: #0f172a;">Appointment History</h3>
                         <div id="spec-stat-avail" style="padding: 0.6rem 1.25rem; border-radius: 14px; background: #f0fdf4; color: #16a34a; font-size: 1rem; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 1px solid #dcfce7; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
@@ -3272,7 +3346,7 @@ function getSpecialistDetailsView(id) {
                         </div>
                     </div>
                     
-                    <div class="table-responsive" style="overflow-x: auto;">
+                    <div class="table-responsive" style="overflow-x: auto; max-width: 100%;">
                         <table class="clinic-table" id="spec-appt-table" style="width: 100%; border-collapse: separate; border-spacing: 0 0.75rem;">
                             <thead>
                                 <tr style="text-align: left;">
@@ -3290,7 +3364,7 @@ function getSpecialistDetailsView(id) {
                     </div>
                 </div>
 
-                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2.5rem; border: 1px solid #f1f5f9;">
+                <div class="card-premium" style="background: white; border-radius: 24px; padding: 2.5rem; border: 1px solid #f1f5f9; overflow: hidden;">
                     <h3 style="margin: 0 0 1.5rem; font-size: 1.25rem; font-weight: 700; color: #0f172a; text-align: center;">Choose your appointment</h3>
                     <div id="spec-page-slots" style="margin: 0 -2.5rem -2.5rem; padding: 0 2.5rem 2.5rem;">
                         <!-- Slots injected here -->
@@ -3616,7 +3690,7 @@ async function viewPatientRecords(childId, childName) {
         `;
 
         document.getElementById("patient-records-content").innerHTML = `
-            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 2rem;">
+            <div style="display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 2rem;">
                 <!-- Sidebar Extra Info -->
                 <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                     <div style="background: #f8fafc; padding: 1.5rem; border-radius: 20px; border: 1px solid #f1f5f9;">

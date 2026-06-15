@@ -41,13 +41,12 @@ try {
     $start_time = $window['start_time'];
     $end_time = $window['end_time'];
 
-    // 3. Generate 30-min slots
-    $start = new DateTime("$date $start_time");
-    $end = new DateTime("$date $end_time");
-    $slots = [];
-    $interval = new DateInterval('PT30M');
-
-    $now = new DateTime();
+    // Get doctor onboarding preferences
+    $stmtPrefs = $connect->prepare("SELECT session_duration, max_patients_per_day FROM doctor_onboarding WHERE doctor_id = ?");
+    $stmtPrefs->execute([$specialist_id]);
+    $prefs = $stmtPrefs->fetch(PDO::FETCH_ASSOC);
+    $session_duration = $prefs['session_duration'] ?? 30;
+    $max_patients = $prefs['max_patients_per_day'] ?? 10;
 
     // 4. Query booked appointments for this date
     $stmtBooked = $connect->prepare("
@@ -60,11 +59,26 @@ try {
     $stmtBooked->execute([$specialist_id, $date]);
     $booked_rows = $stmtBooked->fetchAll(PDO::FETCH_ASSOC);
     
+    // Check max patients
+    if (count($booked_rows) >= $max_patients) {
+        echo json_encode(['success' => true, 'date' => $date, 'slots' => [], 'message' => 'Specialist is fully booked on this day']);
+        exit();
+    }
+
     $booked_times = [];
     foreach ($booked_rows as $row) {
         $dt_booked = new DateTime($row['scheduled_at']);
         $booked_times[] = $dt_booked->format('H:i:s');
     }
+
+    // 3. Generate slots with gap (session_duration * 2)
+    $start = new DateTime("$date $start_time");
+    $end = new DateTime("$date $end_time");
+    $slots = [];
+    $total_minutes = $session_duration * 2;
+    $interval = new DateInterval("PT{$total_minutes}M");
+
+    $now = new DateTime();
 
     $current = clone $start;
     while ($current < $end) {

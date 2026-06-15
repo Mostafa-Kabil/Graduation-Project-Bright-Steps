@@ -10,6 +10,13 @@ if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'admin') {
     exit();
 }
 
+$stmt = $connect->prepare("SELECT first_name, last_name FROM users WHERE user_id = ?");
+$stmt->execute([$_SESSION['id']]);
+$adminData = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$adminData) {
+    $adminData = ['first_name' => 'Admin', 'last_name' => 'User'];
+}
+
 // Fetch summary stats
 try {
     $stmt = $connect->query("SELECT COALESCE(SUM(total_points), 0) FROM parent_points_wallet");

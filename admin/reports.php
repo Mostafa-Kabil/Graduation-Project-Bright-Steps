@@ -67,7 +67,7 @@ try {
 
         // Support Tickets
         $supportTickets = 0;
-        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM contact_messages"); $supportTickets = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
+        try { $stmt = $connect->query("SELECT COUNT(*) as total FROM support_tickets"); $supportTickets = $stmt->fetch(PDO::FETCH_ASSOC)['total']; } catch(Exception $e) {}
 
         // Flagged children (Needs Attention or Review -> inactive > 7 days)
         $flaggedChildren = 0;

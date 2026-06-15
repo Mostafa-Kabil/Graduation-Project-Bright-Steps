@@ -86,12 +86,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // Get current admin's permissions
-            $myPerms = ['all']; // default
+            $myPerms = []; // default secure
             $myRoleStmt = $connect->prepare("SELECT role_level FROM admin WHERE admin_id = ?");
             $myRoleStmt->execute([$adminId]);
             $myRole = $myRoleStmt->fetch(PDO::FETCH_ASSOC);
-            if ($myRole && isset($roleMap[$myRole['role_level']])) {
-                $myPerms = json_decode($roleMap[$myRole['role_level']]['permissions'], true) ?: ['all'];
+            if ($myRole) {
+                if ($myRole['role_level'] == 1) {
+                    $myPerms = ['all'];
+                } elseif (isset($roleMap[$myRole['role_level']])) {
+                    $decoded = json_decode($roleMap[$myRole['role_level']]['permissions'], true);
+                    if (is_array($decoded)) $myPerms = $decoded;
+                }
             }
 
             echo json_encode(['success' => true, 'roles' => $roles, 'admins' => $admins, 'my_permissions' => $myPerms]);
@@ -116,13 +121,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $connect->prepare("SELECT role_level FROM admin WHERE admin_id = ?");
             $stmt->execute([$adminId]);
             $myRole = $stmt->fetch(PDO::FETCH_ASSOC);
-            $perms = ['all']; // default for Super Admin
+            $perms = []; // default secure
             if ($myRole) {
-                $roleStmt = $connect->prepare("SELECT permissions FROM admin_roles WHERE id = ?");
-                $roleStmt->execute([$myRole['role_level']]);
-                $roleData = $roleStmt->fetch(PDO::FETCH_ASSOC);
-                if ($roleData) {
-                    $perms = json_decode($roleData['permissions'], true) ?: ['all'];
+                if ($myRole['role_level'] == 1) {
+                    $perms = ['all'];
+                } else {
+                    $roleStmt = $connect->prepare("SELECT permissions FROM admin_roles WHERE id = ?");
+                    $roleStmt->execute([$myRole['role_level']]);
+                    $roleData = $roleStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($roleData && $roleData['permissions']) {
+                        $decoded = json_decode($roleData['permissions'], true);
+                        if (is_array($decoded)) $perms = $decoded;
+                    }
                 }
             }
             echo json_encode(['success' => true, 'permissions' => $perms]);

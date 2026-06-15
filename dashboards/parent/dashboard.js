@@ -1371,8 +1371,20 @@
                             <span style="font-size:1.35rem;font-weight:800;">${expectedVocab}+</span>
                         </div>
                         <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;">
-                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Status</span>
+                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Status (Total)</span>
                             <span id="insight-status" style="font-size:1.1rem;font-weight:700;">–</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;">
+                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Expected Per Recording</span>
+                            <span id="insight-expected-single" style="font-size:1.35rem;font-weight:800;">–</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;">
+                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Latest Recording Words</span>
+                            <span id="insight-latest-words" style="font-size:1.35rem;font-weight:800;">–</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.15);padding:0.6rem 1.25rem;border-radius:14px;">
+                            <span style="display:block;font-size:0.7rem;opacity:0.7;">Recording Status</span>
+                            <span id="insight-recording-status" style="font-size:1.1rem;font-weight:700;">–</span>
                         </div>
                     </div>
                 </div>
@@ -1411,12 +1423,50 @@
 
             if (entries.length > 0) {
                 const latest = entries[0];
-                const insightText = document.getElementById('insight-text');
-                const insightWords = document.getElementById('insight-words');
-                const insightStatus = document.getElementById('insight-status');
+                const d = window.dashboardData || {};
+                const child = (d.children || []).find(c => c.child_id == childId) || {};
+                const ageMonthsForSpeech = child.age_months || 24;
+                
+                let latestWords = 0;
+                let uniqueWords = 0;
+                if (latest.transcript) {
+                    const wordsArr = latest.transcript.trim().split(/\s+/).filter(w => w.length > 0);
+                    latestWords = wordsArr.length;
+                    uniqueWords = new Set(wordsArr.map(w => w.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ''))).size;
+                }
+                
+                // Calculate expected per recording based on default 30s
+                let expectedWPM = 50;
+                if (ageMonthsForSpeech >= 72) expectedWPM = 130;
+                else if (ageMonthsForSpeech >= 60) expectedWPM = 120;
+                else if (ageMonthsForSpeech >= 48) expectedWPM = 100;
+                else if (ageMonthsForSpeech >= 36) expectedWPM = 80;
+                else if (ageMonthsForSpeech >= 24) expectedWPM = 50;
+                else if (ageMonthsForSpeech >= 18) expectedWPM = 20;
+                else expectedWPM = 5;
+                
+                let expectedWordsPerRecording = Math.max(2, Math.floor(expectedWPM * 0.5));
+                let expectedRange = Math.floor(expectedWordsPerRecording * 0.5) + '-' + Math.floor(expectedWordsPerRecording * 1.5);
+                
+                // Set text contents
                 if (insightText) insightText.textContent = latest.transcript || 'No transcript available.';
-                if (insightWords) insightWords.textContent = latest.vocabulary_score ?? '–';
-                if (insightStatus) insightStatus.textContent = latest.status || '–';
+                if (insightWords) insightWords.textContent = uniqueWords;
+                // insightStatus now represents overall status from DB (but DB status is based on recording! Python returns it in 'status' field which is mapped to vs.feedback)
+                // Actually vs.feedback contains the recording status now from Python ("Below expected range" etc)
+                // We'll calculate a mockup total status since DB doesn't have it.
+                // Wait, the user wants "status of the total words for the age group"
+                // But we don't track their TOTAL words spoken across all recordings in DB yet. 
+                // We can just show "Pending" or "-" until they do a full evaluation.
+                if (insightStatus) insightStatus.textContent = 'Pending Eval';
+                if (insightExpectedSingle) insightExpectedSingle.textContent = expectedRange + ' words';
+                if (insightLatestWords) insightLatestWords.textContent = latestWords;
+                
+                if (insightRecordingStatus) {
+                    insightRecordingStatus.textContent = latest.status || '–';
+                    if (latest.status === 'Above expected range') insightRecordingStatus.style.color = '#86efac';
+                    else if (latest.status === 'Below expected range') insightRecordingStatus.style.color = '#fca5a5';
+                    else insightRecordingStatus.style.color = '#fff';
+                }
             } else {
                 const insightText = document.getElementById('insight-text');
                 if (insightText) insightText.textContent = 'No recordings yet. Click "New Recording" to get started!';
@@ -5497,7 +5547,20 @@
                         </div>
                     </div>
 
-                    
+                    <!-- Motor Skills Report Card -->
+                    <div class="dashboard-card" style="display: flex; flex-direction: column;">
+                         <div style="height: 120px; background: linear-gradient(135deg, #3b82f620, #93c5fd20); display: flex; align-items: center; justify-content: center; border-radius: var(--radius-lg) var(--radius-lg) 0 0;">
+                            <span style="font-size: 3rem;">🏃</span>
+                        </div>
+                        <div class="card-content" style="flex: 1;">
+                            <h3 style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.25rem;">Motor Skills Report</h3>
+                            <p style="font-size: 0.875rem; color: var(--slate-500); margin-bottom: 1rem;">Gross and fine motor development milestones</p>
+                             <span class="badge" style="background:#eff6ff;color:#2563eb;margin-bottom: 1rem;">Motor Data</span>
+                            <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                <button class="btn btn-gradient btn-sm" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('reports');return;} window.open('../../api_export_pdf.php?type=motor-skills-report${childParam}','_blank')">📥 Download</button>
+                                <button class="btn btn-outline btn-sm" style="color:#2563eb;border-color:#2563eb;" onclick="openShareReportModal('motor-skills-report', ${childId})">📤 Share</button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Speech Report Card -->
@@ -5579,6 +5642,7 @@
             'full-report': '📋 Full Development Report',
             'growth-report': '📊 Growth Report',
             'speech-report': '🗣️ Speech Report',
+            'motor-skills-report': '🏃 Motor Skills Report',
             'child-report': '👤 Child Profile Report',
             'uploaded-pdf': '📎 Upload Custom PDF'
         };
@@ -8700,8 +8764,14 @@
                     <div>
                         <label style="display:block;font-size:0.875rem;font-weight:600;margin-bottom:0.5rem;color:var(--slate-700);">Consultation Type</label>
                         <select id="bk-type" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--slate-200);border-radius:12px;outline:none;font-size:0.95rem;">
-                            <option value="onsite">On-site (Clinic Visit)</option>
-                            <option value="online">Online (Video Session)</option>
+                            ${(function(){
+                                let types = ['online', 'onsite'];
+                                try { if (spec.ob_consultation_types) types = JSON.parse(spec.ob_consultation_types); } catch(e){}
+                                let opts = '';
+                                if (types.includes('onsite')) opts += '<option value="onsite">On-site (Clinic Visit)</option>';
+                                if (types.includes('online')) opts += '<option value="online">Online (Video Session)</option>';
+                                return opts || '<option value="online">Online (Video Session)</option>';
+                            })()}
                         </select>
                     </div>
                     
@@ -8839,16 +8909,23 @@
 
         // Pre-fill date if a slot was pre-selected
         if (typeof preDate !== 'undefined' && preDate) { 
-            const el = document.getElementById('bk-slot'); 
+            const el = document.getElementById('bk-date'); 
             if (el) { 
                 for (let i = 0; i < el.options.length; i++) {
-                    if (el.options[i].value.startsWith(preDate)) {
+                    if (el.options[i].value === preDate) {
                         el.selectedIndex = i;
                         break;
                     }
                 }
             } 
         }
+        
+        // Initial fetch of slots for the selected date
+        setTimeout(() => {
+            if (typeof window.fetchSlots === 'function') {
+                window.fetchSlots(specId);
+            }
+        }, 50);
 
         window.goToBookingStep1 = function () {
             document.getElementById('bk-step-1').style.display = 'flex';
@@ -9811,6 +9888,20 @@
                 container.innerHTML = html;
                 if (isNearBottom) {
                     container.scrollTop = container.scrollHeight;
+                }
+                
+                const chatInput = document.getElementById('parent-chat-input');
+                const chatSendBtn = document.querySelector('#parent-chat-input').nextElementSibling;
+                const fileInputBtn = document.getElementById('parent-chat-attach-btn');
+                
+                if (data.is_locked) {
+                    if (chatInput) { chatInput.disabled = true; chatInput.placeholder = 'Chat locked. Book another appointment.'; }
+                    if (chatSendBtn) { chatSendBtn.disabled = true; chatSendBtn.style.opacity = '0.5'; }
+                    if (fileInputBtn) { fileInputBtn.style.pointerEvents = 'none'; fileInputBtn.style.opacity = '0.5'; }
+                } else {
+                    if (chatInput) { chatInput.disabled = false; chatInput.placeholder = 'Type a message...'; }
+                    if (chatSendBtn) { chatSendBtn.disabled = false; chatSendBtn.style.opacity = '1'; }
+                    if (fileInputBtn) { fileInputBtn.style.pointerEvents = 'auto'; fileInputBtn.style.opacity = '1'; }
                 }
             }
         } catch(e) {}

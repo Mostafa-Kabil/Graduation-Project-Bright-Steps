@@ -1,67 +1,19 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-include 'connection.php';
-
-$input = [
-    'action' => 'submit_report',
-    'specialist_id' => 5100,
-    'doctor_report_id' => 0,
-    'child_id' => 5100,
-    'child_report' => '',
-    'doctor_notes' => 'Test Notes',
-    'recommendations' => 'Test Recs',
-    'report_date' => '2026-05-01',
-    'shared_report_id' => 0
-];
-
-$specialist_id = intval($input['specialist_id'] ?? 0);
-$child_id = intval($input['child_id'] ?? 0);
-$child_report = trim($input['child_report'] ?? '');
-$doctor_notes = trim($input['doctor_notes'] ?? '');
-$recommendations = trim($input['recommendations'] ?? '');
-$report_date = trim($input['report_date'] ?? date('Y-m-d'));
-$shared_report_id = intval($input['shared_report_id'] ?? 0);
-$doctor_report_id = intval($input['doctor_report_id'] ?? 0);
-
-if (!$specialist_id || !$child_id || !$doctor_notes) {
-    echo json_encode(['success' => false, 'error' => 'specialist_id, child_id, and doctor_notes are required']);
-    exit;
-}
-
-try {
-    if ($doctor_report_id > 0) {
-        // Update existing report
-        $stmt = $connect->prepare("
-            UPDATE doctor_report 
-            SET doctor_notes = :notes, recommendations = :rec, report_date = :rdate 
-            WHERE report_id = :rid AND specialist_id = :sid
-        ");
-        $stmt->execute([
-            ':notes' => $doctor_notes,
-            ':rec' => $recommendations,
-            ':rdate' => $report_date,
-            ':rid' => $doctor_report_id,
-            ':sid' => $specialist_id
-        ]);
-        echo "Updated!\n";
-    } else {
-        // Insert new report
-        $stmt = $connect->prepare("
-            INSERT INTO doctor_report (specialist_id, child_id, child_report, doctor_notes, recommendations, report_date)
-            VALUES (:sid, :cid, :cr, :notes, :rec, :rdate)
-        ");
-        $stmt->execute([
-            ':sid' => $specialist_id,
-            ':cid' => $child_id,
-            ':cr' => $child_report,
-            ':notes' => $doctor_notes,
-            ':rec' => $recommendations,
-            ':rdate' => $report_date
-        ]);
-        $doctor_report_id = $connect->lastInsertId();
-        echo "Inserted! ID: $doctor_report_id\n";
-    }
-} catch (Exception $e) {
-    echo "SQL ERROR: " . $e->getMessage() . "\n";
-}
+require 'connection.php';
+$stmt = $connect->prepare("
+                        SELECT u.user_id, u.first_name, u.last_name, u.email, u.phone,
+                               s.specialization, s.experience_years, s.certificate_of_experience, s.clinic_id,
+                               COALESCE(c.clinic_name, '') AS clinic_name,
+                               COALESCE(c.location, '') AS clinic_location,
+                               COALESCE(s.bio, '') AS bio, o.consultation_types, o.focus_areas,
+                               o.session_duration, o.max_patients_per_day, o.follow_up_reminder
+                        FROM users u
+                        LEFT JOIN specialist s ON u.user_id = s.specialist_id
+                        LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
+                        LEFT JOIN doctor_onboarding o ON u.user_id = o.doctor_id
+                        WHERE u.email = 'mostafakabils@gmail.com'
+                    ");
+$stmt->execute();
+$profile = $stmt->fetch(PDO::FETCH_ASSOC);
+echo json_encode($profile);
+?>

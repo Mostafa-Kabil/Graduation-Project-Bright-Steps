@@ -42,7 +42,7 @@ function renderClinicsView(main, stats, clinics, currentSearch) {
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1rem;">
                 <div style="background:var(--bg-secondary);border-radius:10px;padding:.6rem;text-align:center;">
                     <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">${c.specialist_count||0}</div>
-                    <div style="font-size:.65rem;color:var(--text-secondary);">Doctors</div>
+                    <div style="font-size:.65rem;color:var(--text-secondary);">Specialists</div>
                 </div>
                 <div style="background:var(--bg-secondary);border-radius:10px;padding:.6rem;text-align:center;">
                     <div style="font-size:1.1rem;font-weight:700;color:var(--text-primary);">${c.patient_count||0}</div>
@@ -259,7 +259,8 @@ async function viewClinicDetail(clinicId) {
             </div>
             <div style="flex:1;">
                 <h3 style="margin:0;font-size:1.15rem;">${c.clinic_name}</h3>
-                <p style="margin:.25rem 0 0;font-size:.85rem;color:var(--text-secondary);">${c.email}</p>
+                <p style="margin:.25rem 0 0;font-size:.85rem;color:var(--text-secondary);">✉️ ${c.email || 'No email'}</p>
+                <p style="margin:.25rem 0 0;font-size:.85rem;color:var(--text-secondary);">📞 ${c.phone || 'No phone number'}</p>
                 <div style="display:flex;gap:.5rem;margin-top:.5rem;align-items:center;">
                     ${c.status === 'verified' ? '<span class="status-badge status-active">Verified</span>' : c.status === 'suspended' ? '<span class="status-badge status-danger">Suspended</span>' : c.status === 'deactivated' ? '<span class="status-badge status-danger">Deactivated</span>' : c.status === 'rejected' ? '<span class="status-badge status-danger">Rejected</span>' : '<span class="status-badge status-warning">Pending</span>'}
                     <span style="font-size:.75rem;color:var(--text-secondary);">Since ${fmtDate(c.added_at)}</span>
@@ -278,6 +279,10 @@ async function viewClinicDetail(clinicId) {
             </div>
         </div>
         <div style="margin-bottom:1rem;"><strong style="font-size:.85rem;">Location:</strong> <span style="font-size:.85rem;color:var(--text-secondary);">${c.location||'Not set'}</span></div>
+        <div style="margin-bottom:1.5rem;padding:1rem;background:var(--slate-50);border-radius:12px;border:1px solid var(--slate-200);">
+            <strong style="display:block;font-size:.85rem;margin-bottom:.5rem;color:var(--slate-700);">Description / Bio:</strong>
+            <span style="font-size:.85rem;color:var(--text-secondary);line-height:1.5;">${c.bio||'No description provided.'}</span>
+        </div>
         ${specs.length > 0 ? `<div style="border-top:1px solid var(--border);padding-top:1rem;"><h4 style="font-size:.875rem;font-weight:600;margin:0 0 .75rem;">Specialists</h4>
             <div style="max-height:200px;overflow-y:auto;">
             ${specs.map(s => `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border);">

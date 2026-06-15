@@ -73,7 +73,7 @@ try {
             $search = $_GET['search'] ?? '';
             $status = $_GET['status'] ?? '';
 
-            $sql = "SELECT c.clinic_id, c.clinic_name, c.email, c.location, c.status, c.rating, c.added_at,
+            $sql = "SELECT c.clinic_id, c.clinic_name, c.email, c.phone, c.bio, c.location, c.status, c.rating, c.added_at,
                     (SELECT COUNT(*) FROM specialist s WHERE s.clinic_id = c.clinic_id) as specialist_count,
                     (SELECT COUNT(DISTINCT a.parent_id) FROM appointment a 
                      JOIN specialist s2 ON a.specialist_id = s2.specialist_id 

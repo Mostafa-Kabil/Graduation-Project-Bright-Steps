@@ -39,17 +39,18 @@ try {
     // 2. Fetch Appointments
     $stmt = $connect->prepare("
         SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.comment, a.cancelled_by,
+               a.specialist_id,
                u.first_name as parent_fname, u.last_name as parent_lname,
                spec.first_name as specialist_fname, spec.last_name as specialist_lname,
                c.first_name as child_fname, c.last_name as child_lname,
                p.method as payment_method, p.status as payment_status
         FROM appointment a
         JOIN specialist spec ON a.specialist_id = spec.specialist_id
-        JOIN child c ON a.child_id = c.child_id
-        JOIN users u ON c.parent_id = u.user_id
+        LEFT JOIN child c ON a.child_id = c.child_id
+        LEFT JOIN users u ON c.parent_id = u.user_id
         LEFT JOIN payment p ON a.payment_id = p.payment_id
         WHERE spec.clinic_id = ?
-        ORDER BY a.scheduled_at ASC
+        ORDER BY a.scheduled_at DESC
     ");
     $stmt->execute([$clinic_id]);
     $appointments = $stmt->fetchAll(PDO::FETCH_ASSOC);

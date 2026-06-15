@@ -37,6 +37,27 @@ if ($cStmt->fetchColumn() === 'suspended' || $uStmt->fetchColumn() === 'suspende
     <link rel="stylesheet" href="../../styles/dashboard.css?v=<?= time() ?>">
     <link rel="stylesheet" href="../../styles/doctor.css?v=<?= time() ?>">
     <link rel="stylesheet" href="../../styles/clinic.css?v=<?= time() ?>">
+    <style>
+        /* Fix specialist details view overflow */
+        .specialist-profile-grid {
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr);
+        }
+        @media (max-width: 900px) {
+            .specialist-profile-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+            .specialist-profile-sidebar {
+                border-right: none !important;
+                border-bottom: 1px solid var(--border-color);
+            }
+        }
+        @media (max-width: 1100px) {
+            .page-content-premium {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -155,6 +176,7 @@ if ($cStmt->fetchColumn() === 'suspended' || $uStmt->fetchColumn() === 'suspende
     <script src="../../scripts/theme-toggle.js?v=<?= time() ?>"></script>
     <script src="../../scripts/language-toggle.js?v=<?= time() ?>"></script>
     <script src="../../scripts/navigation.js?v=<?= time() ?>"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="clinic-dashboard.js?v=<?= time() ?>"></script>
 </body>
 

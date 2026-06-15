@@ -7,12 +7,27 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !=
 }
 
 include 'connection.php';
-$statusCheck = $connect->prepare("SELECT status FROM users WHERE user_id = ?");
+$statusCheck = $connect->prepare("SELECT u.status, u.first_name, u.last_name, a.role_level FROM users u JOIN admin a ON u.user_id = a.admin_id WHERE u.user_id = ?");
 $statusCheck->execute([$_SESSION['id']]);
-if ($statusCheck->fetchColumn() === 'suspended') {
+$adminData = $statusCheck->fetch(PDO::FETCH_ASSOC);
+
+if (!$adminData || $adminData['status'] === 'suspended') {
     session_destroy();
     header("Location: account-suspended.php");
     exit;
+}
+
+$adminName = htmlspecialchars($adminData['first_name'] . ' ' . $adminData['last_name']);
+
+// Get role name
+$roleName = "Admin";
+if ($adminData['role_level'] == 1) {
+    $roleName = "Super Admin";
+} else {
+    $roleStmt = $connect->prepare("SELECT name FROM admin_roles WHERE id = ?");
+    $roleStmt->execute([$adminData['role_level']]);
+    $roleRow = $roleStmt->fetch(PDO::FETCH_ASSOC);
+    if ($roleRow) $roleName = htmlspecialchars($roleRow['name']);
 }
 ?>
 <!DOCTYPE html>
@@ -47,8 +62,8 @@ if ($statusCheck->fetchColumn() === 'suspended') {
                         </svg>
                     </div>
                     <div class="user-info">
-                        <div class="user-name">Admin Panel</div>
-                        <div class="user-badge-text admin-badge-label">Super Admin</div>
+                        <div class="user-name" id="sidebar-admin-name"><?php echo $adminName; ?></div>
+                        <div class="user-badge-text admin-badge-label" id="sidebar-admin-role"><?php echo $roleName; ?></div>
                     </div>
                     <div class="admin-shield" title="Admin Access">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -231,7 +246,10 @@ if ($statusCheck->fetchColumn() === 'suspended') {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="scripts/admin-dashboard.js?v=24"></script>
+    <script>
+        const CURRENT_ADMIN_NAME = <?php echo json_encode($adminName); ?>;
+    </script>
+    <script src="scripts/admin-dashboard.js?v=11"></script>
     <script src="scripts/admin-clinics-view.js?v=24"></script>
     <script src="scripts/admin-specialists-view.js?v=22"></script>
     <script src="scripts/admin-views-extended.js?v=22"></script>

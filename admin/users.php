@@ -142,6 +142,41 @@ try {
             $stmt = $connect->prepare($sql);
             $stmt->execute($params);
 
+            // Handle role-specific table inserts and cleanups if role changed
+            if ($role === 'admin') {
+                $checkAdmin = $connect->prepare("SELECT admin_id FROM admin WHERE admin_id = :id");
+                $checkAdmin->execute(['id' => $userId]);
+                if (!$checkAdmin->fetch()) {
+                    $insertAdmin = $connect->prepare("INSERT INTO admin (admin_id, role_level) VALUES (:id, 2)");
+                    $insertAdmin->execute(['id' => $userId]);
+                }
+                // Cleanup other roles
+                $connect->prepare("DELETE FROM parent WHERE parent_id = ?")->execute([$userId]);
+                $connect->prepare("DELETE FROM specialist WHERE specialist_id = ?")->execute([$userId]);
+                $connect->prepare("DELETE FROM clinic_specialists WHERE specialist_id = ?")->execute([$userId]);
+            } elseif ($role === 'parent') {
+                $checkParent = $connect->prepare("SELECT parent_id FROM parent WHERE parent_id = :id");
+                $checkParent->execute(['id' => $userId]);
+                if (!$checkParent->fetch()) {
+                    $insertParent = $connect->prepare("INSERT INTO parent (parent_id, number_of_children) VALUES (:id, 0)");
+                    $insertParent->execute(['id' => $userId]);
+                }
+                // Cleanup other roles
+                $connect->prepare("DELETE FROM admin WHERE admin_id = ?")->execute([$userId]);
+                $connect->prepare("DELETE FROM specialist WHERE specialist_id = ?")->execute([$userId]);
+                $connect->prepare("DELETE FROM clinic_specialists WHERE specialist_id = ?")->execute([$userId]);
+            } elseif ($role === 'specialist') {
+                $checkSpec = $connect->prepare("SELECT specialist_id FROM specialist WHERE specialist_id = :id");
+                $checkSpec->execute(['id' => $userId]);
+                if (!$checkSpec->fetch()) {
+                    $insertSpec = $connect->prepare("INSERT INTO specialist (specialist_id, title, clinic_id) VALUES (:id, 'Specialist', NULL)");
+                    $insertSpec->execute(['id' => $userId]);
+                }
+                // Cleanup other roles
+                $connect->prepare("DELETE FROM admin WHERE admin_id = ?")->execute([$userId]);
+                $connect->prepare("DELETE FROM parent WHERE parent_id = ?")->execute([$userId]);
+            }
+
             logActivity($connect, 'user_updated', "User updated: {$firstName} {$lastName}", $userId);
             if (function_exists('log_audit_action')) log_audit_action($connect, $_SESSION['id'] ?? 1, 'update_user', 'users', "Updated user: {$firstName} {$lastName}", $userId);
 

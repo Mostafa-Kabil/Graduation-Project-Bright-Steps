@@ -55,9 +55,9 @@ try {
             exit;
         }
 
-        // Insert into feedback table
+        // Insert into specialist_reviews table
         $stmt = $connect->prepare("
-            INSERT INTO feedback (parent_id, specialist_id, rating, content, submitted_at) 
+            INSERT INTO specialist_reviews (parent_id, specialist_id, rating, comment, created_at) 
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         ");
         
@@ -76,11 +76,11 @@ try {
     else if ($method === 'GET' && $action === 'my_reviews') {
         // Fetch reviews submitted by this parent
         $stmt = $connect->prepare("
-            SELECT f.*, s.first_name as spec_fname, s.last_name as spec_lname 
-            FROM feedback f
+            SELECT f.review_id as feedback_id, f.parent_id, f.specialist_id, f.comment as content, f.rating, f.created_at as submitted_at, s.first_name as spec_fname, s.last_name as spec_lname 
+            FROM specialist_reviews f
             JOIN specialist s ON f.specialist_id = s.specialist_id
             WHERE f.parent_id = ?
-            ORDER BY f.submitted_at DESC
+            ORDER BY f.created_at DESC
         ");
         $stmt->execute([$parentId]);
         $reviews = $stmt->fetchAll(PDO::FETCH_ASSOC);

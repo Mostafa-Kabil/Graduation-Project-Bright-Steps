@@ -19,6 +19,13 @@ if (!$childId) {
 $role = $_SESSION['role'];
 $userId = $_SESSION['id'];
 
+$clinic_id = null;
+if ($role === 'clinic') {
+    $cIdStmt = $connect->prepare("SELECT clinic_id FROM clinic WHERE clinic_id = ? OR admin_id = ? LIMIT 1");
+    $cIdStmt->execute([$userId, $userId]);
+    $clinic_id = $cIdStmt->fetchColumn();
+}
+
 try {
     // 1. Basic Data + Parent Info
     $childStmt = $connect->prepare("
@@ -84,17 +91,31 @@ try {
     // Appointments
     $appointments = [];
     try {
-        $aptStmt = $connect->prepare("
-            SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.cancelled_by,
-                   p.method AS payment_method, p.status AS payment_status,
-                   s.first_name AS spec_fname, s.last_name AS spec_lname
-            FROM appointment a
-            LEFT JOIN payment p ON a.payment_id = p.payment_id
-            LEFT JOIN specialist s ON a.specialist_id = s.specialist_id
-            WHERE a.child_id = :child_id 
-            ORDER BY a.scheduled_at DESC
-        ");
-        $aptStmt->execute([':child_id' => $childId]);
+        if ($role === 'clinic' && $clinic_id) {
+            $aptStmt = $connect->prepare("
+                SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.cancelled_by,
+                       p.method AS payment_method, p.status AS payment_status,
+                       s.first_name AS spec_fname, s.last_name AS spec_lname
+                FROM appointment a
+                LEFT JOIN payment p ON a.payment_id = p.payment_id
+                JOIN specialist s ON a.specialist_id = s.specialist_id
+                WHERE a.child_id = :child_id AND s.clinic_id = :clinic_id
+                ORDER BY a.scheduled_at DESC
+            ");
+            $aptStmt->execute([':child_id' => $childId, ':clinic_id' => $clinic_id]);
+        } else {
+            $aptStmt = $connect->prepare("
+                SELECT a.appointment_id, a.status, a.type, a.scheduled_at, a.cancelled_by,
+                       p.method AS payment_method, p.status AS payment_status,
+                       s.first_name AS spec_fname, s.last_name AS spec_lname
+                FROM appointment a
+                LEFT JOIN payment p ON a.payment_id = p.payment_id
+                LEFT JOIN specialist s ON a.specialist_id = s.specialist_id
+                WHERE a.child_id = :child_id 
+                ORDER BY a.scheduled_at DESC
+            ");
+            $aptStmt->execute([':child_id' => $childId]);
+        }
         $appointments = $aptStmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {}
 

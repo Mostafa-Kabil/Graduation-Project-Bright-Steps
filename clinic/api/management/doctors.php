@@ -27,13 +27,13 @@ if ($action === 'list' && $method === 'GET') {
         SELECT s.specialist_id, u.first_name, u.last_name, u.email, u.status,
                s.specialization, s.experience_years, s.certificate_of_experience,
                c.clinic_id, c.clinic_name,
-               (SELECT ROUND(AVG(f.rating), 1) FROM feedback f WHERE f.specialist_id = s.specialist_id) AS avg_rating,
-               (SELECT COUNT(*) FROM feedback f WHERE f.specialist_id = s.specialist_id) AS review_count,
+               (SELECT ROUND(AVG(f.rating), 1) FROM specialist_reviews f WHERE f.specialist_id = s.specialist_id) AS avg_rating,
+               (SELECT COUNT(*) FROM specialist_reviews f WHERE f.specialist_id = s.specialist_id) AS review_count,
                (SELECT COUNT(*) FROM appointment a WHERE a.specialist_id = s.specialist_id AND a.status IN ('scheduled','confirmed') AND a.scheduled_at >= NOW()) AS upcoming_appointments
         FROM specialist s
         INNER JOIN users u ON s.specialist_id = u.user_id
         INNER JOIN clinic c ON s.clinic_id = c.clinic_id
-        WHERE 1=1
+        WHERE u.role = 'specialist'
     ";
     $params = [];
 
@@ -238,12 +238,12 @@ elseif ($action === 'details' && $method === 'GET') {
         SELECT s.specialist_id, u.first_name, u.last_name, u.email, u.status, u.created_at,
                s.specialization, s.experience_years, s.certificate_of_experience,
                c.clinic_id, c.clinic_name, c.location AS clinic_location,
-               (SELECT ROUND(AVG(f.rating), 1) FROM feedback f WHERE f.specialist_id = s.specialist_id) AS avg_rating,
-               (SELECT COUNT(*) FROM feedback f WHERE f.specialist_id = s.specialist_id) AS review_count
+               (SELECT ROUND(AVG(f.rating), 1) FROM specialist_reviews f WHERE f.specialist_id = s.specialist_id) AS avg_rating,
+               (SELECT COUNT(*) FROM specialist_reviews f WHERE f.specialist_id = s.specialist_id) AS review_count
         FROM specialist s
         INNER JOIN users u ON s.specialist_id = u.user_id
         INNER JOIN clinic c ON s.clinic_id = c.clinic_id
-        WHERE s.specialist_id = :sid
+        WHERE s.specialist_id = :sid AND u.role = 'specialist'
     ");
     $stmt->execute([':sid' => $doctorId]);
     $doctor = $stmt->fetch();

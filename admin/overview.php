@@ -49,7 +49,7 @@ try {
     $totalUsers = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
     // Users by role
-    $stmt = $connect->query("SELECT role, COUNT(*) as count FROM users GROUP BY role");
+    $stmt = $connect->query("SELECT role, COUNT(*) as count FROM users WHERE role != 'doctor' GROUP BY role");
     $distribution = [];
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $distribution[$row['role']] = (int) $row['count'];
@@ -82,13 +82,13 @@ try {
     $newClinics = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
 
     // ── Total Revenue ────────────────────────────────────
-    $stmt = $connect->query("SELECT COALESCE(SUM(amount_post_discount), 0) as total FROM payment WHERE status = 'completed' OR status IS NULL");
+    $stmt = $connect->query("SELECT COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) as total FROM payment WHERE status = 'completed' OR status IS NULL");
     $totalRevenue = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-    $stmt = $connect->query("SELECT COALESCE(SUM(amount_post_discount), 0) as c FROM payment WHERE (status = 'completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW(), '%Y-%m-01')");
+    $stmt = $connect->query("SELECT COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) as c FROM payment WHERE (status = 'completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW(), '%Y-%m-01')");
     $revenueThisMonth = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
 
-    $stmt = $connect->query("SELECT COALESCE(SUM(amount_post_discount), 0) as c FROM payment WHERE (status = 'completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-01') AND paid_at < DATE_FORMAT(NOW(), '%Y-%m-01')");
+    $stmt = $connect->query("SELECT COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) as c FROM payment WHERE (status = 'completed' OR status IS NULL) AND paid_at >= DATE_FORMAT(NOW() - INTERVAL 1 MONTH, '%Y-%m-01') AND paid_at < DATE_FORMAT(NOW(), '%Y-%m-01')");
     $revenueLastMonth = $stmt->fetch(PDO::FETCH_ASSOC)['c'];
     $revenueTrend = $revenueLastMonth > 0 ? round((($revenueThisMonth - $revenueLastMonth) / $revenueLastMonth) * 100) : ($revenueThisMonth > 0 ? 100 : 0);
 
@@ -153,7 +153,7 @@ try {
     $revenueChart = [];
     try {
         $stmt = $connect->query("
-            SELECT DATE_FORMAT(paid_at, '%Y-%m') as month, COALESCE(SUM(amount_post_discount), 0) as revenue
+            SELECT DATE_FORMAT(paid_at, '%Y-%m') as month, COALESCE(SUM(COALESCE(amount_post_discount, amount_pre_discount)), 0) as revenue
             FROM payment WHERE (status = 'completed' OR status IS NULL) AND paid_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
             GROUP BY DATE_FORMAT(paid_at, '%Y-%m') ORDER BY month ASC
         ");
@@ -217,7 +217,7 @@ try {
     $recentPayments = [];
     try {
         $stmt = $connect->query("
-            SELECT p.payment_id, p.amount_post_discount, p.method, p.paid_at, p.status, s.plan_name
+            SELECT p.payment_id, COALESCE(p.amount_post_discount, p.amount_pre_discount) as amount_post_discount, p.method, p.paid_at, p.status, s.plan_name
             FROM payment p LEFT JOIN subscription s ON p.subscription_id = s.subscription_id
             ORDER BY p.paid_at DESC LIMIT 5
         ");

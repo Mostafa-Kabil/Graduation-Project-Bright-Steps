@@ -1,12 +1,12 @@
 // Admin Dashboard – View Controller (All 7 Features)
 const ADMIN_API = 'admin/';
-let _adminPermissions = ['all']; // Default: full access
+let _adminPermissions = []; // Default: no access
 document.addEventListener('DOMContentLoaded', async function () {
     // Fetch current admin's permissions
     try {
         const r = await apiGet('roles.php?action=get_permissions');
         if (r.success && r.permissions) _adminPermissions = r.permissions;
-    } catch(e) { console.warn('Could not fetch permissions, defaulting to full access'); }
+    } catch(e) { console.warn('Could not fetch permissions, defaulting to no access'); }
     initAdminNav();
     enforceNavPermissions();
     showAdminView('overview');
@@ -204,7 +204,7 @@ async function loadOverviewView(main) {
             <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;background:rgba(255,255,255,0.08);border-radius:50%;"></div>
             <div style="position:absolute;bottom:-30px;right:60px;width:80px;height:80px;background:rgba(255,255,255,0.06);border-radius:50%;"></div>
             <div style="position:relative;z-index:1;">
-                <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 .25rem;color:white !important;">${greeting}, Admin 👋</h1>
+                <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 .25rem;color:white !important;">${greeting}, ${typeof CURRENT_ADMIN_NAME !== 'undefined' ? CURRENT_ADMIN_NAME : 'Admin'} 👋</h1>
                 <p style="opacity:.9;margin:0;font-size:.9rem;color:white !important;">${dateStr} — Here's your platform at a glance</p>
             </div>
             <div style="display:flex;gap:.6rem;margin-top:1rem;position:relative;z-index:1;">
@@ -282,7 +282,7 @@ async function loadOverviewView(main) {
                 </div>
                 <div class="distribution-bar-wrap">
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#6366f1;"></span>Parents</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.parent || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#6366f1,#818cf8);"></div></div><div class="dist-value">${fmtNum(dist.parent || 0)}</div></div>
-                <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#10b981;"></span>Doctors</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.doctor || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#10b981,#34d399);"></div></div><div class="dist-value">${fmtNum(dist.doctor || 0)}</div></div>
+
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#0d9488;"></span>Specialists</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.specialist || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#0d9488,#14b8a6);"></div></div><div class="dist-value">${fmtNum(dist.specialist || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#d97706;"></span>Clinics</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.clinic || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#d97706,#f59e0b);"></div></div><div class="dist-value">${fmtNum(dist.clinic || 0)}</div></div>
                 <div class="distribution-row"><div class="dist-label"><span class="dist-dot" style="background:#ec4899;"></span>Admins</div><div class="dist-bar"><div class="dist-fill" style="width:${totalDist ? ((dist.admin || 0) / totalDist * 100) : 0}%;background:linear-gradient(90deg,#ec4899,#f472b6);"></div></div><div class="dist-value">${fmtNum(dist.admin || 0)}</div></div>
@@ -511,7 +511,11 @@ function deletePlan(subId, planName) {
 // ═══ POINTS (Modernized) ═══
 async function loadPointsView(main) {
     try {
-        const [sd, wd, ed, rd] = await Promise.all([apiGet('points.php?action=stats'), apiGet('points.php?action=top_wallets'), apiGet('engagement.php?action=all_data'), apiGet('api_admin_points.php')]);
+        let sd, wd, ed, rd;
+        try { sd = await apiGet('points.php?action=stats'); } catch(e) { throw new Error('points.php?action=stats failed: ' + e.message); }
+        try { wd = await apiGet('points.php?action=top_wallets'); } catch(e) { throw new Error('points.php?action=top_wallets failed: ' + e.message); }
+        try { ed = await apiGet('engagement.php?action=all_data'); } catch(e) { throw new Error('engagement.php?action=all_data failed: ' + e.message); }
+        try { rd = await apiGet('api_admin_points.php'); } catch(e) { throw new Error('api_admin_points.php failed: ' + e.message); }
         const stats = sd.stats, wallets = wd.wallets || [], rules = rd.rules || [], badges = ed.badges || [], banners = ed.banners || [];
         const medals = ['🥇','🥈','🥉'];
         const styleColors = {info:'#6366f1',warning:'#f59e0b',success:'#10b981',error:'#ef4444'};

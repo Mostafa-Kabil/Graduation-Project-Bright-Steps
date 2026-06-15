@@ -214,11 +214,27 @@ try {
         ':other_user_id' => $otherUserId
     ]);
 
+    $is_locked = false;
+    $checkLock = $connect->prepare("
+        SELECT status FROM appointment
+        WHERE ((parent_id = :uid1 AND specialist_id = :uid2) 
+           OR (parent_id = :uid2 AND specialist_id = :uid1))
+        ORDER BY scheduled_at DESC, appointment_id DESC
+        LIMIT 1
+    ");
+    $checkLock->execute([':uid1' => $userId, ':uid2' => $otherUserId]);
+    $latestStatus = $checkLock->fetchColumn();
+    $active_statuses = ['confirmed', 'approved', 'scheduled'];
+    if (!in_array(strtolower($latestStatus ?? ''), $active_statuses)) {
+        $is_locked = true;
+    }
+
     echo json_encode([
         'success' => true,
         'data' => $messages,
         'messages' => $messages,
-        'appointment' => $activeAppointment
+        'appointment' => $activeAppointment,
+        'is_locked' => $is_locked
     ]);
 } catch (PDOException $e) {
     echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);

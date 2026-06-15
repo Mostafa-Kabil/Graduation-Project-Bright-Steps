@@ -1,0 +1,1231 @@
+CREATE TABLE `activity_log` (
+  `log_id` int(11) NOT NULL AUTO_INCREMENT,
+  `activity_type` varchar(50) NOT NULL,
+  `description` text NOT NULL,
+  `related_user_id` int(11) DEFAULT NULL,
+  `user_name` varchar(200) DEFAULT NULL,
+  `user_role` varchar(50) DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`log_id`),
+  KEY `related_user_id` (`related_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `admin` (
+  `admin_id` int(11) NOT NULL,
+  `role_level` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`admin_id`),
+  CONSTRAINT `admin_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `admin_notification_recipients` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `notification_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `delivered` tinyint(1) DEFAULT 0,
+  `read_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_anr_notif` (`notification_id`),
+  KEY `idx_anr_user` (`user_id`),
+  CONSTRAINT `anr_notif_fk` FOREIGN KEY (`notification_id`) REFERENCES `admin_notifications` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `anr_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `admin_notifications` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(255) NOT NULL,
+  `body` text NOT NULL,
+  `type` enum('in_app','email','both') DEFAULT 'in_app',
+  `priority` enum('low','normal','high','urgent') DEFAULT 'normal',
+  `target_type` enum('all','specific','segment') DEFAULT 'all',
+  `target_filter` text DEFAULT NULL COMMENT 'JSON: user IDs or segment criteria',
+  `scheduled_at` datetime DEFAULT NULL,
+  `sent_at` datetime DEFAULT NULL,
+  `status` enum('draft','scheduled','sent','cancelled','failed') DEFAULT 'draft',
+  `recipient_count` int(11) DEFAULT 0,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_admin_notif_status` (`status`),
+  KEY `idx_admin_notif_created_by` (`created_by`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `admin_roles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) NOT NULL,
+  `description` text DEFAULT NULL,
+  `permissions` text DEFAULT NULL COMMENT 'JSON array of permission strings',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `role_name` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `announcement_banners` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `message` text NOT NULL,
+  `style` enum('info','warning','success','error') DEFAULT 'info',
+  `link` varchar(255) DEFAULT NULL,
+  `target_audience` enum('all','parents','specialists','admins') DEFAULT 'all',
+  `starts_at` datetime DEFAULT NULL,
+  `ends_at` datetime DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ab_active` (`is_active`),
+  KEY `idx_ab_dates` (`starts_at`,`ends_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `appointment` (
+  `appointment_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `payment_id` int(11) NOT NULL,
+  `specialist_id` int(11) NOT NULL,
+  `status` varchar(50) DEFAULT NULL,
+  `type` enum('online','onsite') DEFAULT NULL,
+  `report` text DEFAULT NULL,
+  `comment` text DEFAULT NULL,
+  `scheduled_at` datetime DEFAULT NULL,
+  `cancelled_by` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`appointment_id`),
+  KEY `parent_id` (`parent_id`),
+  KEY `payment_id` (`payment_id`),
+  KEY `specialist_id` (`specialist_id`),
+  CONSTRAINT `appointment_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`),
+  CONSTRAINT `appointment_ibfk_2` FOREIGN KEY (`payment_id`) REFERENCES `payment` (`payment_id`),
+  CONSTRAINT `appointment_ibfk_3` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=122 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `appointment_slots` (
+  `slot_id` int(11) NOT NULL AUTO_INCREMENT,
+  `doctor_id` int(11) NOT NULL,
+  `clinic_id` int(11) NOT NULL,
+  `day_of_week` tinyint(1) NOT NULL COMMENT '0=Sun, 1=Mon, ..., 6=Sat',
+  `start_time` time NOT NULL,
+  `end_time` time NOT NULL,
+  `slot_duration` int(11) NOT NULL DEFAULT 30 COMMENT 'minutes per slot',
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (`slot_id`),
+  UNIQUE KEY `uq_doctor_day` (`doctor_id`,`day_of_week`),
+  KEY `idx_doctor` (`doctor_id`),
+  KEY `idx_active` (`is_active`),
+  KEY `as_clinic_fk` (`clinic_id`),
+  CONSTRAINT `as_doctor_fk` FOREIGN KEY (`doctor_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `appointment_tokens` (
+  `token_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `redemption_id` int(11) DEFAULT NULL,
+  `token_type` enum('discount_25','discount_50','free','extended','priority') NOT NULL,
+  `discount_amount` decimal(10,2) DEFAULT 0.00,
+  `status` enum('available','applied','used','expired') DEFAULT 'available',
+  `applied_to_appointment` int(11) DEFAULT NULL,
+  `expires_at` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `used_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`token_id`),
+  KEY `idx_parent` (`parent_id`),
+  KEY `idx_status` (`status`),
+  KEY `fk_token_redemption` (`redemption_id`),
+  KEY `fk_token_appointment` (`applied_to_appointment`),
+  KEY `idx_expires_at` (`expires_at`),
+  CONSTRAINT `fk_token_appointment` FOREIGN KEY (`applied_to_appointment`) REFERENCES `appointment` (`appointment_id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_token_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_token_redemption` FOREIGN KEY (`redemption_id`) REFERENCES `parent_redemptions` (`redemption_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `article_reads` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `article_title` varchar(255) NOT NULL,
+  `read_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `article_reads_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `audit_logs` (
+  `log_id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `action` varchar(100) NOT NULL COMMENT 'login, logout, register, password_change, etc.',
+  `resource` varchar(100) DEFAULT NULL COMMENT 'users, children, appointments, payments, etc.',
+  `resource_id` varchar(50) DEFAULT NULL COMMENT 'ID of the affected resource',
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` varchar(500) DEFAULT NULL,
+  `details` text DEFAULT NULL COMMENT 'JSON with extra context',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`log_id`),
+  KEY `idx_audit_user` (`user_id`),
+  KEY `idx_audit_action` (`action`),
+  KEY `idx_audit_created` (`created_at`),
+  KEY `idx_audit_resource` (`resource`,`resource_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `badge` (
+  `badge_id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(100) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `icon` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`badge_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `behavior` (
+  `behavior_id` int(11) NOT NULL AUTO_INCREMENT,
+  `category_id` int(11) NOT NULL,
+  `behavior_type` varchar(100) DEFAULT NULL,
+  `behavior_details` text DEFAULT NULL,
+  `indicator` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`behavior_id`),
+  KEY `category_id` (`category_id`),
+  CONSTRAINT `behavior_ibfk_1` FOREIGN KEY (`category_id`) REFERENCES `behavior_category` (`category_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=152 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `behavior_category` (
+  `category_id` int(11) NOT NULL AUTO_INCREMENT,
+  `category_name` varchar(100) DEFAULT NULL,
+  `category_type` varchar(100) DEFAULT NULL,
+  `category_description` text DEFAULT NULL,
+  PRIMARY KEY (`category_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `blocked_ips` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip_address` varchar(45) NOT NULL,
+  `reason` varchar(255) DEFAULT NULL,
+  `blocked_by` int(11) DEFAULT NULL COMMENT 'admin user_id',
+  `blocked_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `expires_at` datetime DEFAULT NULL COMMENT 'NULL = permanent',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ip_address` (`ip_address`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child` (
+  `ssn` varchar(20) NOT NULL,
+  `child_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `first_name` varchar(100) DEFAULT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `birth_day` int(11) DEFAULT NULL,
+  `birth_month` int(11) DEFAULT NULL,
+  `birth_year` int(11) DEFAULT NULL,
+  `gender` varchar(10) DEFAULT NULL,
+  `birth_certificate` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`child_id`),
+  UNIQUE KEY `ssn` (`ssn`),
+  KEY `parent_id` (`parent_id`),
+  CONSTRAINT `child_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=207 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child_activities` (
+  `activity_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `category` enum('article','real_life','website_game','speech','motor','cognitive','social') DEFAULT 'real_life',
+  `duration_minutes` int(11) DEFAULT 15,
+  `difficulty` enum('easy','medium','hard') DEFAULT 'medium',
+  `source` enum('ai','system','specialist') DEFAULT 'ai',
+  `external_url` varchar(500) DEFAULT NULL,
+  `is_completed` tinyint(1) DEFAULT 0,
+  `completed_at` datetime DEFAULT NULL,
+  `points_earned` int(11) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`activity_id`),
+  KEY `idx_ca_child` (`child_id`),
+  KEY `idx_ca_completed` (`is_completed`),
+  KEY `idx_ca_category` (`category`),
+  KEY `idx_ca_created` (`created_at`),
+  CONSTRAINT `child_activities_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=61 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child_badge` (
+  `child_id` int(11) NOT NULL,
+  `badge_id` int(11) NOT NULL,
+  `redeemed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`child_id`,`badge_id`),
+  KEY `badge_id` (`badge_id`),
+  CONSTRAINT `child_badge_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`),
+  CONSTRAINT `child_badge_ibfk_2` FOREIGN KEY (`badge_id`) REFERENCES `badge` (`badge_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child_exhibited_behavior` (
+  `child_id` int(11) NOT NULL,
+  `behavior_id` int(11) NOT NULL,
+  `frequency` int(11) DEFAULT NULL,
+  `severity` varchar(100) DEFAULT NULL,
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`child_id`,`behavior_id`),
+  KEY `behavior_id` (`behavior_id`),
+  CONSTRAINT `child_exhibited_behavior_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`),
+  CONSTRAINT `child_exhibited_behavior_ibfk_2` FOREIGN KEY (`behavior_id`) REFERENCES `behavior` (`behavior_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child_generated_system_report` (
+  `child_id` int(11) NOT NULL,
+  `report` varchar(255) NOT NULL,
+  PRIMARY KEY (`child_id`,`report`),
+  CONSTRAINT `child_generated_system_report_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child_last_login` (
+  `child_id` int(11) NOT NULL,
+  `login_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`child_id`,`login_at`),
+  CONSTRAINT `child_last_login_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `child_milestones` (
+  `child_id` int(11) NOT NULL,
+  `milestone_id` int(11) NOT NULL,
+  `achieved_at` date DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`child_id`,`milestone_id`),
+  KEY `milestone_id` (`milestone_id`),
+  CONSTRAINT `child_milestones_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE,
+  CONSTRAINT `child_milestones_ibfk_2` FOREIGN KEY (`milestone_id`) REFERENCES `milestones` (`milestone_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `clinic` (
+  `clinic_id` int(11) NOT NULL AUTO_INCREMENT,
+  `admin_id` int(11) NOT NULL,
+  `clinic_name` varchar(255) DEFAULT NULL,
+  `logo` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password` varchar(255) DEFAULT NULL,
+  `location` varchar(255) DEFAULT NULL,
+  `bio` text DEFAULT NULL,
+  `cover_image` varchar(255) DEFAULT NULL,
+  `profile_image` varchar(255) DEFAULT NULL,
+  `opening_hours` varchar(255) DEFAULT NULL,
+  `specialties` text DEFAULT NULL,
+  `website` varchar(255) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'pending',
+  `rating` decimal(3,2) DEFAULT 0.00,
+  `added_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `medical_specialties` text DEFAULT NULL,
+  `is_first_login` tinyint(1) DEFAULT 1,
+  `branches` text DEFAULT NULL,
+  PRIMARY KEY (`clinic_id`),
+  KEY `admin_id` (`admin_id`),
+  CONSTRAINT `clinic_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`admin_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `clinic_branches` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `clinic_id` int(11) NOT NULL,
+  `branch_name` varchar(255) DEFAULT NULL,
+  `detailed_address` varchar(255) DEFAULT NULL,
+  `city` varchar(100) DEFAULT NULL,
+  `area` varchar(100) DEFAULT NULL,
+  `street` varchar(255) DEFAULT NULL,
+  `building` varchar(255) DEFAULT NULL,
+  `is_main` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `clinic_phone` (
+  `clinic_id` int(11) NOT NULL,
+  `phone` varchar(20) NOT NULL,
+  PRIMARY KEY (`clinic_id`,`phone`),
+  CONSTRAINT `clinic_phone_ibfk_1` FOREIGN KEY (`clinic_id`) REFERENCES `clinic` (`clinic_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `clinic_reviews` (
+  `review_id` int(11) NOT NULL AUTO_INCREMENT,
+  `clinic_id` int(11) NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `appointment_id` int(11) NOT NULL,
+  `rating` int(11) NOT NULL,
+  `comment` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`review_id`),
+  UNIQUE KEY `uq_clinic_review` (`parent_id`,`appointment_id`),
+  KEY `clinic_id` (`clinic_id`),
+  KEY `parent_id` (`parent_id`),
+  KEY `appointment_id` (`appointment_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `community_messages` (
+  `message_id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `message` text NOT NULL,
+  `likes` int(11) DEFAULT 0,
+  `reply_count` int(11) DEFAULT 0,
+  `parent_message_id` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`message_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `community_messages_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `consultation_messages` (
+  `message_id` int(11) NOT NULL AUTO_INCREMENT,
+  `consultation_id` int(11) NOT NULL,
+  `sender_id` int(11) NOT NULL,
+  `message` text NOT NULL,
+  `is_read` tinyint(1) DEFAULT 0,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`message_id`),
+  KEY `consultation_id` (`consultation_id`),
+  KEY `sender_id` (`sender_id`),
+  CONSTRAINT `consultation_messages_ibfk_1` FOREIGN KEY (`consultation_id`) REFERENCES `consultations` (`consultation_id`) ON DELETE CASCADE,
+  CONSTRAINT `consultation_messages_ibfk_2` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `consultations` (
+  `consultation_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `specialist_id` int(11) NOT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `consultation_type` enum('video','voice','chat') DEFAULT 'video',
+  `status` enum('scheduled','in_progress','completed','cancelled') DEFAULT 'scheduled',
+  `scheduled_at` datetime NOT NULL,
+  `duration_minutes` int(11) DEFAULT 30,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`consultation_id`),
+  KEY `parent_id` (`parent_id`),
+  KEY `specialist_id` (`specialist_id`),
+  KEY `child_id` (`child_id`),
+  CONSTRAINT `consultations_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `consultations_ibfk_2` FOREIGN KEY (`specialist_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `consultations_ibfk_3` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `contact_messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `subject` varchar(500) NOT NULL,
+  `message` text NOT NULL,
+  `is_read` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `doctor_onboarding` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `doctor_id` int(11) NOT NULL,
+  `specialization` varchar(100) DEFAULT NULL,
+  `experience_years` int(11) DEFAULT 0,
+  `certifications` varchar(255) DEFAULT NULL,
+  `certificate_path` varchar(500) DEFAULT NULL,
+  `focus_areas` text DEFAULT NULL,
+  `working_days` text DEFAULT NULL,
+  `start_time` time DEFAULT '09:00:00',
+  `end_time` time DEFAULT '17:00:00',
+  `consultation_types` text DEFAULT NULL,
+  `goals` text DEFAULT NULL,
+  `completed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `age_groups` text DEFAULT NULL,
+  `therapy_approaches` text DEFAULT NULL,
+  `session_duration` int(11) DEFAULT 30,
+  `max_patients_per_day` int(11) DEFAULT 10,
+  `follow_up_reminder` varchar(50) DEFAULT '1week',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `doctor_report` (
+  `doctor_report_id` int(11) NOT NULL AUTO_INCREMENT,
+  `specialist_id` int(11) NOT NULL,
+  `child_id` int(11) NOT NULL,
+  `child_report` varchar(255) DEFAULT NULL COMMENT 'Reference to child_generated_system_report.report',
+  `doctor_notes` text NOT NULL,
+  `recommendations` text DEFAULT NULL,
+  `report_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `visibility` enum('private','shared') DEFAULT 'private',
+  PRIMARY KEY (`doctor_report_id`),
+  KEY `idx_dr_specialist` (`specialist_id`),
+  KEY `idx_dr_child` (`child_id`),
+  CONSTRAINT `doctor_report_ibfk_1` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE,
+  CONSTRAINT `doctor_report_ibfk_2` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `email_logs` (
+  `log_id` int(11) NOT NULL AUTO_INCREMENT,
+  `recipient_email` varchar(255) NOT NULL,
+  `subject` varchar(255) NOT NULL,
+  `template_type` varchar(50) DEFAULT NULL,
+  `status` enum('sent','failed') DEFAULT 'sent',
+  `error_message` text DEFAULT NULL,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`log_id`),
+  KEY `recipient_email` (`recipient_email`)
+) ENGINE=InnoDB AUTO_INCREMENT=43 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `feedback` (
+  `feedback_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) DEFAULT NULL,
+  `specialist_id` int(11) DEFAULT NULL,
+  `content` text DEFAULT NULL,
+  `rating` int(11) DEFAULT NULL,
+  `submitted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`feedback_id`),
+  KEY `parent_id` (`parent_id`),
+  KEY `specialist_id` (`specialist_id`),
+  CONSTRAINT `feedback_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`),
+  CONSTRAINT `feedback_ibfk_2` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `flagged_content` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `content_type` varchar(50) NOT NULL COMMENT 'feedback, message, report',
+  `content_id` int(11) NOT NULL,
+  `content_text` text DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL COMMENT 'user who posted the content',
+  `reason` varchar(255) DEFAULT NULL,
+  `flagged_by` varchar(50) DEFAULT 'auto' COMMENT 'auto or user_id',
+  `status` enum('pending','approved','removed','warned') DEFAULT 'pending',
+  `reviewed_by` int(11) DEFAULT NULL,
+  `reviewed_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_fc_status` (`status`),
+  KEY `idx_fc_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `growth_record` (
+  `record_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `height` decimal(5,2) DEFAULT NULL,
+  `weight` decimal(5,2) DEFAULT NULL,
+  `head_circumference` decimal(5,2) DEFAULT NULL,
+  `arm_circumference` decimal(5,2) DEFAULT NULL,
+  `subscapular_skinfold` decimal(5,2) DEFAULT NULL,
+  `triceps_skinfold` decimal(5,2) DEFAULT NULL,
+  `motor_milestones_score` int(11) DEFAULT 0,
+  `recorded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`record_id`),
+  KEY `child_id` (`child_id`),
+  CONSTRAINT `growth_record_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=99 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `medical_records` (
+  `record_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `doctor_id` int(11) NOT NULL,
+  `diagnosis` varchar(255) DEFAULT NULL,
+  `symptoms` text DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `follow_up_date` date DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`record_id`),
+  KEY `child_id` (`child_id`),
+  KEY `doctor_id` (`doctor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `message` (
+  `message_id` int(11) NOT NULL AUTO_INCREMENT,
+  `sender_id` int(11) NOT NULL,
+  `receiver_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `meeting_link` varchar(500) DEFAULT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `content` text NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `file_path` varchar(500) DEFAULT NULL,
+  `message_type` varchar(50) DEFAULT 'text',
+  PRIMARY KEY (`message_id`),
+  KEY `idx_msg_sender` (`sender_id`),
+  KEY `idx_msg_receiver` (`receiver_id`),
+  KEY `idx_msg_appointment` (`appointment_id`),
+  KEY `idx_msg_child` (`child_id`),
+  CONSTRAINT `message_ibfk_1` FOREIGN KEY (`sender_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `message_ibfk_2` FOREIGN KEY (`receiver_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `message_ibfk_3` FOREIGN KEY (`appointment_id`) REFERENCES `appointment` (`appointment_id`) ON DELETE SET NULL,
+  CONSTRAINT `message_ibfk_4` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `milestones` (
+  `milestone_id` int(11) NOT NULL AUTO_INCREMENT,
+  `category` enum('motor_skills','language','cognitive','social_emotional','self_care') NOT NULL,
+  `title` varchar(200) NOT NULL,
+  `description` text DEFAULT NULL,
+  `min_age_months` int(11) NOT NULL DEFAULT 0,
+  `max_age_months` int(11) NOT NULL DEFAULT 72,
+  PRIMARY KEY (`milestone_id`),
+  KEY `idx_milestone_category` (`category`),
+  KEY `idx_milestone_age` (`min_age_months`,`max_age_months`)
+) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `moderation_log` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `admin_id` int(11) NOT NULL,
+  `action` varchar(50) NOT NULL COMMENT 'approve, remove, warn, ban',
+  `target_user_id` int(11) DEFAULT NULL,
+  `content_id` int(11) DEFAULT NULL,
+  `note` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ml_admin` (`admin_id`),
+  KEY `idx_ml_target` (`target_user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `motor_milestones` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `milestone_name` varchar(150) NOT NULL,
+  `category` varchar(50) DEFAULT 'gross_motor',
+  `is_achieved` tinyint(1) DEFAULT 0,
+  `achieved_at` timestamp NULL DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `child_id` (`child_id`),
+  CONSTRAINT `motor_milestones_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `newsletter_history` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `subject` varchar(500) NOT NULL,
+  `content` text DEFAULT NULL,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_nh_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `newsletter_subscribers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `email` varchar(255) NOT NULL,
+  `subscribed` tinyint(1) DEFAULT 1,
+  `preferences` text DEFAULT NULL,
+  `subscribed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_newsletter_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `notifications` (
+  `notification_id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `clinic_id` int(11) DEFAULT NULL,
+  `type` enum('appointment_reminder','payment_success','growth_alert','milestone','system') DEFAULT 'system',
+  `title` varchar(255) NOT NULL,
+  `message` text NOT NULL,
+  `is_read` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`notification_id`),
+  KEY `user_id` (`user_id`),
+  KEY `is_read` (`is_read`),
+  KEY `fk_clinic_notif` (`clinic_id`),
+  CONSTRAINT `fk_clinic_notif` FOREIGN KEY (`clinic_id`) REFERENCES `clinic` (`clinic_id`) ON DELETE CASCADE,
+  CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent` (
+  `parent_id` int(11) NOT NULL,
+  `number_of_children` int(11) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`parent_id`),
+  CONSTRAINT `parent_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_action_cooldowns` (
+  `cooldown_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `action_key` varchar(100) NOT NULL,
+  `last_action_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `available_at` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
+  PRIMARY KEY (`cooldown_id`),
+  UNIQUE KEY `uk_parent_action` (`parent_id`,`action_key`),
+  KEY `idx_available_at` (`available_at`),
+  CONSTRAINT `fk_cooldown_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_onboarding` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `child_name` varchar(100) DEFAULT NULL,
+  `child_dob` date DEFAULT NULL,
+  `child_gender` varchar(10) DEFAULT NULL,
+  `primary_concerns` text DEFAULT NULL,
+  `preferred_activities` text DEFAULT NULL,
+  `development_goals` text DEFAULT NULL,
+  `completed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `parent_id` (`parent_id`),
+  CONSTRAINT `parent_onboarding_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `users` (`user_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_points_history` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `action` varchar(100) NOT NULL,
+  `points` int(11) NOT NULL,
+  `reason` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_points_milestones` (
+  `milestone_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `milestone_type` enum('earned_total','redeemed_total','streak_days','action_count') NOT NULL,
+  `milestone_value` int(11) NOT NULL,
+  `milestone_name` varchar(255) NOT NULL,
+  `badge_icon` varchar(255) DEFAULT NULL,
+  `achieved_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`milestone_id`),
+  UNIQUE KEY `uk_parent_milestone` (`parent_id`,`milestone_type`,`milestone_value`),
+  CONSTRAINT `fk_milestone_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_points_tracking` (
+  `tracking_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `action_key` varchar(100) NOT NULL,
+  `points_earned` int(11) NOT NULL DEFAULT 0,
+  `earned_date` date NOT NULL,
+  `week_start_date` date NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`tracking_id`),
+  UNIQUE KEY `uk_parent_action_date` (`parent_id`,`action_key`,`earned_date`),
+  KEY `idx_week_tracking` (`parent_id`,`week_start_date`),
+  CONSTRAINT `fk_tracking_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_points_wallet` (
+  `wallet_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `total_points` int(11) DEFAULT 0,
+  `lifetime_earned` int(11) DEFAULT 0,
+  `lifetime_redeemed` int(11) DEFAULT 0,
+  `last_earned_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`wallet_id`),
+  UNIQUE KEY `uk_parent_wallet` (`parent_id`),
+  KEY `idx_total_points` (`total_points`),
+  CONSTRAINT `fk_parent_wallet_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=243 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_redeemed_offers` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) DEFAULT NULL,
+  `child_id` int(11) DEFAULT NULL,
+  `offer_id` int(11) DEFAULT NULL,
+  `points_spent` int(11) DEFAULT 0,
+  `status` varchar(50) DEFAULT 'active',
+  `redeemed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_redemptions` (
+  `redemption_id` int(11) NOT NULL AUTO_INCREMENT,
+  `wallet_id` int(11) NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `item_id` int(11) NOT NULL,
+  `points_used` int(11) NOT NULL,
+  `quantity` int(11) DEFAULT 1,
+  `status` enum('pending','active','used','expired','refunded') DEFAULT 'active',
+  `notes` text DEFAULT NULL,
+  `expires_at` date DEFAULT NULL,
+  `used_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`redemption_id`),
+  KEY `idx_parent` (`parent_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_expires` (`expires_at`),
+  KEY `fk_redemption_wallet` (`wallet_id`),
+  KEY `fk_redemption_item` (`item_id`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_redemption_item` FOREIGN KEY (`item_id`) REFERENCES `redemption_catalog` (`item_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_redemption_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_redemption_wallet` FOREIGN KEY (`wallet_id`) REFERENCES `parent_points_wallet` (`wallet_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `parent_subscription` (
+  `parent_id` int(11) NOT NULL,
+  `subscription_id` int(11) NOT NULL,
+  `child_name` varchar(100) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `expires_at` datetime DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'active',
+  PRIMARY KEY (`parent_id`,`subscription_id`,`child_name`),
+  KEY `subscription_id` (`subscription_id`),
+  CONSTRAINT `parent_subscription_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`),
+  CONSTRAINT `parent_subscription_ibfk_2` FOREIGN KEY (`subscription_id`) REFERENCES `subscription` (`subscription_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `password_reset_tokens` (
+  `token_id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `token` varchar(255) NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `used` tinyint(1) DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`token_id`),
+  UNIQUE KEY `token` (`token`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `password_reset_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `payment` (
+  `payment_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) DEFAULT NULL,
+  `subscription_id` int(11) DEFAULT NULL,
+  `amount_pre_discount` decimal(10,2) DEFAULT NULL,
+  `discount_rate` decimal(5,2) DEFAULT NULL,
+  `amount_post_discount` decimal(10,2) DEFAULT NULL,
+  `method` varchar(50) DEFAULT NULL,
+  `status` varchar(50) DEFAULT NULL,
+  `paid_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `tokens_used` decimal(10,2) DEFAULT 0.00,
+  `token_id` int(11) DEFAULT NULL,
+  `points_redeemed` int(11) DEFAULT 0,
+  PRIMARY KEY (`payment_id`),
+  KEY `subscription_id` (`subscription_id`),
+  KEY `fk_payment_token` (`token_id`),
+  CONSTRAINT `fk_payment_token` FOREIGN KEY (`token_id`) REFERENCES `appointment_tokens` (`token_id`) ON DELETE SET NULL,
+  CONSTRAINT `payment_ibfk_1` FOREIGN KEY (`subscription_id`) REFERENCES `subscription` (`subscription_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=120 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `platform_settings` (
+  `setting_key` varchar(100) NOT NULL,
+  `setting_value` varchar(255) NOT NULL DEFAULT '',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_earning_rules` (
+  `rule_id` int(11) NOT NULL AUTO_INCREMENT,
+  `action_key` varchar(100) NOT NULL,
+  `action_name` varchar(255) NOT NULL,
+  `points_value` int(11) NOT NULL DEFAULT 0,
+  `daily_cap` int(11) DEFAULT NULL,
+  `weekly_cap` int(11) DEFAULT NULL,
+  `cooldown_minutes` int(11) DEFAULT 0,
+  `requires_verification` tinyint(1) DEFAULT 0,
+  `is_active` tinyint(1) DEFAULT 1,
+  `description` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`rule_id`),
+  UNIQUE KEY `action_key` (`action_key`),
+  KEY `idx_action_key` (`action_key`),
+  KEY `idx_is_active` (`is_active`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_expiration_rules` (
+  `rule_id` int(11) NOT NULL AUTO_INCREMENT,
+  `rule_name` varchar(255) NOT NULL,
+  `expiration_days` int(11) NOT NULL,
+  `reminder_days_before` int(11) DEFAULT 7,
+  `applies_to` enum('all','unredeemed','bonus_points') DEFAULT 'all',
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`rule_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_refrence` (
+  `refrence_id` int(11) NOT NULL AUTO_INCREMENT,
+  `admin_id` int(11) NOT NULL,
+  `action_name` varchar(100) DEFAULT NULL,
+  `points_value` int(11) DEFAULT NULL,
+  `adjust_sign` enum('+','-') DEFAULT NULL,
+  PRIMARY KEY (`refrence_id`),
+  KEY `admin_id` (`admin_id`),
+  CONSTRAINT `points_refrence_ibfk_1` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`admin_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_rules` (
+  `rule_key` varchar(50) NOT NULL,
+  `points` int(11) NOT NULL,
+  `daily_cap` int(11) DEFAULT NULL,
+  `weekly_cap` int(11) DEFAULT NULL,
+  `cooldown_minutes` int(11) DEFAULT 0,
+  `description` varchar(255) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  PRIMARY KEY (`rule_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_transaction` (
+  `transaction_id` int(11) NOT NULL AUTO_INCREMENT,
+  `refrence_id` int(11) NOT NULL,
+  `wallet_id` int(11) NOT NULL,
+  `points_change` int(11) DEFAULT NULL,
+  `transaction_type` enum('deposit','withdrawal') DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `parent_id` int(11) DEFAULT NULL,
+  `session_id` varchar(100) DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  PRIMARY KEY (`transaction_id`),
+  KEY `refrence_id` (`refrence_id`),
+  KEY `wallet_id` (`wallet_id`),
+  KEY `idx_parent` (`parent_id`),
+  CONSTRAINT `points_transaction_ibfk_1` FOREIGN KEY (`refrence_id`) REFERENCES `points_refrence` (`refrence_id`),
+  CONSTRAINT `points_transaction_ibfk_2` FOREIGN KEY (`wallet_id`) REFERENCES `points_wallet` (`wallet_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_verification_queue` (
+  `verification_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `action_key` varchar(100) NOT NULL,
+  `claimed_points` int(11) NOT NULL,
+  `evidence_url` varchar(500) DEFAULT NULL,
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `reviewed_by` int(11) DEFAULT NULL,
+  `review_notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`verification_id`),
+  KEY `idx_status` (`status`),
+  KEY `fk_verify_parent` (`parent_id`),
+  CONSTRAINT `fk_verify_parent` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `points_wallet` (
+  `wallet_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `total_points` int(11) DEFAULT 0,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`wallet_id`),
+  KEY `child_id` (`child_id`),
+  CONSTRAINT `points_wallet_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `prescriptions` (
+  `prescription_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `doctor_id` int(11) NOT NULL,
+  `record_id` int(11) DEFAULT NULL,
+  `medication_name` varchar(255) NOT NULL,
+  `dosage` varchar(100) DEFAULT NULL,
+  `frequency` varchar(100) DEFAULT NULL,
+  `duration` varchar(100) DEFAULT NULL,
+  `instructions` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`prescription_id`),
+  KEY `child_id` (`child_id`),
+  KEY `doctor_id` (`doctor_id`),
+  KEY `record_id` (`record_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `rate_limit_log` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip_address` varchar(45) NOT NULL,
+  `endpoint` varchar(200) NOT NULL,
+  `request_count` int(11) DEFAULT 1,
+  `window_start` timestamp NOT NULL DEFAULT current_timestamp(),
+  `blocked` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_rate_ip_endpoint` (`ip_address`,`endpoint`),
+  KEY `idx_rate_window` (`window_start`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `redemption_catalog` (
+  `item_id` int(11) NOT NULL AUTO_INCREMENT,
+  `item_type` enum('appointment','service','badge','custom') NOT NULL,
+  `item_name` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `points_cost` int(11) NOT NULL,
+  `original_price` decimal(10,2) DEFAULT NULL,
+  `discount_percentage` decimal(5,2) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `requires_specialist` tinyint(1) DEFAULT 0,
+  `specialist_id` int(11) DEFAULT NULL,
+  `max_redemptions_per_user` int(11) DEFAULT NULL,
+  `valid_until` date DEFAULT NULL,
+  `icon` varchar(255) DEFAULT NULL,
+  `badge_color` varchar(50) DEFAULT 'blue',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`item_id`),
+  KEY `idx_item_type` (`item_type`),
+  KEY `idx_is_active` (`is_active`),
+  KEY `fk_catalog_specialist` (`specialist_id`),
+  CONSTRAINT `fk_catalog_specialist` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `reward_offers` (
+  `offer_id` int(11) NOT NULL AUTO_INCREMENT,
+  `admin_id` int(11) DEFAULT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `points_required` int(11) DEFAULT NULL,
+  `icon` varchar(50) DEFAULT '??',
+  `is_active` tinyint(4) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `target_plan` enum('standard','premium','all') DEFAULT 'all',
+  PRIMARY KEY (`offer_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `shared_reports` (
+  `report_id` int(11) NOT NULL AUTO_INCREMENT,
+  `file_path` varchar(500) DEFAULT NULL,
+  `report_type` varchar(50) DEFAULT 'full-report',
+  `child_id` int(11) NOT NULL,
+  `parent_id` int(11) NOT NULL,
+  `doctor_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `is_shared` tinyint(1) DEFAULT 1,
+  `doctor_reply` text DEFAULT NULL,
+  `doctor_reply_date` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`report_id`),
+  KEY `idx_sr_child` (`child_id`),
+  KEY `idx_sr_parent` (`parent_id`),
+  KEY `idx_sr_doctor` (`doctor_id`),
+  KEY `idx_sr_appointment` (`appointment_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `specialist` (
+  `specialist_id` int(11) NOT NULL AUTO_INCREMENT,
+  `clinic_id` int(11) DEFAULT NULL,
+  `first_name` varchar(100) DEFAULT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `specialization` varchar(100) DEFAULT NULL,
+  `certificate_of_experience` varchar(255) DEFAULT NULL,
+  `experience_years` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `consultation_fee` decimal(10,2) DEFAULT 50.00,
+  `bio` text DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `certification_text` text DEFAULT NULL,
+  `certification_pdf` varchar(255) DEFAULT NULL,
+  `profile_photo` varchar(255) DEFAULT NULL,
+  `consultation_types` set('online','onsite') DEFAULT 'online,onsite',
+  `certifications` varchar(255) DEFAULT NULL,
+  `branch_id` int(11) DEFAULT NULL,
+  PRIMARY KEY (`specialist_id`),
+  KEY `clinic_id` (`clinic_id`),
+  KEY `specialist_id` (`specialist_id`),
+  CONSTRAINT `fk_specialist_user` FOREIGN KEY (`specialist_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `specialist_clinic_fk` FOREIGN KEY (`clinic_id`) REFERENCES `clinic` (`clinic_id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=76 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `specialist_availability` (
+  `availability_id` int(11) NOT NULL AUTO_INCREMENT,
+  `specialist_id` int(11) NOT NULL,
+  `day_of_week` tinyint(1) NOT NULL COMMENT '0=Sunday, 1=Monday ... 6=Saturday',
+  `start_time` time NOT NULL DEFAULT '09:00:00',
+  `end_time` time NOT NULL DEFAULT '17:00:00',
+  `slot_duration_minutes` int(11) NOT NULL DEFAULT 30,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
+  PRIMARY KEY (`availability_id`),
+  KEY `specialist_id` (`specialist_id`),
+  CONSTRAINT `specialist_avail_ibfk_1` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `specialist_reviews` (
+  `review_id` int(11) NOT NULL AUTO_INCREMENT,
+  `parent_id` int(11) NOT NULL,
+  `specialist_id` int(11) NOT NULL,
+  `appointment_id` int(11) DEFAULT NULL,
+  `rating` int(11) NOT NULL,
+  `comment` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`review_id`),
+  KEY `parent_id` (`parent_id`),
+  KEY `specialist_id` (`specialist_id`),
+  CONSTRAINT `specialist_reviews_ibfk_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`parent_id`),
+  CONSTRAINT `specialist_reviews_ibfk_2` FOREIGN KEY (`specialist_id`) REFERENCES `specialist` (`specialist_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `speech_analysis` (
+  `sample_id` int(11) NOT NULL,
+  `analyzed_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `transcript` text DEFAULT NULL,
+  `vocabulary_score` decimal(5,2) DEFAULT NULL,
+  `clarify_score` decimal(5,2) DEFAULT NULL,
+  `match_score` decimal(5,2) DEFAULT NULL,
+  `sentence_count` int(11) DEFAULT NULL,
+  `avg_sentence_length` decimal(5,2) DEFAULT NULL,
+  `sentence_complexity_score` decimal(5,2) DEFAULT NULL,
+  `avg_word_length` decimal(5,2) DEFAULT NULL,
+  `avg_syllables_per_word` decimal(5,2) DEFAULT NULL,
+  `polysyllabic_word_count` int(11) DEFAULT NULL,
+  `flesch_reading_ease` decimal(6,2) DEFAULT NULL,
+  `flesch_kincaid_grade` decimal(5,2) DEFAULT NULL,
+  `overall_development_score` decimal(5,2) DEFAULT NULL,
+  `developmental_feedback` text DEFAULT NULL,
+  PRIMARY KEY (`sample_id`,`analyzed_at`),
+  CONSTRAINT `speech_analysis_ibfk_1` FOREIGN KEY (`sample_id`) REFERENCES `voice_sample` (`sample_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `streaks` (
+  `streak_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `parent_id` int(11) DEFAULT NULL,
+  `streak_type` varchar(50) NOT NULL COMMENT 'growth_tracking, milestone_logging, daily_login',
+  `current_count` int(11) DEFAULT 0,
+  `longest_count` int(11) DEFAULT 0,
+  `last_activity_date` date DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`streak_id`),
+  UNIQUE KEY `child_streak_type` (`child_id`,`streak_type`),
+  KEY `idx_parent_streak` (`parent_id`,`streak_type`),
+  CONSTRAINT `streaks_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `subscription` (
+  `subscription_id` int(11) NOT NULL AUTO_INCREMENT,
+  `plan_name` varchar(100) DEFAULT NULL,
+  `plan_period` varchar(50) DEFAULT NULL,
+  `price` decimal(10,2) DEFAULT NULL,
+  `description` text DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'active',
+  PRIMARY KEY (`subscription_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `subscription_feature` (
+  `feature_id` int(11) NOT NULL AUTO_INCREMENT,
+  `subscription_id` int(11) NOT NULL,
+  `feature_text` varchar(255) NOT NULL,
+  PRIMARY KEY (`feature_id`),
+  KEY `subscription_id` (`subscription_id`),
+  CONSTRAINT `sub_feature_fk` FOREIGN KEY (`subscription_id`) REFERENCES `subscription` (`subscription_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `support_tickets` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) DEFAULT NULL,
+  `guest_name` varchar(255) DEFAULT NULL,
+  `guest_email` varchar(255) DEFAULT NULL,
+  `subject` varchar(255) NOT NULL,
+  `priority` enum('low','medium','high','critical') DEFAULT 'medium',
+  `status` enum('open','in_progress','waiting','resolved','closed') DEFAULT 'open',
+  `assigned_to` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_st_user` (`user_id`),
+  KEY `idx_st_status` (`status`),
+  KEY `idx_st_assigned` (`assigned_to`),
+  CONSTRAINT `st_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `system_config` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `setting_key` varchar(50) NOT NULL,
+  `setting_value` text DEFAULT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `setting_key` (`setting_key`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `system_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `level` enum('info','warning','error','critical') DEFAULT 'info',
+  `message` text NOT NULL,
+  `endpoint` varchar(255) DEFAULT NULL,
+  `method` varchar(10) DEFAULT NULL,
+  `user_id` int(11) DEFAULT NULL,
+  `stack_trace` text DEFAULT NULL,
+  `request_payload` text DEFAULT NULL,
+  `response_time_ms` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `is_resolved` tinyint(1) DEFAULT 0,
+  `status` varchar(20) DEFAULT 'unresolved',
+  PRIMARY KEY (`id`),
+  KEY `idx_sl_level` (`level`),
+  KEY `idx_sl_created` (`created_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `ticket_messages` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ticket_id` int(11) NOT NULL,
+  `sender_id` int(11) DEFAULT NULL,
+  `sender_type` enum('user','admin') DEFAULT 'user',
+  `message` text NOT NULL,
+  `is_internal` tinyint(1) DEFAULT 0 COMMENT 'Internal admin notes',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_tm_ticket` (`ticket_id`),
+  CONSTRAINT `tm_ticket_fk` FOREIGN KEY (`ticket_id`) REFERENCES `support_tickets` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `token_blacklist` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `token_jti` varchar(36) NOT NULL COMMENT 'JWT jti claim',
+  `user_id` int(11) NOT NULL,
+  `expires_at` datetime NOT NULL COMMENT 'Token original expiry',
+  `blacklisted_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `token_jti` (`token_jti`),
+  KEY `idx_blacklist_user` (`user_id`),
+  KEY `idx_blacklist_expires` (`expires_at`),
+  CONSTRAINT `token_blacklist_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `user_sessions` (
+  `session_id` varchar(36) NOT NULL COMMENT 'UUID',
+  `user_id` int(11) NOT NULL,
+  `token_jti` varchar(36) DEFAULT NULL COMMENT 'JWT ID for blacklisting',
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` varchar(500) DEFAULT NULL,
+  `device_name` varchar(100) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `last_active_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `expires_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`session_id`),
+  KEY `idx_session_user` (`user_id`),
+  KEY `idx_session_active` (`is_active`),
+  CONSTRAINT `user_sessions_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `user_settings` (
+  `user_id` int(11) NOT NULL,
+  `theme` enum('light','dark') DEFAULT 'light',
+  `language` enum('en','ar') DEFAULT 'en',
+  `push_notifications` tinyint(1) DEFAULT 1,
+  `email_notifications` tinyint(1) DEFAULT 1,
+  `appointment_reminders` tinyint(1) DEFAULT 1,
+  `daily_reminders` tinyint(1) DEFAULT 1,
+  `milestone_alerts` tinyint(1) DEFAULT 1,
+  `data_sharing` tinyint(1) DEFAULT 1,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `system_alerts` tinyint(1) DEFAULT 1,
+  `weekly_reports` tinyint(1) DEFAULT 1,
+  `points_notifications` tinyint(1) DEFAULT 1,
+  `points_milestone_alerts` tinyint(1) DEFAULT 1,
+  `points_expiration_reminders` tinyint(1) DEFAULT 1,
+  PRIMARY KEY (`user_id`),
+  CONSTRAINT `user_settings_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `users` (
+  `user_id` int(11) NOT NULL AUTO_INCREMENT,
+  `first_name` varchar(100) DEFAULT NULL,
+  `last_name` varchar(100) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
+  `password` varchar(255) DEFAULT NULL,
+  `role` varchar(50) DEFAULT NULL,
+  `status` varchar(20) DEFAULT 'active',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `phone` varchar(20) DEFAULT NULL,
+  `is_first_login` tinyint(1) DEFAULT 0,
+  PRIMARY KEY (`user_id`),
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `phone` (`phone`)
+) ENGINE=InnoDB AUTO_INCREMENT=197 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+;
+
+;
+
+CREATE TABLE `voice_sample` (
+  `sample_id` int(11) NOT NULL AUTO_INCREMENT,
+  `child_id` int(11) NOT NULL,
+  `feedback` text DEFAULT NULL,
+  `audio_url` varchar(255) DEFAULT NULL,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `mode` varchar(20) DEFAULT 'free_talk',
+  `target_text` text DEFAULT NULL,
+  PRIMARY KEY (`sample_id`),
+  KEY `child_id` (`child_id`),
+  CONSTRAINT `voice_sample_ibfk_1` FOREIGN KEY (`child_id`) REFERENCES `child` (`child_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=93 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+

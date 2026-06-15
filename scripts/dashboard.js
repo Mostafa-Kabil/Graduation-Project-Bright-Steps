@@ -353,11 +353,23 @@
                                 <span id="insight-words" style="font-size:1.25rem;font-weight:700;">–</span>
                             </div>
                             <div style="background:rgba(255,255,255,0.2);padding:0.5rem 1rem;border-radius:12px;">
+                                <span style="display:block;font-size:0.75rem;opacity:0.8;">Expected Words</span>
+                                <span id="insight-expected" style="font-size:1.25rem;font-weight:700;">–</span>
+                            </div>
+                            <div style="background:rgba(255,255,255,0.2);padding:0.5rem 1rem;border-radius:12px;">
                                 <span style="display:block;font-size:0.75rem;opacity:0.8;">Status</span>
                                 <span id="insight-status" style="font-size:1.1rem;font-weight:700;">–</span>
                             </div>
                         </div>
                     </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="speech-expectations-box" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:15px;margin-bottom:20px;display:none;">
+                    <strong style="color:#6C63FF;font-size:1rem;display:block;margin-bottom:8px;">Age Expectations (<span id="expectations-age"></span> months):</strong>
+                    <div style="font-size:0.9rem;color:#475569;margin-bottom:4px;">Expected words in a single recording: <strong id="expectations-single"></strong></div>
+                    <div style="font-size:0.9rem;color:#475569;">Total expected vocabulary: <strong id="expectations-total"></strong></div>
                 </div>
 
                 <h3 class="section-heading">Recent Recordings</h3>
@@ -383,9 +395,32 @@
                 const latest = entries[0];
                 const insightText = document.getElementById('insight-text');
                 const insightWords = document.getElementById('insight-words');
+                const insightExpected = document.getElementById('insight-expected');
                 const insightStatus = document.getElementById('insight-status');
+                
+                const d = window.dashboardData || {};
+                const child = (d.children || []).find(c => c.child_id == childId) || {};
+                const ageMonthsForSpeech = child.age_months || 24;
+                
+                let expectedSentence = '1 word';
+                let expectedTotal = '10-50 words';
+                if (ageMonthsForSpeech >= 60) { expectedSentence = '5+ words'; expectedTotal = '5000+ words'; }
+                else if (ageMonthsForSpeech >= 48) { expectedSentence = '4-5 words'; expectedTotal = '2000+ words'; }
+                else if (ageMonthsForSpeech >= 36) { expectedSentence = '3-4 words'; expectedTotal = '1000+ words'; }
+                else if (ageMonthsForSpeech >= 24) { expectedSentence = '2-3 words'; expectedTotal = '200+ words'; }
+                else if (ageMonthsForSpeech >= 18) { expectedSentence = '2 words'; expectedTotal = '50-100 words'; }
+
+                const expBox = document.getElementById('speech-expectations-box');
+                if (expBox) {
+                    expBox.style.display = 'block';
+                    document.getElementById('expectations-age').textContent = ageMonthsForSpeech;
+                    document.getElementById('expectations-single').textContent = expectedSentence;
+                    document.getElementById('expectations-total').textContent = expectedTotal;
+                }
+
                 if (insightText) insightText.textContent = latest.transcript || 'No transcript available.';
                 if (insightWords) insightWords.textContent = latest.vocabulary_score ?? '–';
+                if (insightExpected) insightExpected.textContent = `${expectedSentence} (Single) / ${expectedTotal} (Total)`;
                 if (insightStatus) insightStatus.textContent = latest.status || '–';
             } else {
                 const insightText = document.getElementById('insight-text');
@@ -428,7 +463,7 @@
                         </div>
                         <p style="color:var(--slate-500);font-size:0.875rem;margin-bottom:0.5rem;font-style:italic;">&quot;${transcript}&quot;</p>
                         <div style="display:flex;gap:1.25rem;font-size:0.8rem;color:var(--slate-400);flex-wrap:wrap;">
-                            <span>📖 <strong>${words}</strong> words</span>
+                            <span title="Estimated Total Vocabulary">📖 <strong>${words}</strong> est. total vocab</span>
                             <span>🔊 Clarity: <strong>${clarify}</strong></span>
                             ${matchHtml}
                         </div>

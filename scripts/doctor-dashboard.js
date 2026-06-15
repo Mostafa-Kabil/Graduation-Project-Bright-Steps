@@ -107,6 +107,7 @@ function renderDoctorTopBar() {
     
     main.style.flex = '1';
     main.style.overflowY = 'auto';
+    main.style.minHeight = '0';
 
     document.addEventListener('click', function (e) {
         const dropdown = document.getElementById('doctor-notif-dropdown');
@@ -385,6 +386,14 @@ function formatRelativeDate(dateStr) {
     const date = new Date(dateStr);
     const now = new Date();
     const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+        const futureDays = Math.abs(diffDays);
+        if (futureDays === 1) return 'Upcoming tomorrow';
+        if (futureDays < 7) return `Upcoming in ${futureDays} days`;
+        return `Upcoming on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    }
+    
     if (diffDays === 0) return 'Updated today';
     if (diffDays === 1) return 'Updated yesterday';
     if (diffDays < 7) return `Updated ${diffDays} days ago`;
@@ -1020,9 +1029,38 @@ function loadAppointmentsData(statusFilter) {
     let url = `doctor-dashboard.php?ajax=1&section=appointments&action=get_appointments&specialist_id=${SPECIALIST_ID}`;
     if (statusFilter) url += `&status=${statusFilter}`;
     fetch(url).then(r => r.json()).then(result => {
-        if (result.success) { allAppointmentsCache = result.data || []; renderAppointmentsList(allAppointmentsCache); if (result.counts) updateAppointmentStats(result.counts); }
+        if (result.success) { 
+            allAppointmentsCache = result.data || []; 
+            renderAppointmentsList(allAppointmentsCache); 
+            if (result.counts) updateAppointmentStats(result.counts); 
+            
+            // Check for max patients limit
+            if (result.max_patients_warning && !sessionStorage.getItem('maxPatientsWarningShown')) {
+                sessionStorage.setItem('maxPatientsWarningShown', 'true');
+                showMaxPatientsWarning();
+            }
+        }
         else renderAppointmentsEmpty();
     }).catch(() => renderAppointmentsEmpty());
+}
+
+function showMaxPatientsWarning() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:24px;width:100%;max-width:450px;padding:2rem;text-align:center;box-shadow:0 25px 50px rgba(0,0,0,0.25);animation:slideUp 0.3s ease-out;">
+            <div style="width:4rem;height:4rem;background:var(--orange-100);color:var(--orange-600);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1.5rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:2rem;height:2rem;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <h2 style="font-size:1.5rem;font-weight:800;color:var(--slate-900);margin-bottom:0.75rem;">Max Patients Reached!</h2>
+            <p style="color:var(--slate-600);line-height:1.6;margin-bottom:2rem;font-size:0.95rem;">You have reached your daily maximum patient limit for today. No more slots will be available for parents to book today.</p>
+            <div style="display:flex;gap:1rem;">
+                <button class="btn btn-outline" style="flex:1;" onclick="this.closest('div').parentElement.parentElement.remove()">Dismiss</button>
+                <button class="btn btn-gradient" style="flex:1;" onclick="this.closest('div').parentElement.parentElement.remove(); switchView('settings'); setTimeout(()=>switchSettingsTab('preferences', document.querySelector('[data-settings-tab=preferences]')), 100);">Increase Limit</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
 }
 
 function renderAppointmentsList(appointments) {
@@ -1646,14 +1684,14 @@ function getMessagesView() {
                 <div class="chat-input-bar">
                     <div class="chat-input-wrapper">
                         <textarea class="chat-input" id="chatInput" placeholder="Type your message..." rows="1" onkeydown="handleChatKeydown(event)"></textarea>
-                        <button onclick="document.getElementById('drChatFile').click()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;" title="Attach file">
+                        <button id="dr-chat-attach-btn" onclick="document.getElementById('drChatFile').click()" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;" title="Attach file">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         </button>
                         <input type="file" id="drChatFile" style="display:none" onchange="handleDrChatFile(event)">
                         <button onclick="toggleDrChatSearch()" title="Search messages" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:0 0.5rem;display:flex;align-items:center;">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:1.25rem;height:1.25rem;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                         </button>
-                        <button class="chat-send-btn" onclick="sendMessage()" title="Send message">
+                        <button id="chatSendBtn" class="chat-send-btn" onclick="sendMessage()" title="Send message">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                         </button>
                     </div>
@@ -1887,6 +1925,20 @@ function loadChatMessages(partnerId, silent) {
             } else if (!silent) {
                 container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary);"><p>No messages yet. Start the conversation!</p></div>';
                 lastMessageId = 0;
+            }
+
+            const chatInput = document.getElementById('chatInput');
+            const chatSendBtn = document.getElementById('chatSendBtn');
+            const fileInputBtn = document.getElementById('dr-chat-attach-btn');
+            
+            if (result.is_locked) {
+                if (chatInput) { chatInput.disabled = true; chatInput.placeholder = 'Chat locked. Parent needs to book another appointment.'; }
+                if (chatSendBtn) { chatSendBtn.disabled = true; chatSendBtn.style.opacity = '0.5'; }
+                if (fileInputBtn) { fileInputBtn.style.pointerEvents = 'none'; fileInputBtn.style.opacity = '0.5'; }
+            } else {
+                if (chatInput) { chatInput.disabled = false; chatInput.placeholder = 'Type your message...'; }
+                if (chatSendBtn) { chatSendBtn.disabled = false; chatSendBtn.style.opacity = '1'; }
+                if (fileInputBtn) { fileInputBtn.style.pointerEvents = 'auto'; fileInputBtn.style.opacity = '1'; }
             }
         }).catch(() => {});
 }

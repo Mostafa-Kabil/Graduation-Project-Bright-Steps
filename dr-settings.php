@@ -51,7 +51,8 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
                    s.specialization, s.experience_years, s.certificate_of_experience, {$certSel}, s.clinic_id,
                    c.clinic_name, c.location AS clinic_location,
                    s.bio, ob.certificate_path, ob.working_days, ob.consultation_types,
-                   ob.start_time, ob.end_time, ob.focus_areas, ob.goals
+                   ob.start_time, ob.end_time, ob.focus_areas, ob.goals,
+                   ob.session_duration, ob.max_patients_per_day, ob.follow_up_reminder
             FROM users u
             LEFT JOIN specialist s ON u.user_id = s.specialist_id
             LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
@@ -225,6 +226,8 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
         $start  = trim($input['start_time'] ?? '09:00');
         $end    = trim($input['end_time'] ?? '17:00');
         $duration = intval($input['slot_duration'] ?? 30);
+        $max_patients = intval($input['max_patients_per_day'] ?? 10);
+        $follow_up = trim($input['follow_up_reminder'] ?? '1week');
         $consultation_types = isset($input['consultation_types']) ? json_encode($input['consultation_types']) : '[]';
         $age_groups = isset($input['age_groups']) ? json_encode($input['age_groups']) : '[]';
         $therapy_approaches = isset($input['therapy_approaches']) ? json_encode($input['therapy_approaches']) : '[]';
@@ -238,8 +241,8 @@ if (isset($_GET['ajax']) || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVE
                         ->execute([$doctor_id, $_SESSION['specialization'] ?? '']);
             }
 
-            $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, age_groups = :ag, therapy_approaches = :ta, working_days = :wd, start_time = :st, end_time = :et WHERE doctor_id = :did")
-                    ->execute([':ct' => $consultation_types, ':ag' => $age_groups, ':ta' => $therapy_approaches, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':did' => $doctor_id]);
+            $connect->prepare("UPDATE doctor_onboarding SET consultation_types = :ct, age_groups = :ag, therapy_approaches = :ta, working_days = :wd, start_time = :st, end_time = :et, session_duration = :sd, max_patients_per_day = :mp, follow_up_reminder = :fu WHERE doctor_id = :did")
+                    ->execute([':ct' => $consultation_types, ':ag' => $age_groups, ':ta' => $therapy_approaches, ':wd' => json_encode($days), ':st' => $start, ':et' => $end, ':sd' => $duration, ':mp' => $max_patients, ':fu' => $follow_up, ':did' => $doctor_id]);
 
         // Deactivate all existing slots
         $connect->prepare("UPDATE appointment_slots SET is_active = 0 WHERE doctor_id = :did")
@@ -447,6 +450,17 @@ $ob_focus_areas       = $onboarding ? json_decode($onboarding['focus_areas'] ?? 
 $ob_goals             = $onboarding ? json_decode($onboarding['goals'] ?? '[]', true) : [];
 $ob_bio               = clean_bio_value($onboarding ? ($onboarding['bio'] ?? '') : '');
 $ob_certificate_path  = $onboarding ? ($onboarding['certificate_path'] ?? '') : '';
+$ob_session_duration  = $onboarding ? intval($onboarding['session_duration'] ?? 30) : 30;
+$ob_max_patients      = $onboarding ? intval($onboarding['max_patients_per_day'] ?? 10) : 10;
+$ob_follow_up         = $onboarding ? ($onboarding['follow_up_reminder'] ?? '1week') : '1week';
+
+// Pass preferences to JS
+$drPrefsJS = json_encode([
+    'session_duration' => $ob_session_duration,
+    'max_patients' => $ob_max_patients,
+    'follow_up' => $ob_follow_up,
+    'has_clinic' => !empty($doctor['clinic_id'])
+]);
 
 // Specialization options for dropdown
 $spec_options = [
@@ -476,6 +490,9 @@ $current_spec = $doctor['specialization'] ?? '';
     <link rel="stylesheet" href="styles/settings.css?v=8">
     <link rel="stylesheet" href="styles/profile.css?v=8">
     <link rel="stylesheet" href="styles/dr-settings.css?v=8">
+    <script>
+        window.DR_PREFS = <?php echo $drPrefsJS; ?>;
+    </script>
 </head>
 
 <body>

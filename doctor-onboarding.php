@@ -180,9 +180,6 @@ $doctorName = htmlspecialchars(($_SESSION['fname'] ?? '') . ' ' . ($_SESSION['ln
                         <div class="option-card" onclick="toggleOption(this, 'focus_areas')" data-value="Motor Skills">
                             <div class="option-icon">🏃</div><div class="option-label">Motor Skills</div>
                         </div>
-                        <div class="option-card" onclick="toggleOption(this, 'focus_areas')" data-value="Autism Spectrum">
-                            <div class="option-icon">🧩</div><div class="option-label">Autism Spectrum</div>
-                        </div>
                         <div class="option-card" onclick="toggleOption(this, 'focus_areas')" data-value="Behavioral Therapy">
                             <div class="option-icon">🤝</div><div class="option-label">Behavioral Therapy</div>
                         </div>

@@ -1,112 +1,112 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../connection.php';
 header('Content-Type: application/json');
-header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
-header("Cache-Control: post-check=0, pre-check=0", false);
-header("Pragma: no-cache");
 
-if (!isset($_SESSION['id']) || $_SESSION['role'] !== 'parent') {
+// Must be logged in
+if (!isset($_SESSION['id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'Unauthorized']);
-    exit;
+    exit();
 }
 
-$specialist_id = intval($_GET['specialist_id'] ?? 0);
-$date = $_GET['date'] ?? '';
+$specialist_id = $_GET['specialist_id'] ?? null;
+$date = $_GET['date'] ?? null;
 
-if ($specialist_id <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+if (!$specialist_id || !$date) {
     http_response_code(400);
-    echo json_encode(['error' => 'Invalid specialist_id or date format (YYYY-MM-DD)']);
-    exit;
+    echo json_encode(['error' => 'specialist_id and date are required']);
+    exit();
 }
 
 try {
-    // 1. Determine day of week (0 = Sunday, 1 = Monday... 6 = Saturday)
-    // Note: PHP 'w' format returns 0 (for Sunday) through 6 (for Saturday)
-    $dayOfWeek = (int)date('w', strtotime($date));
-
-    // 2. Fetch working windows for this day
+    // 1. Get day of week (0 = Sunday, 1 = Monday, ...)
+    $dt = new DateTime($date);
+    $day_of_week = (int)$dt->format('w');
+    
+    // 2. Query availability for this day of week
     $stmt = $connect->prepare("
         SELECT start_time, end_time, slot_duration 
         FROM appointment_slots 
         WHERE doctor_id = ? AND day_of_week = ? AND is_active = 1
     ");
-    $stmt->execute([$specialist_id, $dayOfWeek]);
-    $windows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt->execute([$specialist_id, $day_of_week]);
+    $window = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (count($windows) === 0) {
-        echo json_encode([
-            "success" => true,
-            "date" => $date,
-            "slots" => [],
-            "message" => "Specialist not available on this day"
-        ]);
-        exit;
+    if (!$window) {
+        echo json_encode(['success' => true, 'date' => $date, 'slots' => [], 'message' => 'Specialist not available on this day']);
+        exit();
     }
 
-    // 3. Generate slots based on duration
+    $start_time = $window['start_time'];
+    $end_time = $window['end_time'];
+
+    // Get doctor onboarding preferences
+    $stmtPrefs = $connect->prepare("SELECT session_duration, max_patients_per_day FROM doctor_onboarding WHERE doctor_id = ?");
+    $stmtPrefs->execute([$specialist_id]);
+    $prefs = $stmtPrefs->fetch(PDO::FETCH_ASSOC);
+    $session_duration = $window['slot_duration'] ?? $prefs['session_duration'] ?? 30;
+    $max_patients = $prefs['max_patients_per_day'] ?? 10;
+
+    // 4. Query booked appointments for this date
+    $stmtBooked = $connect->prepare("
+        SELECT scheduled_at 
+        FROM appointment 
+        WHERE specialist_id = ? 
+          AND DATE(scheduled_at) = ? 
+          AND status NOT IN ('Cancelled')
+    ");
+    $stmtBooked->execute([$specialist_id, $date]);
+    $booked_rows = $stmtBooked->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Check max patients
+    if (count($booked_rows) >= $max_patients) {
+        echo json_encode(['success' => true, 'date' => $date, 'slots' => [], 'message' => 'Specialist is fully booked on this day']);
+        exit();
+    }
+
+    $booked_times = [];
+    foreach ($booked_rows as $row) {
+        $dt_booked = new DateTime($row['scheduled_at']);
+        $booked_times[] = $dt_booked->format('H:i:s');
+    }
+
+    // 3. Generate slots with gap (session_duration * 2)
+    $start = new DateTime("$date $start_time");
+    $end = new DateTime("$date $end_time");
     $slots = [];
-    $now = new DateTime('now', new DateTimeZone('Africa/Cairo'));
+    $total_minutes = $session_duration * 2;
+    $interval = new DateInterval("PT{$total_minutes}M");
 
-    foreach ($windows as $win) {
-        $start = new DateTime("$date {$win['start_time']}", new DateTimeZone('Africa/Cairo'));
-        $end = new DateTime("$date {$win['end_time']}", new DateTimeZone('Africa/Cairo'));
-        $duration = intval($win['slot_duration']) > 0 ? intval($win['slot_duration']) : 30;
-        
-        while ($start < $end) {
-            $slotTime = $start->format('H:i');
-            $slotLabel = $start->format('g:i A');
-            
-            $isPast = $start <= $now;
+    $now = new DateTime();
 
-            $slots[] = [
-                'time' => $slotTime,
-                'label' => $slotLabel,
-                'datetime_full' => $start->format('Y-m-d H:i:s'),
-                'booked' => false,
-                'past' => $isPast,
-                'duration' => $duration
-            ];
+    $current = clone $start;
+    while ($current < $end) {
+        $time_str = $current->format('H:i:s');
+        $display_time = $current->format('h:i A');
+        $is_past = $current <= $now;
+        $is_booked = in_array($time_str, $booked_times);
 
-            $start->modify('+' . $duration . ' minutes');
-        }
-    }
+        $slots[] = [
+            'time' => substr($time_str, 0, 5), // HH:MM
+            'label' => $display_time,
+            'booked' => $is_booked,
+            'past' => $is_past
+        ];
 
-    if (count($slots) > 0) {
-        // 4. Check bookings
-        $times = array_column($slots, 'datetime_full');
-        $placeholders = implode(',', array_fill(0, count($times), '?'));
-        
-        $params = array_merge([$specialist_id], $times);
-        
-        $bookStmt = $connect->prepare("
-            SELECT scheduled_at 
-            FROM appointment 
-            WHERE specialist_id = ? 
-              AND status NOT IN ('Cancelled', 'Rejected')
-              AND scheduled_at IN ($placeholders)
-        ");
-        $bookStmt->execute($params);
-        
-        $bookedTimes = $bookStmt->fetchAll(PDO::FETCH_COLUMN);
-
-        // Mark as booked
-        foreach ($slots as &$slot) {
-            if (in_array($slot['datetime_full'], $bookedTimes)) {
-                $slot['booked'] = true;
-            }
-            unset($slot['datetime_full']); // Clean up response
-        }
+        $current->add($interval);
     }
 
     echo json_encode([
-        "success" => true,
-        "date" => $date,
-        "slots" => $slots
+        'success' => true,
+        'date' => $date,
+        'slots' => $slots
     ]);
 
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Server Error']);
+    echo json_encode(['error' => 'Database error', 'detail' => $e->getMessage()]);
 }
+?>

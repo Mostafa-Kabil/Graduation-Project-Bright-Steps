@@ -31,6 +31,8 @@ try {
             vs.audio_url,
             vs.feedback       AS status,
             vs.sent_at,
+            vs.mode,
+            vs.target_text,
             sa.transcript,
             sa.vocabulary_score,
             sa.clarify_score,
@@ -63,6 +65,8 @@ try {
                 vs.audio_url,
                 vs.feedback AS status,
                 vs.sent_at,
+                vs.mode,
+                vs.target_text,
                 sa.transcript,
                 sa.vocabulary_score,
                 sa.clarify_score,
@@ -83,7 +87,9 @@ try {
                     vs.sample_id,
                     vs.audio_url,
                     vs.feedback AS status,
-                    vs.sent_at
+                    vs.sent_at,
+                    vs.mode,
+                    vs.target_text
                 FROM voice_sample vs
                 WHERE vs.child_id = :cid
                 ORDER BY vs.sent_at DESC

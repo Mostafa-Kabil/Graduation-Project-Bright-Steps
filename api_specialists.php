@@ -67,6 +67,9 @@ try {
             {$feeCol},
             {$photoCol},
             {$bioCol},
+            COALESCE(do.session_duration, 30) AS session_duration,
+            COALESCE(do.max_patients_per_day, 10) AS max_patients_per_day,
+            do.consultation_types AS ob_consultation_types,
             COALESCE(c.clinic_name, 'Independent Practice') AS clinic_name,
             COALESCE(c.location, 'Online/Remote') AS location,
             COALESCE(c.rating, 5.0) AS clinic_rating,
@@ -80,7 +83,8 @@ try {
         FROM specialist s
         LEFT JOIN clinic c ON s.clinic_id = c.clinic_id
         INNER JOIN users u ON u.user_id = s.specialist_id
-        WHERE u.status = 'active'
+        LEFT JOIN doctor_onboarding do ON do.doctor_id = s.specialist_id
+        WHERE u.status = 'active' AND u.role = 'specialist'
         ORDER BY COALESCE(c.rating, 5.0) DESC, s.experience_years DESC
     ");
     $stmt->execute();
@@ -95,10 +99,10 @@ try {
     $slotMap = [];
     try {
         $slotStmt = $connect->query("
-            SELECT doctor_id AS specialist_id, day_of_week, start_time, end_time, slot_duration
-            FROM appointment_slots
+            SELECT specialist_id, day_of_week, start_time, end_time, slot_duration_minutes AS slot_duration
+            FROM specialist_availability
             WHERE is_active = 1
-            ORDER BY doctor_id, day_of_week, start_time
+            ORDER BY specialist_id, day_of_week, start_time
         ");
         $allSlots = $slotStmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($allSlots as $sl) {
