@@ -41,7 +41,20 @@ FFMPEG_EXE = os.path.join(_FFMPEG_BIN, "ffmpeg.exe")
 app = FastAPI()
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-model = whisper.load_model("tiny", device=DEVICE)
+model = whisper.load_model("small", device=DEVICE)
+
+
+def detect_language_constrained(wav_path: str) -> str:
+    """Detect language from audio, constrained to Arabic ('ar') or English ('en') only.
+    Uses Whisper's built-in language detection on the first 30s of audio."""
+    audio_data = whisper.load_audio(wav_path)
+    audio_data = whisper.pad_or_trim(audio_data)
+    mel = whisper.log_mel_spectrogram(audio_data).to(model.device)
+    _, probs = model.detect_language(mel)
+    ar_prob = probs.get('ar', 0)
+    en_prob = probs.get('en', 0)
+    detected = 'ar' if ar_prob >= en_prob else 'en'
+    return detected
 
 
 def get_syllable_count(w: str) -> int:
@@ -381,7 +394,8 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
         except RuntimeError as e:
             raise HTTPException(status_code=422, detail=str(e))
 
-        result = model.transcribe(wav_path)
+        detected_lang = detect_language_constrained(wav_path)
+        result = model.transcribe(wav_path, language=detected_lang)
         transcript = result["text"].strip()
 
         clarity_score = 0.75
@@ -432,7 +446,8 @@ async def analyze(audio: UploadFile, age: int = Form(...)):
             "readability_scores": readability,
             "developmental_feedback": feedback,
             "overall_development_score": overall_score,
-            "clarity_score": clarity_score
+            "clarity_score": clarity_score,
+            "detected_language": detected_lang
         })
 
     finally:
@@ -590,7 +605,8 @@ async def analyze_compare(audio: UploadFile, age: int = Form(...), target_text: 
         except RuntimeError as e:
             raise HTTPException(status_code=422, detail=str(e))
 
-        result = model.transcribe(wav_path)
+        detected_lang = detect_language_constrained(wav_path)
+        result = model.transcribe(wav_path, language=detected_lang)
         transcript = result["text"].strip()
 
         clarity_score = 0.75
@@ -669,6 +685,7 @@ async def analyze_compare(audio: UploadFile, age: int = Form(...), target_text: 
             "word_misses": word_misses,
             "target_words": target_words,
             "clarity_score": clarity_score,
+            "detected_language": detected_lang,
         })
 
     finally:

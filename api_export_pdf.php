@@ -150,7 +150,7 @@ $stmt->execute([$childId]);
 $points = $stmt->fetchColumn() ?: 0;
 
 // Motor Skills
-$stmt = $connect->prepare("SELECT milestone_name, category, is_achieved FROM motor_milestones WHERE child_id = ? ORDER BY category, milestone_name");
+$stmt = $connect->prepare("SELECT milestone_name, category, MAX(is_achieved) AS is_achieved FROM motor_milestones WHERE child_id = ? GROUP BY milestone_name, category ORDER BY category, milestone_name");
 $stmt->execute([$childId]);
 $motorSkills = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -744,12 +744,9 @@ ob_start();
                         <?php if (count($stat['behaviors']) > 0): ?>
                             <div style="font-size: 9pt; color: #64748b; margin-bottom: 5px;">Observed behaviors:</div>
                             <ul style="margin: 0; padding-left: 15px; font-size: 9pt; color: #475569;">
-                                <?php foreach (array_slice($stat['behaviors'], 0, 4) as $bh): ?>
+                                <?php foreach ($stat['behaviors'] as $bh): ?>
                                     <li style="margin-bottom: 3px;"><?= htmlspecialchars($bh) ?></li>
                                 <?php endforeach; ?>
-                                <?php if (count($stat['behaviors']) > 4): ?>
-                                    <li style="margin-bottom: 3px; font-style: italic;">...and <?= count($stat['behaviors']) - 4 ?> more</li>
-                                <?php endif; ?>
                             </ul>
                         <?php else: ?>
                             <div style="font-size: 9pt; color: #94a3b8; font-style: italic;">No behaviors observed yet.</div>

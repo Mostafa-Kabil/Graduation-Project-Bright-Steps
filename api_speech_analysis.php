@@ -257,9 +257,8 @@ try {
         $pointsToAward = $awardResult['points_awarded'];
         $pointsMessage = " +{$pointsToAward} points earned!";
     } else if (isset($awardResult['error']) && $awardResult['error'] === 'cooldown') {
-        $connect->rollBack();
-        echo json_encode(['error' => 'cooldown', 'minutes_remaining' => $awardResult['minutes_remaining']]);
-        exit();
+        // Don't block speech analysis — just skip points
+        $pointsMessage = "";
     } else if (isset($awardResult['error'])) {
         $pointsMessage = " (Points error: " . $awardResult['error'] . ")";
     }

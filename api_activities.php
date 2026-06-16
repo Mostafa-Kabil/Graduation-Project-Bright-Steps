@@ -522,7 +522,9 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
             exit();
         }
 
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+        error_log("api_activities.php?action=complete INPUT: " . print_r($input, true));
+
         $activityId = $input['activity_id'] ?? null;
         $childId = $input['child_id'] ?? null;
 

@@ -1930,11 +1930,6 @@
                 return;
             }
 
-            if (typeof window.loadNotifications === 'function') {
-                window.loadNotifications();
-                if (typeof window.loadNotifCount === 'function') window.loadNotifCount();
-            }
-
             if (data.success) {
                 // Close modal first
                 const modal = document.getElementById('speech-modal');
@@ -4714,14 +4709,20 @@
         try {
             const res = await fetch('../../api_activities.php?action=history&child_id=' + childId);
             const data = await res.json();
-            const activities = (data.activities || []).filter(a => !a.is_completed);
+            const activities = (data.activities || []).filter(a => a.is_completed == 0);
 
             let activityId = null;
-            let count = 0;
-            for (const act of activities) {
-                if (act.category === category || (category === 'real_life' && ['motor', 'speech', 'cognitive', 'social'].includes(act.category))) {
-                    if (count === index) { activityId = act.activity_id; break; }
-                    count++;
+            if (title) {
+                const match = activities.find(a => a.title === title);
+                if (match) activityId = match.activity_id;
+            }
+            if (!activityId) {
+                let count = 0;
+                for (const act of activities) {
+                    if (act.category === category || (category === 'real_life' && ['motor', 'speech', 'cognitive', 'social'].includes(act.category))) {
+                        if (count === index) { activityId = act.activity_id; break; }
+                        count++;
+                    }
                 }
             }
 
@@ -4740,6 +4741,7 @@
                     const child = (d.children || [])[window._selectedChildIndex || 0];
                     if (child) {
                         child.total_points = (child.total_points || 0) + 15;
+                        child.activities_completed = (child.activities_completed || 0) + 1;
                         const ptsEl = document.getElementById('topbar-points-count');
                         if (ptsEl) ptsEl.textContent = child.total_points;
                     }
@@ -4784,6 +4786,8 @@
                     loadNotifCount();
                     // reload History
                     loadActivityHistory(childId, 'all', document.querySelector('.activity-tabs button.active'));
+                    // Also refresh the home 7-day chart so it reflects this completion
+                    loadHomeActivities(true);
                 }
             }
         } catch (e) { console.error('Complete activity error:', e); }
@@ -4856,7 +4860,7 @@
                         </div>
 
                         <button onclick="
-                            completeActivity(${childId}, '${category}', ${index});
+                            completeActivity(${childId}, '${category}', ${index}, '${title.replace(/'/g, "\\'")}');
                             document.getElementById('act-modal').remove();
                         " class="btn btn-gradient" style="width:100%;padding:1rem;font-size:1.1rem;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Complete Activity</button>
                     </div>
@@ -10194,6 +10198,36 @@
         console.error('Dashboard bootstrap error:', e);
     }
 })();
+
+// ── Mark Activity Complete (called from modal onclick) ──────────────
+window.markActivityComplete = async function(title, category) {
+    const d = window.dashboardData || {};
+    const child = (d.children || [])[window._selectedChildIndex || 0];
+    if (!child) { console.error('markActivityComplete: no child selected'); return; }
+
+    // Normalize display-label categories to DB-friendly values
+    const catMap = {
+        'motor': 'motor', 'speech': 'speech', 'cognitive': 'cognitive',
+        'social': 'social', 'article': 'article', 'website_game': 'website_game',
+        'fine_motor': 'motor', 'attention': 'cognitive', 'communication': 'speech',
+        'motorskills': 'motor', 'finemotorskills': 'motor', 'socialskills': 'social',
+        'finemotor': 'motor', 'activity': 'real_life'
+    };
+    let dbCategory = category.toLowerCase().replace(/[^a-z_]/g, '').replace(/_+/g, '').trim();
+    dbCategory = catMap[dbCategory] || 'real_life';
+
+    // Delegate to the main completeActivity (which lives inside the IIFE with full scope)
+    if (typeof window.completeActivity === 'function') {
+        await window.completeActivity(child.child_id, dbCategory, null, title);
+    } else {
+        console.error('markActivityComplete: window.completeActivity not found');
+    }
+
+    // Close the modal
+    const modal = document.getElementById('activity-detail-modal');
+    if (modal) modal.remove();
+};
+
 window.checkMemoryMatchCooldown = async function(childId) {
     try {
         const res = await fetch('../../api_activities.php?action=history&child_id=' + childId + '&period=all');
@@ -10221,6 +10255,8 @@ window.checkMemoryMatchCooldown = async function(childId) {
 
 
 // ── Activity Detail Modal (for Today's Activities & Weekly Plan clicks) ──
+
+
 window.openActivityDetailModal = function(title, description, reason, category, bgColor, textColor) {
     let existing = document.getElementById('activity-detail-modal');
     if (existing) existing.remove();

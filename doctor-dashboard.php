@@ -220,8 +220,13 @@ if ($isAjax) {
                 $stmt2->execute([':sid' => $specialist_id]);
                 $shared_stats = $stmt2->fetch(PDO::FETCH_ASSOC);
 
-                $stmt_week = $connect->prepare("SELECT SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) FROM appointment WHERE specialist_id = :sid");
-                $stmt_week->execute([':sid' => $specialist_id]);
+                // Count reports from the last 7 days (both doctor reports and shared reports)
+                $stmt_week = $connect->prepare("
+                    SELECT 
+                        (SELECT COUNT(*) FROM doctor_report WHERE specialist_id = :sid AND created_at >= CURDATE() - INTERVAL 7 DAY) +
+                        (SELECT COUNT(*) FROM shared_reports WHERE doctor_id = :sid2 AND is_shared = 1 AND created_at >= CURDATE() - INTERVAL 7 DAY)
+                ");
+                $stmt_week->execute([':sid' => $specialist_id, ':sid2' => $specialist_id]);
                 $this_week_kpi = (int)$stmt_week->fetchColumn();
 
                 echo json_encode([
@@ -456,7 +461,7 @@ if ($isAjax) {
                     
                     $stmtAppt = $connect->prepare("
                         SELECT COUNT(*) FROM appointment a
-                        WHERE a.specialist_id = ? AND a.parent_id = ? AND a.status IN ('scheduled', 'pending', 'confirmed', 'pending reschedule')
+                        WHERE a.specialist_id = ? AND a.parent_id = ? AND a.status IN ('pending', 'confirmed', 'pending reschedule')
                     ");
                     $stmtAppt->execute([$doc_id, $par_id]);
                     if ($stmtAppt->fetchColumn() == 0) {
@@ -550,7 +555,7 @@ if ($isAjax) {
                 $stmt->execute([':sid' => $specialist_id, ':sid2' => $specialist_id, ':sid3' => $specialist_id]);
                 $patients_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-                $stmt_week = $connect->prepare("SELECT SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) FROM appointment WHERE specialist_id = :sid");
+                $stmt_week = $connect->prepare("SELECT SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY AND status IN ('pending', 'confirmed', 'pending reschedule') THEN 1 ELSE 0 END) FROM appointment WHERE specialist_id = :sid");
                 $stmt_week->execute([':sid' => $specialist_id]);
                 $this_week_kpi = (int)$stmt_week->fetchColumn();
 
@@ -709,7 +714,7 @@ if ($isAjax) {
                 $stmt2 = $connect->prepare("
                     SELECT 
                         COUNT(*) AS total,
-                        SUM(CASE WHEN status = 'scheduled' OR status = 'pending' OR status = 'pending reschedule' THEN 1 ELSE 0 END) AS pending,
+                        SUM(CASE WHEN status = 'pending' OR status = 'pending reschedule' THEN 1 ELSE 0 END) AS pending,
                         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
                         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
                         SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) AS confirmed,
@@ -1084,7 +1089,7 @@ if ($isAjax) {
                     SELECT 
                         COUNT(*) AS total_appointments,
                         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_appointments,
-                        SUM(CASE WHEN (status = 'scheduled' OR status = 'confirmed') AND scheduled_at >= CURDATE() THEN 1 ELSE 0 END) AS upcoming_appointments,
+                        SUM(CASE WHEN (status = 'pending' OR status = 'confirmed' OR status = 'pending reschedule') AND scheduled_at >= CURDATE() THEN 1 ELSE 0 END) AS upcoming_appointments,
                         SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_appointments,
                         SUM(CASE WHEN scheduled_at >= CURDATE() AND scheduled_at < CURDATE() + INTERVAL 7 DAY THEN 1 ELSE 0 END) AS this_week,
                         SUM(CASE WHEN scheduled_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 ELSE 0 END) AS this_month
@@ -1375,7 +1380,7 @@ if ($isAjax) {
         const SESSION_DOCTOR_EMAIL = <?php echo json_encode($_SESSION['email'] ?? ''); ?>;
         const SESSION_SPECIALIZATION = <?php echo json_encode($_SESSION['specialization'] ?? 'Specialist'); ?>;
     </script>
-    <script src="scripts/doctor-dashboard.js?v=32"></script>
+    <script src="scripts/doctor-dashboard.js?v=33"></script>
     <script src="scripts/doctor-settings.js?v=11"></script>
 
 </body>

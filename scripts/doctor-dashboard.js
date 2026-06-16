@@ -468,9 +468,12 @@ function renderPatientsList(patients) {
     patients.forEach(p => {
         const initials = (p.child_first_name?.charAt(0) || '') + (p.child_last_name?.charAt(0) || '');
         const age = calculateAge(p.birth_year, p.birth_month, p.birth_day);
-        const status = p.last_appointment_status || 'scheduled';
-        const statusClass = status === 'completed' ? 'status-green' : (status === 'cancelled' ? 'status-red' : 'status-yellow');
-        const statusLabel = status === 'completed' ? 'On Track' : (status === 'cancelled' ? 'Cancelled' : 'Needs Review');
+        const status = (p.last_appointment_status || 'pending').toLowerCase();
+        let statusClass = 'status-yellow';
+        let statusLabel = 'Pending Review';
+        if (status === 'completed') { statusClass = 'status-green'; statusLabel = 'On Track'; }
+        else if (status === 'confirmed') { statusClass = 'status-blue'; statusLabel = 'Upcoming'; }
+        else if (status === 'cancelled') { statusClass = 'status-red'; statusLabel = 'Cancelled'; }
         const lastDate = p.last_appointment_date ? formatRelativeDate(p.last_appointment_date) : 'No appointments';
         const childFullName = `${p.child_first_name} ${p.child_last_name}`.replace(/'/g, "\\'").replace(/"/g, "&quot;");
         html += `<div class="patient-row">
@@ -501,8 +504,11 @@ function renderPatientsEmpty() {
 
 function updatePatientsStats(patients, thisWeekKpi) {
     const total = patients.length;
-    const onTrack = patients.filter(p => p.last_appointment_status === 'completed').length;
-    const needsAttention = patients.filter(p => p.last_appointment_status === 'pending' || p.last_appointment_status === 'scheduled').length;
+    const onTrack = patients.filter(p => (p.last_appointment_status || '').toLowerCase() === 'completed').length;
+    const needsAttention = patients.filter(p => {
+        const st = (p.last_appointment_status || 'pending').toLowerCase();
+        return st === 'pending' || st === 'scheduled' || st === 'pending reschedule';
+    }).length;
     const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
     el('stat-active-patients', total); el('stat-on-track', onTrack); el('stat-needs-attention', needsAttention); el('stat-this-week-patients', thisWeekKpi || 0);
     const sub = document.getElementById('patientsSubtitle');
@@ -631,8 +637,8 @@ function showPatientDetailModal(data) {
     // Appointments section
     let appointmentsHtml = data.appointments?.length > 0
         ? data.appointments.slice(0, 5).map(a => {
-            const st = a.status || 'scheduled';
-            const stClass = st === 'completed' ? 'color:var(--green-500)' : (st === 'cancelled' ? 'color:var(--red-500)' : 'color:var(--yellow-500)');
+            const st = (a.status || 'pending').toLowerCase();
+            const stClass = st === 'completed' ? 'color:var(--green-500)' : (st === 'cancelled' ? 'color:var(--red-500)' : (st === 'confirmed' ? 'color:var(--blue-500)' : 'color:var(--yellow-500)'));
             const typeIcon = a.type === 'online' ? '🖥' : '🏥';
             return `<div style="padding:0.5rem 0;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center;">
                 <div>${typeIcon} ${a.scheduled_at ? new Date(a.scheduled_at).toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric'}) : 'No date'}</div>
@@ -812,9 +818,9 @@ function filterSharedReports(filter) {
     }
     let filtered;
     if (filter === 'replied') {
-        filtered = allSharedReportsCache.filter(r => r.doctor_reply && r.doctor_reply.trim().length > 0);
+        filtered = allSharedReportsCache.filter(r => r.doctor_reply && String(r.doctor_reply).trim().length > 0);
     } else if (filter === 'pending') {
-        filtered = allSharedReportsCache.filter(r => !r.doctor_reply || r.doctor_reply.trim().length === 0);
+        filtered = allSharedReportsCache.filter(r => !r.doctor_reply || String(r.doctor_reply).trim().length === 0);
     } else {
         filtered = allSharedReportsCache;
     }
@@ -833,7 +839,7 @@ function renderSharedReportsList(reports) {
         const age = calculateAge(r.birth_year, r.birth_month);
         const apptDate = r.appointment_date ? new Date(r.appointment_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No appointment';
         const apptStatus = r.appointment_status ? r.appointment_status.charAt(0).toUpperCase() + r.appointment_status.slice(1) : '';
-        const isReplied = r.doctor_reply && r.doctor_reply.trim().length > 0;
+        const isReplied = r.doctor_reply && String(r.doctor_reply).trim().length > 0;
         const statusBadge = isReplied
             ? '<span class="report-status report-status-completed">Replied</span>'
             : '<span class="report-status report-status-pending">Pending Review</span>';
@@ -1073,10 +1079,10 @@ function renderAppointmentsList(appointments) {
         const date = a.scheduled_at ? new Date(a.scheduled_at) : null;
         const dateStr = date ? date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date';
         const timeStr = date ? date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
-        const status = a.status || 'pending';
-        const statusMap = { 'completed': 'status-green', 'confirmed': 'status-green', 'cancelled': 'status-red', 'pending': 'status-yellow', 'scheduled': 'status-yellow' };
+        const status = (a.status || 'pending').toLowerCase();
+        const statusMap = { 'completed': 'status-green', 'confirmed': 'status-green', 'cancelled': 'status-red', 'pending': 'status-yellow', 'scheduled': 'status-yellow', 'pending reschedule': 'status-yellow' };
         const statusClass = statusMap[status] || 'status-yellow';
-        const statusLabelMap = { 'scheduled': 'Pending', 'pending': 'Pending', 'confirmed': 'Confirmed', 'completed': 'Completed', 'cancelled': 'Cancelled' };
+        const statusLabelMap = { 'scheduled': 'Pending', 'pending': 'Pending', 'pending reschedule': 'Pending Reschedule', 'confirmed': 'Confirmed', 'completed': 'Completed', 'cancelled': 'Cancelled' };
         const typeIcon = a.type === 'online' ? '🖥' : '🏥';
         const typeLabel = a.type === 'online' ? 'Online' : 'On-site';
         const initials = (a.parent_first_name?.charAt(0) || '') + (a.parent_last_name?.charAt(0) || '');
@@ -1092,8 +1098,8 @@ function renderAppointmentsList(appointments) {
             <div class="patient-last-update">${dateStr}${timeStr ? ' at ' + timeStr : ''}</div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                 ${a.type === 'online' && a.meeting_link && isActive ? `<button class="btn btn-sm btn-join-meeting" onclick="joinMeeting('${a.meeting_link}')">Join Meeting</button>` : ''}
-                ${(status.toLowerCase() === 'pending' || status.toLowerCase() === 'scheduled' || status.toLowerCase() === 'pending reschedule') ? `<button class="btn btn-sm btn-outline" style="color:#ca8a04;border-color:#ca8a04;" onclick="doctorApproveAppointment(${a.appointment_id})">Confirm</button>` : ''}
-                ${status.toLowerCase() === 'confirmed' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
+                ${(status === 'pending' || status === 'scheduled' || status === 'pending reschedule') ? `<button class="btn btn-sm btn-outline" style="color:#ca8a04;border-color:#ca8a04;" onclick="doctorApproveAppointment(${a.appointment_id})">Confirm</button>` : ''}
+                ${status === 'confirmed' ? `<button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="updateAppointmentStatus(${a.appointment_id},'completed')">Complete</button>` : ''}
                 ${isActive ? `<button class="btn btn-sm btn-outline" style="color:var(--red-500);border-color:var(--red-500);" onclick="cancelAppointment(${a.appointment_id})">Cancel</button>` : ''}
                 <button class="btn btn-sm btn-outline" style="color:var(--green-500);border-color:var(--green-500);" onclick="chatWithParent(${a.parent_id}, '${parentNameSafe}')">Chat</button>
             </div></div>`;

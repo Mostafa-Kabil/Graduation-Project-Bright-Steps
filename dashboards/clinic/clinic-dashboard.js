@@ -510,13 +510,13 @@ async function refreshClinicData(viewId) {
                 'stat-accepted': s.accepted_appointments || 0,
                 'stat-cancelled': s.cancelled_appointments || 0,
                 'stat-pending': s.pending_appointments || 0,
-                'stat-revenue-month': revenue > 0 ? '$' + revenue.toLocaleString() : '$0',
-                'stat-monthly-revenue': revenue > 0 ? '$' + revenue.toLocaleString() : '$0',
-                'stat-cash-total': 'Cash: $' + (s.cash_revenue || 0).toLocaleString(),
-                'stat-credit-total': 'Credit: $' + (s.credit_revenue || 0).toLocaleString(),
+                'stat-revenue-month': revenue > 0 ? revenue.toLocaleString() + ' EGP' : '0 EGP',
+                'stat-monthly-revenue': revenue > 0 ? revenue.toLocaleString() + ' EGP' : '0 EGP',
+                'stat-cash-total': 'Cash: ' + (s.cash_revenue || 0).toLocaleString() + ' EGP',
+                'stat-credit-total': 'Credit: ' + (s.credit_revenue || 0).toLocaleString() + ' EGP',
                 'stat-sessions-booked': txCount,
                 'stat-active-patients': clinicPatients.length,
-                'stat-pending-revenue': pendingRev > 0 ? '$' + pendingRev.toLocaleString() : '$0',
+                'stat-pending-revenue': pendingRev > 0 ? pendingRev.toLocaleString() + ' EGP' : '0 EGP',
                 'stat-overall-rating': s.avg_rating || '0.0',
                 'stat-avg-rating': s.avg_rating || '0.0',
                 'stat-total-reviews': reviewStats.count || 0
@@ -631,7 +631,7 @@ function renderRevenueChart(chartData) {
                         color: '#f1f5f9'
                     },
                     ticks: { 
-                        callback: (value) => '$' + value,
+                        callback: (value) => value + ' EGP',
                         padding: 10,
                         font: { weight: '600' }
                     }
@@ -725,7 +725,7 @@ function renderRevenueBreakdown(logs) {
                 </td>
                 <td style="padding:1.25rem 1.5rem;">${methodTag}</td>
                 <td style="padding:1.25rem 1.5rem;"><span class="status-badge ${sClass}">${log.status}</span></td>
-                <td style="padding:1.25rem 1.5rem; text-align:right; font-weight:700; color:#0f172a;">$${parseFloat(log.amount || 0).toLocaleString()}</td>
+                <td style="padding:1.25rem 1.5rem; text-align:right; font-weight:700; color:#0f172a;">${parseFloat(log.amount || 0).toLocaleString()} EGP</td>
             </tr>
         `;
     });
@@ -741,9 +741,9 @@ function renderRevenueData(stats) {
     const pending = stats.pending_appointments || 0;
     const revenue = stats.revenue || 0;
     container.innerHTML = `
-        <div class="revenue-row"><span class="revenue-plan">Completed Appointments</span><span class="revenue-count">${completed} sessions</span><span class="revenue-amount">$${(completed * 50).toLocaleString()}</span></div>
-        <div class="revenue-row"><span class="revenue-plan">Pending Appointments</span><span class="revenue-count">${pending} sessions</span><span class="revenue-amount">$${(pending * 50).toLocaleString()}</span></div>
-        <div class="revenue-row revenue-total"><span class="revenue-plan">Total Estimated Revenue</span><span></span><span class="revenue-amount">$${revenue.toLocaleString()}</span></div>
+        <div class="revenue-row"><span class="revenue-plan">Completed Appointments</span><span class="revenue-count">${completed} sessions</span><span class="revenue-amount">${(completed * 50).toLocaleString()} EGP</span></div>
+        <div class="revenue-row"><span class="revenue-plan">Pending Appointments</span><span class="revenue-count">${pending} sessions</span><span class="revenue-amount">${(pending * 50).toLocaleString()} EGP</span></div>
+        <div class="revenue-row revenue-total"><span class="revenue-plan">Total Estimated Revenue</span><span></span><span class="revenue-amount">${revenue.toLocaleString()} EGP</span></div>
     `;
 }
 

@@ -138,22 +138,13 @@ if ($parentId) {
                 }
             } catch (Exception $e) { $ch['_speech'] = null; }
 
-            // Motor milestones completion percentage (from behavior checklist)
+            // Motor milestones completion percentage
             try {
-                $s7 = $connect->prepare("
-                    SELECT COUNT(*) FROM behavior b 
-                    JOIN behavior_category bc ON b.category_id = bc.category_id 
-                    WHERE bc.category_type = 'motor'
-                ");
-                $s7->execute();
+                $s7 = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = :cid");
+                $s7->execute(['cid' => $ch['child_id']]);
                 $motorTotal = (int)$s7->fetchColumn();
 
-                $s8 = $connect->prepare("
-                    SELECT COUNT(*) FROM child_exhibited_behavior ceb
-                    JOIN behavior b ON ceb.behavior_id = b.behavior_id
-                    JOIN behavior_category bc ON b.category_id = bc.category_id
-                    WHERE ceb.child_id = :cid AND bc.category_type = 'motor'
-                ");
+                $s8 = $connect->prepare("SELECT COUNT(*) FROM motor_milestones WHERE child_id = :cid AND is_achieved = 1");
                 $s8->execute(['cid' => $ch['child_id']]);
                 $motorDone = (int)$s8->fetchColumn();
 
