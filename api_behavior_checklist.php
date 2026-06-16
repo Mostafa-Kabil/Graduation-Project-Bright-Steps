@@ -203,22 +203,30 @@ switch ($action) {
             // Check if child already has behaviors saved (existing checklist)
             $hasExisting = hasExistingChecklist($connect, $childId);
 
-            // Call AI API to generate personalized behaviors
-            $aiResponse = callAIAPI(
-                $childId,
-                $ageMonths,
-                $growthMetrics['weight'] ?? null,
-                $growthMetrics['height'] ?? null,
-                $growthMetrics['head_circumference'] ?? null,
-                $speechMetrics['vocabulary_score'] ?? null,
-                null // condition - could be determined based on metrics
-            );
+            // Only call the AI API when explicitly requested (force_generate=1)
+            // This prevents corrupting data when the AI server is down
+            $forceGenerate = ($_GET['force_generate'] ?? $_POST['force_generate'] ?? '0') === '1';
+            $useAI = false;
+            $aiUnavailable = false;
+            $aiResponse = [];
 
-            // Check if AI API call was successful
-            $useAI = $aiResponse['success'] ?? false;
-            $aiUnavailable = $aiResponse['ai_unavailable'] ?? false;
+            if ($forceGenerate) {
+                // Call AI API to generate personalized behaviors
+                $aiResponse = callAIAPI(
+                    $childId,
+                    $ageMonths,
+                    $growthMetrics['weight'] ?? null,
+                    $growthMetrics['height'] ?? null,
+                    $growthMetrics['head_circumference'] ?? null,
+                    $speechMetrics['vocabulary_score'] ?? null,
+                    null
+                );
 
-            // If AI generated new behaviors, use them directly to build the checklist
+                $useAI = $aiResponse['success'] ?? false;
+                $aiUnavailable = $aiResponse['ai_unavailable'] ?? false;
+            }
+
+            // If AI generated new behaviors (only when explicitly requested), use them
             if ($useAI && !empty($aiResponse['categories'])) {
                 $dbCategories = [];
                 $dbBehaviors = [];
@@ -264,7 +272,7 @@ switch ($action) {
                     }
                 }
             } else {
-                // Fallback to database if AI fails
+                // Read existing behaviors from database (no AI call)
                 $stmt = $connect->prepare("SELECT * FROM behavior_category WHERE LOWER(category_name) LIKE '%attention%' OR LOWER(category_name) LIKE '%communication%' OR LOWER(category_name) LIKE '%social%' OR LOWER(category_name) LIKE '%motor%' ORDER BY category_type, category_name");
                 $stmt->execute();
                 $dbCategories = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -277,7 +285,33 @@ switch ($action) {
                     ORDER BY bc.category_type, bc.category_name, b.behavior_details
                 ");
                 $stmt->execute();
-                $dbBehaviors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $allDbBehaviors = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                $dbBehaviors = [];
+                $seen = [];
+                // Use child's actual age for filtering (DB now has milestones up to 60 months)
+                $effectiveAge = $ageMonths;
+
+                foreach ($allDbBehaviors as $b) {
+                    // Deduplicate by behavior_details and category_id
+                    $key = $b['category_id'] . '_' . strtolower(trim($b['behavior_details']));
+                    if (isset($seen[$key])) continue;
+                    $seen[$key] = true;
+
+                    $indicator = strtolower($b['indicator']);
+                    if (preg_match_all('/\d+/', $indicator, $matches) && !empty($matches[0])) {
+                        $minAge = (int)$matches[0][0];
+                        $maxAge = isset($matches[0][1]) ? (int)$matches[0][1] : $minAge + 6;
+                        
+                        // Show milestones less than child's effective age and slightly higher
+                        if ($effectiveAge >= $minAge - 12 && $effectiveAge <= $maxAge + 12) {
+                            $dbBehaviors[] = $b;
+                        }
+                    } else {
+                        // If no age found in indicator, include it
+                        $dbBehaviors[] = $b;
+                    }
+                }
             }
 
             // Get child's exhibited behaviors

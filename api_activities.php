@@ -15,6 +15,9 @@ if (!isset($connect) || !$connect) {
 }
 
 header('Content-Type: application/json');
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
 
 if (!isset($_SESSION['id'])) {
     http_response_code(401);
@@ -69,17 +72,24 @@ function getCuratedActivities($ageMonths, $childName) {
                 ['title' => 'Healthy Meals for Picky Eaters', 'summary' => 'Creative strategies to ensure your toddler gets proper nutrition despite being selective.', 'category' => 'nutrition', 'read_time' => '4 min'],
                 ['title' => 'Toddler Hygiene Routines', 'summary' => 'Making handwashing and teeth brushing fun with songs and routines.', 'category' => 'health', 'read_time' => '3 min'],
                 ['title' => 'Navigating the Terrible Twos', 'summary' => 'Expert advice on managing toddler emotions and setting boundaries.', 'category' => 'parenting', 'read_time' => '5 min'],
-                ['title' => 'Potty Training 101', 'summary' => 'Signs of readiness and a gentle approach to toilet training.', 'category' => 'health', 'read_time' => '6 min']
+                ['title' => 'Potty Training 101', 'summary' => 'Signs of readiness and a gentle approach to toilet training.', 'category' => 'health', 'read_time' => '6 min'],
+                ['title' => 'The Power of Play', 'summary' => 'Why unstructured playtime is critical for your toddler\'s cognitive development.', 'category' => 'development', 'read_time' => '4 min'],
+                ['title' => 'Bedtime Routines that Work', 'summary' => 'Strategies to help your active toddler wind down and sleep through the night.', 'category' => 'health', 'read_time' => '5 min']
             ],
             'real_life_activities' => [
                 ['title' => 'Building Block Tower', 'description' => 'Stack blocks as high as possible. Count each block together as you build.', 'duration' => '15 min', 'category' => 'motor', 'difficulty' => 'easy', 'materials' => 'Building blocks'],
                 ['title' => 'Naming Game Walk', 'description' => 'Walk around the house or yard naming everything you see. Repeat words clearly.', 'duration' => '15 min', 'category' => 'speech', 'difficulty' => 'easy', 'materials' => 'None'],
-                ['title' => 'Water Play Station', 'description' => 'Set up cups and containers with water. Practice pouring and scooping to build coordination.', 'duration' => '20 min', 'category' => 'motor', 'difficulty' => 'easy', 'materials' => 'Cups, bowls, water, towel']
+                ['title' => 'Water Play Station', 'description' => 'Set up cups and containers with water. Practice pouring and scooping to build coordination.', 'duration' => '20 min', 'category' => 'motor', 'difficulty' => 'easy', 'materials' => 'Cups, bowls, water, towel'],
+                ['title' => 'Animal Imitation', 'description' => 'Act out different animals and make their sounds. Great for full body movement and vocalization.', 'duration' => '10 min', 'category' => 'speech', 'difficulty' => 'easy', 'materials' => 'None'],
+                ['title' => 'Color Sorting', 'description' => 'Mix up colorful toys and have your toddler sort them into piles by color.', 'duration' => '15 min', 'category' => 'cognitive', 'difficulty' => 'easy', 'materials' => 'Colorful toys or balls'],
+                ['title' => 'Dance Party', 'description' => 'Put on some music and dance together! Excellent for gross motor skills and rhythm.', 'duration' => '15 min', 'category' => 'motor', 'difficulty' => 'easy', 'materials' => 'Music player']
             ],
             'website_games' => [
                 ['title' => 'Shape Sorter', 'description' => 'Drag shapes to matching holes. Teaches shape recognition and problem-solving.', 'type' => 'interactive', 'skill_focus' => 'Shape recognition', 'duration' => '10 min'],
                 ['title' => 'Word Builder', 'description' => 'Tap pictures to hear and learn new words. Builds vocabulary.', 'type' => 'interactive', 'skill_focus' => 'Vocabulary', 'duration' => '10 min'],
-                ['title' => 'Color Mixing', 'description' => 'Mix primary colors to make new ones. Teaches cause and effect.', 'type' => 'creative', 'skill_focus' => 'Color recognition', 'duration' => '10 min']
+                ['title' => 'Color Mixing', 'description' => 'Mix primary colors to make new ones. Teaches cause and effect.', 'type' => 'creative', 'skill_focus' => 'Color recognition', 'duration' => '10 min'],
+                ['title' => 'Animal Sounds Match', 'description' => 'Listen to the sound and tap the correct animal.', 'type' => 'interactive', 'skill_focus' => 'Auditory matching', 'duration' => '5 min'],
+                ['title' => 'Pop the Bubbles', 'description' => 'Pop bubbles as they float up the screen. Great for hand-eye coordination.', 'type' => 'interactive', 'skill_focus' => 'Hand-eye coordination', 'duration' => '10 min']
             ]
         ],
         'preschool' => [
@@ -125,6 +135,31 @@ function getCuratedActivities($ageMonths, $childName) {
     return $activities[$ageGroup] ?? $activities['preschool'];
 }
 
+function customizeFallback($activities, $ageDisplay, $childName, $weakAreasStr, $speech, $motorPct) {
+    if (isset($activities['articles'])) shuffle($activities['articles']);
+    if (isset($activities['real_life_activities'])) {
+        shuffle($activities['real_life_activities']);
+        foreach ($activities['real_life_activities'] as &$act) {
+            $reasons = [
+                "Tailored for {$childName} ({$ageDisplay}) to focus on {$act['category']} development.",
+                "Great for {$childName}'s current stage, specifically targeting {$act['category']}.",
+                "Based on {$childName}'s recent progress, this {$act['duration']} activity will boost {$act['category']} skills.",
+            ];
+            
+            if (strpos($weakAreasStr, 'motor') !== false && $act['category'] == 'motor') {
+                $reasons[] = "Highly recommended for {$childName} to improve motor skills (currently at {$motorPct}%).";
+            }
+            if ($speech && strpos($weakAreasStr, 'speech') !== false && $act['category'] == 'speech') {
+                $reasons[] = "Perfect for {$childName} to practice speech clarity and vocabulary building.";
+            }
+            
+            $act['reason_picked'] = $reasons[array_rand($reasons)];
+        }
+    }
+    if (isset($activities['website_games'])) shuffle($activities['website_games']);
+    return $activities;
+}
+
 switch ($action) {
 
     // ── Get AI-powered activity recommendations ──────────────
@@ -141,6 +176,44 @@ switch ($action) {
             $fallback = getCuratedActivities(0, 'your child');
             echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (db_error)']);
             exit();
+        }
+
+        $forceRefresh = isset($_GET['force']) && $_GET['force'] == 1;
+
+        if (!$forceRefresh) {
+            // Check if we already have AI recommendations generated today for this child
+            try {
+                $stmtCheck = $connect->prepare("SELECT * FROM child_activities WHERE child_id = ? AND source = 'ai' AND DATE(created_at) = CURDATE() ORDER BY activity_id DESC LIMIT 30");
+                $stmtCheck->execute([$childId]);
+                $todayActs = $stmtCheck->fetchAll(PDO::FETCH_ASSOC);
+                
+                if (count($todayActs) >= 3) {
+                    $recommendations = [
+                        'real_life_activities' => [],
+                        'articles' => [],
+                        'website_games' => []
+                    ];
+                    foreach ($todayActs as $act) {
+                        if ($act['category'] === 'article') {
+                            $recommendations['articles'][] = ['title' => $act['title'], 'summary' => $act['description'], 'category' => 'development'];
+                        } elseif ($act['category'] === 'website_game') {
+                            $recommendations['website_games'][] = ['title' => $act['title'], 'description' => $act['description'], 'type' => 'interactive', 'duration' => $act['duration_minutes'] . ' min'];
+                        } else {
+                            $recommendations['real_life_activities'][] = ['title' => $act['title'], 'description' => $act['description'], 'category' => $act['category'], 'duration' => $act['duration_minutes'] . ' min', 'difficulty' => $act['difficulty']];
+                        }
+                    }
+                    echo json_encode(['success' => true, 'recommendations' => $recommendations, 'source' => 'db_cache']);
+                    exit();
+                }
+            } catch (PDOException $e) {
+                // Table might not exist yet, continue to AI generation
+            }
+        } else {
+            // Force refresh: delete uncompleted AI activities from today to avoid clutter
+            try {
+                $stmtDel = $connect->prepare("DELETE FROM child_activities WHERE child_id = ? AND source = 'ai' AND is_completed = 0 AND DATE(created_at) = CURDATE()");
+                $stmtDel->execute([$childId]);
+            } catch (PDOException $e) { }
         }
 
         // Gather child data with error handling
@@ -198,16 +271,21 @@ switch ($action) {
             $speech = null;
         }
 
-        // Get motor milestone completion percentage
+        // Get motor milestone completion percentage (from behavior checklist)
         try {
-            $stmtMotorTotal = $connect->prepare("SELECT COUNT(*) FROM milestones WHERE category IN ('gross_motor','fine_motor')");
+            $stmtMotorTotal = $connect->prepare("
+                SELECT COUNT(*) FROM behavior b 
+                JOIN behavior_category bc ON b.category_id = bc.category_id 
+                WHERE bc.category_type = 'motor'
+            ");
             $stmtMotorTotal->execute();
             $motorTotal = (int)$stmtMotorTotal->fetchColumn();
 
             $stmtMotorDone = $connect->prepare(
-                "SELECT COUNT(*) FROM child_milestones cm
-                 JOIN milestones m ON cm.milestone_id = m.milestone_id
-                 WHERE cm.child_id = ? AND m.category IN ('gross_motor','fine_motor') AND cm.is_achieved = 1"
+                "SELECT COUNT(*) FROM child_exhibited_behavior ceb
+                 JOIN behavior b ON ceb.behavior_id = b.behavior_id
+                 JOIN behavior_category bc ON b.category_id = bc.category_id
+                 WHERE ceb.child_id = ? AND bc.category_type = 'motor'"
             );
             $stmtMotorDone->execute([$childId]);
             $motorDone = (int)$stmtMotorDone->fetchColumn();
@@ -218,17 +296,19 @@ switch ($action) {
             $motorPct = 0;
         }
 
-        // Get achieved milestones
+        // Get achieved milestones (from behavior checklist)
         try {
             $stmt4 = $connect->prepare(
-                "SELECT m.category, m.title FROM child_milestones cm
-                 INNER JOIN milestones m ON cm.milestone_id = m.milestone_id
-                 WHERE cm.child_id = ? AND cm.is_achieved = 1 ORDER BY cm.achieved_at DESC LIMIT 5"
+                "SELECT bc.category_type as category, b.behavior_details as title 
+                 FROM child_exhibited_behavior ceb
+                 INNER JOIN behavior b ON ceb.behavior_id = b.behavior_id
+                 INNER JOIN behavior_category bc ON b.category_id = bc.category_id
+                 WHERE ceb.child_id = ? ORDER BY ceb.recorded_at DESC LIMIT 5"
             );
             $stmt4->execute([$childId]);
-            $milestones = $stmt4->fetchAll(PDO::FETCH_ASSOC);
+            $recentMilestones = $stmt4->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            $milestones = [];
+            $recentMilestones = [];
         }
 
         // Get recently completed activities
@@ -289,11 +369,9 @@ switch ($action) {
         }
 
         $apiKey = getEnvValue('OPENAI_API_KEY');
-        if (!$apiKey || strpos($apiKey, 'your-key') !== false || strpos($apiKey, 'sk-') !== 0) {
+        $hasKey = ($apiKey && strpos($apiKey, 'your-key') === false && strpos($apiKey, 'sk-') === 0);
+        if (!$hasKey) {
             error_log("OpenAI API key invalid or not configured. Key starts with: " . substr($apiKey, 0, 10) . "...");
-            $fallback = getCuratedActivities($ageMonths, $child['first_name']);
-            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (no api key)']);
-            exit();
         }
 
         $prompt = "You are a child development expert for the Bright Steps platform. Based on the following child data, provide personalized recommendations in JSON format.
@@ -332,61 +410,64 @@ Return EXACTLY this JSON structure (no markdown, no backticks, just raw JSON):
 Make all recommendations age-appropriate, specific, and actionable. Vary the categories to cover different developmental areas.
 CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a 'reason_picked' field that explicitly explains why you picked it. This explanation MUST accurately mention the child's exact age (e.g., '$ageDisplay') and directly reference their specific conditions, recent milestones, or speech/growth status if available. We want to generate as many tailored items as possible (up to 8 in articles and 8 in real_life_activities) to fill the parent's dashboard.";
 
-        // OpenAI API call
-        $ch = curl_init('https://api.openai.com/v1/chat/completions');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $apiKey
-            ],
-            CURLOPT_POSTFIELDS => json_encode([
-                'model' => 'gpt-4o-mini',
-                'response_format' => ['type' => 'json_object'],
-                'messages' => [
-                    ['role' => 'system', 'content' => 'You are a child development expert. Always respond with valid JSON only, no markdown.'],
-                    ['role' => 'user', 'content' => $prompt]
+        if (!$hasKey) {
+            $recommendations = getCuratedActivities($ageMonths, $child['first_name']);
+            $recommendations = customizeFallback($recommendations, $ageDisplay, $child['first_name'], $weakStr, $speech, $motorPct);
+            $source = 'curated (no api key)';
+        } else {
+            $ch = curl_init('https://api.openai.com/v1/chat/completions');
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_POST => true,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'Authorization: Bearer ' . $apiKey
                 ],
-                'temperature' => 0.8,
-                'max_tokens' => 4000
-            ]),
-            CURLOPT_TIMEOUT => 30
-        ]);
+                CURLOPT_POSTFIELDS => json_encode([
+                    'model' => 'gpt-4o-mini',
+                    'response_format' => ['type' => 'json_object'],
+                    'messages' => [
+                        ['role' => 'system', 'content' => 'You are a child development expert. Always respond with valid JSON only, no markdown.'],
+                        ['role' => 'user', 'content' => $prompt]
+                    ],
+                    'temperature' => 0.8,
+                    'max_tokens' => 4000
+                ]),
+                CURLOPT_TIMEOUT => 30
+            ]);
 
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curlError = curl_error($ch);
-        curl_close($ch);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
 
-        if ($httpCode !== 200) {
-            // Log error for debugging
-            error_log("OpenAI API error (HTTP $httpCode): " . substr($response, 0, 500));
-            if ($curlError) error_log("Curl error: " . $curlError);
+            if ($httpCode !== 200) {
+                error_log("OpenAI API error (HTTP $httpCode): " . substr($response, 0, 500));
+                if ($curlError) error_log("Curl error: " . $curlError);
 
-            // Fallback to curated activities when API is unavailable or rate limited
-            $fallback = getCuratedActivities($ageMonths, $child['first_name']);
-            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (api_error)']);
-            exit();
-        }
+                $recommendations = getCuratedActivities($ageMonths, $child['first_name']);
+                $recommendations = customizeFallback($recommendations, $ageDisplay, $child['first_name'], $weakStr, $speech, $motorPct);
+                $source = 'curated (api_error)';
+            } else {
+                $result = json_decode($response, true);
+                $content = $result['choices'][0]['message']['content'] ?? '';
 
-        $result = json_decode($response, true);
-        $content = $result['choices'][0]['message']['content'] ?? '';
+                $recommendations = json_decode($content, true);
+                if (!$recommendations) {
+                    preg_match('/\{[\s\S]*\}/', $content, $matches);
+                    if (!empty($matches)) {
+                        $recommendations = json_decode($matches[0], true);
+                    }
+                }
 
-        // Parse JSON from response
-        $recommendations = json_decode($content, true);
-        if (!$recommendations) {
-            // Try to extract JSON from markdown-wrapped response
-            preg_match('/\{[\s\S]*\}/', $content, $matches);
-            if (!empty($matches)) {
-                $recommendations = json_decode($matches[0], true);
+                if (!$recommendations) {
+                    $recommendations = getCuratedActivities($ageMonths, $child['first_name']);
+                    $recommendations = customizeFallback($recommendations, $ageDisplay, $child['first_name'], $weakStr, $speech, $motorPct);
+                    $source = 'curated (unparseable api)';
+                } else {
+                    $source = 'ai';
+                }
             }
-        }
-
-        if (!$recommendations) {
-            $fallback = getCuratedActivities($ageMonths, $child['first_name']);
-            echo json_encode(['success' => true, 'recommendations' => $fallback, 'source' => 'curated (unparseable api)']);
-            exit();
         }
 
         // Store recommended activities in DB (skip if table doesn't exist)
@@ -430,7 +511,7 @@ CRITICAL INSTRUCTION: For each 'real_life_activities' item, you MUST provide a '
             error_log("Failed to store activities: " . $e->getMessage());
         }
 
-        echo json_encode(['success' => true, 'recommendations' => $recommendations]);
+        echo json_encode(['success' => true, 'recommendations' => $recommendations, 'source' => $source ?? 'ai']);
         break;
 
     // ── Mark an activity as completed ──────────────────────────

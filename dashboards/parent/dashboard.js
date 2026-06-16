@@ -654,7 +654,7 @@
 
     // Load home activities from API
     window.loadHomeActivities = loadHomeActivities;
-    async function loadHomeActivities() {
+    async function loadHomeActivities(forceRefresh = false) {
         // Trigger daily notifications in the background
         fetch('../../api_trigger_daily.php').catch(e => console.error(e));
 
@@ -668,7 +668,8 @@
         if (container) container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--slate-400);"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite;margin:0 auto 0.4rem;display:block;"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Refreshing activities...</div>';
 
         try {
-            const res = await fetch('../../api_activities.php?action=recommend&child_id=' + child.child_id);
+            const forceParam = forceRefresh ? '&force=1' : '';
+            const res = await fetch('../../api_activities.php?action=recommend&child_id=' + child.child_id + forceParam + '&_t=' + Date.now());
             if (!res.ok) {
                 throw new Error('HTTP ' + res.status);
             }
@@ -928,7 +929,7 @@
                     <div class="dashboard-card">
                         <div class="card-header" style="padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center;">
                             <h3 class="card-title" style="font-size:0.95rem;margin:0;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Today's Activities for ${child.first_name}</h3>
-                            <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Activities" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                            <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities(true)" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Activities" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                         </div>
                         <div class="card-content" id="home-activities-list" style="padding:0.75rem 1.25rem;">
                             <div style="text-align:center;padding:1.5rem;color:var(--slate-400);">
@@ -976,7 +977,7 @@
                                 <h3 class="card-title" style="font-size:0.95rem;margin-bottom:0.15rem;"><svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>Weekly Articles & Tips</h3>
                                 <div style="display:flex;align-items:center;gap:0.5rem;">
                                     <div id="article-countdown" style="font-size:0.7rem;color:var(--slate-400);display:flex;align-items:center;gap:0.3rem;"></div>
-                                    <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Articles" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                                    <button onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('weekly_plan');return;} loadHomeActivities(true)" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;cursor:pointer;padding:0.45rem 0.9rem;border-radius:8px;display:flex;align-items:center;gap:0.35rem;font-size:0.75rem;font-weight:600;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 2px 8px rgba(99,102,241,0.25);" title="Refresh Articles" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                                 </div>
                             </div>
                             <a href="../../articles.php" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.8rem;color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);text-decoration:none;font-weight:600;padding:0.45rem 1rem;border-radius:10px;box-shadow:0 2px 8px rgba(99,102,241,0.3);transition:all 0.2s;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 2px 8px rgba(99,102,241,0.3)'">View All →</a>
@@ -1449,6 +1450,13 @@
                 let expectedRange = Math.floor(expectedWordsPerRecording * 0.5) + '-' + Math.floor(expectedWordsPerRecording * 1.5);
                 
                 // Set text contents
+                const insightText = document.getElementById('insight-text');
+                const insightWords = document.getElementById('insight-words');
+                const insightStatus = document.getElementById('insight-status');
+                const insightExpectedSingle = document.getElementById('insight-expected-single');
+                const insightLatestWords = document.getElementById('insight-latest-words');
+                const insightRecordingStatus = document.getElementById('insight-recording-status');
+                
                 if (insightText) insightText.textContent = latest.transcript || 'No transcript available.';
                 if (insightWords) insightWords.textContent = uniqueWords;
                 // insightStatus now represents overall status from DB (but DB status is based on recording! Python returns it in 'status' field which is mapped to vs.feedback)
@@ -2964,24 +2972,21 @@
         const pillars = ['attention', 'communication', 'social', 'motor', 'fine_motor'];
         pillars.forEach(pillar => {
             const s = stats[pillar];
-            // Use expected (age-appropriate) as denominator, not total checklist items
-            const percent = s.expected > 0 ? Math.round((s.achieved / s.expected) * 100) : 0;
+            // Use total checklist items for consistency with the card percentages
+            const percent = s.total > 0 ? Math.round((s.achieved / s.total) * 100) : 0;
             const status = getTrafficLightStatus(percent);
             const alertEl = document.getElementById(`alert-${pillar}`);
             if (alertEl) {
                 alertEl.style.display = 'inline-flex';
-                alertEl.style.flexDirection = 'row';
                 alertEl.style.alignItems = 'center';
-                alertEl.style.justifyContent = 'center';
-                alertEl.style.gap = '0.35rem';
-                alertEl.style.padding = '0.3rem 0.65rem';
-                alertEl.style.borderRadius = '20px';
-                alertEl.style.background = `${status.color}15`;
+                alertEl.style.gap = '0.3rem';
+                alertEl.style.background = status.color + '15'; // 15% opacity background
                 alertEl.style.color = status.color;
-                alertEl.style.flexShrink = '0';
-                
-                alertEl.innerHTML = `<span style="font-size:0.5rem; line-height:1;">●</span><span style="font-size:0.65rem; font-weight:700; white-space:nowrap; line-height:1;">${status.label}</span>`;
-                alertEl.title = `${status.label} (${percent}% of age-expected milestones)`;
+                alertEl.style.padding = '0.2rem 0.6rem';
+                alertEl.style.borderRadius = '99px';
+                alertEl.style.fontSize = '0.65rem';
+                alertEl.style.fontWeight = '700';
+                alertEl.innerHTML = `<span style="font-size:0.5rem;color:${status.color};">&#11044;</span> ${status.label}`;
             }
         });
     }
@@ -3016,6 +3021,12 @@
             socialPercent = stats.social.total > 0 ? (stats.social.achieved / stats.social.total) * 100 : 0;
             motorPercent = stats.motor.total > 0 ? (stats.motor.achieved / stats.motor.total) * 100 : 0;
             fineMotorPercent = stats.fine_motor.total > 0 ? (stats.fine_motor.achieved / stats.fine_motor.total) * 100 : 0;
+        }
+
+        const currentCanvas = document.getElementById('radarChart');
+        if (_pillarRadarChart && currentCanvas && _pillarRadarChart.canvas !== currentCanvas) {
+            _pillarRadarChart.destroy();
+            _pillarRadarChart = null;
         }
 
         if (_pillarRadarChart) {
@@ -3498,11 +3509,12 @@
         window.print();
     }
 
-    async function loadBehaviorChecklist(childId) {
+    async function loadBehaviorChecklist(childId, forceGenerate = false) {
         if (!childId) return;
 
         try {
-            const res = await fetch('../../api_behavior_checklist.php?action=list&child_id=' + childId);
+            const url = '../../api_behavior_checklist.php?action=list&child_id=' + childId + (forceGenerate ? '&force_generate=1' : '');
+            const res = await fetch(url);
             const data = await res.json();
             console.log('Behavior Checklist Data:', data);
 
@@ -4117,8 +4129,8 @@
         }
 
         if (!_behaviorChecklistData) {
-            // Load data first - ensure childId is passed correctly
-            loadBehaviorChecklist(childId).then(() => {
+            // Load data with force_generate=true since user explicitly clicked Evaluate
+            loadBehaviorChecklist(childId, true).then(() => {
                 setTimeout(() => openBehaviorChecklistModal(childId), 300);
             });
             return;
@@ -4540,7 +4552,7 @@
                         <h1 class="dashboard-title" style="margin-bottom:0.25rem;">Activity Center 🎨</h1>
                         <p class="dashboard-subtitle" style="margin:0;">Engaging learning experiences and AI-powered recommendations for ${child ? child.first_name : 'your child'}</p>
                     </div>
-                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('${childParam}')" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
+                    <button id="ai-refresh-btn" onclick="if(!(window.dashboardData&&window.dashboardData.subscription&&window.dashboardData.subscription.plan_name==='Premium')){window.showPremiumModal('');return;}loadAIRecommendations('${childParam}', true)" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;padding:0.6rem 1.25rem;border-radius:12px;font-weight:700;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;gap:0.4rem;box-shadow:0 4px 12px rgba(99,102,241,0.3);transition:all 0.2s;height:fit-content;" onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform=''"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 1 0 2.13-5.88L2 9"/></svg> Refresh</button>
                 </div>
 
                 <!-- Featured Game Banner -->
@@ -4582,7 +4594,7 @@
     }
 
     // ── AI Recommendations Loader ─────────────────────────────
-    window.loadAIRecommendations = async function (childId) {
+    window.loadAIRecommendations = async function (childId, forceRefresh = false) {
         const container = document.getElementById('ai-recommendations');
         const btn = document.getElementById('ai-refresh-btn');
         if (!container) return;
@@ -4598,7 +4610,8 @@
             </div>`;
 
         try {
-            const res = await fetch('../../api_activities.php?action=recommend&child_id=' + childId);
+            const forceParam = forceRefresh ? '&force=1' : '';
+            const res = await fetch('../../api_activities.php?action=recommend&child_id=' + childId + forceParam + '&_t=' + Date.now());
             if (!res.ok) {
                 throw new Error('HTTP ' + res.status);
             }
@@ -10264,7 +10277,10 @@ window.openActivityDetailModal = function(title, description, reason, category, 
                     })()}
                 </div>
                 <div style="padding:1.5rem 2.5rem;border-top:1px solid #f1f5f9;background:#f8fafc;">
-                    <button onclick="document.getElementById('activity-detail-modal').remove()" style="width:100%;padding:1rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:16px;font-weight:700;font-size:1.05rem;cursor:pointer;transition:all 0.2s;box-shadow:0 10px 20px rgba(99,102,241,0.3);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 24px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 20px rgba(99,102,241,0.3)'">Let\'s Go! 🚀</button>
+                    <div style="display:flex;gap:1rem;">
+                        <button onclick="document.getElementById('activity-detail-modal').remove()" style="flex:1;padding:1rem;background:#f1f5f9;color:#475569;border:none;border-radius:16px;font-weight:700;font-size:1.05rem;cursor:pointer;transition:all 0.2s;">Cancel</button>
+                        <button onclick="markActivityComplete('${title}', '${category}')" style="flex:2;padding:1rem;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:16px;font-weight:700;font-size:1.05rem;cursor:pointer;transition:all 0.2s;box-shadow:0 10px 20px rgba(99,102,241,0.3);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 12px 24px rgba(99,102,241,0.4)'" onmouseout="this.style.transform='';this.style.boxShadow='0 10px 20px rgba(99,102,241,0.3)'">Mark as Completed ✅</button>
+                    </div>
                 </div>
             </div>
         </div>`;
